@@ -27,6 +27,9 @@ export interface TermPreset {
   bg: string
   fg: string
   cursor: string
+  /** The window chrome's accent, when the theme has an opinion. Absent, the
+   *  chrome takes the palette's blue. */
+  accent?: string
   /** A curated full palette (extracted from Tabby's schemes, or the user's
    *  own). Absent, the sixteen are derived from bg/fg by the engine. */
   ansi?: Ansi16
@@ -42,7 +45,7 @@ export interface TermPreset {
  */
 export const TERM_PRESETS: TermPreset[] = [
   // Prism's own dark look: what the terminal wore by default inside Prism.
-  { id: 'prism', name: 'Prism', bg: '#0b0b0f', fg: '#e7e7ee', cursor: '#7c7cf0' },
+  { id: 'prism', name: 'Prism', bg: '#0b0b0f', fg: '#e7e7ee', cursor: '#7c7cf0', accent: '#5b5bd6' },
   {
     id: 'bright-lights',
     name: 'Bright Lights',
@@ -319,6 +322,11 @@ export const DEFAULT_TERM_THEME = 'prism'
 
 /** The theme the settings say, resolved: a preset by id, else the 'prism'
  *  preset (unknown ids, and the 'style' an imported Prism save may carry). */
+/** The chrome accent a preset asks for, if it asks. */
+export function presetAccent(themeId: string): string | undefined {
+  return TERM_PRESETS.find((x) => x.id === themeId)?.accent
+}
+
 export function resolveTermTheme(themeId: string): TermTheme {
   if (themeId === 'custom') {
     const c = customTermTheme()
