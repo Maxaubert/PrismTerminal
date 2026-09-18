@@ -188,15 +188,6 @@ export default function App(): JSX.Element {
     [agentKinds, closeNow]
   )
 
-  // The last SHELL closing takes the window with it; the process stays
-  // resident. Seen as a transition, so an empty launch closes nothing.
-  const hadShells = useRef(false)
-  useEffect(() => {
-    const n = shellTabs(state).length
-    if (n === 0 && hadShells.current && !hidden.current) window.prism.windowClose()
-    hadShells.current = n > 0
-  }, [state])
-
   // The shell ended: typed exit, or died. Its tab goes with it, unasked.
   // (Not while the window is put away: main killed those shells itself, and
   // their exits are not tabs closing.)
@@ -249,6 +240,18 @@ export default function App(): JSX.Element {
       )
     })
   }, [state, activeId, agentIds, agentKinds])
+
+  // The last SHELL closing takes the window with it; the process stays
+  // resident. Seen as a transition, so an empty launch closes nothing.
+  // AFTER the report above, and the order is the point: main stops listening
+  // to reports the moment it hides, so the emptied list has to be said first
+  // or the tab that was just closed comes back on the next launch.
+  const hadShells = useRef(false)
+  useEffect(() => {
+    const n = shellTabs(state).length
+    if (n === 0 && hadShells.current && !hidden.current) window.prism.windowClose()
+    hadShells.current = n > 0
+  }, [state])
 
   useEffect(() => {
     window.prism.setAgentBusy(confirmClose() && workingIds.size > 0)

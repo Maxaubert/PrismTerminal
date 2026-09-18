@@ -1,4 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron'
+import pkg from '../../package.json'
 import { stat } from 'fs/promises'
 import { homedir } from 'os'
 import { dirname, join } from 'path'
@@ -454,7 +455,9 @@ function wireIpc(): void {
     if (!ok) closeAgreed = false
     return ok
   })
-  ipcMain.handle('app:version', () => app.getVersion())
+  // package.json's, not app.getVersion(): unpackaged, that one answers with
+  // ELECTRON's version, and Settings then shows 43.x as the app's own.
+  ipcMain.handle('app:version', () => pkg.version)
 
   /* ----- the window ----- */
 
