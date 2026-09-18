@@ -15,7 +15,7 @@ import { installUpdate, watchForUpdates } from './update'
 import { createVerbSwitch } from './verbSwitch'
 import { readWindowState, watchWindowState } from './windowState'
 
-// Prism Terminal's main process: the window, the resident lifecycle and the
+// Prism Terminal's main process: the window, its lifecycle and the
 // IPC wiring. Everything with rules of its own lives in its own file (the pty,
 // the agent poll, the resume lookup, the tab store, the verb, the update
 // check), so what is left here is wiring.
@@ -78,20 +78,24 @@ const isDir = (p: unknown): Promise<boolean> =>
     : Promise.resolve(false)
 
 /* ------------------------------------------------------------------ *
- * The resident lifecycle.
+ * The lifecycle.
  *
- * Closing the window HIDES it and kills every shell; the process stays, so the
- * next launch (a second instance, handed over by the lock) is a window that is
- * simply there. Only `app:quit`, the updater and the installer end the process.
+ * CLOSING THE WINDOW QUITS (owner, 2026-09-18, after using the first build,
+ * which hid the window and stayed resident: "the app should actually close
+ * when you close it"). Nothing is lost by it: the tab list is flushed on the
+ * way out, and an agent tab resumes from tabs.json plus the agent's own
+ * session files at the next launch, which needs no process kept alive.
+ * Closing the LAST TAB does not close the window; it lands on the start
+ * screen. While the app runs it is still single-instance: a second launch
+ * hands its folder over and ends.
  * ------------------------------------------------------------------ */
-let quitting = false // app.quit() is under way: a close now really closes
+let quitting = false // app.quit() is under way
 let quitWanted = false // a quit the close question interrupted; confirm resumes it
 let agentBusy = false // mirrored from the renderer: an agent is WORKING
 let closeAgreed = false // the renderer's "go ahead" for the close in flight
-let hiddenResident = false // the window is hidden and its tab list dropped
 /**
  * The renderer has no tab list worth saving: it has not restored yet (launch,
- * a reload) or it dropped its list when the window hid. Two things follow.
+ * a reload). Two things follow.
  * Its `tabs:changed` reports are IGNORED - an emptied list would otherwise
  * overwrite tabs.json with nothing, which is every tab lost at the next launch.
  * And folders handed over are QUEUED, to go out after the restore has
@@ -198,7 +202,7 @@ function createWindow(): void {
       e.preventDefault()
       // The veto cancels an app.quit() too. Remember that this was one, so the
       // go-ahead finishes the quit, and drop the flag, so that "Cancel" leaves
-      // an ordinary window whose next close hides like any other.
+      // an ordinary window behind.
       quitWanted = quitting
       quitting = false
       // A minimised or background window can't show its own dialog usefully.
@@ -210,14 +214,7 @@ function createWindow(): void {
     tabs.flush()
     killAll()
     agentBusy = false
-    if (quitting) return
-    // Resident: the window goes, the process stays, so the next launch is
-    // instant. The renderer drops its tab list; the restore refills it.
-    e.preventDefault()
-    hiddenResident = true
-    awaitingRestore = true
-    win.hide()
-    send('window:hidden')
+    // Not prevented: the window closes, and window-all-closed ends the app.
   })
   // Windows is shutting down or logging off: no before-quit is coming.
   win.on('session-end', () => tabs.flush())
@@ -465,7 +462,7 @@ function wireIpc(): void {
   ipcMain.on('window:toggle-maximize', () =>
     mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow?.maximize()
   )
-  // The X, and the renderer closing its LAST tab: the same path as Alt+F4.
+  // The X: the same path as Alt+F4.
   ipcMain.on('window:close', () => mainWindow?.close())
   ipcMain.on('agent:busy', (_e, busy: boolean) => {
     agentBusy = busy === true
@@ -477,7 +474,7 @@ function wireIpc(): void {
       app.quit()
     } else mainWindow?.close()
   })
-  // "Quit Prism Terminal": the one way out of the resident process from inside.
+  // A quit asked for from the page (the e2e ends its runs with it).
   ipcMain.on('app:quit', () => {
     quitting = true
     app.quit()
@@ -502,7 +499,7 @@ function wireIpc(): void {
 
 // Single instance: a second launch (the verb, a shortcut, a command line)
 // forwards its folders to the running process and ends, instead of starting a
-// rival. With the window hidden that IS how the app is opened again.
+// rival.
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -525,18 +522,13 @@ if (!app.requestSingleInstanceLock()) {
     // been sitting in the background for an hour, and the folder it is handed
     // must arrive in a window that is actually in front of you.
     reveal(mainWindow)
-    if (hiddenResident) {
-      hiddenResident = false
-      send('restore:again') // the renderer calls restoreTabs(); the folders follow it
-    }
     handFolders(folders)
   })
 
   app.on('before-quit', () => {
     quitting = true
   })
-  // Resident: a process with no visible window is the normal state, not the end.
-  app.on('window-all-closed', () => {})
+  app.on('window-all-closed', () => app.quit())
   // Every shell dies with the app; a pty with no window is an orphan.
   app.on('will-quit', () => {
     killAll()

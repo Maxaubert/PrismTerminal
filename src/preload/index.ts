@@ -63,19 +63,14 @@ const api = {
     ipcRenderer.invoke('dialog:pick-folder', from),
   /** The saved strip, with folders that have gone dropped and each agent tab's
    *  resume resolved. The first call of a launch also carries the folders the
-   *  app was launched with. Call it on mount and again on onRestoreAgain. */
+   *  app was launched with. Call it on mount. */
   restoreTabs: (): Promise<Restored> => ipcRenderer.invoke('tabs:restore'),
   /** Report the strip so main can persist it. Ignored until restoreTabs has
-   *  answered, and again from onWindowHidden until the next restore. */
+   *  answered. */
   tabsChanged: (s: SavedTabs): void => ipcRenderer.send('tabs:changed', s),
   /** A folder handed over (the Explorer verb, a second launch): open a NEW tab
    *  there, whatever else is open. Only ever arrives after a restore answered. */
   onOpenFolder: (cb: (cwd: string) => void): (() => void) => on('open:folder', cb),
-  /** The window was closed to resident and every shell is dead: drop the tab
-   *  list and the sessions. Nothing is reported; tabs.json already has them. */
-  onWindowHidden: (cb: () => void): (() => void) => on('window:hidden', cb),
-  /** The hidden window is on screen again: call restoreTabs() and rebuild. */
-  onRestoreAgain: (cb: () => void): (() => void) => on('restore:again', cb),
 
   /* ----- closing ----- */
 
@@ -105,11 +100,11 @@ const api = {
   setWindowBg: (hex: string): void => ipcRenderer.send('window:bg', hex),
   windowMinimize: (): void => ipcRenderer.send('window:minimize'),
   windowToggleMaximize: (): void => ipcRenderer.send('window:toggle-maximize'),
-  /** Closes to resident (after the agent question, if one is due). */
+  /** Closes the window, which quits (after the agent question, if one is due). */
   windowClose: (): void => ipcRenderer.send('window:close'),
   windowToggleFullscreen: (): void => ipcRenderer.send('window:fullscreen-toggle'),
   onFullscreen: (cb: (on: boolean) => void): (() => void) => on('window:fullscreen', cb),
-  /** End the resident process, not just the window. */
+  /** Quit outright. */
   quitApp: (): void => ipcRenderer.send('app:quit'),
   appVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
 

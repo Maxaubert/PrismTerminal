@@ -24,8 +24,6 @@ export interface AgentIndicator {
   agentKinds: RefObject<Map<string, DetectedAgent>>
   /** The session ended: every mark it carried goes with it. */
   forget: (id: string) => void
-  /** Everything at once: the window was put away and its shells killed. */
-  reset: () => void
 }
 
 const without = (prev: ReadonlySet<string>, id: string): ReadonlySet<string> => {
@@ -199,16 +197,5 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     setDoneIds((prev) => without(prev, id))
   }
 
-  const reset = (): void => {
-    for (const id of [...fallbackTimers.current.keys()]) stopFallback(id)
-    for (const id of titled.current) forgetAgentTitle(id)
-    outputRuns.current.clear()
-    titled.current.clear()
-    agentKinds.current.clear()
-    setAgentIds(new Set())
-    setWorkingIds(new Set())
-    setDoneIds(new Set())
-  }
-
-  return { agentIds, workingIds, doneIds, agentKinds, forget, reset }
+  return { agentIds, workingIds, doneIds, agentKinds, forget }
 }

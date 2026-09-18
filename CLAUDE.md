@@ -19,8 +19,8 @@ Design spec and plan: `docs/superpowers/specs/2026-09-18-prism-terminal-design.m
 
 In: tabs (a tab is ONE shell and its folder, nothing else), the agent indicator, themes + custom
 theme + fonts + acrylic, tab restore with agent resume, the + with ask / fixed-folder modes and its
-pinned + recent list, find in scrollback, the paste and drop rules, close confirmation, Explorer
-verbs, update chip, resident single instance.
+pinned + recent list, the start screen, find in scrollback, the paste and drop rules, close
+confirmation, Explorer verbs, update chip, single instance.
 
 Out, each a fresh owner decision and not a natural next step: split panes, several shells per tab,
 per-shell profiles, a tray icon, multiple windows, SSH management, app styles separate from the
@@ -48,11 +48,16 @@ terminal theme, anything that reads or shows files.
   20s. It reports CHANGES, so its first verdict on a shell is said once; the e2e waits for it.
 - **The only command the app writes into a shell is the agent resume**, as the shell's STARTUP
   command, with the id shape-checked in main (`validResume`). Never type into a user's shell.
-- **Resident lifecycle.** Closing the window (or the last tab) hides it and kills the shells; the
-  process stays. Main IGNORES `tabs:changed` from the hide until the next restore answers, or the
-  renderer's emptied list overwrites `tabs.json`. The renderer reports the emptied list BEFORE it
-  asks for the close when the user closed the last tab, which is what makes that tab stay closed.
-  The installer kills the process itself (`build/installer.nsh`), since a close only hides it.
+- **Closing the window QUITS; closing the last tab does not** (owner, 2026-09-18, after using the
+  first build, which hid the window and stayed resident: "the app should actually close when you
+  close it"). The last tab lands on the start screen (`EmptyState`, Tabby's shape by owner
+  reference: mark, name, New terminal, the pinned + recent folders, Settings, version). Resume does
+  NOT need a live process: it is `tabs.json` plus the agent's own session files at the next launch.
+  So `tabs.flush()` and the window-state write both happen synchronously in `close`, and main
+  ignores `tabs:changed` until the first restore has answered (a page that has not restored yet
+  reports an empty list). Do not reintroduce the resident process without a fresh decision.
+- **The title bar has a settings cog and NO menu** (owner, same day: a menu of Settings + Quit was
+  cut to the cog). Nothing in the UI needs to quit the app any more; the X does.
 - **The theme drives the chrome** through the real `--p-*` tokens (`lib/chromeTheme.ts`). Every ink is
   moved to a contrast floor, and light/dark is MEASURED from the ground, never read off a name. No
   container behind `TerminalPanel` may paint `--p-bg`: on acrylic that is a second translucent coat.
@@ -82,8 +87,8 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
 - `npm run dev`, `npm test` (vitest), `npm run typecheck`, `npm run lint`.
 - `npm run e2e` builds and drives the app through Playwright over CDP, PARKED offscreen and
   unfocusable (`--e2e`), each scenario in its own profile and reaping its processes (the app is
-  resident, so a "closed" app still holds the single-instance lock). `npm run e2e -- <name>` runs the
-  scenarios whose name contains `<name>`. Under `--e2e`: no verb write, no updater, and
+  single-instance, so a stray one takes every later launch's folder and exits it).
+  `npm run e2e -- <name>` runs the scenarios whose name contains `<name>`. Under `--e2e`: no verb write, no updater, and
   `PT_E2E_PICK` answers the folder chooser. An app whose stand-in agent is "working" will hold
   `app.close()` on the close question; end scenarios idle.
 - CI (`ci.yml`): typecheck + lint + unit on PR and push to main. The e2e is the local pre-push gate.

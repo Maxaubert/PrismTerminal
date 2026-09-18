@@ -89,11 +89,17 @@ interface Tab {
   pinned then recent folders (last five, deduped, read fresh) and opens a tab there directly.
 - Prewarm runs only in `folder` mode, where the folder is known before the click.
 
-**Last tab closes -> the window closes, the process stays resident** (owner). A relaunch or an
-Explorer verb shows the window again instantly. Closing the WINDOW with tabs open also hides to
-resident after the close confirmation passes, killing every shell, with `tabs.json` already
-saved. A tray icon is NOT added; quitting the resident process is "Quit Prism Terminal" in the
-title bar's menu, and the installer/uninstaller closes it. Relaunch with no argument restores
+**Closing the window quits; the last tab closing lands on the start screen** (owner, REVISED
+2026-09-18 after using the first build. The first decision, "window closes, process stays
+resident", was built and reversed: "the app should actually close when you close it". Resume is
+unaffected, since it works from `tabs.json` and the agent's session files at the next launch.)
+The start screen follows Tabby's, the owner's reference: the mark and the name, New terminal, the
+pinned and recent folders (one press each), Settings, a footer with GitHub and the version.
+Closing the WINDOW passes the close confirmation, flushes `tabs.json`, kills every shell and ends
+the process. A tray icon is NOT added. The title bar carries a settings cog and NO menu (owner, after using
+the first build: a menu holding Settings and Quit was cut to the cog alone), so nothing in the UI
+quits the resident process; the installer and uninstaller end it, and `app:quit` stays in the
+preload for the e2e. Relaunch with no argument restores
 `tabs.json`; with a folder argument it restores and adds that folder's tab.
 
 **Second open** (owner): single instance. A folder handed over (verb, argv, a second launch)

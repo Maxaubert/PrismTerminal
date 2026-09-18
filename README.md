@@ -32,8 +32,8 @@ and want to know, at a glance, which one has finished.
   every colour is checked against a contrast floor, so no theme can make an unreadable window.
   Acrylic works with any of them, with an opacity slider.
 - **Open a tab where you are.** "Open in Prism Terminal" on a folder and "Open Prism Terminal here"
-  on empty space, in Explorer's right-click menu. The folder arrives as a new tab in the running
-  window.
+  on empty space, in Explorer's right-click menu. If the app is running, the folder arrives as a new
+  tab in its window.
 - **New tabs your way.** The + asks for a folder each time, or always opens in one folder you
   choose. Right-click the + for pinned and recent folders.
 - **Made for the way AI CLIs are used.** An image on the clipboard pastes into Claude Code, copied
@@ -57,8 +57,8 @@ with no administrator prompt.
 > The installer is **unsigned**, so Windows SmartScreen will warn on first run: choose
 > "More info", then "Run anyway". Windows 10 1809 or newer, x64. Acrylic needs Windows 11.
 
-The app is resident: closing the window (or the last tab) puts it away and keeps the process, so
-the next launch is instant. "Quit Prism Terminal" in the title-bar menu ends it.
+Closing the window quits, and everything open comes back at the next launch. Closing the last tab
+lands on a start screen with the folders you were last in, each one press from a shell.
 
 ## Keys
 

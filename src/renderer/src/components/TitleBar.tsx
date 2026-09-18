@@ -1,10 +1,11 @@
-import { useState, type JSX } from 'react'
-import { ContextMenu } from './ContextMenu'
+import type { JSX } from 'react'
 import UpdateChip from './UpdateChip'
 
 /**
  * The frameless window's top strip: the mark and the name, a drag region, the
- * update chip when there is one, a menu, and the three window buttons.
+ * update chip when there is one, the settings cog, and the three window
+ * buttons. A cog and not a menu (owner, 2026-09-18): a menu of one row is
+ * chrome.
  *
  * Prism's bar, by subtraction: no file name, no panel toggle, no Tools. What
  * it keeps is the shape - 36px, the title surface, glyph-only 32x28 buttons -
@@ -16,7 +17,6 @@ const BTN =
 
 export default function TitleBar({ onSettings }: { onSettings: () => void }): JSX.Element {
   const w = window.prism
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   return (
     <div
       data-title-bar
@@ -46,19 +46,11 @@ export default function TitleBar({ onSettings }: { onSettings: () => void }): JS
       <UpdateChip />
       <div className="no-drag flex items-center gap-1">
         <button
-          className={`${BTN} ${menu ? 'bg-[var(--p-hover-hi)] text-[var(--p-text)]' : ''}`}
-          onClick={(e) => {
-            // Opened at the button's own bottom-left corner, not at the
-            // pointer: a menu from a button belongs to the button. ContextMenu
-            // clamps it inside the window.
-            const r = e.currentTarget.getBoundingClientRect()
-            setMenu({ x: r.left, y: r.bottom + 2 })
-          }}
-          title="Menu"
-          aria-label="Menu"
-          aria-haspopup="menu"
-          aria-expanded={!!menu}
-          data-title-menu
+          className={BTN}
+          onClick={onSettings}
+          title="Settings (Ctrl+,)"
+          aria-label="Settings"
+          data-title-settings
         >
           <svg
             viewBox="0 0 24 24"
@@ -66,11 +58,13 @@ export default function TitleBar({ onSettings }: { onSettings: () => void }): JS
             height={15}
             fill="none"
             stroke="currentColor"
-            strokeWidth="1.9"
+            strokeWidth="1.7"
             strokeLinecap="round"
+            strokeLinejoin="round"
             aria-hidden
           >
-            <path d="M5 7h14M5 12h14M5 17h14" />
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </button>
         <button className={BTN} onClick={() => w.windowMinimize()} title="Minimize" aria-label="Minimize">
@@ -102,19 +96,6 @@ export default function TitleBar({ onSettings }: { onSettings: () => void }): JS
           </svg>
         </button>
       </div>
-      {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          onClose={() => setMenu(null)}
-          items={[
-            { label: 'Settings', hint: 'Ctrl+,', onPick: onSettings },
-            // Close hides the window and leaves the app resident, so the next
-            // launch is instant; this is the row that really ends it.
-            { label: 'Quit Prism Terminal', onPick: () => w.quitApp() }
-          ]}
-        />
-      )}
     </div>
   )
 }

@@ -224,7 +224,7 @@ type Send = (channel: string, ...args: unknown[]) => void
 /**
  * Spawn a shell for `id`, cwd at `root`. Refuses a live id (the renderer asked
  * twice; the first shell wins). node-pty is imported here rather than at module
- * top so the resident window's launch path never touches the native module.
+ * top so the window's launch path never touches the native module.
  */
 /**
  * A restored Claude session rides the shell's OWN startup command, so nothing

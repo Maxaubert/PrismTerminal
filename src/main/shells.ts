@@ -43,7 +43,7 @@ const run = (exe: string, args: string[]): Promise<{ ok: boolean; stdout: Buffer
 
 let cached: Promise<ShellDef[]> | null = null
 
-/** Detect once per run. Prism is resident, but a newly installed shell only
+/** Detect once per run. The app can run for days, and a newly installed shell only
  *  matters for NEW terminals, and a restart is an acceptable price for that. */
 export function detectShells(): Promise<ShellDef[]> {
   cached ??= (async () => {

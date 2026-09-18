@@ -217,7 +217,9 @@ const scenarios = {
     // The chooser answers alpha ONCE, for the Settings picker; the + must not ask it.
     const { app, page } = await launch(w, { args: [w.beta], pick: w.alpha })
     await until(async () => (await tabLabels(page)).length === 1)
-    await page.keyboard.press('Control+,')
+    // The title bar's cog is the way into Settings (there is no menu).
+    await page.locator('[data-title-settings]').click()
+    ok((await page.locator('[data-title-menu]').count()) === 0, 'the title bar has a settings cog and no menu')
     await page.locator('[data-pref="newtab-mode"] [data-seg="folder"]').click()
     ok(
       await until(() => page.evaluate(() => localStorage.getItem('prism.newtab.mode') === 'folder' && !!localStorage.getItem('prism.newtab.folder'))),
@@ -264,22 +266,33 @@ const scenarios = {
     await app.close().catch(() => {})
   },
 
-  /** Closing the last tab puts the window away; the process stays resident,
-   *  and the next launch shows it again. */
+  /** Closing the last tab lands on the start screen; the X is what quits, and
+   *  what was open when it quit is what comes back. */
   async lastTab(ok) {
     const w = world()
-    const { app, page } = await launch(w, { args: [w.alpha] })
+    let { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    await until(async () => (await tabLabels(page)).length === 2)
+    await page.locator('[data-tab-close]').first().click({ force: true })
     await until(async () => (await tabLabels(page)).length === 1)
     await page.locator('[data-tab-close]').first().click({ force: true })
+    ok(await until(async () => (await page.locator('[data-empty-state]').count()) === 1), 'closing the last tab lands on the start screen')
     const visible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((x) => x.isVisible()))
-    ok(await until(async () => (await visible())[0] === false), 'the window is put away')
-    ok((await visible()).length === 1, 'and the process is still there')
-    const child = spawn(electronPath, [MAIN, `--user-data-dir=${w.profile}`, '--e2e', w.beta], { stdio: 'ignore' })
-    await new Promise((r) => child.on('exit', r))
-    ok(await until(async () => (await visible())[0] === true), 'a new launch shows it again')
-    await app.evaluate(park)
-    ok(await until(async () => (await tabLabels(page)).length === 1), 'with the folder it was handed, and not the tab that was closed')
-    ok((await tabTitles(page))[0].endsWith('beta'), 'which is beta')
+    ok((await visible())[0] === true, 'and the window stays')
+    ok(
+      await until(async () => /^Version \d+\.\d+\.\d+/.test((await page.locator('[data-start-version]').textContent()) ?? '')),
+      'the start screen says which version this is'
+    )
+    const folders = await page.locator('[data-start-folder]').count()
+    ok(folders === 2, `and offers the folders you were just in (${folders})`)
+    await page.locator('[data-start-folder]').first().click()
+    ok(await until(async () => (await tabLabels(page)).length === 1), 'one press opens a shell in one of them')
+    await sleep(900) // past the save debounce
+    // The X really quits: no resident process is left holding the lock.
+    const gone = new Promise((r) => app.process().on('exit', r))
+    await page.locator('[data-window-close]').click().catch(() => {})
+    ok((await Promise.race([gone.then(() => 'exit'), sleep(10000).then(() => 'timeout')])) === 'exit', 'the X ends the process')
+    ;({ app, page } = await launch(w))
+    ok(await until(async () => (await tabLabels(page)).length === 1), 'and the tab that was open when it quit comes back')
     await app.close().catch(() => {})
   },
 

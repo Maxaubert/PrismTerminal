@@ -1,7 +1,9 @@
-; Prism Terminal is RESIDENT: closing its window hides it and the process
-; stays, so the next launch is instant. An installer cannot replace an exe
-; that is running, and the app's own close request only hides it again, so
-; setup ends the process itself before it touches a file.
+; An installer cannot replace an exe that is running, and a terminal is the
+; kind of app that is: an in-app update quits first, but setup run by hand
+; (or /S from a script) meets a live window, and one whose agent is working
+; would answer a polite close with a question nobody is there to read. So
+; setup ends the process itself before it touches a file; tabs.json is
+; already on disk (every change is saved within half a second).
 !macro customInit
   nsExec::Exec 'taskkill /F /T /IM PrismTerminal.exe'
   Pop $0

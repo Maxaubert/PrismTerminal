@@ -80,20 +80,21 @@ export function readWindowState(): WindowState {
  *  to hear about every pixel of it. */
 export function watchWindowState(win: BrowserWindow): void {
   let timer: NodeJS.Timeout | null = null
+  const write = (): void => {
+    if (win.isDestroyed() || win.isMinimized()) return
+    // getNormalBounds is the un-maximised size, which is what should come back
+    // when the window is restored.
+    const b = win.getNormalBounds()
+    const state: WindowState = { ...b, maximised: win.isMaximized() }
+    try {
+      writeFileSync(WINDOW_STATE(), JSON.stringify(state))
+    } catch {
+      /* a terminal that cannot write its window size is still a terminal */
+    }
+  }
   const save = (): void => {
     if (timer) clearTimeout(timer)
-    timer = setTimeout(() => {
-      if (win.isDestroyed() || win.isMinimized()) return
-      // getNormalBounds is the un-maximised size, which is what should come back
-      // when the window is restored.
-      const b = win.getNormalBounds()
-      const state: WindowState = { ...b, maximised: win.isMaximized() }
-      try {
-        writeFileSync(WINDOW_STATE(), JSON.stringify(state))
-      } catch {
-        /* a terminal that cannot write its window size is still a terminal */
-      }
-    }, 400)
+    timer = setTimeout(write, 400)
   }
   // Listed one by one: BrowserWindow's overloads are per event name, so a loop
   // over a union of them has no single signature to match.
@@ -101,7 +102,11 @@ export function watchWindowState(win: BrowserWindow): void {
   win.on('move', save)
   win.on('maximize', save)
   win.on('unmaximize', save)
-  // The window HIDES on close here (the process stays resident), so the save
-  // this arms still lands 400ms later, on a window that is not destroyed.
-  win.on('close', save)
+  // Closing quits, so there is no 400ms later: written NOW, while the window
+  // still exists to be measured. (A close the agent question vetoes writes a
+  // size that is still true.)
+  win.on('close', () => {
+    if (timer) clearTimeout(timer)
+    write()
+  })
 }

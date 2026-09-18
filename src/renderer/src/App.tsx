@@ -83,9 +83,6 @@ export default function App(): JSX.Element {
   useEffect(() => {
     live.current = { state, workingIds, agentIds }
   })
-  /** The window is put away: its list is dropped and must not be reported,
-   *  or the emptied list would overwrite the tabs main just saved. */
-  const hidden = useRef(false)
 
   useEffect(() => {
     paintChrome()
@@ -124,7 +121,6 @@ export default function App(): JSX.Element {
       const ids = r.tabs.map((t) => openTab(t.cwd, t.resume))
       const front = ids[r.active]
       if (front) setState((s) => pickTab(s, front))
-      hidden.current = false
       prewarm()
     })
   }, [openTab, prewarm])
@@ -132,20 +128,7 @@ export default function App(): JSX.Element {
   useEffect(() => {
     restore()
     const offs = [
-      window.prism.onRestoreAgain(restore),
       window.prism.onOpenFolder((cwd) => openTab(cwd)),
-      window.prism.onWindowHidden(() => {
-        // Main has killed every shell and saved the list; drop ours quietly.
-        hidden.current = true
-        for (const t of shellTabs(live.current.state)) {
-          disposeTermSession(t.id)
-          forgetSession(t.id)
-        }
-        indicator.reset()
-        setFindFor(null)
-        setAsk(null)
-        setState(EMPTY)
-      }),
       onCwd((id, path) => setState((s) => setCwd(s, id, path)))
     ]
     return () => offs.forEach((off) => off())
@@ -153,7 +136,8 @@ export default function App(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  /** Close for real: the shell dies, and the last tab takes the window. */
+  /** Close for real: the shell dies. The LAST tab closing leaves the start
+   *  screen, not a closed window (owner, 2026-09-18); the X is what quits. */
   const closeNow = useCallback(
     (id: string) => {
       const tab = live.current.state.tabs.find((t) => t.id === id)
@@ -189,15 +173,7 @@ export default function App(): JSX.Element {
   )
 
   // The shell ended: typed exit, or died. Its tab goes with it, unasked.
-  // (Not while the window is put away: main killed those shells itself, and
-  // their exits are not tabs closing.)
-  useEffect(
-    () =>
-      window.prism.onTermExit((id) => {
-        if (!hidden.current) closeNow(id)
-      }),
-    [closeNow]
-  )
+  useEffect(() => window.prism.onTermExit((id) => closeNow(id)), [closeNow])
 
   // The window is closing while an agent works: main held the close and asks.
   useEffect(
@@ -226,7 +202,6 @@ export default function App(): JSX.Element {
   // Tell main what is open, whenever it changes: persistence for next launch,
   // and whether closing the window would interrupt anything.
   useEffect(() => {
-    if (hidden.current) return
     const shells = shellTabs(state)
     window.prism.tabsChanged({
       tabs: shells.map((t) => {
@@ -240,18 +215,6 @@ export default function App(): JSX.Element {
       )
     })
   }, [state, activeId, agentIds, agentKinds])
-
-  // The last SHELL closing takes the window with it; the process stays
-  // resident. Seen as a transition, so an empty launch closes nothing.
-  // AFTER the report above, and the order is the point: main stops listening
-  // to reports the moment it hides, so the emptied list has to be said first
-  // or the tab that was just closed comes back on the next launch.
-  const hadShells = useRef(false)
-  useEffect(() => {
-    const n = shellTabs(state).length
-    if (n === 0 && hadShells.current && !hidden.current) window.prism.windowClose()
-    hadShells.current = n > 0
-  }, [state])
 
   useEffect(() => {
     window.prism.setAgentBusy(confirmClose() && workingIds.size > 0)
@@ -353,9 +316,13 @@ export default function App(): JSX.Element {
             </Suspense>
           </div>
         )}
-        {tabs.length === 0 && (
+        {!active && (
           <div className="h-full w-full bg-[var(--p-bg)]">
-            <EmptyState onNew={() => void newTab()} />
+            <EmptyState
+              onNew={() => void newTab()}
+              onOpenFolder={openRecent}
+              onSettings={() => setState(openSettings)}
+            />
           </div>
         )}
       </div>
