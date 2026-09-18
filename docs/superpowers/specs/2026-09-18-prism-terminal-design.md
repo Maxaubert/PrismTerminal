@@ -30,7 +30,8 @@ Main process:
   fast-fails the app when a pty dies mid-read), `OutputBatcher`, `ptyEnv` (TERM/COLORTERM set,
   NO_COLOR/FORCE_COLOR dropped, agent session markers stripped by name), spawn / write / resize /
   kill / killAll / livePids, prewarm.
-- `shells.ts`: detect pwsh, Windows PowerShell, cmd, WSL, bash; main only spawns what it detected.
+- `shells.ts`: detect pwsh, Windows PowerShell, cmd and each WSL distro; main only spawns what it
+  detected.
 - `termPrompt.ts`: the OSC 9;9 folder report wrapped around the profile's own `prompt`, cmd's
   PROMPT, PSReadLine forced on with `-EnableScreenReaderMode:$false`, `PS_FILE_STYLE` (folders
   bold blue, the rest plain).
@@ -72,7 +73,7 @@ interface Tab {
 
 - Label: the last segment of `cwd`, following every OSC 9;9 report (owner). Tooltip: full path.
   Two tabs with the same last segment disambiguate with the parent folder, as `tabLabels` does.
-  Shells that report nothing (WSL, bash) keep the folder they opened in.
+  Shells that report nothing (WSL) keep the folder they opened in.
 - A shell that exits closes its tab.
 - `tabs.json` (userData, debounced 400ms, flushed on close): `{ tabs: [{ cwd, agent? }], active }`.
   Restore respawns each tab in its folder, drops a tab whose folder is gone without a word, and
