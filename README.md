@@ -9,7 +9,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-5b5bd6)](#install)
 [![License](https://img.shields.io/github/license/Maxaubert/PrismTerminal?color=5b5bd6)](LICENSE)
 
-<img src="assets/terminal-dark.png" alt="Prism Terminal with two tabs, the second one lit orange because its agent is working" width="860">
+<img src="assets/terminal-dark.png" alt="Prism Terminal with two tabs; a line in the theme's accent runs under the second one while its agent works" width="860">
 
 </div>
 
@@ -19,11 +19,11 @@ and want to know, at a glance, which one has finished.
 
 ## What it does
 
-- **An agent indicator on every tab.** A tab lights while Claude Code or Codex is working and holds
-  a "finished" colour until you visit it. It reads the agent's own word (the state each CLI writes
-  into the terminal title), so it lights within milliseconds of Enter and clears the instant the
-  answer lands, where a terminal that scores output is a second or two late at both ends. Two volumes: a quiet line under the tab,
-  or the whole tab filled.
+- **An agent indicator on every tab.** A tab lights while Claude Code or Codex is working. It reads
+  the agent's own word (the state each CLI writes into the terminal title), so it lights within
+  milliseconds of Enter and clears the instant the answer lands, where a terminal that scores output
+  is a second or two late at both ends. It wears the theme's accent, as a quiet line under the tab
+  or, turned up, the whole tab filled, which then also holds a "finished" colour until you visit it.
 - **Tabs that come back.** Close the app and reopen it: every tab returns in the folder its shell
   was in, and a tab that hosted Claude or Codex resumes that conversation (`claude --resume <id>`,
   `codex resume --last`).

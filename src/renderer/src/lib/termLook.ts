@@ -107,13 +107,14 @@ const AGENT_IND_KEY = 'prism.term.agentIndicator'
 
 export type AgentIndicator = 'off' | 'minimal' | 'full'
 
-/** How a working agent shows on its tab: not at all, an icon plus a left edge
- *  bar, or the whole tab turning. Full is the default - the point of the
- *  indicator is to be seen across a row of tabs. Idle always looks default;
- *  only WORKING paints. */
+/** How a working agent shows on its tab: not at all, a line under the tab,
+ *  or the whole tab turning. MINIMAL is the default (owner, 2026-09-18; it was
+ *  full in Prism and in the first build): the line says it, and a filled tab
+ *  is the loud version you opt into. Idle always looks default; only WORKING
+ *  paints. */
 export function agentIndicator(): AgentIndicator {
   const v = localStorage.getItem(AGENT_IND_KEY)
-  return v === 'minimal' || v === 'off' ? v : 'full'
+  return v === 'full' || v === 'off' ? v : 'minimal'
 }
 
 export function setAgentIndicator(v: AgentIndicator): void {
@@ -122,31 +123,38 @@ export function setAgentIndicator(v: AgentIndicator): void {
 }
 
 const AGENT_COLOR_KEY = 'prism.term.agentColor'
-const AGENT_COLOR_DEFAULT = '#f97316'
+const AGENT_DONE_KEY = 'prism.term.agentDoneColor'
+const HEX = /^#[0-9a-f]{6}$/i
 
-/** The working colour: the full tab's fill, the minimal icon's tint. */
-export function agentColor(): string {
+/**
+ * The two agent colours, as CHOICES. '' means "follow the theme" and is the
+ * default (owner, 2026-09-18: the indicator should wear the theme's accent):
+ * a fixed orange belonged to one theme and clashed with thirty-eight others.
+ * What the theme gives when nothing is chosen is lib/agentColors' business;
+ * this file only remembers whether the user has an opinion.
+ */
+export function agentColorChoice(): string {
   const v = localStorage.getItem(AGENT_COLOR_KEY)
-  return v && /^#[0-9a-f]{6}$/i.test(v) ? v : AGENT_COLOR_DEFAULT
+  return v && HEX.test(v) ? v : ''
 }
 
+/** A hex picks a colour; '' gives the choice back to the theme. */
 export function setAgentColor(hex: string): void {
-  localStorage.setItem(AGENT_COLOR_KEY, hex)
+  if (HEX.test(hex)) localStorage.setItem(AGENT_COLOR_KEY, hex)
+  else localStorage.removeItem(AGENT_COLOR_KEY)
   notify()
 }
 
-const AGENT_DONE_KEY = 'prism.term.agentDoneColor'
-const AGENT_DONE_DEFAULT = '#22c55e'
-
-/** The finished-while-away colour: an agent that stopped working on a
- *  BACKGROUND tab wears this until the tab is visited. */
-export function agentDoneColor(): string {
+/** The finished-while-away colour's choice: an agent that stopped working on
+ *  a BACKGROUND tab wears it until the tab is visited. */
+export function agentDoneColorChoice(): string {
   const v = localStorage.getItem(AGENT_DONE_KEY)
-  return v && /^#[0-9a-f]{6}$/i.test(v) ? v : AGENT_DONE_DEFAULT
+  return v && HEX.test(v) ? v : ''
 }
 
 export function setAgentDoneColor(hex: string): void {
-  localStorage.setItem(AGENT_DONE_KEY, hex)
+  if (HEX.test(hex)) localStorage.setItem(AGENT_DONE_KEY, hex)
+  else localStorage.removeItem(AGENT_DONE_KEY)
   notify()
 }
 
@@ -173,9 +181,10 @@ export interface CustomTermTheme {
 export const TERM_EXTRA_DEFAULTS = {
   font: 'cascadia',
   fontPct: 100,
-  indicator: 'full' as AgentIndicator,
-  indicatorColor: AGENT_COLOR_DEFAULT,
-  doneColor: AGENT_DONE_DEFAULT,
+  indicator: 'minimal' as AgentIndicator,
+  // '' = the theme's own (see agentColorChoice).
+  indicatorColor: '',
+  doneColor: '',
   acrylic: false,
   opacity: 100
 }
@@ -199,8 +208,11 @@ export function applyCustomExtras(t: CustomTermTheme | null): void {
   if (t.font) setTermFontId(t.font)
   if (t.fontPct) localStorage.setItem(FONT_KEY, String(t.fontPct))
   if (t.indicator) localStorage.setItem(AGENT_IND_KEY, t.indicator)
+  // A saved setup that followed the theme goes back to following it.
   if (t.indicatorColor) localStorage.setItem(AGENT_COLOR_KEY, t.indicatorColor)
+  else localStorage.removeItem(AGENT_COLOR_KEY)
   if (t.doneColor) localStorage.setItem(AGENT_DONE_KEY, t.doneColor)
+  else localStorage.removeItem(AGENT_DONE_KEY)
   if (t.acrylic !== undefined) localStorage.setItem(ACRYLIC_KEY, t.acrylic ? '1' : '0')
   if (t.opacity !== undefined) localStorage.setItem(OPACITY_KEY, String(t.opacity))
   notify()
@@ -251,11 +263,11 @@ export function useTermOpacity(): number {
 export function useAgentIndicator(): AgentIndicator {
   return useSyncExternalStore(sub, agentIndicator)
 }
-export function useAgentColor(): string {
-  return useSyncExternalStore(sub, agentColor)
+export function useAgentColorChoice(): string {
+  return useSyncExternalStore(sub, agentColorChoice)
 }
-export function useAgentDoneColor(): string {
-  return useSyncExternalStore(sub, agentDoneColor)
+export function useAgentDoneColorChoice(): string {
+  return useSyncExternalStore(sub, agentDoneColorChoice)
 }
 export function useCustomTermTheme(): CustomTermTheme | null {
   // Cache per notify tick: useSyncExternalStore needs a stable snapshot.

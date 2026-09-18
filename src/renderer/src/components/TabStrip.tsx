@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type JSX, type MouseEvent, type PointerEvent } from 'react'
 import { tabLabels, type Tab } from '../lib/tabs'
-import { useAgentColor, useAgentDoneColor, useAgentIndicator } from '../lib/termLook'
+import { useAgentIndicator } from '../lib/termLook'
+import { useAgentColors } from '../lib/agentColors'
 import { contrastRatio } from '../lib/termAnsi'
 import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from '../lib/recentRoots'
 import { ContextMenu } from './ContextMenu'
@@ -85,12 +86,12 @@ export function TabStrip({
   onOpenRecent: (path: string) => void
 }): JSX.Element | null {
   const indicator = useAgentIndicator()
-  const agentColor = useAgentColor()
-  const doneColor = useAgentDoneColor()
-  // Full mode fills the tab with the chosen colour. Text biases WHITE: strict
-  // contrast maths picks black on the default orange, but white-on-orange is
-  // the look; black only wins on genuinely light fills (contrast vs black of
-  // 12 is a ~0.55 luminance threshold).
+  // The user's pick where there is one, else the theme's accent and green.
+  const { working: agentColor, finished: doneColor } = useAgentColors()
+  // Full mode fills the tab with the colour. Text biases WHITE: strict
+  // contrast maths picks black on a mid orange or indigo, but white on a
+  // saturated fill is the look; black only wins on genuinely light fills
+  // (contrast vs black of 12 is a ~0.55 luminance threshold).
   const onTint = (c: string): string => (contrastRatio('#000000', c) < 12 ? '#ffffff' : '#000000')
   // A tab being carried (#71 follow-up): the strip animates it rather than
   // drawing a hairline - the tab lifts out and its neighbours slide across to
