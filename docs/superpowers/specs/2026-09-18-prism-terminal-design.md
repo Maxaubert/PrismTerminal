@@ -30,7 +30,8 @@ Main process:
   fast-fails the app when a pty dies mid-read), `OutputBatcher`, `ptyEnv` (TERM/COLORTERM set,
   NO_COLOR/FORCE_COLOR dropped, agent session markers stripped by name), spawn / write / resize /
   kill / killAll / livePids, prewarm.
-- `shells.ts`: detect pwsh, Windows PowerShell, cmd, WSL, bash; main only spawns what it detected.
+- `shells.ts`: detect pwsh, Windows PowerShell, cmd and each WSL distro; main only spawns what it
+  detected.
 - `termPrompt.ts`: the OSC 9;9 folder report wrapped around the profile's own `prompt`, cmd's
   PROMPT, PSReadLine forced on with `-EnableScreenReaderMode:$false`, `PS_FILE_STYLE` (folders
   bold blue, the rest plain).
@@ -72,7 +73,7 @@ interface Tab {
 
 - Label: the last segment of `cwd`, following every OSC 9;9 report (owner). Tooltip: full path.
   Two tabs with the same last segment disambiguate with the parent folder, as `tabLabels` does.
-  Shells that report nothing (WSL, bash) keep the folder they opened in.
+  Shells that report nothing (WSL) keep the folder they opened in.
 - A shell that exits closes its tab.
 - `tabs.json` (userData, debounced 400ms, flushed on close): `{ tabs: [{ cwd, agent? }], active }`.
   Restore respawns each tab in its folder, drops a tab whose folder is gone without a word, and
@@ -81,18 +82,31 @@ interface Tab {
 - Every restored tab's shell spawns AT LAUNCH, in front or not (`ensureTermSession`), which is
   Prism's behaviour: every conversation resumes at launch, not when its tab is first visited.
 
-**New tab** (owner): Settings > General offers exactly two modes.
-- `ask` (default): the folder chooser opens, parented to the window; cancel opens nothing.
-- `folder`: a fixed folder picked in Settings; if it has gone, fall back to `ask` for that press.
-- The +, Ctrl+Shift+T and the empty state's "New tab" all follow the mode. Right-click on + lists
+**New tab** (owner, REVISED 2026-09-18 after using the first build, where `ask` was the default):
+Settings > General offers two modes.
+- `folder` (default): a tab opens at once. With no folder chosen it is the user's own folder; a
+  folder picked in Settings replaces it, and "Use my user folder" gives it back. A folder that has
+  gone falls back to the user's folder at spawn.
+- `ask`: the folder chooser opens, parented to the window; cancel opens nothing.
+- The +, Ctrl+T (owner, revised from Ctrl+Shift+T, which still works) and the start screen's "New
+  terminal" all follow the mode. Right-click on + lists
   pinned then recent folders (last five, deduped, read fresh) and opens a tab there directly.
 - Prewarm runs only in `folder` mode, where the folder is known before the click.
 
-**Last tab closes -> the window closes, the process stays resident** (owner). A relaunch or an
-Explorer verb shows the window again instantly. Closing the WINDOW with tabs open also hides to
-resident after the close confirmation passes, killing every shell, with `tabs.json` already
-saved. A tray icon is NOT added; quitting the resident process is "Quit Prism Terminal" in the
-title bar's menu, and the installer/uninstaller closes it. Relaunch with no argument restores
+**The window's edge** (owner, 2026-09-18): a faint hairline a small step off the theme's ground,
+as in Prism, in place of DWM's default grey border; none when maximized or fullscreen.
+
+**Closing the window quits; the last tab closing lands on the start screen** (owner, REVISED
+2026-09-18 after using the first build. The first decision, "window closes, process stays
+resident", was built and reversed: "the app should actually close when you close it". Resume is
+unaffected, since it works from `tabs.json` and the agent's session files at the next launch.)
+The start screen follows Tabby's, the owner's reference: the mark and the name, New terminal, the
+pinned and recent folders (one press each), Settings, a footer with GitHub and the version.
+Closing the WINDOW passes the close confirmation, flushes `tabs.json`, kills every shell and ends
+the process. A tray icon is NOT added. The title bar carries a settings cog and NO menu (owner, after using
+the first build: a menu holding Settings and Quit was cut to the cog alone), so nothing in the UI
+quits the resident process; the installer and uninstaller end it, and `app:quit` stays in the
+preload for the e2e. Relaunch with no argument restores
 `tabs.json`; with a folder argument it restores and adds that folder's tab.
 
 **Second open** (owner): single instance. A folder handed over (verb, argv, a second launch)
@@ -130,7 +144,7 @@ theme, font, size, acrylic, agent colours.
 **Close confirmation** (owner): closing a tab, or the window, while an agent is WORKING asks
 first and names the agent and how long it has run (`agentClock`). Off means off.
 
-**Keys**: Ctrl+Shift+T new tab, Ctrl+Shift+W close tab, Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+1-9
+**Keys**: Ctrl+T new tab, Ctrl+Shift+W close tab, Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+1-9
 switch, Ctrl+Shift+F find, Ctrl+, settings, F11 fullscreen. Plain Ctrl+W stays delete-word and
 Escape stays the shell's. Ctrl+` is no longer claimed (there is no panel to hide).
 

@@ -1,0 +1,159 @@
+@import 'tailwindcss';
+
+:root {
+  color-scheme: dark;
+}
+
+/* The MINIMAL agent indicator (owner pick, 2026-08-23): an indeterminate bar
+   running along the bottom edge of a tab while its agent works - the way a
+   loading browser tab reads. Working only; the finished colour belongs to the
+   full indicator alone. */
+@keyframes p-agent-run {
+  0% { left: -42% }
+  100% { left: 100% }
+}
+.p-agent-run { animation: p-agent-run 1.25s ease-in-out infinite }
+@media (prefers-reduced-motion: reduce) {
+  /* No travelling bar for anyone who asked for stillness: the edge simply
+     carries the colour instead. */
+  .p-agent-run { left: 0; width: 100%; animation: none }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* Fallbacks only, for the frame before the first paint: lib/chromeTheme derives
+   the real values from the terminal's theme and App paints them onto :root,
+   again whenever the theme, acrylic or its opacity changes. These ARE that
+   derivation's output for the default 'prism' preset at full opacity, pasted
+   rather than typed, so first paint and first render are the same colours.
+   Recompute them if the preset or chromeTokens changes. */
+:root {
+  --p-bg-solid: #0b0b0f;
+  --p-bg: #0b0b0f;
+  --p-side: #0b0b0f;
+  --p-side-flat: #141418;
+  --p-title: #0b0b0f;
+  --p-tabs: #0b0b0f;
+  --p-tab-active: #0b0b0f;
+  --p-text: #e7e7ee;
+  --p-text-soft: #c8c8cf;
+  --p-dim: #939399;
+  --p-dim2: #6e6e73;
+  --p-accent: #4aa5f0;
+  --p-accent-hi: #71b6f0;
+  --p-on-accent: #0b0b0f;
+  --p-icon: #939399;
+  --p-hover: #ffffff0f;
+  --p-hover-hi: #ffffff1c;
+  --p-divider: #ffffff12;
+  --p-line: #ffffff17;
+  --p-preview: #28282c;
+  --p-control: #131317;
+  --p-track: #5a5a5e;
+  --p-sel-bg: #4aa5f0;
+  --p-tree-folder: #71b6f0;
+
+  /* Shape and type. No theme changes these, so they live here and nowhere
+     else. --p-radius-sm is SHARED, not styled: small controls keep one shape
+     everywhere (Prism, owner decision 2026-08-21). */
+  --p-radius: 2px;
+  --p-radius-sm: 3px;
+  --p-font: 'Segoe UI', system-ui, sans-serif;
+  --p-font-ui: 'Segoe UI', system-ui, sans-serif;
+  --p-size: 12.5px;
+}
+
+body {
+  /* Transparent on purpose: the surfaces paint --p-bg themselves, and on an
+     acrylic window a painted body is a second coat under every one of them. */
+  background: transparent;
+  color: var(--p-text);
+  font-family: var(--p-font-ui);
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Frameless drag region for the top strip. */
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Someone who asked the OS for less motion gets state changes, not journeys. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* No scrollbar at all: the pane scrolls, it just doesn't advertise it. Styling
+   the Windows one (::-webkit-scrollbar) was tried and left it on screen; only
+   taking it away removes the grey gutter and steppers, which on a true-black
+   theme were the brightest thing in the window. */
+.p-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.p-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* The two surfaces that carry the chrome's face: the title bar and the strip.
+   Everything else, and Settings above all, stays on the UI face. */
+.p-styled-font {
+  font-family: var(--p-font);
+}
+
+/* Colour pickers: the control is the swatch. Chromium nests a padded inner
+   rectangle by default, which reads as a box inside a box. */
+input[type='color'] {
+  padding: 0;
+}
+input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+/* xterm's stock stylesheet paints .xterm-viewport solid black (a macOS
+   scrollbar-opacity workaround). The THEME background lives on the scrollable
+   element above it, so the black was invisible - until an acrylic window made
+   the theme translucent and the black showed through as "every terminal is
+   black". The scrollable element owns the surface; this layer stays clear. */
+.xterm .xterm-viewport {
+  /* !important because xterm.css rides the LAZY terminal chunk and lands in
+     the document after this sheet - equal specificity would lose on order. */
+  background-color: transparent !important;
+}
+
+/* The start screen's one authored moment: it settles in, once, when the last
+   tab closes. Visible by default, so a missed animation is a static screen. */
+@keyframes p-start-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.p-start-in {
+  animation: p-start-in 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .p-start-in {
+    animation: none;
+  }
+}
