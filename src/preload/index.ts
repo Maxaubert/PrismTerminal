@@ -107,6 +107,8 @@ const api = {
   /** Quit outright. */
   quitApp: (): void => ipcRenderer.send('app:quit'),
   appVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
+  /** The user's own folder: where a new tab opens when no folder is chosen. */
+  homeDir: (): Promise<string> => ipcRenderer.invoke('app:home'),
 
   /* ----- the update check ----- */
 

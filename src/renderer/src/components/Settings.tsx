@@ -884,21 +884,29 @@ function GeneralTab(): JSX.Element {
       if (dir) setNewTabMode('folder', dir)
     })
   }
-  // "Always open in a folder" with none chosen yet opens the chooser right
-  // away; cancelling keeps asking rather than leaving a mode with no folder. A
-  // folder chosen earlier is simply used again, and the button changes it.
-  const pickTabMode = (v: 'ask' | 'folder'): void => {
-    if (v === 'folder' && !tabFolder) chooseFolder()
-    else setNewTabMode(v)
-  }
+  // With no folder chosen, "a folder" is the user's own (owner, 2026-09-18:
+  // the + should simply open, and asking is the option, not the default).
+  const [home, setHome] = useState('')
+  useEffect(() => {
+    void window.prism.homeDir().then(setHome)
+  }, [])
   return (
     <div className={ROWS}>
       <Pref
         id="newtab-mode"
         label="New tabs"
-        hint={tabMode === 'folder' ? tabFolder : 'Where the + and Ctrl+Shift+T land.'}
+        hint={
+          tabMode === 'ask'
+            ? 'The + and Ctrl+T ask for a folder every time.'
+            : tabFolder || (home ? `Your user folder: ${home}` : 'Your user folder')
+        }
       >
         <div className="flex items-center gap-2.5">
+          {tabMode === 'folder' && tabFolder && (
+            <button data-use-home onClick={() => setNewTabMode('folder', '')} className={ROW_BUTTON}>
+              Use my user folder
+            </button>
+          )}
           {tabMode === 'folder' && (
             <button data-choose-folder onClick={chooseFolder} className={ROW_BUTTON}>
               Choose folder…
@@ -906,10 +914,10 @@ function GeneralTab(): JSX.Element {
           )}
           <Segmented
             value={tabMode}
-            onChange={pickTabMode}
+            onChange={(v: 'ask' | 'folder') => setNewTabMode(v)}
             options={[
-              { id: 'ask', name: 'Ask where each time' },
-              { id: 'folder', name: 'Always open in a folder' }
+              { id: 'folder', name: 'Open in a folder' },
+              { id: 'ask', name: 'Ask where each time' }
             ]}
           />
         </div>

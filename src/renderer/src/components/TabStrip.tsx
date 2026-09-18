@@ -426,7 +426,7 @@ export function TabStrip({
       })}
       <button
         className="no-drag my-1 grid w-7 shrink-0 place-items-center rounded text-[var(--p-icon)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)]"
-        title="New tab (Ctrl+Shift+T). Right-click for recent folders"
+        title="New tab (Ctrl+T). Right-click for recent folders"
         aria-label="New tab"
         onClick={onNew}
         // The + adds a tab instantly; its RIGHT click is where "somewhere I

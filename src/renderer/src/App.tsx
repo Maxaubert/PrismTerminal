@@ -100,15 +100,22 @@ export default function App(): JSX.Element {
     return id
   }, [])
 
+  /** The user's own folder: where a new tab opens when Settings names none.
+   *  Asked once; main is the one that knows. */
+  const home = useRef('')
+
   const prewarm = useCallback(() => {
-    // Only a fixed folder is known ahead of the click.
-    if (newTabMode() === 'folder') window.prism.termPrewarm(newTabFolder(), savedShellId())
+    // Only a folder known ahead of the click can be warmed; asking cannot.
+    const dir = newTabMode() === 'folder' ? newTabFolder() || home.current : ''
+    if (dir) window.prism.termPrewarm(dir, savedShellId())
   }, [])
 
   const newTab = useCallback(async () => {
-    let cwd: string | null = newTabMode() === 'folder' ? newTabFolder() : null
-    // Cancelling the chooser opens nothing.
-    if (!cwd) cwd = await window.prism.pickFolder()
+    const cwd =
+      newTabMode() === 'folder'
+        ? newTabFolder() || home.current || (await window.prism.homeDir())
+        : // Cancelling the chooser opens nothing.
+          await window.prism.pickFolder()
     if (!cwd) return
     openTab(cwd)
     prewarm()
@@ -126,6 +133,9 @@ export default function App(): JSX.Element {
   }, [openTab, prewarm])
 
   useEffect(() => {
+    void window.prism.homeDir().then((dir) => {
+      home.current = dir
+    })
     restore()
     const offs = [
       window.prism.onOpenFolder((cwd) => openTab(cwd)),
@@ -251,7 +261,9 @@ export default function App(): JSX.Element {
       } else if (!e.shiftKey && e.key === ',') {
         hit()
         setState(openSettings)
-      } else if (e.shiftKey && k === 't') {
+      } else if (k === 't') {
+        // With or without shift: Ctrl+T is the chord, Ctrl+Shift+T the habit
+        // Windows Terminal leaves in the hand.
         hit()
         void newTab()
       } else if (e.shiftKey && k === 'w') {

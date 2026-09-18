@@ -34,8 +34,8 @@ and want to know, at a glance, which one has finished.
 - **Open a tab where you are.** "Open in Prism Terminal" on a folder and "Open Prism Terminal here"
   on empty space, in Explorer's right-click menu. If the app is running, the folder arrives as a new
   tab in its window.
-- **New tabs your way.** The + asks for a folder each time, or always opens in one folder you
-  choose. Right-click the + for pinned and recent folders.
+- **New tabs your way.** The + opens in your user folder, or in one folder you choose, or asks each
+  time. Right-click the + for pinned and recent folders.
 - **Made for the way AI CLIs are used.** An image on the clipboard pastes into Claude Code, copied
   files paste as quoted paths, a file dropped on the window types its path, Shift+Enter is a
   newline, and Ctrl+C over a selection copies instead of interrupting.
@@ -64,7 +64,7 @@ lands on a start screen with the folders you were last in, each one press from a
 
 | Key | Does |
 |---|---|
-| `Ctrl+Shift+T` | New tab |
+| `Ctrl+T` | New tab |
 | `Ctrl+Shift+W` | Close tab |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
 | `Ctrl+1` to `Ctrl+9` | Jump to a tab |

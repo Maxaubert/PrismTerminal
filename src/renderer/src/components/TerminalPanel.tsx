@@ -422,13 +422,14 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     ) {
       return false
     }
-    // New tab and close tab are Ctrl+SHIFT+T and Ctrl+SHIFT+W here, Windows
-    // Terminal's pair, and the shift is tested for the same reason it is for
-    // find above. Inside Prism the plain chords were the app's; in a terminal
-    // they are the shell's and the agent's - Ctrl+W deletes a word in every
-    // readline, Ctrl+T and Ctrl+B are Claude Code's own - so yielding them
-    // here would swallow a key that nothing then acts on.
-    if (e.ctrlKey && e.shiftKey && !e.altKey && /^[tw]$/i.test(e.key)) return false
+    // New tab is Ctrl+T (owner, 2026-09-18), with or without shift, as it is
+    // in Prism and in every browser. That takes the chord from whatever runs
+    // in the shell (Claude Code uses Ctrl+T for its task list), which is the
+    // owner's trade. Close tab stays Ctrl+SHIFT+W: plain Ctrl+W deletes a word
+    // in every readline, and yielding it would swallow a key people type all
+    // day. The shift is tested for the same reason it is for find above.
+    if (e.ctrlKey && !e.altKey && (e.key === 't' || e.key === 'T')) return false
+    if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'w' || e.key === 'W')) return false
     if (e.key === 'Enter' && e.shiftKey) {
       // Newline-without-submit, the continuation form Claude Code accepts
       // everywhere. This is what /terminal-setup exists to configure; here it

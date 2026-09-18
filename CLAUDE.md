@@ -56,6 +56,17 @@ terminal theme, anything that reads or shows files.
   So `tabs.flush()` and the window-state write both happen synchronously in `close`, and main
   ignores `tabs:changed` until the first restore has answered (a page that has not restored yet
   reports an empty list). Do not reintroduce the resident process without a fresh decision.
+- **New tab is Ctrl+T and opens in the user's folder** (owner, 2026-09-18, reversing the first
+  build's Ctrl+Shift+T and its "ask" default). `newTabPrefs`: mode `folder` is the default and a
+  folder of `''` means the user's own, which main resolves (`homeDir()`); `ask` is the option.
+  Ctrl+T is therefore taken from whatever runs in the shell (Claude Code's task list), knowingly.
+  Close tab stays Ctrl+SHIFT+W: plain Ctrl+W is delete-word in every readline.
+- **The window's edge is a faint hairline that follows the theme** (owner, same day;
+  `windowEdge.ts` + Prism's `dwmHelper.ts`). DWM's border is always one physical pixel, so it cannot
+  be thinner; what reads as thickness is contrast, so it is drawn a small step off the theme's own
+  ground, and removed when maximized or fullscreen. Chromium rewrites the DWM attributes when the
+  backdrop changes, so it is re-applied, debounced, after every material or ground change. Off
+  under `--e2e` (the helper is a PowerShell that compiles a P/Invoke per launch).
 - **The title bar has a settings cog and NO menu** (owner, same day: a menu of Settings + Quit was
   cut to the cog). Nothing in the UI needs to quit the app any more; the X does.
 - **The theme drives the chrome** through the real `--p-*` tokens (`lib/chromeTheme.ts`). Every ink is
@@ -77,7 +88,8 @@ terminal theme, anything that reads or shows files.
 ## Layout
 
 `src/main` (index.ts is wiring only; terminal, shells, termPrompt, agentDetect, agentPoll,
-agentResume, tabsStore, windowState, material, verbSwitch, shellVerb, update, argv),
+agentResume, tabsStore, windowState, material, windowEdge, dwmHelper, verbSwitch, shellVerb,
+update, argv),
 `src/preload`, `src/shared` (termCwd, types), `src/renderer/src` (App.tsx owns the tab list and the
 keys; components/; lib/ is pure and tested). One responsibility per file; aliases `@shared`,
 `@renderer`. No new runtime dependency without a reason; today there are eight.

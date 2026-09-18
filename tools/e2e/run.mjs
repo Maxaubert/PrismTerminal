@@ -121,16 +121,28 @@ async function until(fn, ms = 20000, step = 150) {
 }
 
 const scenarios = {
-  /** + asks for a folder (the default mode), a shell opens there, echo round-trips. */
+  /** New terminal opens in the user's own folder with nothing asked (the
+   *  default), Ctrl+T does the same from inside a shell, and "ask" asks. */
   async spawn(ok) {
     const w = world()
     const { app, page } = await launch(w, { pick: w.alpha })
-    ok((await page.locator('[data-empty-state]').count()) === 1, 'an empty launch offers a new tab')
-    await page.locator('[data-empty-state] button').first().click()
-    ok(await until(async () => (await tabLabels(page)).length === 1), 'the chooser\'s folder became a tab')
-    ok((await tabTitles(page))[0].endsWith('alpha'), 'the tab\'s tooltip is the full path')
+    const home = await page.evaluate(() => window.prism.homeDir())
+    ok((await page.locator('[data-empty-state]').count()) === 1, 'an empty launch lands on the start screen')
+    await page.locator('[data-start-new]').click()
+    ok(await until(async () => (await tabLabels(page)).length === 1), 'New terminal opens a tab with nothing asked')
+    ok((await tabTitles(page))[0].toLowerCase() === home.toLowerCase(), 'in the user\'s own folder, and the tooltip is the full path')
     await typeLine(page, 'echo pt-$(20+22)-ok')
     ok(await until(async () => (await termText(page)).includes('pt-42-ok')), 'echo round-trips through the pty')
+    // From INSIDE the shell: xterm has to yield the chord for App to hear it.
+    await page.locator('.xterm').first().click({ force: true })
+    await page.keyboard.press('Control+t')
+    ok(await until(async () => (await tabLabels(page)).length === 2), 'Ctrl+T opens a tab over a focused shell')
+    await page.evaluate(() => localStorage.setItem('prism.newtab.mode', 'ask'))
+    await page.locator('[aria-label="New tab"]').click()
+    ok(
+      await until(async () => (await tabTitles(page)).some((t) => t.endsWith('alpha'))),
+      'in ask mode the + opens the folder the chooser answered'
+    )
     ok((await page.evaluate(() => window.prism.e2eRegWrites())) === 0, 'no registry write was attempted under --e2e')
     await app.close().catch(() => {})
   },
@@ -211,24 +223,34 @@ const scenarios = {
     await app.close().catch(() => {})
   },
 
-  /** A fixed folder makes + instant: no chooser is asked. */
+  /** A chosen folder replaces the user's own, and can be given back. */
   async newTabFolder(ok) {
     const w = world()
-    // The chooser answers alpha ONCE, for the Settings picker; the + must not ask it.
+    // The chooser answers alpha for the Settings picker; the + must not ask it.
     const { app, page } = await launch(w, { args: [w.beta], pick: w.alpha })
     await until(async () => (await tabLabels(page)).length === 1)
     // The title bar's cog is the way into Settings (there is no menu).
     await page.locator('[data-title-settings]').click()
     ok((await page.locator('[data-title-menu]').count()) === 0, 'the title bar has a settings cog and no menu')
-    await page.locator('[data-pref="newtab-mode"] [data-seg="folder"]').click()
     ok(
-      await until(() => page.evaluate(() => localStorage.getItem('prism.newtab.mode') === 'folder' && !!localStorage.getItem('prism.newtab.folder'))),
-      'choosing folder mode asks for the folder once and remembers it'
+      (await page.locator('[data-pref="newtab-mode"] [data-seg="folder"]').getAttribute('aria-pressed')) === 'true',
+      'opening in a folder is the default'
+    )
+    await page.locator('[data-choose-folder]').click()
+    ok(
+      await until(() => page.evaluate(() => (localStorage.getItem('prism.newtab.folder') ?? '').endsWith('alpha'))),
+      'Choose folder remembers the folder'
     )
     const before = (await tabLabels(page)).length
     await page.locator('[aria-label="New tab"]').click()
     ok(await until(async () => (await tabLabels(page)).length === before + 1), 'the + opens a tab at once')
-    ok((await tabTitles(page)).some((t) => t.endsWith('alpha')), 'in the fixed folder')
+    ok((await tabTitles(page)).some((t) => t.endsWith('alpha')), 'in the chosen folder')
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-use-home]').click()
+    ok(
+      await until(() => page.evaluate(() => localStorage.getItem('prism.newtab.folder') === '')),
+      'and "Use my user folder" gives the default back'
+    )
     await app.close().catch(() => {})
   },
 

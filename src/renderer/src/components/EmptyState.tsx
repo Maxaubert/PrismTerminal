@@ -11,8 +11,8 @@ import { pinnedRoots, plusMenuList, recentRoots } from '../lib/recentRoots'
  * What it adds to the reference is the one thing a terminal can know that a
  * start screen is for, the folders you were last in, each one a single press
  * from a shell. "New terminal" is the + by another name: what it opens (the
- * folder chooser, or the fixed folder Settings names) is decided where the +
- * is decided, so the two can never disagree.
+ * user's folder, a folder Settings names, or the chooser) is decided where
+ * the + is decided, so the two can never disagree.
  */
 const REPO = 'https://github.com/Maxaubert/PrismTerminal'
 
@@ -94,7 +94,7 @@ export default function EmptyState({
               <path d="M12 5.5v13M5.5 12h13" />
             </Glyph>
             <span className="min-w-0 flex-1 truncate text-[var(--p-text)]">New terminal</span>
-            <span className="shrink-0 text-[11.5px] text-[var(--p-dim)]">Ctrl+Shift+T</span>
+            <span className="shrink-0 text-[11.5px] text-[var(--p-dim)]">Ctrl+T</span>
           </button>
 
           {places.length > 0 && (

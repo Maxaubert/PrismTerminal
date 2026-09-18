@@ -82,12 +82,19 @@ interface Tab {
 - Every restored tab's shell spawns AT LAUNCH, in front or not (`ensureTermSession`), which is
   Prism's behaviour: every conversation resumes at launch, not when its tab is first visited.
 
-**New tab** (owner): Settings > General offers exactly two modes.
-- `ask` (default): the folder chooser opens, parented to the window; cancel opens nothing.
-- `folder`: a fixed folder picked in Settings; if it has gone, fall back to `ask` for that press.
-- The +, Ctrl+Shift+T and the empty state's "New tab" all follow the mode. Right-click on + lists
+**New tab** (owner, REVISED 2026-09-18 after using the first build, where `ask` was the default):
+Settings > General offers two modes.
+- `folder` (default): a tab opens at once. With no folder chosen it is the user's own folder; a
+  folder picked in Settings replaces it, and "Use my user folder" gives it back. A folder that has
+  gone falls back to the user's folder at spawn.
+- `ask`: the folder chooser opens, parented to the window; cancel opens nothing.
+- The +, Ctrl+T (owner, revised from Ctrl+Shift+T, which still works) and the start screen's "New
+  terminal" all follow the mode. Right-click on + lists
   pinned then recent folders (last five, deduped, read fresh) and opens a tab there directly.
 - Prewarm runs only in `folder` mode, where the folder is known before the click.
+
+**The window's edge** (owner, 2026-09-18): a faint hairline a small step off the theme's ground,
+as in Prism, in place of DWM's default grey border; none when maximized or fullscreen.
 
 **Closing the window quits; the last tab closing lands on the start screen** (owner, REVISED
 2026-09-18 after using the first build. The first decision, "window closes, process stays
@@ -137,7 +144,7 @@ theme, font, size, acrylic, agent colours.
 **Close confirmation** (owner): closing a tab, or the window, while an agent is WORKING asks
 first and names the agent and how long it has run (`agentClock`). Off means off.
 
-**Keys**: Ctrl+Shift+T new tab, Ctrl+Shift+W close tab, Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+1-9
+**Keys**: Ctrl+T new tab, Ctrl+Shift+W close tab, Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+1-9
 switch, Ctrl+Shift+F find, Ctrl+, settings, F11 fullscreen. Plain Ctrl+W stays delete-word and
 Escape stays the shell's. Ctrl+` is no longer claimed (there is no panel to hide).
 

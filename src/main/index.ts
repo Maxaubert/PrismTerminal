@@ -8,6 +8,8 @@ import { startAgentPoll, pollAgentsSoon } from './agentPoll'
 import { claudeSessions, planRestore, validResume } from './agentResume'
 import { foldersFromArgv } from './argv'
 import { acrylicOk, createMaterial } from './material'
+import { stopDwmHelper, warmDwmHelper } from './dwmHelper'
+import { createWindowEdge } from './windowEdge'
 import { detectShells } from './shells'
 import { createTabsStore } from './tabsStore'
 import { killAll, killTerm, prewarmShell, resizeTerm, spawnTerm, writeTerm } from './terminal'
@@ -61,6 +63,15 @@ Menu.setApplicationMenu(null)
 let mainWindow: BrowserWindow | null = null
 // Acrylic and the window's solid ground; the rules are material.ts's.
 const material = createMaterial(() => mainWindow)
+// The faint hairline round a floating window; the rules are windowEdge.ts's.
+// Not under --e2e: a parked window has no edge anyone sees, and the helper is a
+// PowerShell that compiles a P/Invoke, once per launch, thirty launches a run.
+const edge = E2E
+  ? { apply: (): void => {} }
+  : createWindowEdge(
+      () => mainWindow,
+      () => material.bg()
+    )
 
 /** Every event to the renderer goes through here: a pty can outlive the
  *  webContents it reports to by a moment, and sending into a destroyed one
@@ -187,7 +198,13 @@ function createWindow(): void {
     if (remembered.maximised) win.maximize()
     reveal(win)
     material.settled() // a window made after the prefs were said still wears them
+    // The helper compiles its one P/Invoke now, so the first edge change is a
+    // pipe write and not a two-second wait.
+    if (!E2E) warmDwmHelper()
+    edge.apply()
   })
+  win.on('maximize', () => edge.apply())
+  win.on('unmaximize', () => edge.apply())
   watchWindowState(win)
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
@@ -222,10 +239,12 @@ function createWindow(): void {
   win.on('enter-full-screen', () => {
     send('window:fullscreen', true)
     material.settled()
+    edge.apply()
   })
   win.on('leave-full-screen', () => {
     send('window:fullscreen', false)
     material.settled()
+    edge.apply()
   })
 
   /**
@@ -455,6 +474,8 @@ function wireIpc(): void {
   // package.json's, not app.getVersion(): unpackaged, that one answers with
   // ELECTRON's version, and Settings then shows 43.x as the app's own.
   ipcMain.handle('app:version', () => pkg.version)
+  // Where a new tab opens when Settings names no folder: the user's own.
+  ipcMain.handle('app:home', () => homedir())
 
   /* ----- the window ----- */
 
@@ -491,10 +512,17 @@ function wireIpc(): void {
 
   ipcMain.handle('acrylic:supported', () => acrylicOk())
   // False = the material does not exist here (Windows 10).
-  ipcMain.handle('acrylic:set', (_e, on: boolean): boolean => material.setAcrylic(on))
+  ipcMain.handle('acrylic:set', (_e, on: boolean): boolean => {
+    const ok = material.setAcrylic(on)
+    edge.apply() // Chromium rewrites the DWM attributes when the backdrop changes
+    return ok
+  })
   // The theme's solid ground: the window's colour when the material is off,
   // and what shows for the frame before the page paints after a resize.
-  ipcMain.on('window:bg', (_e, hex: string) => material.setBg(hex))
+  ipcMain.on('window:bg', (_e, hex: string) => {
+    material.setBg(hex)
+    edge.apply() // the edge is a step off the ground, so it follows the theme
+  })
 }
 
 // Single instance: a second launch (the verb, a shortcut, a command line)
@@ -531,6 +559,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => app.quit())
   // Every shell dies with the app; a pty with no window is an orphan.
   app.on('will-quit', () => {
+    stopDwmHelper()
     killAll()
     tabs.flush()
   })
