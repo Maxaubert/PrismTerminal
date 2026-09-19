@@ -97,6 +97,19 @@ terminal theme, anything that reads or shows files.
   make the character under a block cursor a hole). Exactly ONE coat per pixel, which also matters
   on acrylic: two translucent coats are a visibly darker panel, so App's own container behind the
   panel stays unpainted. The e2e `theme` scenario measures the strip, and fails on the old code.
+- **Links are PAINTED, not only underlined on hover** (owner, 2026-09-19, #10). xterm's link addon
+  marks a link only under the pointer, so `lib/termLinkPaint.ts` lays a DECORATION on each row a
+  link sits on: the link colour as its foreground, a faint underline as its element, never in the
+  way of a click. `lib/termLinks.ts` is the pure half: `findLinks` (a sentence's full stop and a
+  bracket the link never opened are given back) and `linkColor`, which is `LINK_BLUE` moved only as
+  far as the ground needs to reach 4.5:1, so it adapts to every preset and to a custom background,
+  and is tested for all of them. WHAT IS SCANNED is the design: scrollback is immutable, so its
+  links are painted once and ride a marker; the LIVE screen is redrawn in place by TUIs, so every
+  pass throws away what it painted from the last finished line down and paints that again (a
+  decoration left on a rewritten row is a blue smear over words that were never a link). Rebuilt
+  on a resize (reflow) and on a theme change; not on the alternate screen. Columns are counted in
+  CELLS, since a wide character is one character and two cells. xterm splits a row into spans as
+  it likes, so the e2e finds a link's span by POSITION, never by its text.
 - **Opacity is a number read defensively** (`termOpacity`): `Number(null)` is 0, and never-set must
   read as opaque.
 - **Explorer verbs**: HKCU, `reg.exe` with argv only, on `Directory` and `Directory\Background`, no

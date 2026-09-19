@@ -141,6 +141,10 @@ and the chrome alike. Windows 10, where the material does not exist, shows the t
 with the reason. The window is created the way Prism creates it (not `frame: false`, because DWM
 refuses to composite the material behind a frameless window).
 
+**Links are highlighted** (owner, 2026-09-19, #10): an http(s) link in the buffer wears a link
+colour and a faint underline at all times. The colour is blue, moved only as far as the theme's
+ground (a preset's or a custom one) needs to reach 4.5:1, so it adapts to every theme.
+
 **Settings** rides the strip as a tab. General: new tab mode + folder, shell, Explorer verb,
 close confirmation, agent indicator volume, version + update. Appearance: theme grid, custom
 theme, font, size, acrylic, agent colours.

@@ -425,6 +425,89 @@ const scenarios = {
     await app.close().catch(() => {})
   },
 
+  /** A printed link is painted as one, in a colour that follows the theme. */
+  async links(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    await until(async () => (await tabLabels(page)).length === 1)
+    // Every run of cells in the rows that wears `rgb`, as text, row by row.
+    const inked = (rgb) =>
+      page.evaluate((want) => {
+        const norm = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).join(',')
+        return [...document.querySelectorAll('.xterm .xterm-rows > div')]
+          .map((row) =>
+            [...row.querySelectorAll('span')]
+              .filter((sp) => norm(getComputedStyle(sp).color) === want)
+              .map((sp) => sp.textContent ?? '')
+              .join('')
+          )
+          .filter((t) => t.length)
+      }, rgb)
+    const BLUE = '78,161,255' // LINK_BLUE, which reads as it is on the default theme
+    const url = 'https://go.microsoft.com/fwlink/?LinkID=108518'
+    // Write-Host, so the OUTPUT row holds the sentence exactly as typed here.
+    await typeLine(page, `cls; Write-Host 'online at ${url}. Then more.'`)
+    ok(await until(async () => (await inked(BLUE)).includes(url), 8000), 'a printed link wears the link blue')
+    const runs = await inked(BLUE)
+    ok(runs.every((t) => !t.endsWith('.')), `and the sentence's full stop is not part of it (${JSON.stringify(runs)})`)
+    // A link longer than the window is wide wraps; every row of it is the link.
+    const long = 'https://example.com/' + 'a'.repeat(260)
+    await typeLine(page, `cls; Write-Host '${long}'`)
+    ok(
+      await until(async () => (await inked(BLUE)).join('').includes(long), 8000),
+      'a link that wraps over rows is painted on every one of them'
+    )
+    ok((await inked(BLUE)).length >= 2, 'and it really did wrap')
+    // A light theme: the same blue would be unreadable, so it moves.
+    await typeLine(page, `cls; Write-Host 'see ${url}'`)
+    await until(async () => (await inked(BLUE)).includes(url), 8000)
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    await page.locator('[data-term-card="github"]').first().click()
+    await page.locator('[data-tab]').first().click()
+    // The colour of the cell the link STARTS on: xterm splits a row into runs
+    // of spans as it likes, so the span is found by position, not by its text.
+    const light = await until(
+      () =>
+        page.evaluate(() => {
+          const lin = (c) => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4)
+          const lum = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+          const nums = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).map(Number)
+          let ink = null
+          for (const row of document.querySelectorAll('.xterm .xterm-rows > div')) {
+            const at = (row.textContent ?? '').indexOf('https://')
+            if (at < 0) continue
+            let seen = 0
+            for (const sp of row.querySelectorAll('span')) {
+              const len = (sp.textContent ?? '').length
+              if (at < seen + len) {
+                ink = nums(getComputedStyle(sp).color)
+                break
+              }
+              seen += len
+            }
+            if (ink) break
+          }
+          if (!ink) return null
+          const probe = document.createElement('span')
+          probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-bg-solid')
+          document.body.appendChild(probe)
+          const ground = nums(getComputedStyle(probe).color)
+          probe.remove()
+          const hi = Math.max(lum(...ink), lum(...ground))
+          const lo = Math.min(lum(...ink), lum(...ground))
+          const ratio = (hi + 0.05) / (lo + 0.05)
+          return ink.join(',') === '78,161,255' || ratio < 4.5
+            ? null
+            : { rgb: ink.join(','), ratio, blue: ink[2] > ink[0] }
+        }),
+      8000
+    )
+    ok(!!light, 'on a light theme the link takes another colour that reads there')
+    ok(!!light && light.blue, `and it is still a blue (${light ? light.rgb + ' at ' + light.ratio.toFixed(1) + ':1' : 'none'})`)
+    await app.close().catch(() => {})
+  },
+
   /** `exit` closes the tab it was typed in. */
   async exitClosesTab(ok) {
     const w = world()

@@ -9,6 +9,8 @@ import { registerPaste, reportCwd, reportTitle } from '../lib/termBus'
 import { parseOsc9 } from '@shared/termCwd'
 import { resolveTermTheme } from '../lib/termTheme'
 import { normalizeColor } from '../lib/termAnsi'
+import { linkColor } from '../lib/termLinks'
+import { attachLinkPaint, type LinkPainter } from '../lib/termLinkPaint'
 import {
   onTermLookChange,
   termBaseFontPx,
@@ -36,6 +38,8 @@ interface Session {
   term: Terminal
   fit: FitAddon
   search: SearchAddon
+  /** Paints the links in the buffer; told when the colours change. */
+  links: LinkPainter
   el: HTMLDivElement
   unsub: Array<() => void>
   /** Ctrl+scroll zoom, this session only: never persisted, dies with it. */
@@ -63,6 +67,13 @@ const sessions = new Map<string, Session>()
  * defaults to the background; on a clear background that would be a hole, so
  * it is named.
  */
+/** What a link wears on the theme in force: blue, moved as far as this
+ *  ground (a preset's, or one the user picked) needs for it to read. */
+function currentLinkColor(): string {
+  const theme = resolveTermTheme(termThemeId())
+  return linkColor(theme.background, theme.foreground)
+}
+
 function currentTermTheme(): ReturnType<typeof resolveTermTheme> & { cursorAccent: string } {
   const theme = resolveTermTheme(termThemeId())
   // Flattened first: a custom theme may hold #rgb or an rgba().
@@ -151,6 +162,7 @@ function applyLook(): void {
   const family = termFontStack()
   for (const [id, s] of sessions) {
     s.term.options.theme = theme
+    s.links.repaint() // the link colour is measured against the theme's ground
     const want = s.fontOverride ?? base
     const sizeChanged = s.term.options.fontSize !== want
     const familyChanged = s.term.options.fontFamily !== family
@@ -202,6 +214,7 @@ export function disposeTermSession(id: string): void {
   sessions.delete(id)
   forgetSession(id)
   s.unsub.forEach((u) => u())
+  s.links.dispose()
   s.search.dispose()
   s.term.dispose()
   s.el.remove()
@@ -310,6 +323,9 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   term.loadAddon(new Unicode11Addon())
   term.unicode.activeVersion = '11'
   term.loadAddon(new WebLinksAddon((_e, url) => window.prism.openExternal(url)))
+  // The addon makes a link clickable and underlines it under the pointer; this
+  // is what makes it LOOK like a link the rest of the time.
+  const links = attachLinkPaint(term, currentLinkColor)
 
   const el = document.createElement('div')
   el.className = 'h-full w-full'
@@ -460,7 +476,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     return true
   })
 
-  const session: Session = { term, fit, search, el, unsub }
+  const session: Session = { term, fit, search, links, el, unsub }
   sessions.set(id, session)
 
   // A session restored over a Claude conversation launches straight into it:
