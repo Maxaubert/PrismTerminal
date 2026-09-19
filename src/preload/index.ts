@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { createTermApi } from '@core/preload/api'
+import { createDictationApi } from '@core/preload/dictationApi'
 import type { Restored, SavedTabs, UpdateInfo } from '@shared/types'
 
 // The renderer's whole view of the machine. SANDBOXED: nothing here touches
@@ -20,6 +21,8 @@ const api = {
   // THE TERMINAL'S BRIDGE IS THE CORE'S (core/preload/api): the member names,
   // their signatures and the channel names exist once, for this app and Prism.
   ...createTermApi(ipcRenderer),
+  // ...and so is dictation's (#13).
+  ...createDictationApi(ipcRenderer),
   /** The real path of a File from a drop (the sandbox hides `File.path`). */
   getDroppedPath: (file: File): string => webUtils.getPathForFile(file),
   /** A dropped path as the folder a tab would open in: a folder is itself, a

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
+import { DICTATION_OPTIONS, dictationOptionIds } from './dictationOptions'
 import { TERMINAL_OPTIONS, terminalOptionIds } from './options'
 
 // The list and the sections must say the same thing: the list is what each
@@ -20,7 +21,7 @@ const rendered = new Set(
 
 describe('the terminal options list', () => {
   it('names every row the shared sections render, and nothing they do not', () => {
-    expect([...rendered].sort()).toEqual(TERMINAL_OPTIONS.map((o) => o.id).sort())
+    expect([...rendered].sort()).toEqual([...TERMINAL_OPTIONS, ...DICTATION_OPTIONS].map((o) => o.id).sort())
   })
 
   it('has one storage key per option, all under prism.term', () => {
@@ -33,5 +34,18 @@ describe('the terminal options list', () => {
     const all = terminalOptionIds({ windowAcrylic: true })
     const prism = terminalOptionIds({ windowAcrylic: false })
     expect(all.filter((id) => !prism.includes(id))).toEqual(['term-opacity'])
+  })
+
+  it('gives dictation one key per option, under prism.dictation, and only the file managers none', () => {
+    const keys = DICTATION_OPTIONS.map((o) => o.key).filter((k): k is string => k !== null)
+    expect(new Set(keys).size).toBe(keys.length)
+    for (const k of keys) expect(k.startsWith('prism.dictation.')).toBe(true)
+    expect(DICTATION_OPTIONS.filter((o) => o.key === null).map((o) => o.id)).toEqual(['dictation-gpu'])
+  })
+
+  it('offers the GPU row only where an NVIDIA adapter is present', () => {
+    const all = dictationOptionIds({ nvidia: true })
+    const without = dictationOptionIds({ nvidia: false })
+    expect(all.filter((id) => !without.includes(id))).toEqual(['dictation-gpu'])
   })
 })

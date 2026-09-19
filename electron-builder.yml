@@ -25,6 +25,11 @@ npmRebuild: false
 extraResources:
   - from: build/icon.ico
     to: icon.ico
+  # The speech engine for dictation (#13): whisper.cpp's official CPU build,
+  # fetched by `npm run fetch:bin` against a pinned SHA-256. Beside the app, not
+  # in the asar: it is an exe and its DLLs, and Windows has to be able to run it.
+  - from: vendor/whisper
+    to: bin/whisper
 win:
   icon: build/icon.ico
   executableName: PrismTerminal

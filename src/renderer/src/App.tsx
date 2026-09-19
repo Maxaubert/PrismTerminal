@@ -24,6 +24,8 @@ import {
   type TabState
 } from './lib/tabs'
 import { useAgentIndicator } from '@core/renderer/lib/useAgentIndicator'
+import { useDictationArm } from '@core/renderer/lib/useDictation'
+import { DictationPill } from '@core/renderer/components/DictationPill'
 import { humanFor, workingFor } from '@core/renderer/lib/agentClock'
 import { forgetSession, markResume, markTouched } from '@core/renderer/lib/termActivity'
 import { onCwd, pasteInto } from '@core/renderer/lib/termBus'
@@ -80,6 +82,10 @@ export default function App(): JSX.Element {
   const active = tabs.find((t) => t.id === activeId) ?? null
   const activeShell = active && active.kind !== 'settings' ? active : null
   const indicator = useAgentIndicator(activeShell ? activeShell.id : null)
+  // Dictation (#13) is the core's. It is armed here because this is where
+  // "which shell is in front" is known; it renders nothing and re-renders
+  // nothing, and with the setting off it listens to nothing.
+  useDictationArm(activeShell ? activeShell.id : null)
   const findOpen = !!activeShell && findFor === activeShell.id
   const { agentIds, workingIds, doneIds, agentKinds } = indicator
 
@@ -364,6 +370,7 @@ export default function App(): JSX.Element {
             shellId={savedShellId()}
           />
         )}
+        <DictationPill sessionId={activeShell ? activeShell.id : null} />
         {activeShell && findOpen && (
           <TermFind sessionId={activeShell.id} onClose={() => setFindFor(null)} />
         )}

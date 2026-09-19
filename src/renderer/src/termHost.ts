@@ -33,6 +33,10 @@ configureTermCore({
   // Nothing else owns the window, so the terminal setting switches its material.
   acrylic: { kind: 'window', supported: () => window.prism.acrylicSupported() },
   paintsGround: true,
+  // DICTATION (#13). A press only counts over a shell, and App already hands
+  // the controller null when the start screen or Settings is in front, so
+  // there is nothing further for this app to refuse.
+  dictation: { api: window.prism, canDictate: () => true },
   ownsKey: (e) => {
     if (!e.ctrlKey || e.altKey) return false
     const k = e.key.toLowerCase()

@@ -1,6 +1,6 @@
 {
   "name": "prism-term-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The terminal shared by Prism Terminal and Prism: pty, shells, agent detection and indicator, themes, links, the panel. TypeScript source, compiled by the host.",
   "license": "MIT",
   "private": true,
@@ -16,14 +16,18 @@
     "./renderer/lib/*": "./renderer/lib/*.ts",
     "./renderer/components/*": "./renderer/components/*.tsx",
     "./renderer/settings/options": "./renderer/settings/options.ts",
-    "./renderer/settings/*": "./renderer/settings/*.tsx"
+    "./renderer/settings/*": "./renderer/settings/*.tsx",
+    "./renderer/settings/dictationOptions": "./renderer/settings/dictationOptions.ts",
+    "./tools/*": "./tools/*"
   },
   "files": [
     "main",
     "preload",
     "shared",
     "renderer",
+    "tools",
     "!**/*.test.ts",
+    "!**/__fixtures__/**",
     "README.md"
   ],
   "peerDependencies": {

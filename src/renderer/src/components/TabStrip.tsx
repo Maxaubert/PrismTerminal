@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type JSX, type MouseEvent, type PointerEvent } from 'react'
 import { tabLabels, type Tab } from '../lib/tabs'
+import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
 import { useAgentIndicator } from '@core/renderer/lib/termLook'
 import { useAgentColors } from '@core/renderer/lib/agentColors'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
@@ -388,6 +389,7 @@ export function TabStrip({
               )}
             </span>
             )}
+            {t.kind !== 'settings' && <DictationTabMark sessionId={t.id} />}
             <button
               role="tab"
               aria-selected={on}
