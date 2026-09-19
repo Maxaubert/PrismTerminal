@@ -870,6 +870,11 @@ const scenarios = {
     const row = (id) => page.locator(`[data-dictation-item="${id}"]`)
     ok(((await row('base').locator('[data-item-badge]').textContent()) ?? '').trim() === 'Active', 'the model in use says Active')
     ok((await row('base').locator('[data-uninstall]').count()) === 1, 'an installed model offers Uninstall')
+    const same = await page.evaluate(() => {
+      const cs = (el) => { const s = getComputedStyle(el); return [s.backgroundColor, s.borderTopWidth, s.borderTopColor, s.borderRadius, s.color].join('|') }
+      return cs(document.querySelector('[data-dictation-item="base"] [data-uninstall]')) === cs(document.querySelector('[data-dictation-item="small"] button'))
+    })
+    ok(same, 'and it is a button like Download: same fill, border, radius and ink')
     const words = ((await page.locator('[data-dictation-settings]').textContent()) ?? '')
     ok(!/\bDelete\b|\bRemove\b/.test(words), 'and nothing on the page says Delete or Remove')
 
