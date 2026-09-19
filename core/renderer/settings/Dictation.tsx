@@ -5,7 +5,6 @@ import type { CatalogEntry, DownloadFailure, EngineInfo, ItemStatus } from '../.
 import { DEFAULT_HOTKEY, formatHotkey, parseHotkeyFromEvent, type Hotkey } from '../lib/dictationKey'
 import {
   setDictationEnabled,
-  setDictationGpu,
   setDictationHotkey,
   setDictationLanguage,
   setDictationMic,
@@ -14,7 +13,6 @@ import {
   setDictationPauseMedia,
   setDictationSounds,
   useDictationEnabled,
-  useDictationGpu,
   useDictationHotkey,
   useDictationLanguage,
   useDictationMic,
@@ -329,7 +327,6 @@ export function DictationSettings(): JSX.Element | null {
   const pauseMedia = useDictationPauseMedia()
   const sounds = useDictationSounds()
   const model = useDictationModel()
-  const gpuWanted = useDictationGpu()
 
   const [status, setStatus] = useState<ItemStatus[]>([])
   const [info, setInfo] = useState<EngineInfo | null>(null)
@@ -352,9 +349,8 @@ export function DictationSettings(): JSX.Element | null {
 
   const stateOf = (id: string): ItemStatus | undefined => status.find((s) => s.id === id)
   const installed = (id: string): boolean => stateOf(id)?.state === 'installed'
-  const gpuIn = installed(GPU_ID)
-  /** In use: on disk AND not switched off in this app. */
-  const gpuOn = gpuIn && gpuWanted
+  /** GPU acceleration is ON exactly when its engine is on disk. */
+  const gpuOn = installed(GPU_ID)
 
   const download = (id: string): void => {
     setFailures((prev) => without(prev, id))
@@ -501,11 +497,11 @@ export function DictationSettings(): JSX.Element | null {
               : 'An NVIDIA card was found. The GPU engine makes the large models answer in under a second.'}
           </p>
           <div className="mt-3 overflow-hidden rounded-xl border border-[color:var(--p-divider)]">
-            {/* ENABLE and DISABLE, not install and remove (owner, 2026-09-19).
-                Enabling fetches the engine the first time; disabling only stops
-                THIS app using it, because 675 MB is not something to download
-                again on a whim and the other app may be using it. Freeing the
-                disk is Uninstall, the same control a model has. */}
+            {/* ENABLE and DISABLE, and nothing else (owner, 2026-09-19: "enable
+                downloads it, disable uninstalls it"). One control with one
+                meaning: the engine is either on this PC and in use, or it is
+                neither. A separate on/off beside an Uninstall was built first
+                and was two ideas where the owner wanted one. */}
             <ItemRow
               entry={gpu}
               status={stateOf(GPU_ID)}
@@ -513,29 +509,20 @@ export function DictationSettings(): JSX.Element | null {
               failure={failures[GPU_ID]}
               badge={gpuOn ? 'Enabled' : null}
               recommended={false}
-              warn={gpuIn && !gpuWanted ? 'Disabled: dictation is using the CPU.' : null}
+              warn={null}
               getLabel="Enable"
               getPrimary
-              onDownload={() => {
-                setDictationGpu(true)
-                download(GPU_ID)
-              }}
+              onDownload={() => download(GPU_ID)}
               onCancel={() => api.dictationCancel(GPU_ID)}
               installed={
-                <>
-                  <button
-                    data-gpu-toggle
-                    className={gpuWanted ? button : primary}
-                    onClick={() => {
-                      setDictationGpu(!gpuWanted)
-                      // The running server is the OTHER engine now.
-                      api.dictationStop()
-                    }}
-                  >
-                    {gpuWanted ? 'Disable' : 'Enable'}
-                  </button>
-                  <Uninstall what="the GPU engine" onClick={() => remove(GPU_ID)} />
-                </>
+                <button
+                  data-gpu-toggle
+                  className={button}
+                  title="Turns GPU acceleration off and frees 675 MB. Enable downloads it again."
+                  onClick={() => remove(GPU_ID)}
+                >
+                  Disable
+                </button>
               }
             />
           </div>

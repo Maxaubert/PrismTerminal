@@ -232,8 +232,8 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
     }
   }
 
-  async function pick(useGpu: boolean): Promise<{ kind: EngineKind; dir: string } | null> {
-    const gpuDir = gpuFellBack || !useGpu ? null : deps.store.gpuEngineDir()
+  async function pick(): Promise<{ kind: EngineKind; dir: string } | null> {
+    const gpuDir = gpuFellBack ? null : deps.store.gpuEngineDir()
     if (gpuDir && (await hasNvidia())) return { kind: 'gpu', dir: gpuDir }
     const cpuDir = deps.cpuDir()
     return cpuDir ? { kind: 'cpu', dir: cpuDir } : null
@@ -388,8 +388,7 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
     if (!modelPath) return { ok: false, reason: 'no-model' }
     const language = req.language || 'auto'
 
-    // Disabled in Settings is the user's word, and it wins over a pack on disk.
-    const want = await pick(req.useGpu !== false)
+    const want = await pick()
     if (stopped()) return STOPPED
     if (!want) return { ok: false, reason: 'no-engine' }
 

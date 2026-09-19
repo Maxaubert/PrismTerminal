@@ -880,16 +880,14 @@ const scenarios = {
     ok(new Set(fills).size === 1, `and its Download button is the same as every other (${fills.join(' | ')})`)
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-models.png') }).catch(() => {})
 
+    // DISABLE UNINSTALLS IT, ENABLE DOWNLOADS IT (owner, 2026-09-19): one control.
+    ok((await row('gpu-pack').locator('[data-uninstall]').count()) === 0, 'the GPU row has no second control beside Disable')
     await row('gpu-pack').locator('[data-gpu-toggle]').click()
-    ok(await until(async () => ((await row('gpu-pack').locator('[data-gpu-toggle]').textContent()) ?? '').trim() === 'Enable', 4000), 'Disable turns into Enable')
-    ok((await row('gpu-pack').locator('[data-item-badge]').count()) === 0, 'the Enabled badge goes')
-    ok(existsSync(join(pack, 'prism-installed.json')), 'and the engine stays on disk: disabling is not uninstalling')
-    ok((await row('base').locator('text=Recommended').count()) === 1, 'with the GPU off, Base is the recommended model again')
-    ok((await page.evaluate(() => localStorage.getItem('prism.dictation.gpu'))) === '0', 'the choice is this app\'s own setting')
-
-    await row('gpu-pack').locator('[data-uninstall]').click()
-    ok(await until(async () => (await row('gpu-pack').getAttribute('data-state')) === 'absent', 8000), 'Uninstall takes the engine off the disk')
+    ok(await until(async () => (await row('gpu-pack').getAttribute('data-state')) === 'absent', 8000), 'Disable takes the engine off the disk')
     ok(!existsSync(pack), 'for real')
+    ok((await row('gpu-pack').locator('[data-item-badge]').count()) === 0, 'the Enabled badge goes')
+    ok(((await row('gpu-pack').locator('button').textContent()) ?? '').trim() === 'Enable', 'and the button offers Enable again')
+    ok((await row('base').locator('text=Recommended').count()) === 1, 'with the GPU off, Base is the recommended model again')
     await app.close().catch(() => {})
   },
 
