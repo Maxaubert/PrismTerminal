@@ -268,7 +268,12 @@ function ItemRow({
       data-state={state}
       data-active={badge ? '' : undefined}
       className={`flex items-center gap-3.5 border-b border-[color:var(--p-line)] px-3.5 py-3 last:border-b-0 ${
-        badge ? 'bg-[var(--p-hover)]' : ''
+        // A WHISPER of a fill (owner, 2026-09-19: the hover grey was "too much",
+        // it should sit "closer to the terminal's main bg"). 3.5% of the TEXT
+        // colour over the ground, so it darkens a light theme and lightens a
+        // dark one by the same small step, whatever the theme is. The badge
+        // says which row is in use; this only lets the eye find it.
+        badge ? 'bg-[color-mix(in_srgb,var(--p-text)_3.5%,transparent)]' : ''
       }`}
     >
       <VendorMark vendor={entry.kind === 'gpu-pack' ? 'nvidia' : 'openai'} />
