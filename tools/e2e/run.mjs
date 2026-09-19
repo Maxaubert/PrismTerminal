@@ -577,6 +577,40 @@ const scenarios = {
     const extra = [...shown].filter((id) => !wanted.includes(id) && !own.includes(id))
     ok(extra.length === 0, `and nothing else claims to be a setting (extra: ${JSON.stringify(extra)})`)
     ok((await page.locator('[data-pref="confirm-close"]').count()) === 0, 'the close question is not a setting any more')
+    // AND IT IS LAID OUT (#20). The rows above all existed and all worked while
+    // the page was a ruin: core/ sits outside the folder Tailwind scans, so
+    // every utility used only by the shared sections was never generated, and
+    // a check that a row EXISTS cannot see that. Measured, so it can: a theme
+    // card has a card's width and the wall wraps into rows, a row has its
+    // padding, and the options of a segmented control do not overlap.
+    const look = await page.evaluate(() => {
+      const box = (e) => e.getBoundingClientRect()
+      const cards = [...document.querySelectorAll('[data-term-card]')].map(box)
+      const row = document.querySelector('[data-pref="term-font"]')
+      return {
+        cardWidth: Math.round(cards[0]?.width ?? 0),
+        cardRows: new Set(cards.map((c) => Math.round(c.top))).size,
+        rowPad: row ? parseFloat(getComputedStyle(row).paddingTop) : 0
+      }
+    })
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-appearance.png') }).catch(() => {})
+    ok(look.cardWidth >= 150, `a theme card is a card, not a sliver (${look.cardWidth}px wide)`)
+    ok(look.cardRows >= 2, `and the wall wraps into rows (${look.cardRows})`)
+    ok(look.rowPad >= 8, `a settings row has its padding (${look.rowPad}px)`)
+    await page.locator('[data-settings-tab="general"]').click()
+    await sleep(300)
+    const overlaps = await page.evaluate(() => {
+      let n = 0
+      for (const row of document.querySelectorAll('[data-pref]')) {
+        const b = [...row.querySelectorAll('button')].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0)
+        for (let i = 0; i < b.length; i += 1)
+          for (let j = i + 1; j < b.length; j += 1)
+            if (b[i].left < b[j].right - 1 && b[j].left < b[i].right - 1 && b[i].top < b[j].bottom - 1 && b[j].top < b[i].bottom - 1) n += 1
+      }
+      return n
+    })
+    ok(overlaps === 0, `no two controls in a row overlap (${overlaps} do)`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-general.png') }).catch(() => {})
     await app.close().catch(() => {})
   },
 

@@ -27,6 +27,12 @@ so an update never silently changes what an existing user sees; the bridge to ma
   userData), never shared. `settings/options.ts` lists every terminal option by id; a unit test holds
   the list and the sections together, and each app's e2e (`options`) asserts its page shows that
   list and no terminal-looking row of its own. A row outside the list is a fork.
+- **A PAGE THAT WORKS IS NOT A PAGE THAT LOOKS RIGHT** (#20, 2026-09-19). Moving the settings into
+  `core/` dropped every Tailwind class used only there (`core/` is outside the scanned root; the fix
+  is the `@source` line at the top of `index.css`, do not remove it). All 14 e2e scenarios passed over
+  a ruined page, because they asserted that rows EXIST. The `options` scenario now MEASURES the
+  layout (card width, wall rows, row padding) and writes `.e2e-shots/settings-*.png`. After any change
+  that moves UI between `src/` and `core/`, LOOK at those screenshots before calling it done.
 - **A terminal change goes in `core/`**, and is a change to Prism too: say so in the PR, and ask the
   owner when it would conflict with how Prism works. App-shell changes (tabs, start screen, window)
   stay in `src/`.

@@ -3,3 +3,4 @@ out
 dist
 *.log
 .e2e-profile
+.e2e-shots/
