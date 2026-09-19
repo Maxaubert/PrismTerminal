@@ -25,8 +25,10 @@ import {
 } from './lib/tabs'
 import { useAgentIndicator } from './lib/useAgentIndicator'
 import { humanFor, workingFor } from './lib/agentClock'
-import { forgetSession, markResume } from './lib/termActivity'
-import { onCwd } from './lib/termBus'
+import { forgetSession, markResume, markTouched } from './lib/termActivity'
+import { onCwd, pasteInto } from './lib/termBus'
+import { quotePaths } from './lib/termPaste'
+import { ContextMenu } from './components/ContextMenu'
 import { rememberRoot } from './lib/recentRoots'
 import { savedShellId } from './lib/termPrefs'
 import { newTabFolder, newTabMode } from './lib/newTabPrefs'
@@ -73,6 +75,8 @@ export default function App(): JSX.Element {
   /** The shell the find bar was opened over; it belongs to that shell alone. */
   const [findFor, setFindFor] = useState<string | null>(null)
   const [ask, setAsk] = useState<Ask | null>(null)
+  /** The terminal's own right-click menu, at the pointer. */
+  const [termMenu, setTermMenu] = useState<{ x: number; y: number } | null>(null)
   const { tabs, activeId } = state
   const active = tabs.find((t) => t.id === activeId) ?? null
   const activeShell = active && active.kind !== 'settings' ? active : null
@@ -316,7 +320,39 @@ export default function App(): JSX.Element {
           onOpenRecent={openRecent}
         />
       )}
-      <div className="relative min-h-0 flex-1">
+      <div
+        className="relative min-h-0 flex-1"
+        data-term-host
+        // A FILE DROPPED ON THE TERMINAL TYPES ITS PATH (2026-09-19, #16): the
+        // other way a file, or a screenshot, gets into an agent's prompt.
+        // Quoted, at the cursor, as the paste rule quotes copied files, and
+        // never followed by Enter. In Prism this lived in the split dock, and
+        // went with it when the dock was stripped; the README went on
+        // claiming it for a day. Only over a shell: the start screen and
+        // Settings have nothing to type into.
+        onDragOver={(e) => {
+          if (!activeShell || !e.dataTransfer.types.includes('Files')) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+        }}
+        onDrop={(e) => {
+          if (!activeShell) return
+          e.preventDefault()
+          e.stopPropagation()
+          const paths = [...e.dataTransfer.files]
+            .map((f) => window.prism.getDroppedPath(f))
+            .filter((path) => path.length > 0)
+          if (!paths.length) return
+          markTouched(activeShell.id) // input like any other: its echo is not the agent working
+          window.prism.termInput(activeShell.id, quotePaths(paths))
+          focusTermSession(activeShell.id)
+        }}
+        onContextMenu={(e) => {
+          if (!activeShell || !(e.target as HTMLElement).closest('[data-term-region]')) return
+          e.preventDefault()
+          setTermMenu({ x: e.clientX, y: e.clientY })
+        }}
+      >
         {activeShell && (
           <TerminalPanel
             key={activeShell.id}
@@ -348,6 +384,23 @@ export default function App(): JSX.Element {
           </div>
         )}
       </div>
+
+      {termMenu && activeShell && (
+        <ContextMenu
+          x={termMenu.x}
+          y={termMenu.y}
+          onClose={() => setTermMenu(null)}
+          items={[
+            // Paste through the terminal's own rule (an image forwards the
+            // keystroke to the agent, files become quoted paths, text is a
+            // bracketed paste). No Copy row: xterm owns its selection, and
+            // Ctrl+C over one already copies.
+            { label: 'Paste', hint: 'Ctrl+V', onPick: () => void pasteInto(activeShell.id) },
+            { label: 'Find in scrollback', hint: 'Ctrl+Shift+F', onPick: () => setFindFor(activeShell.id) },
+            { label: 'Close tab', hint: 'Ctrl+Shift+W', onPick: () => requestClose(activeShell.id) }
+          ]}
+        />
+      )}
 
       {ask && (
         <Dialog
