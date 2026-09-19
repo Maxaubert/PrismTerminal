@@ -2,6 +2,9 @@
 //
 //   npm run e2e            every scenario
 //   npm run e2e -- theme   only the scenarios whose name contains "theme"
+//   PT_E2E_PACKAGED=1      drive dist/win-unpacked (after `npm run package`) instead of out/:
+//                          what proves the INSTALLER's layout, e.g. that the speech engine is
+//                          where the packaged app looks for it
 //
 // OFFSCREEN and UNFOCUSED, as Prism's is. Electron has no headless mode and a
 // truly hidden window stops answering clicks, so each window is PARKED
@@ -21,9 +24,14 @@ import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 const electronPath = require('electron')
 const MAIN = resolve(process.cwd(), 'out/main/index.js')
+const PACKAGED = process.env.PT_E2E_PACKAGED === '1' ? resolve(process.cwd(), 'dist/win-unpacked/PrismTerminal.exe') : null
 const PROFILE_NAME = 'pt-e2e-profile'
 const only = process.argv.slice(2).filter((a) => !a.startsWith('-'))
 
+if (PACKAGED && !existsSync(PACKAGED)) {
+  console.error('dist/win-unpacked/PrismTerminal.exe is missing: run "npm run package" first.')
+  process.exit(1)
+}
 if (!existsSync(MAIN)) {
   console.error('out/main/index.js is missing: run "npm run build" first (npm run e2e does).')
   process.exit(1)
@@ -47,7 +55,7 @@ function reapStrays() {
       [
         '-NoProfile',
         '-Command',
-        `Get-CimInstance Win32_Process -Filter "Name='electron.exe'" | ` +
+        `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'electron.exe' -or $_.Name -eq 'PrismTerminal.exe' } | ` +
           `Where-Object { $_.CommandLine -like '*${PROFILE_NAME}*' } | ` +
           'ForEach-Object { $_.ProcessId }'
       ],
@@ -77,7 +85,8 @@ function world() {
 
 async function launch(w, { args = [], pick, env = {} } = {}) {
   const app = await electron.launch({
-    args: [MAIN, `--user-data-dir=${w.profile}`, '--e2e', ...args],
+    ...(PACKAGED ? { executablePath: PACKAGED } : {}),
+    args: [...(PACKAGED ? [] : [MAIN]), `--user-data-dir=${w.profile}`, '--e2e', ...args],
     env: { ...process.env, ...(pick ? { PT_E2E_PICK: pick } : {}), ...env }
   })
   const page = await app.firstWindow()
@@ -163,7 +172,7 @@ function ourSpeechServers() {
   try {
     const out = execFileSync(
       'powershell.exe',
-      ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "Name='whisper-server.exe'" | Where-Object { $_.ExecutablePath -like '*\\vendor\\whisper\\*' } | Measure-Object).Count`],
+      ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "Name='whisper-server.exe'" | Where-Object { $_.ExecutablePath -like '*\\vendor\\whisper\\*' -or $_.ExecutablePath -like '*\\win-unpacked\\resources\\bin\\whisper\\*' } | Measure-Object).Count`],
       { encoding: 'utf8', windowsHide: true }
     )
     return Number(out.trim()) || 0
@@ -694,11 +703,14 @@ const scenarios = {
     const root = join(w.profile, 'dictation')
     mkdirSync(join(root, 'models'), { recursive: true })
     copyFileSync(model, join(root, 'models', 'tiny.bin'))
-    const engine = resolve(process.cwd(), 'vendor/whisper')
-    ok(existsSync(join(engine, 'whisper-server.exe')), 'the speech engine was fetched into vendor/whisper')
+    // Unpackaged, the engine is the fetched folder. PACKAGED, the app is told
+    // nothing: it has to find the engine where the installer put it.
+    const engine = PACKAGED ? resolve(process.cwd(), 'dist/win-unpacked/resources/bin/whisper') : resolve(process.cwd(), 'vendor/whisper')
+    ok(existsSync(join(engine, 'whisper-server.exe')), `the speech engine is in ${PACKAGED ? 'the packaged app' : 'vendor/whisper'}`)
+    ok(existsSync(join(engine, 'vcomp140.dll')) && existsSync(join(engine, 'LICENSE-whisper.cpp.txt')), 'with the C++ runtime and the MIT notice beside it')
     const { app, page } = await launch(w, {
       args: [w.alpha],
-      env: { PT_E2E_MIC: clip, PT_DICTATION_ROOT: root, PT_WHISPER_DIR: engine, PT_E2E_NVIDIA: '0' }
+      env: { PT_E2E_MIC: clip, PT_DICTATION_ROOT: root, PT_E2E_NVIDIA: '0', ...(PACKAGED ? {} : { PT_WHISPER_DIR: engine }) }
     })
     await until(async () => (await tabLabels(page)).length === 1)
     await page.waitForFunction(
