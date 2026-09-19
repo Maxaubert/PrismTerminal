@@ -551,11 +551,49 @@ const scenarios = {
     await app.close().catch(() => {})
   },
 
+  /** THE SETTINGS PARITY CHECK (#15): this app shows every terminal option the
+   *  core lists, by id, and nothing terminal-looking of its own. Prism runs the
+   *  same check against the same list, which is what keeps the two apps'
+   *  terminal settings the same settings. */
+  async options(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    await until(async () => (await tabLabels(page)).length === 1)
+    const src = readFileSync(resolve(process.cwd(), 'core/renderer/settings/options.ts'), 'utf8')
+    const wanted = [...src.matchAll(/\{\s*id: '([a-z-]+)'/g)].map((m) => m[1]).sort()
+    ok(wanted.length >= 9, `the core lists the terminal options (${wanted.length})`)
+    await page.locator('[data-title-settings]').click()
+    const shown = new Set()
+    for (const tab of ['general', 'appearance']) {
+      await page.locator(`[data-settings-tab="${tab}"]`).click()
+      await sleep(400)
+      for (const id of await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))) shown.add(id)
+    }
+    const missing = wanted.filter((id) => !shown.has(id))
+    ok(missing.length === 0, `every terminal option is on the page (missing: ${JSON.stringify(missing)})`)
+    // What is left must be THIS APP's rows, a closed list: a terminal-looking
+    // row outside the core's list is a fork.
+    const own = ['newtab-mode', 'explorer-verb', 'app-version']
+    const extra = [...shown].filter((id) => !wanted.includes(id) && !own.includes(id))
+    ok(extra.length === 0, `and nothing else claims to be a setting (extra: ${JSON.stringify(extra)})`)
+    ok((await page.locator('[data-pref="confirm-close"]').count()) === 0, 'the close question is not a setting any more')
+    await app.close().catch(() => {})
+  },
+
   /** `exit` closes the tab it was typed in. */
   async exitClosesTab(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
     await until(async () => (await tabLabels(page)).length === 2)
+    // Ctrl+W closes a tab from INSIDE a focused shell (owner, 2026-09-19): xterm
+    // has to yield the chord, or it is delete-word to the pty and nothing closes.
+    await page.locator('[aria-label="New tab"]').click()
+    await until(async () => (await tabLabels(page)).length === 3)
+    await typeLine(page, 'echo third')
+    await page.locator('.xterm').first().click({ force: true })
+    await page.keyboard.press('Control+w')
+    ok(await until(async () => (await tabLabels(page)).length === 2, 6000), 'Ctrl+W closes the tab over a focused shell')
+    await page.locator('[data-tab]').nth(1).click()
     await typeLine(page, 'exit')
     ok(await until(async () => (await tabLabels(page)).length === 1), 'the shell ending takes its tab')
     ok((await tabTitles(page))[0].endsWith('alpha'), 'and the other tab comes to the front')

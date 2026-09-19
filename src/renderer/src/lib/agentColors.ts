@@ -1,13 +1,6 @@
-import { useMemo } from 'react'
 import { chromeTokens } from './chromeTheme'
 import { contrastRatio, ensureContrast, normalizeColor } from '@core/renderer/lib/termAnsi'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
-import {
-  useAgentColorChoice,
-  useAgentDoneColorChoice,
-  useCustomTermTheme,
-  useTermThemeId
-} from '@core/renderer/lib/termLook'
 
 /**
  * What the agent indicators wear when the user has not picked a colour: the
@@ -35,19 +28,4 @@ export function themeAgentColors(themeId: string): { working: string; finished: 
   const finished =
     contrastRatio(green, working) < 1.15 ? ensureContrast(FALLBACK_DONE, bg, FLOOR) : green
   return { working, finished }
-}
-
-/** The colours in force: the user's pick where there is one, else the theme's. */
-export function useAgentColors(): { working: string; finished: string } {
-  const themeId = useTermThemeId()
-  // A custom theme edited in place keeps its id; its palette is the dependency.
-  const custom = useCustomTermTheme()
-  const working = useAgentColorChoice()
-  const finished = useAgentDoneColorChoice()
-  return useMemo(() => {
-    const themed = themeAgentColors(themeId)
-    return { working: working || themed.working, finished: finished || themed.finished }
-    // `custom` is read through resolveTermTheme, not named in the body.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [themeId, custom, working, finished])
 }

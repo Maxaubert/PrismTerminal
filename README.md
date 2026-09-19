@@ -42,8 +42,9 @@ and want to know, at a glance, which one has finished.
 - **Made for the way AI CLIs are used.** An image on the clipboard pastes into Claude Code, copied
   files paste as quoted paths, a file dropped on the window types its path, Shift+Enter is a
   newline, and Ctrl+C over a selection copies instead of interrupting.
-- **It asks before it interrupts.** Closing a tab or the window while an agent is mid-answer asks
-  first, and says which agent and how long it has been working. Off means off.
+- **It asks before it interrupts.** Closing a tab that hosts an agent asks first, and says which
+  agent and how long it has been working; a plain shell just closes. Not a setting: it simply does
+  the sensible thing.
 
 <div align="center">
 <img src="assets/terminal-light.png" alt="The same window wearing a light theme: the whole chrome turns light with it" width="420">
@@ -68,7 +69,7 @@ lands on a start screen with the folders you were last in, each one press from a
 | Key | Does |
 |---|---|
 | `Ctrl+T` | New tab |
-| `Ctrl+Shift+W` | Close tab |
+| `Ctrl+W` | Close tab |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
 | `Ctrl+1` to `Ctrl+9` | Jump to a tab |
 | `Ctrl+Shift+F` | Find in the scrollback |
@@ -76,7 +77,8 @@ lands on a start screen with the folders you were last in, each one press from a
 | `Ctrl+scroll` | Zoom this tab's text |
 | `F11` | Fullscreen |
 
-Everything else belongs to the shell: plain `Ctrl+W` is still delete-word, `Escape` is still vim's.
+Everything else belongs to the shell: `Escape` is still vim's, and `Ctrl+Backspace` deletes a word
+(`Ctrl+W` closes the tab, as it does in a browser).
 
 ## Shells
 

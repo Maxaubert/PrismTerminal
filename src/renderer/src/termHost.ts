@@ -1,4 +1,5 @@
 import { configureTermCore } from '@core/renderer/host'
+import { themeAgentColors } from './lib/agentColors'
 
 /**
  * PRISM TERMINAL AS A HOST OF THE TERMINAL CORE (#15).
@@ -26,18 +27,24 @@ configureTermCore({
     agentDoneColor: ''
   },
   followsHostStyle: false,
+  // The window's chrome is derived from the terminal theme here, so that is
+  // where the accent an unpicked indicator wears comes from.
+  themedAgentColors: themeAgentColors,
+  // Nothing else owns the window, so the terminal setting switches its material.
+  acrylic: { kind: 'window', supported: () => window.prism.acrylicSupported() },
   paintsGround: true,
   ownsKey: (e) => {
     if (!e.ctrlKey || e.altKey) return false
     const k = e.key.toLowerCase()
     // Next / previous tab, jump to a tab, Settings.
     if (e.key === 'Tab' || /^[1-9]$/.test(e.key) || e.key === ',') return true
-    // New tab is Ctrl+T (owner, 2026-09-18), with or without shift, which
-    // takes the chord from whatever runs in the shell (Claude Code's task
-    // list): the owner's trade.
-    if (k === 't') return true
-    // Close tab and find carry SHIFT, and the shift is tested: plain Ctrl+W
-    // deletes a word in every readline and plain Ctrl+F is the shell's.
-    return e.shiftKey && (k === 'w' || k === 'f')
+    // New tab is Ctrl+T and close tab is Ctrl+W (owner, 2026-09-18 and -19),
+    // with or without shift, as in Prism and in every browser. That takes
+    // both chords from whatever runs in the shell (Claude Code's task list;
+    // readline's delete-word, for which Ctrl+Backspace remains): the owner's
+    // trade, made knowingly.
+    if (k === 't' || k === 'w') return true
+    // Find carries SHIFT, and the shift is tested: plain Ctrl+F is the shell's.
+    return e.shiftKey && k === 'f'
   }
 })
