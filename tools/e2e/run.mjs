@@ -147,10 +147,15 @@ async function cached(name, url, sha256) {
   return file
 }
 function tinyModel() {
+  // The catalog builds its model urls from ONE pinned Hugging Face commit, so
+  // that is what is read here: the same commit, the same file, the same sha.
   const src = readFileSync(resolve(process.cwd(), 'core/shared/dictationCatalog.ts'), 'utf8')
+  const commit = src.match(/const MODELS_COMMIT = '([0-9a-f]{40})'/)?.[1]
   const block = src.slice(src.indexOf("id: 'tiny'"))
-  const pick = (re) => block.match(re)?.[1]
-  return { url: pick(/url:\s*'([^']+)'/) ?? pick(/url:\s*\n?\s*'([^']+)'/), sha256: pick(/sha256:\s*\n?\s*'([0-9a-f]{64})'/) }
+  const file = block.match(/url:\s*model\('([^']+)'\)/)?.[1]
+  const sha256 = block.match(/sha256:\s*'([0-9a-f]{64})'/)?.[1]
+  if (!commit || !file || !sha256) throw new Error('the catalog no longer spells the tiny model the way the e2e reads it')
+  return { url: `https://huggingface.co/ggerganov/whisper.cpp/resolve/${commit}/${file}`, sha256 }
 }
 /** Speech servers started out of THIS checkout's engine folder, and no others:
  *  the owner's own dictation tool runs a whisper-server of its own. */
@@ -759,7 +764,9 @@ const scenarios = {
     ok(moved, 'the level meter moves while the clip plays: a live mic is visible at once')
     const live = await until(async () => ((await page.locator('[data-dictation-live]').textContent().catch(() => '')) ?? '').trim(), 15000)
     ok(!!live, `live text appears while still listening ("${live}")`)
-    await sleep(9000) // let the whole sentence play
+    await sleep(4000)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-listening.png') }).catch(() => {})
+    await sleep(5000) // let the whole sentence play
     const before = await termText(page)
     await page.keyboard.up('AltRight')
     ok(await until(async () => (await pill().getAttribute('data-dictation-pill').catch(() => null)) === 'transcribing', 4000), 'releasing says Transcribing')

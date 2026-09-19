@@ -282,7 +282,9 @@ function ItemRow({
             </button>
           </>
         ) : (
-          <button className={primary} onClick={onDownload}>
+          // One filled button per list: the recommended pick (and the GPU
+          // pack, alone in its own). Four accent buttons in a column is a wall.
+          <button className={recommended || entry.kind === 'gpu-pack' ? primary : button} onClick={onDownload}>
             {failure && failure !== 'cancelled' ? 'Retry' : entry.kind === 'gpu-pack' ? 'Enable GPU' : 'Download'}
           </button>
         )}
