@@ -52,6 +52,9 @@ export interface TranscribeRequest {
   language: string
   /** A partial may be dropped for a newer one; a final never is. */
   final: boolean
+  /** False when the user has DISABLED GPU acceleration in this app: the pack
+   *  may still be on disk (the other app may use it), it is just not used. */
+  useGpu?: boolean
 }
 
 export type TranscribeResult =

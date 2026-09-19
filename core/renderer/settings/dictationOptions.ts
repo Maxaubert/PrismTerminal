@@ -14,9 +14,9 @@ export interface DictationOption {
   id: string
   label: string
   type: 'switch' | 'choice' | 'key' | 'manager'
-  /** The localStorage key behind it; null where the row manages FILES, which
-   *  both apps share, rather than a per-app value. */
-  key: string | null
+  /** The localStorage key behind it. The two managers also manage FILES, which
+   *  both apps share; the key is the per-app half (which model, GPU on or off). */
+  key: string
   /** Absent = every PC. */
   onlyWhere?: 'an NVIDIA adapter is present'
 }
@@ -31,7 +31,7 @@ export const DICTATION_OPTIONS: readonly DictationOption[] = [
   { id: 'dictation-sounds', label: 'Sounds', type: 'switch', key: DICTATION_KEYS.sounds },
   { id: 'dictation-model', label: 'Models', type: 'manager', key: DICTATION_KEYS.model },
   // The official GPU engine is NVIDIA's: the row is offered only where it can work.
-  { id: 'dictation-gpu', label: 'GPU acceleration', type: 'manager', key: null, onlyWhere: 'an NVIDIA adapter is present' }
+  { id: 'dictation-gpu', label: 'GPU acceleration', type: 'manager', key: DICTATION_KEYS.gpu, onlyWhere: 'an NVIDIA adapter is present' }
 ]
 
 /** The option ids a PC should be showing. */

@@ -16,7 +16,7 @@
 import { _electron as electron } from 'playwright-core'
 import { execFileSync, spawn } from 'child_process'
 import { createHash } from 'crypto'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, truncateSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { createRequire } from 'module'
@@ -558,7 +558,11 @@ const scenarios = {
           const hi = Math.max(lum(...ink), lum(...ground))
           const lo = Math.min(lum(...ink), lum(...ground))
           const ratio = (hi + 0.05) / (lo + 0.05)
-          return ink.join(',') === '78,161,255' || ratio < 4.5
+          // Wait for the DECORATED colour. After a theme switch there is a frame or
+          // two where the row is repainted and the link's decoration is not back yet:
+          // the span then wears the plain text ink, which reads fine and is not a
+          // link colour at all (MEASURED: 62,62,62 accepted two runs in three).
+          return ink.join(',') === '78,161,255' || ratio < 4.5 || !(ink[2] > ink[0])
             ? null
             : { rgb: ink.join(','), ratio, blue: ink[2] > ink[0] }
         }),
@@ -812,6 +816,79 @@ const scenarios = {
     ok(await until(() => ourSpeechServers() === 0, 8000), 'switching dictation off kills the speech server')
     await app.close().catch(() => {})
     ok(await until(() => ourSpeechServers() === 0, 8000), 'and none outlives the app')
+  },
+
+  /**
+   * THE MODEL MANAGER, WITH THINGS IN IT (#13, owner's notes of 2026-09-19): a
+   * model and the GPU engine are STAGED as installed (a sparse file of the
+   * catalogued size, a pack folder with its marker), so the rows can be read
+   * in the states a user actually lives in, without a gigabyte of downloads.
+   */
+  async dictationPage(ok) {
+    const w = world()
+    const src = readFileSync(resolve(process.cwd(), 'core/shared/dictationCatalog.ts'), 'utf8')
+    const entry = (id) => {
+      const block = src.slice(src.indexOf(`id: '${id}'`))
+      return { bytes: Number(block.match(/bytes:\s*(\d+)/)[1]), sha256: block.match(/sha256:\s*\n?\s*'([0-9a-f]{64})'/)[1] }
+    }
+    const root = join(w.profile, 'dictation')
+    mkdirSync(join(root, 'models'), { recursive: true })
+    const base = join(root, 'models', 'base.bin')
+    writeFileSync(base, '')
+    truncateSync(base, entry('base').bytes)
+    const gpu = entry('gpu-pack')
+    const pack = join(root, 'engines', `gpu-pack-${gpu.sha256.slice(0, 12)}`)
+    mkdirSync(join(pack, 'Release'), { recursive: true })
+    writeFileSync(join(pack, 'Release', 'whisper-server.exe'), '')
+    writeFileSync(join(pack, 'prism-installed.json'), JSON.stringify({ id: 'gpu-pack', bytes: gpu.bytes, sha256: gpu.sha256 }))
+
+    const { app, page } = await launch(w, { args: [w.alpha], env: { PT_E2E_NVIDIA: '1', PT_DICTATION_ROOT: root } })
+    await until(async () => (await tabLabels(page)).length === 1)
+    await page.evaluate(() => {
+      localStorage.setItem('prism.dictation.enabled', '1')
+      localStorage.setItem('prism.dictation.model', 'base')
+    })
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="dictation"]').click()
+    await page.waitForSelector('[data-dictation-item="gpu-pack"][data-state="installed"]', { timeout: 8000 })
+    ok((await page.locator('[data-settings-tab="dictation"]').getAttribute('aria-current')) === 'page' && (await page.locator('[data-settings-tab="general"]').getAttribute('aria-current')) === null, 'the rail marks Dictation as the page in front')
+    await page.mouse.move(900, 300)
+    await sleep(400)
+
+    const names = await page.evaluate(() => [...document.querySelectorAll('[data-dictation-item] [data-item-name]')].map((e) => e.textContent.trim()))
+    ok(names.length === 5 && names.slice(0, 4).every((n) => n.startsWith('Whisper ')), `models carry their full names (${JSON.stringify(names)})`)
+    const marks = await page.evaluate(() => [...document.querySelectorAll('[data-dictation-item] [data-vendor]')].map((e) => e.getAttribute('data-vendor')))
+    ok(marks.filter((m) => m === 'openai').length === 4 && marks.filter((m) => m === 'nvidia').length === 1, `every row leads with its vendor's mark (${marks.join(',')})`)
+    const mark = await page.evaluate(() => {
+      const row = document.querySelector('[data-dictation-item="base"]').getBoundingClientRect()
+      const m = document.querySelector('[data-dictation-item="base"] [data-vendor]').getBoundingClientRect()
+      const name = document.querySelector('[data-dictation-item="base"] [data-item-name]').getBoundingClientRect()
+      return { left: m.left < name.left, centred: Math.abs(m.top + m.height / 2 - (row.top + row.height / 2)) < 2, size: Math.round(m.width) }
+    })
+    ok(mark.left && mark.centred && mark.size >= 28, `the mark sits left of the name, centred on the row (${JSON.stringify(mark)})`)
+
+    const row = (id) => page.locator(`[data-dictation-item="${id}"]`)
+    ok(((await row('base').locator('[data-item-badge]').textContent()) ?? '').trim() === 'Active', 'the model in use says Active')
+    ok((await row('base').locator('[data-uninstall]').count()) === 1, 'an installed model offers Uninstall')
+    const words = ((await page.locator('[data-dictation-settings]').textContent()) ?? '')
+    ok(!/\bDelete\b|\bRemove\b/.test(words), 'and nothing on the page says Delete or Remove')
+
+    ok(((await row('gpu-pack').locator('[data-item-badge]').textContent()) ?? '').trim() === 'Enabled', 'the GPU engine says Enabled')
+    ok(((await row('gpu-pack').locator('[data-gpu-toggle]').textContent()) ?? '').trim() === 'Disable', 'and offers Disable')
+    ok((await row('large-v3-turbo').locator('text=Recommended').count()) === 1, 'with the GPU on, Turbo is the recommended model')
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-models.png') }).catch(() => {})
+
+    await row('gpu-pack').locator('[data-gpu-toggle]').click()
+    ok(await until(async () => ((await row('gpu-pack').locator('[data-gpu-toggle]').textContent()) ?? '').trim() === 'Enable', 4000), 'Disable turns into Enable')
+    ok((await row('gpu-pack').locator('[data-item-badge]').count()) === 0, 'the Enabled badge goes')
+    ok(existsSync(join(pack, 'prism-installed.json')), 'and the engine stays on disk: disabling is not uninstalling')
+    ok((await row('base').locator('text=Recommended').count()) === 1, 'with the GPU off, Base is the recommended model again')
+    ok((await page.evaluate(() => localStorage.getItem('prism.dictation.gpu'))) === '0', 'the choice is this app\'s own setting')
+
+    await row('gpu-pack').locator('[data-uninstall]').click()
+    ok(await until(async () => (await row('gpu-pack').getAttribute('data-state')) === 'absent', 8000), 'Uninstall takes the engine off the disk')
+    ok(!existsSync(pack), 'for real')
+    await app.close().catch(() => {})
   },
 
   /** `exit` closes the tab it was typed in. */

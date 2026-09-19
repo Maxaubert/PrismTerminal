@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
+import { useCallback, useEffect, useRef, useState, type JSX, type ReactNode } from 'react'
 import { dictationHost } from '../host'
 import { catalogEntry, LANGUAGES, recommendedModel, visibleModels } from '../../shared/dictationCatalog'
 import type { CatalogEntry, DownloadFailure, EngineInfo, ItemStatus } from '../../shared/dictationTypes'
 import { DEFAULT_HOTKEY, formatHotkey, parseHotkeyFromEvent, type Hotkey } from '../lib/dictationKey'
 import {
   setDictationEnabled,
+  setDictationGpu,
   setDictationHotkey,
   setDictationLanguage,
   setDictationMic,
@@ -13,6 +14,7 @@ import {
   setDictationPauseMedia,
   setDictationSounds,
   useDictationEnabled,
+  useDictationGpu,
   useDictationHotkey,
   useDictationLanguage,
   useDictationMic,
@@ -23,6 +25,7 @@ import {
 } from '../lib/dictationPrefs'
 import { listMics, startCapture, type Capture } from '../lib/micCapture'
 import { Pref, Segmented, Select, Switch } from './fields'
+import { VendorMark } from './VendorMark'
 
 /**
  * DICTATION'S SETTINGS PAGE, for both hosts (#13). Prism Terminal shows it as
@@ -201,31 +204,60 @@ function MicField({ value, disabled }: { value: string; disabled: boolean }): JS
   )
 }
 
-/** One downloadable thing: a model, or the GPU pack. */
+/** "X Uninstall" (owner, 2026-09-19): it frees the disk, and says so by name.
+ *  Quiet until hovered, because it is the one destructive control in the row. */
+function Uninstall({ onClick, what }: { onClick: () => void; what: string }): JSX.Element {
+  return (
+    <button
+      data-uninstall
+      onClick={onClick}
+      title={`Delete ${what} from this PC. Prism and Prism Terminal share it.`}
+      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11.5px] font-semibold text-[var(--p-dim)] transition hover:bg-[var(--p-hover)] hover:text-[var(--p-text)]"
+    >
+      <svg viewBox="0 0 24 24" width={11} height={11} fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+      Uninstall
+    </button>
+  )
+}
+
+/**
+ * One downloadable thing: a model, or the GPU engine. The vendor's mark leads
+ * the row (owner, 2026-09-19), then the FULL name ("Whisper Base", not "Base":
+ * a bare size word says nothing to someone who has never met Whisper), its
+ * size and what it is for. What is in use is marked on the row itself, by a
+ * badge and a faint fill, so the list reads as a state and not as a menu.
+ */
 function ItemRow({
   entry,
   status,
   progress,
   failure,
-  active,
+  badge,
   recommended,
   warn,
+  getLabel,
+  getPrimary,
   onDownload,
   onCancel,
-  onRemove,
-  onUse
+  installed
 }: {
   entry: CatalogEntry
   status: ItemStatus | undefined
   progress: number | undefined
   failure: DownloadFailure | undefined
-  active: boolean
+  /** "Active" on the model in use, "Enabled" on a GPU engine that is on. */
+  badge: string | null
   recommended: boolean
   warn: string | null
+  /** The button that fetches it: "Download", or "Enable" for the GPU engine. */
+  getLabel: string
+  getPrimary: boolean
   onDownload: () => void
   onCancel: () => void
-  onRemove: () => void
-  onUse?: () => void
+  /** The controls once it is on disk. */
+  installed: ReactNode
 }): JSX.Element {
   const state = status?.state ?? 'absent'
   const received = progress ?? status?.received ?? 0
@@ -234,21 +266,29 @@ function ItemRow({
     <div
       data-dictation-item={entry.id}
       data-state={state}
-      data-active={active || undefined}
-      className="flex items-center justify-between gap-6 border-b border-[color:var(--p-line)] py-2.5"
+      data-active={badge ? '' : undefined}
+      className={`flex items-center gap-3.5 border-b border-[color:var(--p-line)] px-3.5 py-3 last:border-b-0 ${
+        badge ? 'bg-[var(--p-hover)]' : ''
+      }`}
     >
-      <div className="min-w-0">
+      <VendorMark vendor={entry.kind === 'gpu-pack' ? 'nvidia' : 'openai'} />
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-[12.5px] font-semibold text-[var(--p-text)]">{entry.label}</span>
-          <span className="font-mono text-[11px] text-[var(--p-dim)]">{size(entry.bytes)}</span>
+          <span data-item-name className="truncate text-[12.5px] font-semibold text-[var(--p-text)]">
+            {entry.label}
+          </span>
+          <span className="shrink-0 font-mono text-[11px] text-[var(--p-dim)]">{size(entry.bytes)}</span>
           {recommended && (
-            <span className="rounded-full border border-[color:var(--p-accent-hi)] px-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--p-accent-hi)]">
+            <span className="shrink-0 rounded-full border border-[color:var(--p-accent-hi)] px-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--p-accent-hi)]">
               Recommended
             </span>
           )}
-          {active && (
-            <span className="rounded-full bg-[var(--p-accent)] px-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--p-on-accent)]">
-              Active
+          {badge && (
+            <span
+              data-item-badge
+              className="shrink-0 rounded-full bg-[var(--p-accent)] px-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--p-on-accent)]"
+            >
+              {badge}
             </span>
           )}
         </div>
@@ -256,14 +296,11 @@ function ItemRow({
           {failure && FAILURES[failure] ? FAILURES[failure] : (warn ?? entry.note)}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5">
         {state === 'downloading' ? (
           <>
             <span className="block h-1.5 w-28 overflow-hidden rounded-full bg-[var(--p-track)]">
-              <span
-                className="block h-full origin-left rounded-full bg-[var(--p-accent-hi)]"
-                style={{ width: `${pct}%` }}
-              />
+              <span className="block h-full origin-left rounded-full bg-[var(--p-accent-hi)]" style={{ width: `${pct}%` }} />
             </span>
             <span className="w-9 text-right font-mono text-[11px] text-[var(--p-dim)]">{pct}%</span>
             <button className={button} onClick={onCancel}>
@@ -271,21 +308,12 @@ function ItemRow({
             </button>
           </>
         ) : state === 'installed' ? (
-          <>
-            {onUse && !active && (
-              <button className={primary} onClick={onUse}>
-                Use
-              </button>
-            )}
-            <button className={button} onClick={onRemove}>
-              {entry.kind === 'gpu-pack' ? 'Remove' : 'Delete'}
-            </button>
-          </>
+          installed
         ) : (
           // One filled button per list: the recommended pick (and the GPU
-          // pack, alone in its own). Four accent buttons in a column is a wall.
-          <button className={recommended || entry.kind === 'gpu-pack' ? primary : button} onClick={onDownload}>
-            {failure && failure !== 'cancelled' ? 'Retry' : entry.kind === 'gpu-pack' ? 'Enable GPU' : 'Download'}
+          // engine, alone in its own). Four accent buttons in a column is a wall.
+          <button className={getPrimary ? primary : button} onClick={onDownload}>
+            {failure && failure !== 'cancelled' ? 'Retry' : getLabel}
           </button>
         )}
       </div>
@@ -303,6 +331,7 @@ export function DictationSettings(): JSX.Element | null {
   const pauseMedia = useDictationPauseMedia()
   const sounds = useDictationSounds()
   const model = useDictationModel()
+  const gpuWanted = useDictationGpu()
 
   const [status, setStatus] = useState<ItemStatus[]>([])
   const [info, setInfo] = useState<EngineInfo | null>(null)
@@ -326,6 +355,8 @@ export function DictationSettings(): JSX.Element | null {
   const stateOf = (id: string): ItemStatus | undefined => status.find((s) => s.id === id)
   const installed = (id: string): boolean => stateOf(id)?.state === 'installed'
   const gpuIn = installed(GPU_ID)
+  /** In use: on disk AND not switched off in this app. */
+  const gpuOn = gpuIn && gpuWanted
 
   const download = (id: string): void => {
     setFailures((prev) => without(prev, id))
@@ -345,7 +376,7 @@ export function DictationSettings(): JSX.Element | null {
     })
   }
 
-  const rec = recommendedModel(gpuIn)
+  const rec = recommendedModel(gpuOn)
   const noModel = !installed(model)
   const gpu = catalogEntry(GPU_ID)
 
@@ -424,23 +455,36 @@ export function DictationSettings(): JSX.Element | null {
         <p className="mt-0.5 text-[11.5px] text-[var(--p-dim)]">
           Bigger hears better and needs more from the PC. Downloaded once, used by Prism and Prism Terminal alike.
         </p>
-        <div className={`mt-2.5 ${ROWS}`}>
-          {visibleModels().map((m) => (
-            <ItemRow
-              key={m.id}
-              entry={m}
-              status={stateOf(m.id)}
-              progress={progress[m.id]}
-              failure={failures[m.id]}
-              active={m.id === model && installed(m.id)}
-              recommended={m.id === rec?.id}
-              warn={m.needsGpu && !gpuIn ? 'Slow without GPU acceleration: seconds per sentence on a CPU.' : null}
-              onDownload={() => download(m.id)}
-              onCancel={() => api.dictationCancel(m.id)}
-              onRemove={() => remove(m.id)}
-              onUse={() => setDictationModel(m.id)}
-            />
-          ))}
+        <div className="mt-3 overflow-hidden rounded-xl border border-[color:var(--p-divider)]">
+          {visibleModels().map((m) => {
+            const active = m.id === model && installed(m.id)
+            return (
+              <ItemRow
+                key={m.id}
+                entry={m}
+                status={stateOf(m.id)}
+                progress={progress[m.id]}
+                failure={failures[m.id]}
+                badge={active ? 'Active' : null}
+                recommended={m.id === rec?.id}
+                warn={m.needsGpu && !gpuOn ? 'Slow without GPU acceleration: seconds per sentence on a CPU.' : null}
+                getLabel="Download"
+                getPrimary={m.id === rec?.id}
+                onDownload={() => download(m.id)}
+                onCancel={() => api.dictationCancel(m.id)}
+                installed={
+                  <>
+                    {!active && (
+                      <button className={primary} onClick={() => setDictationModel(m.id)}>
+                        Use
+                      </button>
+                    )}
+                    <Uninstall what={m.label} onClick={() => remove(m.id)} />
+                  </>
+                }
+              />
+            )
+          })}
         </div>
       </div>
 
@@ -454,18 +498,43 @@ export function DictationSettings(): JSX.Element | null {
               ? 'The GPU engine would not start on this PC, so the CPU is answering. Removing and enabling it again may help.'
               : 'An NVIDIA card was found. The GPU engine makes the large models answer in under a second.'}
           </p>
-          <div className={`mt-2.5 ${ROWS}`}>
+          <div className="mt-3 overflow-hidden rounded-xl border border-[color:var(--p-divider)]">
+            {/* ENABLE and DISABLE, not install and remove (owner, 2026-09-19).
+                Enabling fetches the engine the first time; disabling only stops
+                THIS app using it, because 675 MB is not something to download
+                again on a whim and the other app may be using it. Freeing the
+                disk is Uninstall, the same control a model has. */}
             <ItemRow
               entry={gpu}
               status={stateOf(GPU_ID)}
               progress={progress[GPU_ID]}
               failure={failures[GPU_ID]}
-              active={false}
+              badge={gpuOn ? 'Enabled' : null}
               recommended={false}
-              warn={null}
-              onDownload={() => download(GPU_ID)}
+              warn={gpuIn && !gpuWanted ? 'Disabled: dictation is using the CPU.' : null}
+              getLabel="Enable"
+              getPrimary
+              onDownload={() => {
+                setDictationGpu(true)
+                download(GPU_ID)
+              }}
               onCancel={() => api.dictationCancel(GPU_ID)}
-              onRemove={() => remove(GPU_ID)}
+              installed={
+                <>
+                  <button
+                    data-gpu-toggle
+                    className={gpuWanted ? button : primary}
+                    onClick={() => {
+                      setDictationGpu(!gpuWanted)
+                      // The running server is the OTHER engine now.
+                      api.dictationStop()
+                    }}
+                  >
+                    {gpuWanted ? 'Disable' : 'Enable'}
+                  </button>
+                  <Uninstall what="the GPU engine" onClick={() => remove(GPU_ID)} />
+                </>
+              }
             />
           </div>
         </div>

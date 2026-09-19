@@ -40,11 +40,11 @@ describe('CATALOG', () => {
     )
     expect(CATALOG.filter((e) => e.kind === 'gpu-pack').map((e) => e.id)).toEqual(['gpu-pack'])
     const label = (id: string): string | undefined => catalogEntry(id)?.label
-    expect(label('tiny')).toBe('Tiny')
-    expect(label('base')).toBe('Base')
-    expect(label('small')).toBe('Small')
-    expect(label('large-v3-turbo')).toBe('Large v3 Turbo')
-    expect(label('large-v3')).toBe('Large v3')
+    expect(label('tiny')).toBe('Whisper Tiny')
+    expect(label('base')).toBe('Whisper Base')
+    expect(label('small')).toBe('Whisper Small')
+    expect(label('large-v3-turbo')).toBe('Whisper Large v3 Turbo')
+    expect(label('large-v3')).toBe('Whisper Large v3')
   })
 
   it('pins every model to a COMMIT of the Hugging Face repo, never to main', () => {
