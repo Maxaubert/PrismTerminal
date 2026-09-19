@@ -177,13 +177,22 @@ try {
   // them fails the build here, loudly, rather than shipping an engine that
   // starts only where the developer happens to sit.
   const SYS = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+  // WITHOUT PowerShell 7's MODULE PATH. Started from pwsh (an npm script in a
+  // pwsh terminal, and every GitHub Windows runner), Windows PowerShell 5.1
+  // inherits PSModulePath, looks for its own Microsoft.PowerShell.Security among
+  // 7's modules, and cannot load Get-AuthenticodeSignature at all. MEASURED on a
+  // runner, the first time this script ran anywhere but the owner's PC: "the
+  // module could not be loaded". Unset, 5.1 falls back to its own defaults.
+  const cleanEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => k.toLowerCase() !== 'psmodulepath')
+  )
   for (const name of RUNTIME) {
     const from = join(SYS, name)
     if (!existsSync(from)) throw new Error(`${from} is missing: install the Visual C++ 2015-2022 x64 redistributable on the build machine`)
     const signer = execFileSync(
       join(SYS, 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
       ['-NoProfile', '-NonInteractive', '-Command', '$s = Get-AuthenticodeSignature -LiteralPath $env:PRISM_DLL; "$($s.Status)|$($s.SignerCertificate.Subject)"'],
-      { encoding: 'utf8', windowsHide: true, env: { ...process.env, PRISM_DLL: from } }
+      { encoding: 'utf8', windowsHide: true, env: { ...cleanEnv, PRISM_DLL: from } }
     ).trim()
     if (!/^Valid\|.*O=Microsoft Corporation/.test(signer)) throw new Error(`${from} is not validly signed by Microsoft (${signer})`)
     copyFileSync(from, join(OUT, name))
