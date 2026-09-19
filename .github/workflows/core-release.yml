@@ -83,7 +83,9 @@ jobs:
 
   bump-prism:
     needs: release
-    if: needs.release.outputs.fresh == 'true'
+    # On a fresh tag, or when run by hand: that is how a bump HELD by a red check
+    # is resumed once the cause is fixed (it finds the open PR and carries on).
+    if: needs.release.outputs.fresh == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -116,7 +118,15 @@ jobs:
           set -euo pipefail
           branch="chore/$TAG"
           if [ -n "$(git ls-remote --heads origin "$branch")" ]; then
-            echo "::notice::$branch already exists in Prism. Leaving it alone."
+            # Already opened, by an earlier run: never rebuilt (a person may have
+            # pushed a fix onto it). Carry on from its open PR, if it still has one.
+            url=$(gh pr list --repo Maxaubert/Prism --head "$branch" --state open --json url --jq '.[0].url // ""')
+            if [ -n "$url" ]; then
+              echo "::notice::$branch is already open as $url. Resuming from its checks."
+              echo "url=$url" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice::$branch exists in Prism with no open PR (merged or closed). Nothing to do."
+            fi
             exit 0
           fi
           current=$(node -p "require('./package.json').devDependencies['prism-term-core']")
@@ -138,8 +148,34 @@ jobs:
           " "$current" "$TAG")
           npm version "$kind" --no-git-tag-version >/dev/null
           version=$(node -p "require('./package.json').version")
-          # The lockfile only: nothing is installed or run on this runner.
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          # THE LOCKFILE IS EDITED, NOT REGENERATED. `npm install --package-lock-only`
+          # on this Linux runner rewrote about 300 unrelated lines of Prism's lock
+          # (MEASURED on the first live bump, Prism #165: a different npm drops every
+          # "libc" field, and lock-only mode invents bundled entries even under the
+          # owner's own npm). A pin bump is FOUR lines: the two version fields npm
+          # version has just set, the pin, and the commit it resolves to. The rest
+          # of the entry (the core's own version and peer ranges) is read from the
+          # released core itself, so the lock says what `npm ci` will find.
+          sha=$(git ls-remote https://github.com/Maxaubert/PrismTerminal.git "refs/tags/$TAG" | cut -f1)
+          if [ -z "$sha" ]; then echo "::error::$TAG was not found on PrismTerminal."; exit 1; fi
+          curl -fsSL "https://raw.githubusercontent.com/Maxaubert/PrismTerminal/$sha/package.json" -o "$RUNNER_TEMP/core.json"
+          WANT="$want" SHA="$sha" CORE="$RUNNER_TEMP/core.json" node -e "
+            const fs = require('fs')
+            const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'))
+            const core = JSON.parse(fs.readFileSync(process.env.CORE, 'utf8'))
+            const entry = lock.packages['node_modules/prism-term-core']
+            if (!entry) throw new Error('package-lock.json has no prism-term-core entry')
+            lock.packages[''].devDependencies['prism-term-core'] = process.env.WANT
+            entry.version = core.version
+            entry.resolved = 'git+ssh://git@github.com/Maxaubert/PrismTerminal.git#' + process.env.SHA
+            if (core.peerDependencies) entry.peerDependencies = core.peerDependencies
+            fs.writeFileSync('package-lock.json', JSON.stringify(lock, null, 2) + '\n')
+          "
+          changed=$(git diff --numstat package-lock.json | cut -f1)
+          if [ "${changed:-0}" -gt 12 ]; then
+            echo "::error::The lockfile edit touched $changed lines; a pin bump is about four. Not pushing it."
+            exit 1
+          fi
           git add package.json package-lock.json
           git commit -m "build(terminal): pin prism-term-core to $TAG, $version"
           git push origin "$branch"
