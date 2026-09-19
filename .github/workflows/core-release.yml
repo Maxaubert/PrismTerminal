@@ -1,0 +1,184 @@
+# THE CORE RELEASES ITSELF, AND TELLS PRISM (#23).
+#
+# core/ is the terminal of TWO apps. Prism builds against a pinned tag of the
+# `core-dist` branch, so a core change reaches Prism only when (1) core-dist is
+# re-split, (2) a core-v<version> tag is pushed, and (3) Prism's pin is bumped.
+# All three were done by hand, which is how an app falls silently behind.
+# Owner, 2026-09-19: "that compiled copy needs to be auto bumped when a new
+# Prism Terminal release or merge to main happens."
+#
+# So, on every push to main that touches core/:
+#   1. split core/ into core-dist and tag it core-v<core/package.json version>;
+#   2. open a PR in Maxaubert/Prism that bumps the pin to that tag.
+#
+# THE BUMP PROVES ITSELF (#23, and Prism #164). Prism's terminal gate used to
+# run only on the owner's machine, so a bump could not merge without a person.
+# It now runs on a GitHub runner (`terminal-gate.yml` in Prism; MEASURED green
+# 3 runs of 3, real dictation included), beside Prism's typecheck, lint and unit
+# tests. So the bump PR carries its own version bump, this job WAITS for every
+# check on it, and then:
+#   - repo variable PRISM_AUTO_MERGE = 'true': it squash-merges the PR, Prism's
+#     release.yml publishes the new version, and Prism's users see the update
+#     chip. No person in the loop. This is a STANDING EXCEPTION to the owner's
+#     "never merge without my word" rule, and only the owner switches it on.
+#   - anything else (the default): the PR stays open, green, for a person to merge.
+# A red check never merges, in either mode: the PR stays open and says why.
+#
+# Step 2 needs a token that can write to the Prism repo, since this repo's own
+# GITHUB_TOKEN cannot: a fine-grained token on Maxaubert/Prism with Contents and
+# Pull requests read/write, stored here as the secret PRISM_BUMP_TOKEN. Without
+# it step 2 says so and is skipped; step 1 still happens.
+name: core-release
+
+on:
+  push:
+    branches: [main]
+    paths: ['core/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: core-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      fresh: ${{ steps.tag.outputs.fresh }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Split core/ and tag it
+        id: tag
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          version=$(node -p "require('./core/package.json').version")
+          tag="core-v$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          git subtree split --prefix=core -b core-dist-new
+          tree=$(git rev-parse 'core-dist-new^{tree}')
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            if [ "$(git rev-parse "$tag^{tree}")" = "$tree" ]; then
+              echo "::notice::$tag already holds exactly this core. Nothing to release."
+              echo "fresh=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # A tag is a promise to everyone who pinned it. It is never moved.
+            echo "::error::core/ changed but core/package.json still says $version, and $tag already exists with different contents. Bump the version in core/package.json (ci.yml checks this on the PR)."
+            exit 1
+          fi
+          git push -f origin core-dist-new:core-dist
+          git tag "$tag" core-dist-new
+          git push origin "$tag"
+          echo "fresh=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::Released $tag"
+
+  bump-prism:
+    needs: release
+    if: needs.release.outputs.fresh == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BUMP_TOKEN: ${{ secrets.PRISM_BUMP_TOKEN }}
+      AUTO_MERGE: ${{ vars.PRISM_AUTO_MERGE }}
+      TAG: ${{ needs.release.outputs.tag }}
+    steps:
+      - name: No token, no bump
+        if: env.BUMP_TOKEN == ''
+        run: |
+          echo "::warning::$TAG is released, but the secret PRISM_BUMP_TOKEN is not set, so no PR was opened in Maxaubert/Prism. Bump Prism's pin by hand, or add the secret (see the top of core-release.yml) and re-run this workflow."
+
+      - uses: actions/checkout@v4
+        if: env.BUMP_TOKEN != ''
+        with:
+          repository: Maxaubert/Prism
+          token: ${{ secrets.PRISM_BUMP_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        if: env.BUMP_TOKEN != ''
+        with:
+          node-version: 22
+
+      - name: Bump the pin and the version, open the PR
+        id: pr
+        if: env.BUMP_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ secrets.PRISM_BUMP_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch="chore/$TAG"
+          if [ -n "$(git ls-remote --heads origin "$branch")" ]; then
+            echo "::notice::$branch already exists in Prism. Leaving it alone."
+            exit 0
+          fi
+          current=$(node -p "require('./package.json').devDependencies['prism-term-core']")
+          want="github:Maxaubert/PrismTerminal#$TAG"
+          if [ "$current" = "$want" ]; then
+            echo "::notice::Prism already pins $TAG."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          npm pkg set "devDependencies.prism-term-core=$want"
+          # A NEW Prism version, or release.yml refuses to publish and nobody's
+          # update chip fires. A core FEATURE (its major.minor moved) is a minor
+          # bump of Prism, anything else a patch: the owner's own rule.
+          kind=$(node -e "
+            const v = (s) => (String(s).match(/core-v(\d+)\.(\d+)\./) || []).slice(1, 3).join('.')
+            process.stdout.write(v(process.argv[1]) && v(process.argv[1]) !== v(process.argv[2]) ? 'minor' : 'patch')
+          " "$current" "$TAG")
+          npm version "$kind" --no-git-tag-version >/dev/null
+          version=$(node -p "require('./package.json').version")
+          # The lockfile only: nothing is installed or run on this runner.
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          git add package.json package-lock.json
+          git commit -m "build(terminal): pin prism-term-core to $TAG, $version"
+          git push origin "$branch"
+          url=$(gh pr create --repo Maxaubert/Prism --base main --head "$branch" \
+            --title "Terminal core: prism-term-core $TAG (Prism $version)" \
+            --body "Opened automatically by PrismTerminal's \`core-release\` workflow: the shared terminal core released **$TAG**, and Prism pinned \`$current\`. This bumps the pin and makes Prism **$version** ($kind).
+
+          What changed in the core: https://github.com/Maxaubert/PrismTerminal/commits/main/core
+
+          The checks on this PR are the proof: typecheck, lint, the unit suite, and **terminal-gate**, which builds the app on a Windows runner and drives every scenario the terminal can break, real dictation included.
+
+          If the repo variable \`PRISM_AUTO_MERGE\` in PrismTerminal is \`true\`, this merges itself once every check is green and Prism releases $version. Otherwise it waits here for a person. A red check never merges.")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "::notice::Opened $url"
+
+      - name: Wait for Prism's checks, then merge if the owner switched that on
+        if: env.BUMP_TOKEN != '' && steps.pr.outputs.url != ''
+        env:
+          GH_TOKEN: ${{ secrets.PRISM_BUMP_TOKEN }}
+          URL: ${{ steps.pr.outputs.url }}
+        run: |
+          set -uo pipefail
+          # Checks take a moment to be registered; "no checks" is not "green".
+          for i in $(seq 1 20); do
+            n=$(gh pr checks "$URL" --json name --jq 'length' 2>/dev/null || echo 0)
+            [ "$n" -ge 3 ] && break
+            sleep 15
+          done
+          if [ "${n:-0}" -lt 3 ]; then
+            echo "::error::Prism reported fewer than three checks on $URL (expected ci's two jobs and terminal-gate). Not merging."
+            exit 1
+          fi
+          if ! gh pr checks "$URL" --watch --interval 30 --fail-fast; then
+            echo "::error::A check failed on $URL. The bump stays open; it is NOT merged."
+            exit 1
+          fi
+          if [ "${AUTO_MERGE:-}" = "true" ]; then
+            gh pr merge "$URL" --squash --delete-branch
+            echo "::notice::Merged $URL. Prism's release workflow publishes it now."
+          else
+            echo "::notice::$URL is green and waiting for a person (PRISM_AUTO_MERGE is not 'true')."
+          fi

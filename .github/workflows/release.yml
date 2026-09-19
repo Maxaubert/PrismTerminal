@@ -1,0 +1,94 @@
+# EVERY MERGE TO MAIN IS A RELEASE, when it carries a new version (#23).
+#
+# The app already checks GitHub Releases for a newer `v<version>` and shows an
+# update chip in its title bar (src/main/update.ts). Until now nothing PUBLISHED
+# a release: the chip had never had anything to find. Owner, 2026-09-19: "users
+# of the app can get an update available banner in their app title bar."
+#
+# Same gates as ci.yml, then the installer, then `v<version>` as the latest
+# release. A push whose version is ALREADY released publishes nothing and says
+# so, without failing: a docs-only or CI-only merge is not an error. Bump
+# package.json in the PR when a release is meant (patch for fixes, minor for
+# features).
+#
+# The app's tags are `v*`. The shared terminal core's are `core-v*`, plain git
+# tags with no GitHub Release behind them (core-release.yml), so "latest
+# release" is always an app release.
+#
+# Unsigned, like Prism, until a certificate is configured.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is this version already released?
+        id: ver
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          "version=$v" >> $env:GITHUB_OUTPUT
+          gh release view "v$v" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            "fresh=false" >> $env:GITHUB_OUTPUT
+            Write-Host "::notice::v$v is already released. Nothing to publish (bump package.json in a PR to release)."
+          } else {
+            "fresh=true" >> $env:GITHUB_OUTPUT
+          }
+          $global:LASTEXITCODE = 0
+
+      - uses: actions/setup-node@v4
+        if: steps.ver.outputs.fresh == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+        if: steps.ver.outputs.fresh == 'true'
+
+      - run: npm run typecheck
+        if: steps.ver.outputs.fresh == 'true'
+
+      - run: npm run lint
+        if: steps.ver.outputs.fresh == 'true'
+
+      - run: npm test
+        if: steps.ver.outputs.fresh == 'true'
+
+      # The speech engine for dictation, pinned by SHA-256. `--if-present`: the
+      # script arrives with the dictation PR, and this file may land before it.
+      - run: npm run fetch:bin --if-present
+        if: steps.ver.outputs.fresh == 'true'
+
+      - run: npx electron-vite build
+        if: steps.ver.outputs.fresh == 'true'
+
+      - run: npx electron-builder --win --publish never
+        if: steps.ver.outputs.fresh == 'true'
+
+      - name: Publish
+        if: steps.ver.outputs.fresh == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $exe = "dist/PrismTerminal-Setup-x64-$v.exe"
+          if (-not (Test-Path $exe)) { throw "installer not found: $exe" }
+          gh release create "v$v" $exe --title "Prism Terminal $v" --generate-notes --latest
+          if ($LASTEXITCODE -ne 0) { throw "Release publication failed" }

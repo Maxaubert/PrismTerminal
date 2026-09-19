@@ -34,3 +34,36 @@ jobs:
       - run: npm run lint
 
       - run: npm test
+
+  # A CORE CHANGE NEEDS A NEW CORE VERSION (#23). core-release.yml tags
+  # core-v<version> on merge and never moves a tag, so a PR that changes core/
+  # under a version that is already released would fail AFTER the merge, on
+  # main. It fails here instead, where it can still be fixed.
+  core-version:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: |
+          set -euo pipefail
+          base="origin/${{ github.base_ref }}"
+          if git diff --quiet "$base"...HEAD -- core/; then
+            echo "core/ is untouched."
+            exit 0
+          fi
+          version=$(node -p "require('./core/package.json').version")
+          tag="core-v$version"
+          git fetch -q --tags origin
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "core/ changed and $tag is a new version. Good."
+            exit 0
+          fi
+          git subtree split --prefix=core -b core-check >/dev/null
+          if [ "$(git rev-parse "$tag^{tree}")" = "$(git rev-parse 'core-check^{tree}')" ]; then
+            echo "core/ matches the released $tag."
+            exit 0
+          fi
+          echo "::error::core/ changed, but core/package.json still says $version and $tag is already released with different contents. Bump the version in core/package.json."
+          exit 1
