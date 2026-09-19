@@ -80,6 +80,17 @@ describe('parseReleaseNotes: a generated body', () => {
     expect(parseReleaseNotes('* Fix the thing by @someone').entries).toEqual(['Fix the thing'])
   })
 
+  it('keeps a title that names a handle and then says "in": only a url ends an author tail', () => {
+    // The first build took ANY word after "in", and cut this down to "Mention people".
+    expect(parseReleaseNotes('* Mention people by @handle in comments').entries).toEqual([
+      'Mention people by @handle in comments'
+    ])
+    expect(
+      parseReleaseNotes('* Mention people by @handle in comments by @me in https://x.test/pull/9')
+        .entries
+    ).toEqual(['Mention people by @handle in comments (#9)'])
+  })
+
   it('keeps a "by" that is part of the title', () => {
     expect(
       parseReleaseNotes('* Sort by name by @someone in https://x.test/pull/4').entries
@@ -111,6 +122,16 @@ describe('parseReleaseNotes: a body somebody wrote by hand', () => {
   it('reads a plain paragraph line as an entry', () => {
     expect(parseReleaseNotes('This release fixes the prompt.\n\nAnd the tabs.').entries).toEqual([
       'This release fixes the prompt.',
+      'And the tabs.'
+    ])
+  })
+
+  it('reads a paragraph wrapped over several lines as ONE entry, and a bullet ends it', () => {
+    const body = 'This release fixes\nthe prompt.\n* and a bullet\nthen prose again\n\nAnd the tabs.'
+    expect(parseReleaseNotes(body).entries).toEqual([
+      'This release fixes the prompt.',
+      'and a bullet',
+      'then prose again',
       'And the tabs.'
     ])
   })

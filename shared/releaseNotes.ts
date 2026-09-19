@@ -77,8 +77,10 @@ const BULLET = /^\s*(?:[*+-]|\d{1,9}[.)])(?:\s+|$)(?:\[[ xX]\]\s+)?/
 const FULL_CHANGELOG = /^\W*full changelog\b/i
 // "by @user in <url>", which generate-notes appends to every title. The url is
 // optional so a hand-written "by @user" goes too. It must sit at the END: a
-// title is free to say "sort by name".
-const AUTHOR_TAIL = /\s+by\s+@[\w-]+(?:\[bot\])?(?:\s+in\s+(\S+))?\s*$/i
+// title is free to say "sort by name". And what follows "in" must BE a url:
+// the first build took any word there, so "Mention people by @handle in
+// comments" was cut down to "Mention people" (found in review, 2026-09-20).
+const AUTHOR_TAIL = /\s+by\s+@[\w-]+(?:\[bot\])?(?:\s+in\s+(https?:\/\/\S+))?\s*$/i
 const PR_NUMBER = /\/(?:pull|issues)\/(\d{1,9})\/?$/
 
 // [text](target) and ![alt](target): the text stays, the target never does.
@@ -137,29 +139,36 @@ export function parseReleaseNotes(body: unknown): ReleaseNotes {
   const raw: string[] = []
   let skipping = false // inside "New Contributors", until the next heading
   let open = false // the last entry can still take a wrapped line
+  // The last entry is a PARAGRAPH still running: prose somebody wrote by hand
+  // is wrapped at a column, and each of its lines is not a change of its own
+  // ("This release fixes" and "the prompt." as two bullets). A blank line, a
+  // heading or a bullet ends it.
+  let para = false
   for (const line of text.split(/\r\n|\r|\n/)) {
     if (!line.trim()) {
-      open = false
+      open = para = false
       continue
     }
     if (HEADING.test(line)) {
       skipping = /new contributors/i.test(line)
-      open = false
+      open = para = false
       continue
     }
     if (skipping || RULE.test(line) || FULL_CHANGELOG.test(line)) {
-      open = false
+      open = para = false
       continue
     }
     const bullet = BULLET.exec(line)
     if (bullet) {
       raw.push(line.slice(bullet[0].length))
       open = true
-    } else if (open && /^\s/.test(line)) {
+      para = false
+    } else if ((open && /^\s/.test(line)) || para) {
       raw[raw.length - 1] += ' ' + line.trim()
     } else {
       raw.push(line)
       open = false
+      para = true
     }
   }
 
