@@ -19,8 +19,9 @@
 
 export type WindowEdges = 'hairline' | 'faint' | 'solid' | 'none'
 
-/** In the order the control offers them. */
-export const WINDOW_EDGES: readonly WindowEdges[] = ['hairline', 'faint', 'solid', 'none']
+/** In the order the control offers them: weakest to strongest, which is the
+ *  order of Prism's own Edges row (None, Faint, Hairline, Strong). */
+export const WINDOW_EDGES: readonly WindowEdges[] = ['none', 'faint', 'hairline', 'solid']
 
 export const DEFAULT_WINDOW_EDGES: WindowEdges = 'hairline'
 

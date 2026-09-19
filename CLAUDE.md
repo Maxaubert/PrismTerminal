@@ -187,7 +187,9 @@ terminal theme, anything that reads or shows files.
   the option to specify the edges that you have in the Terminal app, like we have in the main app,
   where you can choose like Hairline, Faint, or like Solid edges, or even No edges"). Settings >
   Appearance > Edges (`window-edges`, localStorage `prism.window.edges`, store `lib/edgesPrefs.ts`).
-  THIS APP'S row, not the core's: the edges are the window's chrome, which in Prism belongs to the
+  The control runs WEAKEST TO STRONGEST (None, Faint, Hairline, Solid), the order of Prism's own
+  Edges row: a segmented scale reads as one only in order, and the order the owner said the words
+  in was a sentence, not a layout. THIS APP'S row, not the core's: the edges are the window's chrome, which in Prism belongs to the
   app style and has an Edges row of its own there, so it is in the `options` e2e's closed list of
   this app's rows and its key is not `prism.term.*`. EVERY edge in the window reads one of two
   tokens (`--p-divider`, the chrome's line; `--p-line`, the list's), core's components included, so

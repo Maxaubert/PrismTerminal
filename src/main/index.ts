@@ -77,13 +77,14 @@ Menu.setApplicationMenu(null)
 let mainWindow: BrowserWindow | null = null
 // Acrylic and the window's solid ground; the rules are material.ts's.
 const material = createMaterial(() => mainWindow)
-// The faint hairline round a floating window; the rules are windowEdge.ts's.
-// Not under --e2e: a parked window has no edge anyone sees, and the helper is a
-// PowerShell that compiles a P/Invoke, once per launch, thirty launches a run.
 // How strongly the user wants edges drawn (#27). The choice lives in the page's
 // localStorage, so main is TOLD it (`window:edges`, at launch and on a change)
 // and holds the default, the border as it always was, until it has been.
 let windowEdges: WindowEdges = DEFAULT_WINDOW_EDGES
+// The line round a floating window, a hairline unless the setting above says
+// otherwise; the rules are windowEdge.ts's.
+// Not under --e2e: a parked window has no edge anyone sees, and the helper is a
+// PowerShell that compiles a P/Invoke, once per launch, thirty launches a run.
 const edge = E2E
   ? { apply: (): void => {} }
   : createWindowEdge(

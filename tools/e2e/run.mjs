@@ -792,8 +792,8 @@ const scenarios = {
     await row.waitFor({ state: 'visible', timeout: 10000 })
     await row.scrollIntoViewIfNeeded()
     ok(
-      (await page.locator('[data-pref="window-edges"] [data-seg]').allTextContents()).join('|') === 'Hairline|Faint|Solid|None',
-      'Settings > Appearance has an Edges row: Hairline, Faint, Solid, None'
+      (await page.locator('[data-pref="window-edges"] [data-seg]').allTextContents()).join('|') === 'None|Faint|Hairline|Solid',
+      'Settings > Appearance has an Edges row, weakest to strongest as in Prism: None, Faint, Hairline, Solid'
     )
     ok((await settled(page))?.pressed === 'hairline', 'with Hairline pressed, since that is what is in force')
     ok(near((await probe(page)).row, 0.09), 'a settings row wears the 9% list line it always did')

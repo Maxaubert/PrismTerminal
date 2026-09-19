@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX, type ReactNode } from 'react'
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../lib/newTabPrefs'
 import { setWindowEdges, useWindowEdges } from '../lib/edgesPrefs'
-import type { WindowEdges } from '@shared/windowEdges'
+import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
 import { Pref, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
 import { DictationSettings } from '@core/renderer/settings/Dictation'
 import { TerminalAppearanceSettings } from '@core/renderer/settings/TerminalAppearance'
@@ -128,12 +128,22 @@ function GeneralTab(): JSX.Element {
 
 /* ---------- appearance ---------- */
 
-const EDGE_OPTIONS: Array<{ id: WindowEdges; name: string }> = [
-  { id: 'hairline', name: 'Hairline' },
-  { id: 'faint', name: 'Faint' },
-  { id: 'solid', name: 'Solid' },
-  { id: 'none', name: 'None' }
-]
+// WEAKEST TO STRONGEST, the order Prism's own Edges row uses (None, Faint,
+// Hairline, Strong). The owner asked for the option "like we have in the main
+// app", and a segmented control that is a scale reads as one only when its
+// steps are in order; the order he happened to say them in ("Hairline, Faint,
+// or like Solid edges, or even No edges") was a sentence, not a layout. The
+// names come from the ids in `WINDOW_EDGES`, so the two lists cannot drift.
+const EDGE_NAMES: Record<WindowEdges, string> = {
+  none: 'None',
+  faint: 'Faint',
+  hairline: 'Hairline',
+  solid: 'Solid'
+}
+const EDGE_OPTIONS: Array<{ id: WindowEdges; name: string }> = WINDOW_EDGES.map((id) => ({
+  id,
+  name: EDGE_NAMES[id]
+}))
 
 /**
  * The Appearance page: the terminal's look, which is the core's and the same in
@@ -153,7 +163,11 @@ function AppearanceTab(): JSX.Element {
   return (
     <>
       <TerminalAppearanceSettings />
-      <Pref id="window-edges" label="Edges" hint="The lines between the parts of the window, and the border round it.">
+      <Pref
+        id="window-edges"
+        label="Edges"
+        hint="The lines between the parts of the window, and the border round it."
+      >
         <Segmented value={edges} onChange={setWindowEdges} options={EDGE_OPTIONS} />
       </Pref>
     </>
