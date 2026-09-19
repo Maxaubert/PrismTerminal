@@ -28,6 +28,14 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
 2. **What is an app's shell stays in the app.** Prism: roots and the wall, the
    sidebar, the split dock, several shells per tab, app styles. Prism Terminal:
    folder tabs, the start screen, window chrome from the theme, the lifecycle.
+   Dictation (#13) is in here too, whole: the key, the microphone, the engine,
+   the model store, the pill, the tab mark and its Settings page. A host wires
+   it with four lines: `registerDictationIpc` in main, `createDictationApi` in
+   the preload, the `dictation` field of its host config, and
+   `useDictationArm` + `<DictationPill>` where its terminal is drawn. It also
+   runs `core/tools/fetch-whisper.mjs <dir>` at build time and ships that folder
+   as `resources/bin/whisper`, and grants its own window the `media` permission
+   (audio only).
 3. **A difference between the apps is DECLARED, never forked.** Every place the
    two legitimately differ is a field of `TermHostConfig` in
    [`renderer/host.ts`](renderer/host.ts): the default each untouched setting
