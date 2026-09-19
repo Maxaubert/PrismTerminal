@@ -1,4 +1,11 @@
 @import 'tailwindcss';
+/* THE CORE IS OUTSIDE THE FOLDER TAILWIND SCANS (#20). Tailwind looks for class
+   names from the renderer root down, and the terminal lives in core/ at the
+   repo root, so a utility used ONLY there is never generated - silently. It
+   went unnoticed while every class in core/ also appeared in src/, and took the
+   whole Settings page apart the day the settings moved into the core. Prism
+   carries the same line for the same reason (see core/README.md). */
+@source '../../../core';
 
 :root {
   color-scheme: dark;
