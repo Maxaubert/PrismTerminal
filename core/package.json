@@ -14,7 +14,9 @@
     "./shared/*": "./shared/*.ts",
     "./renderer/host": "./renderer/host.ts",
     "./renderer/lib/*": "./renderer/lib/*.ts",
-    "./renderer/components/*": "./renderer/components/*.tsx"
+    "./renderer/components/*": "./renderer/components/*.tsx",
+    "./renderer/settings/options": "./renderer/settings/options.ts",
+    "./renderer/settings/*": "./renderer/settings/*.tsx"
   },
   "files": [
     "main",
