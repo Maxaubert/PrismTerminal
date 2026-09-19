@@ -17,8 +17,7 @@ const K = {
   language: 'prism.dictation.language',
   pauseMedia: 'prism.dictation.pauseMedia',
   sounds: 'prism.dictation.sounds',
-  model: 'prism.dictation.model',
-  gpu: 'prism.dictation.gpu'
+  model: 'prism.dictation.model'
 } as const
 
 export const DICTATION_KEYS = K
@@ -99,12 +98,6 @@ export const setDictationSounds = (on: boolean): void => write(K.sounds, on ? '1
 export const dictationModel = (): string => read(K.model) ?? ''
 export const setDictationModel = (id: string): void => write(K.model, id)
 
-/** GPU acceleration is ON unless switched off: installing the pack is the
- *  user saying they want it. Disabling keeps the files (675 MB is not something
- *  to download twice on a whim, and the other app may be using them). */
-export const dictationGpu = (): boolean => read(K.gpu) !== '0'
-export const setDictationGpu = (on: boolean): void => write(K.gpu, on ? '1' : '0')
-
 export const useDictationEnabled = (): boolean => useSyncExternalStore(sub, dictationEnabled)
 export const useDictationMode = (): DictMode => useSyncExternalStore(sub, dictationMode)
 export const useDictationHotkey = (): Hotkey => useSyncExternalStore(sub, dictationHotkey)
@@ -113,5 +106,4 @@ export const useDictationLanguage = (): string => useSyncExternalStore(sub, dict
 export const useDictationPauseMedia = (): boolean => useSyncExternalStore(sub, dictationPauseMedia)
 export const useDictationSounds = (): boolean => useSyncExternalStore(sub, dictationSounds)
 export const useDictationModel = (): string => useSyncExternalStore(sub, dictationModel)
-export const useDictationGpu = (): boolean => useSyncExternalStore(sub, dictationGpu)
 export const onDictationPrefs = sub
