@@ -24,6 +24,14 @@ and want to know, at a glance, which one has finished.
   milliseconds of Enter and clears the instant the answer lands, where a terminal that scores output
   is a second or two late at both ends. It wears the theme's accent, as a quiet line under the tab
   or, turned up, the whole tab filled, which then also holds a "finished" colour until you visit it.
+- **Dictation, on your own machine.** Turn it on in Settings, hold `Right Alt` and speak: the words
+  land at the cursor when you let go, in any tab and any shell. It is
+  [whisper.cpp](https://github.com/ggml-org/whisper.cpp) running locally, so your voice never leaves
+  the PC and it works offline. A pill shows a live level meter and the text as you speak, so a muted
+  microphone is obvious at once, not after a lost sentence. It never presses Enter for you. Pick a
+  model in Settings (Base runs well on any CPU; with an NVIDIA card one click adds the GPU engine and
+  the large models answer in under a second), a language or auto-detect, and optionally pause your
+  music while you talk. Off until you switch it on: nothing listens and nothing downloads before that.
 - **Tabs that come back.** Close the app and reopen it: every tab returns in the folder its shell
   was in, and a tab that hosted Claude or Codex resumes that conversation (`claude --resume <id>`,
   `codex resume --last`).
@@ -76,6 +84,7 @@ lands on a start screen with the folders you were last in, each one press from a
 | `Ctrl+,` | Settings |
 | `Ctrl+scroll` | Zoom this tab's text |
 | `F11` | Fullscreen |
+| hold `Right Alt` | Dictate (when switched on; rebindable, or press-to-toggle) |
 
 Everything else belongs to the shell: `Escape` is still vim's, and `Ctrl+Backspace` deletes a word
 (`Ctrl+W` closes the tab, as it does in a browser).
@@ -90,6 +99,7 @@ prompt, which is what names the tab; a WSL tab keeps the folder it opened in.
 
 ```bash
 npm install
+npm run fetch:bin  # the speech engine, once (pinned by SHA-256; e2e and package run it too)
 npm run dev        # run it
 npm test           # unit tests (vitest)
 npm run e2e        # drives the built app, parked offscreen and unfocused
@@ -97,7 +107,8 @@ npm run package    # dist/PrismTerminal-Setup-x64-<version>.exe
 ```
 
 Electron, React 19, TypeScript, Vite, Tailwind v4, [xterm.js](https://xtermjs.org) and
-[node-pty](https://github.com/microsoft/node-pty). Design notes live in
+[node-pty](https://github.com/microsoft/node-pty). Dictation is [whisper.cpp](https://github.com/ggml-org/whisper.cpp)'s
+official Windows build (MIT), fetched at build time and shipped beside the app. Design notes live in
 [`docs/superpowers`](docs/superpowers).
 
 ## License

@@ -1,11 +1,13 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, session, shell } from 'electron'
 import pkg from '../../package.json'
+import { existsSync } from 'fs'
 import { stat } from 'fs/promises'
 import { homedir } from 'os'
 import { dirname, join } from 'path'
 import type { Restored, SavedTabs, UpdateInfo } from '@shared/types'
 import { claudeSessions } from '@core/main/agentResume'
 import { registerTermIpc } from '@core/main/ipc'
+import { registerDictationIpc } from '@core/main/dictationIpc'
 import { planRestore } from './planRestore'
 import { foldersFromArgv } from './argv'
 import { acrylicOk, createMaterial } from './material'
@@ -41,6 +43,16 @@ const E2E = process.argv.includes('--e2e')
 // per profile - that is what lets the suite run beside the installed app.
 if (!app.commandLine.hasSwitch('user-data-dir'))
   app.setPath('userData', join(app.getPath('appData'), 'PrismTerminal'))
+
+// THE E2E SPEAKS THROUGH A FAKE MICROPHONE (#13): Chromium plays a WAV into
+// getUserMedia, so the dictation scenario runs the REAL capture, the REAL
+// engine and the REAL paste with nobody in the room (MEASURED under Electron:
+// the fake device delivers the file's audio, peak 0.78). Only under --e2e.
+if (E2E && process.env.PT_E2E_MIC) {
+  app.commandLine.appendSwitch('use-fake-device-for-media-stream')
+  app.commandLine.appendSwitch('use-fake-ui-for-media-stream')
+  app.commandLine.appendSwitch('use-file-for-fake-audio-capture', process.env.PT_E2E_MIC)
+}
 
 /**
  * Two things Windows needs told before the first window exists (2026-08-30).
@@ -102,6 +114,8 @@ const isDir = (p: unknown): Promise<boolean> =>
  * hands its folder over and ends.
  * ------------------------------------------------------------------ */
 let quitting = false // app.quit() is under way
+/** Kills dictation's children (the speech server, the media helper). Set by wireIpc. */
+let stopDictation: () => void = () => {}
 let quitWanted = false // a quit the close question interrupted; confirm resumes it
 let agentBusy = false // mirrored from the renderer: an agent is WORKING
 let closeAgreed = false // the renderer's "go ahead" for the close in flight
@@ -352,6 +366,27 @@ function wireIpc(): void {
     // Prism's reroot. This app never moves a shell it did not start there.
     mayCd: () => false
   })
+  // DICTATION (#13) is the core's too. What is this app's own: where ITS
+  // installer put the CPU engine, the folder it shares with Prism, and the GPU
+  // question, answered by Electron's own adapter list (no process spawned).
+  stopDictation = registerDictationIpc({
+    ipcMain,
+    send,
+    cpuEngineDir: () => {
+      const dir =
+        process.env.PT_WHISPER_DIR ??
+        (app.isPackaged ? join(process.resourcesPath, 'bin', 'whisper') : join(app.getAppPath(), 'vendor', 'whisper'))
+      return existsSync(join(dir, 'whisper-server.exe')) ? dir : null
+    },
+    sharedRoot:
+      process.env.PT_DICTATION_ROOT ??
+      join(process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'), 'PrismDictation'),
+    hasNvidia: async () => {
+      if (process.env.PT_E2E_NVIDIA) return process.env.PT_E2E_NVIDIA === '1'
+      const info = (await app.getGPUInfo('basic')) as { gpuDevice?: Array<{ vendorId?: number }> }
+      return (info.gpuDevice ?? []).some((d) => d.vendorId === 0x10de)
+    }
+  })
   // A tab's "Show in File Explorer": a folder that exists, and nothing else.
   ipcMain.on('shell:show-folder', (_e, p: string) => {
     void isDir(p).then((ok) => {
@@ -512,11 +547,31 @@ if (!app.requestSingleInstanceLock()) {
   // Every shell dies with the app; a pty with no window is an orphan.
   app.on('will-quit', () => {
     stopDwmHelper()
+    stopDictation()
     killAll()
     tabs.flush()
   })
 
   app.whenReady().then(() => {
+    // WHAT THE PAGE MAY ASK CHROMIUM FOR, as a closed list. Electron's default
+    // is to grant everything; with dictation (#13) the page now asks for the
+    // MICROPHONE, so the answer is written down: audio capture for this app's
+    // own window, the clipboard the terminal already used, and nothing else.
+    // Never the camera, never another origin.
+    const own = (wc: Electron.WebContents | null): boolean => !!wc && wc === mainWindow?.webContents
+    const granted = new Set(['media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen'])
+    session.defaultSession.setPermissionRequestHandler((wc, permission, callback, details) => {
+      if (!own(wc) || !granted.has(permission)) return callback(false)
+      if (permission === 'media') {
+        const types = (details as { mediaTypes?: string[] }).mediaTypes ?? []
+        return callback(types.length > 0 && types.every((t) => t === 'audio'))
+      }
+      callback(true)
+    })
+    session.defaultSession.setPermissionCheckHandler((wc, permission, _origin, details) => {
+      if (!own(wc) || !granted.has(permission)) return false
+      return permission !== 'media' || (details as { mediaType?: string }).mediaType !== 'video'
+    })
     wireIpc()
     createWindow()
     // Warm the terminal's fixed costs shortly after launch: the native module

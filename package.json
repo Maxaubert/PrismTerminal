@@ -1,7 +1,7 @@
 {
   "name": "prism-terminal",
   "productName": "Prism Terminal",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A tabbed Windows terminal for AI CLIs.",
   "main": "./out/main/index.js",
   "author": "Max",
@@ -15,10 +15,11 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "e2e": "npm run build && node tools/e2e/run.mjs",
+    "fetch:bin": "node core/tools/fetch-whisper.mjs vendor/whisper",
+    "e2e": "npm run fetch:bin && npm run build && node tools/e2e/run.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "package": "electron-vite build && electron-builder --win"
+    "package": "npm run fetch:bin && electron-vite build && electron-builder --win"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

@@ -4,3 +4,5 @@ dist
 *.log
 .e2e-profile
 .e2e-shots/
+vendor/
+.e2e-cache/

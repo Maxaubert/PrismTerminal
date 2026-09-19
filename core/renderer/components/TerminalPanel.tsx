@@ -5,7 +5,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
 import { decidePaste } from '../lib/termPaste'
-import { registerPaste, reportCwd, reportTitle } from '../lib/termBus'
+import { registerPaste, reportCwd, reportTitle, setTextPaster } from '../lib/termBus'
 import { parseOsc9 } from '../../shared/termCwd'
 import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
 import { followsHostStyle, paintsGround, termApi, termHost } from '../host'
@@ -221,6 +221,24 @@ export function ensureTermSession(id: string, root: string, shellId: string | un
 export function focusTermSession(id: string): void {
   sessions.get(id)?.term.focus()
 }
+
+/**
+ * Paste TEXT THE USER SPOKE into a session (#13), exactly as a Ctrl+V of text
+ * would arrive: xterm wraps it in the bracketed-paste escape when the shell
+ * asked for that, so an agent's prompt takes it as one paste. NEVER A NEWLINE:
+ * `paste` turns one into a carriage return, which is Enter, and dictation must
+ * never send a command. The caller cleans the text; this strips what is left
+ * anyway, because the rule is worth two locks.
+ */
+function pasteSpokenText(id: string, text: string): boolean {
+  const s = sessions.get(id)
+  const flat = text.replace(/[\r\n\u2028\u2029]+/g, ' ')
+  if (!s || !flat) return false
+  markTouched(id)
+  s.term.paste(flat)
+  return true
+}
+setTextPaster(pasteSpokenText)
 
 /** Kill a session's renderer half: the xterm instance and its element. Main's
  *  pty half is killed separately (term:kill) or already exited. */
