@@ -284,6 +284,16 @@ export default function App(): JSX.Element {
     [agentKinds]
   )
   const update = useUpdateFlow(window.prism, installGuard)
+  // ONE QUESTION AT A TIME. The app's chords still work while the update window
+  // is up (Ctrl+W, Alt+F4), and a close question raised from behind it mounted
+  // UNDER it: same z-index, earlier in the document. The question then took the
+  // focus onto its primary button where nobody could see it, so Enter, pressed
+  // at what looked like Install, closed the tab and ended the agent. A question
+  // about losing work outranks a list of patch notes, so the window gives way.
+  const cancelUpdate = update.cancel
+  useEffect(() => {
+    if (ask) cancelUpdate()
+  }, [ask, cancelUpdate])
   /** The running version, for the window's "You have" line. Asked once. */
   const [version, setVersion] = useState('')
   useEffect(() => {

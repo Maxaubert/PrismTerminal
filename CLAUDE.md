@@ -114,6 +114,12 @@ so an update never silently changes what an existing user sees; the bridge to ma
     that fails now says so under the chip, where it used to fall back to "Update" in silence. The
     `updateGuard` e2e drives the question, Cancel, the go-ahead and the failure line with an offer
     whose url `installUpdate` refuses before it sends a byte (`PT_E2E_UPDATE_OFFER`, e2e only).
+  - **ONE QUESTION AT A TIME** (review of #28, 2026-09-20). The app's chords still work over the
+    update window, so Ctrl+W on an agent's tab (or Alt+F4) raised the close question UNDER it, with
+    the focus on "Close tab" where nobody could see it: Enter, aimed at Install, ended the agent.
+    MEASURED in the e2e with the fix taken out. App now puts the update window away whenever a
+    question (`ask`) appears; `updateGuard` holds it. The window's Tab trap also leaves Ctrl+Tab
+    alone, which used to switch tabs AND move the focus inside the window in one press.
 - **A PAGE THAT WORKS IS NOT A PAGE THAT LOOKS RIGHT** (#20, 2026-09-19). Moving the settings into
   `core/` dropped every Tailwind class used only there (`core/` is outside the scanned root; the fix
   is the `@source` line at the top of `index.css`, do not remove it). All 14 e2e scenarios passed over

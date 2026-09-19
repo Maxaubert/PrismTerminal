@@ -53,7 +53,12 @@ export default function UpdateDialog({
         onCancel()
         return
       }
-      if (e.key !== 'Tab') return
+      // A PLAIN Tab only. Ctrl+Tab is the host's own chord (it steps the tab
+      // strip in both apps), and both listeners sit on the window in the
+      // capture phase, where one's stopPropagation does not silence the other:
+      // without this test one press both switched tabs and moved the focus in
+      // here.
+      if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey) return
       // Tab stays inside. Behind this is a terminal, and a Tab that wandered
       // out of the dialog would be typed into somebody's shell.
       const stops = [

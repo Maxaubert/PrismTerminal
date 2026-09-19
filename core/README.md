@@ -57,7 +57,11 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
    where its title bar is drawn, `<UpdateChip>` in the bar and ONE
    `<UpdateDialog>` at the root. The `guard` is the host's own question before
    an install, which ends in the app quitting: Prism Terminal asks about a
-   working agent, Prism about unsaved text as well.
+   working agent, Prism about unsaved text as well. And a host that raises a
+   question of its OWN while the window is up (its chords still work over it:
+   Ctrl+W, Alt+F4) must put the window away first (`cancel()`): the two are
+   the same layer, and a question mounted under this one takes the focus where
+   nobody can see it, so Enter at "Install" answers the hidden question.
    Two rules travel with it. **The notes are plain text**: they are text off the
    network in a window that can reach the bridge, so they are parsed to strings
    and printed as text nodes; never HTML, never rendered markdown, never an

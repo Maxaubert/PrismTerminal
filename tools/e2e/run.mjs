@@ -1127,8 +1127,17 @@ const scenarios = {
     ok(/No notes were published/.test((await updateDialog.locator('[data-update-notes]').textContent()) ?? ''), 'and says so in one line')
     ok((await updateDialog.locator('[data-update-preview]').count()) === 0, 'a real offer is not called a preview')
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/update-dialog-empty.png') }).catch(() => {})
+    // ONE QUESTION AT A TIME. The app's chords still work over the update
+    // window, and this tab hosts an agent, so Ctrl+W asks. The question used to
+    // mount UNDER the update window with the focus on "Close tab": Enter, aimed
+    // at Install, ended the agent. The window must give way to the question.
+    await page.keyboard.press('Control+w')
+    ok(await until(async () => (await question.count()) === 1, 4000, 50), 'Ctrl+W over the update window still asks about the agent')
+    ok(await until(async () => (await updateDialog.count()) === 0, 4000, 50), 'and the update window gives way, so the question is not hidden under it')
+    ok(await until(() => page.evaluate(() => (document.activeElement?.textContent ?? '').trim() === 'Close tab' && !!document.activeElement.closest('[role="dialog"]')), 4000, 50), 'the focus is on the question that can be seen')
     await page.keyboard.press('Escape')
-    await until(async () => (await updateDialog.count()) === 0, 4000, 50)
+    ok(await until(async () => (await question.count()) === 0, 4000, 50), 'Escape backs out of it')
+    ok((await tabLabels(page)).length === 1 && (await installs()) === 0, 'with the tab still open and nothing installed')
 
     await page.locator('.xterm').first().click({ force: true })
     await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x25D0 + ' Claude Code'")
