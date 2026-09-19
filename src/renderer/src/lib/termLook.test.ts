@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { agentColor, agentIndicator, customTermTheme, setAgentColor, saveCustomTermTheme, setAgentIndicator, setTermAcrylic, setTermFontPct, setTermOpacity, setTermThemeId, termAcrylic, termBaseFontPx, termFontPct, termOpacity, termThemeId } from './termLook'
+import { agentColorChoice, agentIndicator, customTermTheme, setAgentColor, saveCustomTermTheme, setAgentIndicator, setTermAcrylic, setTermFontPct, setTermOpacity, setTermThemeId, termAcrylic, termBaseFontPx, termFontPct, termOpacity, termThemeId } from './termLook'
 
 beforeEach(() => localStorage.clear())
 
@@ -41,24 +41,31 @@ describe('the one custom theme', () => {
 })
 
 describe('the agent indicator', () => {
-  it('defaults to full and round-trips minimal', () => {
-    expect(agentIndicator()).toBe('full')
-    setAgentIndicator('minimal')
+  it('defaults to minimal and round-trips full', () => {
+    localStorage.removeItem('prism.term.agentIndicator')
     expect(agentIndicator()).toBe('minimal')
+    setAgentIndicator('full')
+    expect(agentIndicator()).toBe('full')
   })
   it('garbage reads as the default', () => {
     localStorage.setItem('prism.term.agentIndicator', 'soup')
-    expect(agentIndicator()).toBe('full')
+    expect(agentIndicator()).toBe('minimal')
   })
 })
 
 describe('the working colour', () => {
-  it('defaults to orange and round-trips a pick; garbage falls back', () => {
-    expect(agentColor()).toBe('#f97316')
+  it('follows the theme until a colour is picked, and can be given back', () => {
+    localStorage.removeItem('prism.term.agentColor')
+    expect(agentColorChoice()).toBe('')
     setAgentColor('#22c55e')
-    expect(agentColor()).toBe('#22c55e')
+    expect(agentColorChoice()).toBe('#22c55e')
+    setAgentColor('')
+    expect(agentColorChoice()).toBe('')
+    expect(localStorage.getItem('prism.term.agentColor')).toBeNull()
+  })
+  it('garbage in storage reads as following the theme', () => {
     localStorage.setItem('prism.term.agentColor', 'soup')
-    expect(agentColor()).toBe('#f97316')
+    expect(agentColorChoice()).toBe('')
   })
 })
 

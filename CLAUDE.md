@@ -44,6 +44,14 @@ terminal theme, anything that reads or shows files.
   first idle title is the agent STARTING, not working. Output scoring (`termActivity`) is only the
   fallback, and an agent's startup paint is not work (`markBorn` / `startupOutput`). The rules live in
   `lib/useAgentIndicator.ts`; change them there, with Prism's reasoning in hand.
+- **The indicator is MINIMAL by default and wears the THEME** (owner, 2026-09-18, #4; it was Full
+  and a fixed orange in Prism and the first build). `termLook` stores the two colours as CHOICES,
+  `''` meaning "follow the theme"; `lib/agentColors.ts` resolves what is in force: working = the
+  chrome's own `--p-accent`, finished = the theme's green moved to the contrast floor (the fallback
+  green when a palette's green IS its accent, since two states in one colour is no indicator).
+  Picking a theme gives both back to the theme; a pick of your own shows a "Follow theme" button.
+  Settings calls them "Agent working indicator" and "Agent finished indicator". The finished mark
+  is Full's alone, so the e2e turns the volume up before it looks for one.
 - **The process poll** (`agentPoll.ts`) asks only after a pty printed something and backs off 2.5s to
   20s. It reports CHANGES, so its first verdict on a shell is said once; the e2e waits for it.
 - **The only command the app writes into a shell is the agent resume**, as the shell's STARTUP

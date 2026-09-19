@@ -19,8 +19,8 @@ import {
   setTermOpacity,
   setTermThemeId,
   termThemeId,
-  useAgentColor,
-  useAgentDoneColor,
+  useAgentColorChoice,
+  useAgentDoneColorChoice,
   useAgentIndicator,
   useCustomTermTheme,
   useTermAcrylic,
@@ -32,6 +32,7 @@ import {
   type CustomTermTheme
 } from '../lib/termLook'
 import { resolveTermTheme, TERM_PRESETS } from '../lib/termTheme'
+import { useAgentColors } from '../lib/agentColors'
 import { luminance, normalizeColor } from '../lib/termAnsi'
 
 // Settings WRITES STORES and nothing else. The window's chrome and its acrylic
@@ -593,8 +594,11 @@ function AppearanceTab(): JSX.Element {
   const fontId = useTermFontId()
   const acrylicOn = useTermAcrylic()
   const opacity = useTermOpacity()
-  const agentCol = useAgentColor()
-  const doneCol = useAgentDoneColor()
+  // The CHOICES ('' = follow the theme) are what is saved and compared; the
+  // colours in force are what the swatches show.
+  const agentCol = useAgentColorChoice()
+  const doneCol = useAgentDoneColorChoice()
+  const inForce = useAgentColors()
   const custom = useCustomTermTheme()
   // The material is Windows 11's; null while main has not answered yet, which
   // reads as supported so the row does not flash disabled on every open.
@@ -818,17 +822,39 @@ function AppearanceTab(): JSX.Element {
       </Pref>
       <Pref
         id="agent-color"
-        label="Indicator colour"
-        hint="The tab's fill (full) or the line under it (minimal) while an agent works."
+        label="Agent working indicator"
+        hint={
+          agentCol
+            ? "The line under a tab (minimal) or the tab's fill (full) while its agent works. Your own colour."
+            : "The line under a tab (minimal) or the tab's fill (full) while its agent works. Follows the theme's accent."
+        }
       >
-        <HexSwatch label="Indicator colour" value={agentCol} onChange={setAgentColor} />
+        <div className="flex items-center gap-2.5">
+          {agentCol && (
+            <button data-follow-theme="working" onClick={() => setAgentColor('')} className={ROW_BUTTON}>
+              Follow theme
+            </button>
+          )}
+          <HexSwatch label="Agent working indicator" value={inForce.working} onChange={setAgentColor} />
+        </div>
       </Pref>
       <Pref
         id="agent-done-color"
-        label="Finished colour"
-        hint="An agent that finished while its tab was in the background wears this until you visit the tab. Full indicator only."
+        label="Agent finished indicator"
+        hint={
+          doneCol
+            ? 'A tab whose agent finished while you were elsewhere wears this until you visit it. Full indicator only. Your own colour.'
+            : "A tab whose agent finished while you were elsewhere wears this until you visit it. Full indicator only. Follows the theme's green."
+        }
       >
-        <HexSwatch label="Finished colour" value={doneCol} onChange={setAgentDoneColor} />
+        <div className="flex items-center gap-2.5">
+          {doneCol && (
+            <button data-follow-theme="finished" onClick={() => setAgentDoneColor('')} className={ROW_BUTTON}>
+              Follow theme
+            </button>
+          )}
+          <HexSwatch label="Agent finished indicator" value={inForce.finished} onChange={setAgentDoneColor} />
+        </div>
       </Pref>
     </div>
   )

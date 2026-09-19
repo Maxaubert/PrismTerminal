@@ -185,6 +185,32 @@ const scenarios = {
     await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x25D0 + ' Claude Code'")
     const lit = await until(() => page.evaluate(() => !!document.querySelector('[data-agent-state="working"]')), 8000, 50)
     ok(lit, 'a working title lights the tab')
+    // MINIMAL is the default, and its line wears the THEME'S accent: measured
+    // off the computed styles, since a colour is only right on the glass.
+    const mark = await page.evaluate(() => {
+      const rgb = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).join(',')
+      const probe = document.createElement('span')
+      probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-accent')
+      document.body.appendChild(probe)
+      const accent = rgb(getComputedStyle(probe).color)
+      probe.remove()
+      const bar = document.querySelector('.p-agent-run')
+      return {
+        mode: document.querySelector('[data-agent-state="working"]')?.getAttribute('data-agent'),
+        bar: bar ? rgb(getComputedStyle(bar).backgroundColor) : null,
+        accent
+      }
+    })
+    ok(mark.mode === 'minimal', `the indicator is minimal out of the box (${mark.mode})`)
+    ok(!!mark.bar && mark.bar === mark.accent, `and its line is the theme's accent (${mark.bar} vs ${mark.accent})`)
+    // The finished mark is Full's alone: turn it up, the way a user would.
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-pref="agent-indicator"] [data-seg="full"]').click()
+    await page.locator('[data-tab]').nth(1).click()
+    ok(
+      await until(() => page.evaluate(() => document.querySelector('[data-agent-state="working"]')?.getAttribute('data-agent') === 'full')),
+      'Full fills the tab instead'
+    )
     // Walk away, then let it finish behind our back.
     await page.locator('[data-tab]').nth(0).click()
     await sleep(300)

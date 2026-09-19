@@ -128,7 +128,11 @@ or under `--e2e`. The NSIS uninstall macro deletes both keys, and a parity test 
   cursor colour, else Prism indigo `#5b5bd6`), light/dark decided by MEASURED bg luminance.
 - Default theme: Prism's dark look as a preset (`prism`, near-black + indigo), so first launch
   looks like Prism's terminal does today.
-- Custom theme, 15 fonts, size steps, agent working/finished colours, indicator volume: unchanged.
+- Custom theme, 15 fonts, size steps: unchanged.
+- Agent indicators (owner, REVISED 2026-09-18, #4): the volume defaults to MINIMAL (it was Full),
+  and the colours FOLLOW THE THEME until the user picks their own: working is the chrome's accent,
+  finished is the theme's green. Settings names them "Agent working indicator" and "Agent finished
+  indicator", each with a "Follow theme" button once a colour has been picked.
 
 **Acrylic works with any theme** (owner). Appearance gets "Acrylic background" and an opacity
 slider (30-100%, stored as a NUMBER and read defensively: never-set is 100, not 0). On: main sets
