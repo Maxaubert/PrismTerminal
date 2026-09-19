@@ -78,10 +78,18 @@ terminal theme, anything that reads or shows files.
 - **The title bar has a settings cog and NO menu** (owner, same day: a menu of Settings + Quit was
   cut to the cog). Nothing in the UI needs to quit the app any more; the X does.
 - **The theme drives the chrome** through the real `--p-*` tokens (`lib/chromeTheme.ts`). Every ink is
-  moved to a contrast floor, and light/dark is MEASURED from the ground, never read off a name. No
-  container behind `TerminalPanel` may paint `--p-bg`: on acrylic that is a second translucent coat.
+  moved to a contrast floor, and light/dark is MEASURED from the ground, never read off a name.
   The `:root` fallbacks in `index.css` are `chromeTokens` output for the `prism` preset; recompute
   them if either changes.
+- **The terminal panel paints the ground; xterm's canvas is CLEAR** (2026-09-19, #6, owner
+  screenshot: a grey bar under a black terminal). xterm sizes itself in whole rows (MEASURED: 604px
+  in a 611px box), so the strip under the last row is never its to paint; with the ground on the
+  canvas and a transparent box round it, that strip showed the native window background. So
+  `TerminalPanel`'s box is `bg-[var(--p-bg)]` and `currentTermTheme()` hands xterm
+  `background: #00000000` plus a named `cursorAccent` (it defaults to the background, which would
+  make the character under a block cursor a hole). Exactly ONE coat per pixel, which also matters
+  on acrylic: two translucent coats are a visibly darker panel, so App's own container behind the
+  panel stays unpainted. The e2e `theme` scenario measures the strip, and fails on the old code.
 - **Opacity is a number read defensively** (`termOpacity`): `Number(null)` is 0, and never-set must
   read as opaque.
 - **Explorer verbs**: HKCU, `reg.exe` with argv only, on `Directory` and `Directory\Background`, no

@@ -233,6 +233,44 @@ const scenarios = {
     await until(async () => (await tabLabels(page)).length === 1)
     const mode = () => page.evaluate(() => document.documentElement.dataset.mode)
     ok((await mode()) === 'dark', 'the default theme is dark')
+    // The panel is ONE surface in the theme's ground, down to its last pixel.
+    // xterm sizes itself in whole rows, so a strip under the last row is never
+    // its to paint; left transparent, that strip showed the native window
+    // background (owner screenshot: a grey bar under a black terminal).
+    const ground = () =>
+      page.evaluate(() => {
+        const rgb = (c) => (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number).join(',')
+        const probe = document.createElement('span')
+        probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-bg-solid')
+        document.body.appendChild(probe)
+        const want = rgb(getComputedStyle(probe).color)
+        probe.remove()
+        const box = document.querySelector('[data-term-region]').getBoundingClientRect()
+        const rows = document.querySelector('.xterm-screen').getBoundingClientRect()
+        // The first painted ground under a point, walking up from what is there.
+        const under = (x, y) => {
+          let el = document.elementFromPoint(x, y)
+          while (el) {
+            const c = getComputedStyle(el).backgroundColor
+            const alpha = Number((c.match(/[\d.]+/g) ?? [])[3] ?? 1)
+            if (c.startsWith('rgb') && alpha > 0) return rgb(c)
+            el = el.parentElement
+          }
+          return 'none'
+        }
+        const x = box.left + box.width / 2
+        return {
+          want,
+          strip: Math.round(box.bottom - rows.bottom),
+          underLastRow: under(x, box.bottom - 2),
+          frame: under(box.left + 1, box.top + box.height / 2),
+          rows: under(x, rows.top + rows.height / 2)
+        }
+      })
+    const g = await ground()
+    ok(g.strip > 0, `there IS a strip under the last row to get wrong (${g.strip}px)`)
+    ok(g.underLastRow === g.want, `and it is the theme's ground (${g.underLastRow} vs ${g.want})`)
+    ok(g.frame === g.want && g.rows === g.want, 'as are the frame round the rows and the rows themselves')
     await page.keyboard.press('Control+,')
     await page.locator('[data-settings-tab="appearance"]').click()
     await page.locator('[data-term-card="github"]').first().click()
@@ -244,6 +282,9 @@ const scenarios = {
       return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255)
     })
     ok(lum > 0.4, `the ground really is light (luminance ${lum.toFixed(2)})`)
+    await page.locator('[data-tab]').first().click()
+    const g2 = await ground()
+    ok(g2.underLastRow === g2.want && g2.want !== g.want, `the strip follows the theme (${g2.underLastRow})`)
     const bg = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBackgroundColor())
     ok(/^#f/i.test(bg), `main was told the window's ground (${bg})`)
     await app.close().catch(() => {})

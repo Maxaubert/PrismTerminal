@@ -9,13 +9,10 @@ import { registerPaste, reportCwd, reportTitle } from '../lib/termBus'
 import { parseOsc9 } from '@shared/termCwd'
 import { resolveTermTheme } from '../lib/termTheme'
 import { normalizeColor } from '../lib/termAnsi'
-import { alphaHex } from '../lib/chromeTheme'
 import {
   onTermLookChange,
-  termAcrylic,
   termBaseFontPx,
   termFontStack,
-  termOpacity,
   termThemeId
 } from '../lib/termLook'
 import {
@@ -47,21 +44,30 @@ interface Session {
 
 const sessions = new Map<string, Session>()
 
-/** The theme as painted. Acrylic works with ANY theme here: the theme's own
- *  background is kept and only its alpha changes (#rrggbbaa at termOpacity()),
- *  so the window's material shows through a ground that is still the theme's
- *  colour. It is the same colour at the same alpha the chrome paints (--p-bg,
- *  lib/chromeTheme), which is what makes the window one sheet. NOTHING behind
- *  the canvas may paint that colour a second time: two translucent coats are a
- *  visibly darker panel than the rest of the window. */
-function currentTermTheme(): ReturnType<typeof resolveTermTheme> {
-  const theme = { ...resolveTermTheme(termThemeId()) }
-  if (termAcrylic() && termOpacity() < 100) {
-    // Flattened first: a custom theme may hold #rgb or an rgba(), and an alpha
-    // pair appended to either is not a colour.
-    theme.background = normalizeColor(theme.background, '#0b0b0f') + alphaHex(termOpacity())
-  }
-  return theme
+/**
+ * The theme as painted: the theme's colours on a TRANSPARENT canvas.
+ *
+ * THE PANEL PAINTS THE GROUND, NOT XTERM (2026-09-19, owner screenshot: a grey
+ * bar along the bottom of a black terminal). xterm sizes itself in whole rows,
+ * MEASURED at 604px in a 611px box, so a few pixels under the last row are
+ * never xterm's to paint. While the canvas carried the ground and the box
+ * around it was transparent, that strip showed the native window background
+ * instead of the theme. So the ground is `--p-bg` on the panel (the chrome's
+ * own colour, at the window's alpha when it is acrylic, see lib/chromeTheme)
+ * and the canvas over it is clear: every pixel of the panel, rows, frame and
+ * leftover strip alike, gets exactly ONE coat. One and not two is the other
+ * half of it: two translucent coats are a visibly darker panel than the rest
+ * of an acrylic window.
+ *
+ * The block cursor draws the character under it in `cursorAccent`, which
+ * defaults to the background; on a clear background that would be a hole, so
+ * it is named.
+ */
+function currentTermTheme(): ReturnType<typeof resolveTermTheme> & { cursorAccent: string } {
+  const theme = resolveTermTheme(termThemeId())
+  // Flattened first: a custom theme may hold #rgb or an rgba().
+  const solid = normalizeColor(theme.background, '#0b0b0f')
+  return { ...theme, background: '#00000000', cursorAccent: solid }
 }
 
 /**
@@ -529,18 +535,14 @@ export default function TerminalPanel({
     }
   }, [sessionId, root, shellId])
 
-  // The 4px frame round the canvas is a BORDER in --p-bg, not padding over a
-  // background. The canvas paints the theme's ground itself, at the window's
-  // alpha when the window is acrylic, so a background here would be a second
-  // translucent coat under it and a visibly darker panel than the rest of the
-  // window (Prism's acrylic terminal made that obvious); padding alone would
-  // leave a frame of bare desktop. A border is painted once and the canvas
-  // sits inside it, so every pixel of the panel gets exactly one coat.
+  // The panel paints the ground and the canvas over it is clear (see
+  // currentTermTheme): the 4px frame, the rows and the strip under the last
+  // row are one surface in one coat.
   return (
     <div
       ref={box}
       data-term-region
-      className="h-full w-full min-h-0 min-w-0 border-4 border-[color:var(--p-bg)]"
+      className="h-full w-full min-h-0 min-w-0 bg-[var(--p-bg)] p-1"
     />
   )
 }
