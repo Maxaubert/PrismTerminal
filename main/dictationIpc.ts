@@ -95,7 +95,13 @@ export function registerDictationIpc(deps: DictationIpcDeps): () => void {
       !/^[a-z]{2,4}$/.test(r.language)
     )
       return { ok: false, reason: 'engine-failed', detail: 'bad request' }
-    return engine.transcribe({ wav: r.wav, modelId: r.modelId, language: r.language, final: r.final === true })
+    return engine.transcribe({
+      wav: r.wav,
+      modelId: r.modelId,
+      language: r.language,
+      final: r.final === true,
+      useGpu: r.useGpu !== false
+    })
   })
 
   ipcMain.on(DCH.stop, () => engine.stop())

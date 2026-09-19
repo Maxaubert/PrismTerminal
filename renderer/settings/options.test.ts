@@ -36,11 +36,10 @@ describe('the terminal options list', () => {
     expect(all.filter((id) => !prism.includes(id))).toEqual(['term-opacity'])
   })
 
-  it('gives dictation one key per option, under prism.dictation, and only the file managers none', () => {
-    const keys = DICTATION_OPTIONS.map((o) => o.key).filter((k): k is string => k !== null)
+  it('gives dictation one key per option, under prism.dictation', () => {
+    const keys = DICTATION_OPTIONS.map((o) => o.key)
     expect(new Set(keys).size).toBe(keys.length)
     for (const k of keys) expect(k.startsWith('prism.dictation.')).toBe(true)
-    expect(DICTATION_OPTIONS.filter((o) => o.key === null).map((o) => o.id)).toEqual(['dictation-gpu'])
   })
 
   it('offers the GPU row only where an NVIDIA adapter is present', () => {

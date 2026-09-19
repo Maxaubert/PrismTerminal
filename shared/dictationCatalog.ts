@@ -99,7 +99,7 @@ export const ENGINE = {
 export const CATALOG: readonly CatalogEntry[] = [
   {
     id: 'base',
-    label: 'Base',
+    label: 'Whisper Base',
     note: 'Fast live text on any PC.',
     url: model('ggml-base.bin'),
     bytes: 147951465,
@@ -111,7 +111,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'small',
-    label: 'Small',
+    label: 'Whisper Small',
     note: 'More accurate without a GPU, slower: a pass takes about 3x Base.',
     url: model('ggml-small.bin'),
     bytes: 487601967,
@@ -120,7 +120,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'large-v3-turbo',
-    label: 'Large v3 Turbo',
+    label: 'Whisper Large v3 Turbo',
     note: 'Close to Large v3 at about half the download.',
     url: model('ggml-large-v3-turbo.bin'),
     bytes: 1624555275,
@@ -131,7 +131,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'large-v3',
-    label: 'Large v3',
+    label: 'Whisper Large v3',
     note: 'The most accurate.',
     url: model('ggml-large-v3.bin'),
     bytes: 3095033483,
@@ -143,7 +143,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'tiny',
-    label: 'Tiny',
+    label: 'Whisper Tiny',
     note: 'For the end-to-end test: small enough to fetch once and run anywhere.',
     url: model('ggml-tiny.bin'),
     bytes: 77691713,
@@ -153,7 +153,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   },
   {
     id: 'gpu-pack',
-    label: 'NVIDIA GPU engine',
+    label: 'NVIDIA GPU acceleration',
     note: 'The official CUDA 12.4 build. Runs the Large models in under a second.',
     // ONE pack for every NVIDIA card (measured: it runs on an RTX 5090, a card
     // newer than CUDA 12.4, after a one-time 9.1 s kernel compile), which is

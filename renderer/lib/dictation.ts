@@ -3,6 +3,7 @@ import { cleanTranscript } from './dictationClean'
 import { initialKeyState, reduceKey, type KeyEvt, type KeyState } from './dictationKey'
 import {
   dictationEnabled,
+  dictationGpu,
   dictationHotkey,
   dictationLanguage,
   dictationMic,
@@ -177,7 +178,7 @@ async function begin(sessionId: string): Promise<void> {
     r.lastPartialAt = cap.seconds()
     const wav = encodeWav(tailSamples(cap.snapshot(), TARGET_RATE, PARTIAL_WINDOW_S), TARGET_RATE)
     void host.api
-      .dictationTranscribe({ wav, modelId, language: dictationLanguage(), final: false })
+      .dictationTranscribe({ wav, modelId, language: dictationLanguage(), final: false, useGpu: dictationGpu() })
       .then((res) => {
         // Only while THIS recording is still listening: a partial that lands
         // after the final would overwrite the pill with older words.
@@ -215,7 +216,8 @@ async function finishStop(r: Recording): Promise<void> {
       wav: encodeWav(samples, TARGET_RATE),
       modelId: dictationModel(),
       language: dictationLanguage(),
-      final: true
+      final: true,
+      useGpu: dictationGpu()
     })
   } catch {
     res = { ok: false as const, reason: 'engine-failed' as const }
