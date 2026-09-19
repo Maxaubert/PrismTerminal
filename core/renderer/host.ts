@@ -83,6 +83,25 @@ export interface TermHostConfig {
   paintsGround: boolean
 
   /**
+   * What an agent-indicator colour is when the user has NOT picked one: the
+   * host's own accent for "working", and a green that reads on its ground for
+   * "finished". The tab strip is the host's chrome, so the accent is the
+   * host's to name: Prism Terminal derives its chrome from the terminal theme,
+   * Prism takes it from the app style.
+   */
+  themedAgentColors(themeId: string): { working: string; finished: string }
+
+  /**
+   * What "Acrylic" means as a TERMINAL setting. 'window': the terminal setting
+   * switches the window's own material on, for any theme, with an opacity
+   * slider (Prism Terminal, where nothing else owns the window). 'style': the
+   * window material belongs to the host's STYLE, and the row only decides
+   * whether the terminal lets it show through; no slider, since two alphas
+   * over one sheet of glass would fight (Prism; owner, 2026-09-19).
+   */
+  acrylic: { kind: 'window'; supported(): Promise<boolean> } | { kind: 'style' }
+
+  /**
    * A chord the HOST owns even while a shell has the keyboard. xterm must not
    * also feed it to the pty: left to xterm, Ctrl+` became a NUL byte, which
    * counted as the user typing. Everything the host does not claim is the

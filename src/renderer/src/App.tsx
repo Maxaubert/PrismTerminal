@@ -32,18 +32,17 @@ import { ContextMenu } from './components/ContextMenu'
 import { rememberRoot } from '@core/renderer/lib/recentRoots'
 import { savedShellId } from '@core/renderer/lib/termPrefs'
 import { newTabFolder, newTabMode } from './lib/newTabPrefs'
-import { confirmClose } from './lib/closePrefs'
+import {
+  AGENT_NAMES,
+  asksBeforeClosingTab,
+  closeQuestionTitle,
+  holdsWindowClose
+} from '@core/renderer/lib/agentClose'
 import { onTermLookChange, termAcrylic, termOpacity, termThemeId } from '@core/renderer/lib/termLook'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { applyChrome, chromeTokens } from './lib/chromeTheme'
 
 const Settings = lazy(() => import('./components/Settings'))
-
-const AGENT_NAMES: Record<DetectedAgent, string> = {
-  claude: 'Claude',
-  codex: 'Codex',
-  other: 'The agent'
-}
 
 /** What a close question is about to interrupt. */
 interface Ask {
@@ -178,9 +177,10 @@ export default function App(): JSX.Element {
       // work, it just closed"). The first build asked only mid-answer, and an
       // agent waiting at its own prompt is still a conversation the close
       // ends: Prism's rule, which is the one that was expected. A plain shell
-      // has nothing to lose and closes unasked. 'Off' means off: a
-      // confirmation that appears anyway is a setting that lies.
-      if (tab && tab.kind !== 'settings' && confirmClose() && agents.has(id)) {
+      // has nothing to lose and closes unasked. NOT a setting any more
+      // (owner, same day): the rule is core/renderer/lib/agentClose, the same
+      // in Prism.
+      if (tab && tab.kind !== 'settings' && asksBeforeClosingTab(agents.has(id))) {
         const label = tabLabels(st.tabs)[st.tabs.indexOf(tab)]
         setAsk({
           target: id,
@@ -241,7 +241,7 @@ export default function App(): JSX.Element {
   }, [state, activeId, agentIds, agentKinds])
 
   useEffect(() => {
-    window.prism.setAgentBusy(confirmClose() && workingIds.size > 0)
+    window.prism.setAgentBusy(holdsWindowClose(workingIds.size))
   }, [workingIds])
 
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
@@ -280,7 +280,10 @@ export default function App(): JSX.Element {
         // Windows Terminal leaves in the hand.
         hit()
         void newTab()
-      } else if (e.shiftKey && k === 'w') {
+      } else if (k === 'w') {
+        // Ctrl+W closes a tab in BOTH apps (owner, 2026-09-19), with or without
+        // shift. Known cost, accepted: the shell loses delete-word on that
+        // chord; Ctrl+Backspace does the same job.
         hit()
         const id = live.current.state.activeId
         if (id) requestClose(id)
@@ -404,13 +407,7 @@ export default function App(): JSX.Element {
 
       {ask && (
         <Dialog
-          title={
-            ask.target === 'window'
-              ? 'Stop the agent and close the window?'
-              : ask.agent.forMs === null
-                ? 'Close the tab and end the agent?'
-                : 'Stop the agent and close?'
-          }
+          title={closeQuestionTitle(ask.target === 'window' ? 'window' : 'tab', ask.agent.forMs)}
           body={
             // Naming the work is the whole point of asking: an idle prompt and
             // an agent eleven minutes into an answer are not the same close.

@@ -14,6 +14,8 @@ const PRISM_TERMINAL: TermHostConfig = {
   defaults: { theme: 'prism', acrylic: false, indicator: 'minimal', agentColor: '', agentDoneColor: '' },
   followsHostStyle: false,
   paintsGround: true,
+  themedAgentColors: () => ({ working: '#5b5bd6', finished: '#22c55e' }),
+  acrylic: { kind: 'window', supported: async () => true },
   ownsKey: () => false
 }
 
@@ -23,6 +25,8 @@ const PRISM: TermHostConfig = {
   defaults: { theme: 'style', acrylic: true, indicator: 'full', agentColor: '#f97316', agentDoneColor: '#22c55e' },
   followsHostStyle: true,
   paintsGround: false,
+  themedAgentColors: () => ({ working: '#3f5570', finished: '#22c55e' }),
+  acrylic: { kind: 'style' },
   ownsKey: () => false
 }
 

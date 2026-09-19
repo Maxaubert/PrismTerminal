@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type JSX, type MouseEvent, type PointerEvent } from 'react'
 import { tabLabels, type Tab } from '../lib/tabs'
 import { useAgentIndicator } from '@core/renderer/lib/termLook'
-import { useAgentColors } from '../lib/agentColors'
+import { useAgentColors } from '@core/renderer/lib/agentColors'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
 import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from '@core/renderer/lib/recentRoots'
 import { ContextMenu } from './ContextMenu'
