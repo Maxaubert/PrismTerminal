@@ -5,12 +5,34 @@ every tab, terminal themes that colour the whole window. Electron + React 19 + T
 Tailwind v4, node-pty + xterm. x64, Windows 10 1809+ / 11, per-user unsigned NSIS installer,
 GitHub Releases.
 
-## Where it came from
+## This repo is the terminal of TWO apps
 
-Lifted out of **Prism** (`../Prism`) at commit `4196c3a` (v0.50.3), 2026-09-18, owner decision.
-The code was COPIED: Prism keeps its own terminal and is never edited from here. The two drift; a
-fix worth having in both is ported by hand. Prism's CLAUDE.md holds the long history of WHY the
-terminal behaves as it does (search it for the date in a copied comment).
+**`core/` is the terminal, and Prism embeds it** (owner, 2026-09-19, #15: "this terminal app is just
+an extraction of the main Prism app and should therefore be reflected in both apps... all should be
+synced, unless it conflicts with one app, then you need to ask me", and "why can't this repo be the
+core?"). Read [`core/README.md`](core/README.md) before touching anything under `core/`: it is the
+contract. In one paragraph: what IS the terminal lives in `core/` once; what is an app's shell stays
+in the app; every place the two apps legitimately differ is a DECLARED field of `TermHostConfig`
+(`core/renderer/host.ts`), never a fork, and adding one is an owner decision; defaults are per host
+so an update never silently changes what an existing user sees; the bridge to main is written once
+(`core/shared/channels.ts`, `core/preload/api.ts`, `core/main/ipc.ts`). This app is one host
+(`src/renderer/src/termHost.ts`); Prism is the other.
+
+- **A terminal change goes in `core/`**, and is a change to Prism too: say so in the PR, and ask the
+  owner when it would conflict with how Prism works. App-shell changes (tabs, start screen, window)
+  stay in `src/`.
+- **`core/` is lint-walled** (`eslint.config.js`): relative imports only (a consumer resolves
+  `@shared` against ITS OWN tree, MEASURED, silently), never `window.prism` (use `termApi()`), never
+  a host's `src/`, never `electron`, never `chromeTheme`. The app reaches the core through `@core`.
+- **Carry the superset**: a capability only Prism uses (`cdTerm`, `decideFollow`, following the host
+  style) lives in `core/` anyway; deleting it here takes it from Prism.
+- Prism consumes `core/` as a DEV dependency pinned to a `core-v*` tag of the `core-dist` branch
+  (`git subtree split --prefix=core`). Tags: `core-v*` for the core, `v*` for this app.
+
+**History.** Made 2026-09-18 by COPYING Prism's terminal at Prism `4196c3a`, on the recommendation
+"new repo, Prism untouched". That copy drifted within a day, which is what the core exists to end.
+Prism's CLAUDE.md still holds the long history of WHY the terminal behaves as it does (search it for
+the date in a copied comment).
 
 Design spec and plan: `docs/superpowers/specs/2026-09-18-prism-terminal-design.md`,
 `docs/superpowers/plans/2026-09-18-prism-terminal.md`. Owner decisions are marked `(owner)` there.
@@ -133,8 +155,8 @@ terminal theme, anything that reads or shows files.
 
 ## Layout
 
-`src/main` (index.ts is wiring only; terminal, shells, termPrompt, agentDetect, agentPoll,
-agentResume, tabsStore, windowState, material, windowEdge, dwmHelper, verbSwitch, shellVerb,
+`core/` (the terminal, shared with Prism: see above). `src/main` (index.ts is wiring only;
+planRestore, tabsStore, windowState, material, windowEdge, dwmHelper, verbSwitch, shellVerb,
 update, argv),
 `src/preload`, `src/shared` (termCwd, types), `src/renderer/src` (App.tsx owns the tab list and the
 keys; components/; lib/ is pure and tested). One responsibility per file; aliases `@shared`,
