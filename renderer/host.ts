@@ -1,4 +1,5 @@
 import type { DetectedAgent, ShellDef } from '../shared/types'
+import type { DictationApi } from '../preload/dictationApi'
 
 /**
  * THE HOST SEAM (2026-09-19, #15).
@@ -108,6 +109,20 @@ export interface TermHostConfig {
    * shell's, so claim little: plain Ctrl+W is delete-word in every readline.
    */
   ownsKey(e: KeyboardEvent): boolean
+
+  /**
+   * DICTATION (#13). Optional: a host that has not wired main's half simply
+   * leaves it out, and every dictation surface renders nothing. `api` is the
+   * bridge (`createDictationApi` in the host's preload). `canDictate` answers
+   * "is there a shell in front to paste into RIGHT NOW": always, given a tab,
+   * in Prism Terminal; only while the terminal panel is showing in Prism,
+   * where the same window is mostly a media viewer and Right Alt over a film
+   * must do nothing.
+   */
+  dictation?: {
+    api: DictationApi
+    canDictate(): boolean
+  }
 }
 
 let host: TermHostConfig | null = null
@@ -115,6 +130,11 @@ let host: TermHostConfig | null = null
 /** Called once by the host, before anything in the core renders. */
 export function configureTermCore(config: TermHostConfig): void {
   host = config
+}
+
+/** Null where the host has not wired dictation: callers render nothing. */
+export function dictationHost(): NonNullable<TermHostConfig['dictation']> | null {
+  return host?.dictation ?? null
 }
 
 export function termHost(): TermHostConfig {

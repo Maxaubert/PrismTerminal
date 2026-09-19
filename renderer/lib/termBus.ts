@@ -32,6 +32,22 @@ export function pasteInto(sessionId: string): boolean {
   return true
 }
 
+/**
+ * TEXT THE USER SPOKE (#13). The panel owns the xterm instances, and it sits
+ * behind a lazy boundary in Prism so that xterm stays out of the launch bundle;
+ * dictation's controller is armed from the app shell, so it must not import the
+ * panel. The panel hands its paste in when its module loads, and until then
+ * there is no session to paste into anyway.
+ */
+let textPaster: ((sessionId: string, text: string) => boolean) | null = null
+export function setTextPaster(fn: (sessionId: string, text: string) => boolean): void {
+  textPaster = fn
+}
+/** True when the session exists and took the text. */
+export function pasteTextInto(sessionId: string, text: string): boolean {
+  return textPaster ? textPaster(sessionId, text) : false
+}
+
 // Where each shell says it is (#99). TerminalPanel hears the prompt's report
 // through xterm's OSC parser and posts it here; App listens, because the
 // tree and the tab root are its to move.

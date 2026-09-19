@@ -23,7 +23,7 @@ import { cdTerm, killTerm, prewarmShell, resizeTerm, spawnTerm, writeTerm } from
  * written against Electron's own event classes, which the core does not
  * import, so the arguments are typed at each handler instead. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-interface IpcMainLike {
+export interface IpcMainLike {
   handle(channel: string, listener: (event: any, ...args: any[]) => unknown): unknown
   on(channel: string, listener: (event: any, ...args: any[]) => void): unknown
 }
