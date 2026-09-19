@@ -48,7 +48,9 @@ interface Ask {
   /** A tab id, or 'window' for the whole window. */
   target: string
   label: string
-  agent: { kind: DetectedAgent; forMs: number }
+  /** `forMs` is how long it has been mid-answer; null when it is only
+   *  present, waiting at its own prompt. */
+  agent: { kind: DetectedAgent; forMs: number | null }
   /** How many OTHER tabs are also mid-answer (the window question only). */
   others: number
 }
@@ -165,16 +167,24 @@ export default function App(): JSX.Element {
 
   const requestClose = useCallback(
     (id: string) => {
-      const forMs = workingFor(id)
-      const { state: st, workingIds: working } = live.current
+      const { state: st, workingIds: working, agentIds: agents } = live.current
       const tab = st.tabs.find((t) => t.id === id)
-      // 'Off' means off: a confirmation that appears anyway is a setting that lies.
-      if (tab && tab.kind !== 'settings' && confirmClose() && working.has(id) && forMs !== null) {
+      // A tab whose shell HOSTS an agent asks, working or idle (2026-09-19,
+      // owner: "the prompt when you close a tab with an active agent didn't
+      // work, it just closed"). The first build asked only mid-answer, and an
+      // agent waiting at its own prompt is still a conversation the close
+      // ends: Prism's rule, which is the one that was expected. A plain shell
+      // has nothing to lose and closes unasked. 'Off' means off: a
+      // confirmation that appears anyway is a setting that lies.
+      if (tab && tab.kind !== 'settings' && confirmClose() && agents.has(id)) {
         const label = tabLabels(st.tabs)[st.tabs.indexOf(tab)]
         setAsk({
           target: id,
           label,
-          agent: { kind: agentKinds.current.get(id) ?? 'other', forMs },
+          agent: {
+            kind: agentKinds.current.get(id) ?? 'other',
+            forMs: working.has(id) ? workingFor(id) : null
+          },
           others: 0
         })
       } else closeNow(id)
@@ -341,18 +351,32 @@ export default function App(): JSX.Element {
 
       {ask && (
         <Dialog
-          title={ask.target === 'window' ? 'Stop the agent and close the window?' : 'Stop the agent and close?'}
+          title={
+            ask.target === 'window'
+              ? 'Stop the agent and close the window?'
+              : ask.agent.forMs === null
+                ? 'Close the tab and end the agent?'
+                : 'Stop the agent and close?'
+          }
           body={
             // Naming the work is the whole point of asking: an idle prompt and
             // an agent eleven minutes into an answer are not the same close.
-            <>
-              <span className="text-[var(--p-text)]">{AGENT_NAMES[ask.agent.kind]}</span> has been
-              working for {humanFor(ask.agent.forMs)} in{' '}
-              <span className="text-[var(--p-text)]">{ask.label}</span>
-              {ask.others > 0 &&
-                `, and ${ask.others} other ${ask.others === 1 ? 'tab is' : 'tabs are'} working too`}
-              . Closing kills the shell, and the answer with it.
-            </>
+            ask.agent.forMs === null ? (
+              <>
+                <span className="text-[var(--p-text)]">{AGENT_NAMES[ask.agent.kind]}</span> is
+                running in <span className="text-[var(--p-text)]">{ask.label}</span>. Closing the
+                tab kills the shell, and the session with it.
+              </>
+            ) : (
+              <>
+                <span className="text-[var(--p-text)]">{AGENT_NAMES[ask.agent.kind]}</span> has been
+                working for {humanFor(ask.agent.forMs)} in{' '}
+                <span className="text-[var(--p-text)]">{ask.label}</span>
+                {ask.others > 0 &&
+                  `, and ${ask.others} other ${ask.others === 1 ? 'tab is' : 'tabs are'} working too`}
+                . Closing kills the shell, and the answer with it.
+              </>
+            )
           }
           onCancel={() => setAsk(null)}
           choices={[

@@ -141,8 +141,11 @@ refuses to composite the material behind a frameless window).
 close confirmation, agent indicator volume, version + update. Appearance: theme grid, custom
 theme, font, size, acrylic, agent colours.
 
-**Close confirmation** (owner): closing a tab, or the window, while an agent is WORKING asks
-first and names the agent and how long it has run (`agentClock`). Off means off.
+**Close confirmation** (owner, REVISED 2026-09-19, #8): closing a TAB whose shell hosts an agent
+asks first, whether the agent is working or idle, and names it (and how long it has worked, when
+it is working; `agentClock`). The first build asked only while the agent was WORKING, which let a
+tab with an idle Claude close silently. Closing the WINDOW asks only while an agent is working,
+since idle agents resume at the next launch. Off means off.
 
 **Keys**: Ctrl+T new tab, Ctrl+Shift+W close tab, Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+1-9
 switch, Ctrl+Shift+F find, Ctrl+, settings, F11 fullscreen. Plain Ctrl+W stays delete-word and

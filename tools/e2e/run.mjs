@@ -318,6 +318,46 @@ const scenarios = {
     await app.close().catch(() => {})
   },
 
+  /** Closing a tab that HOSTS an agent asks first, working or idle; a plain
+   *  shell closes unasked; and Off means off. */
+  async closeAsk(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    await until(async () => (await tabLabels(page)).length === 2)
+    const dialog = () => page.locator('[role="dialog"]')
+    // A shell stands in for Claude, so the process poll's verdict on it is "no
+    // agent here", said once; let it land before the title claims otherwise.
+    await typeLine(page, 'echo ready')
+    await sleep(6000)
+    await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
+    ok(
+      await until(() => page.evaluate(() => !!document.querySelector('[data-agent-present]')), 8000, 50),
+      'an agent is present and IDLE in the tab'
+    )
+    await page.locator('[data-tab-close]').nth(1).click({ force: true })
+    ok(await until(async () => (await dialog().count()) === 1, 4000), 'closing its tab asks, though the agent is only idle')
+    ok(/Claude/.test((await dialog().textContent()) ?? ''), 'and the question names the agent')
+    await page.keyboard.press('Escape')
+    ok((await tabLabels(page)).length === 2, 'Cancel keeps the tab')
+    // Mid-answer, the question says how long it has been at it.
+    await page.locator('.xterm').first().click({ force: true })
+    await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x25D0 + ' Claude Code'")
+    await until(() => page.evaluate(() => !!document.querySelector('[data-agent-state="working"]')), 8000, 50)
+    await sleep(1200)
+    await page.locator('[data-tab-close]').nth(1).click({ force: true })
+    ok(await until(async () => (await dialog().count()) === 1, 4000), 'a working agent asks too')
+    ok(/working for/.test((await dialog().textContent()) ?? ''), 'and says how long it has been working')
+    await dialog().locator('[data-primary="true"]').click()
+    ok(await until(async () => (await tabLabels(page)).length === 1), 'confirming closes the tab')
+    // A plain shell has nothing to lose: no question.
+    await page.locator('[data-tab-close]').first().click({ force: true })
+    ok(
+      await until(async () => (await page.locator('[data-empty-state]').count()) === 1, 4000),
+      'a tab with no agent closes unasked'
+    )
+    await app.close().catch(() => {})
+  },
+
   /** `exit` closes the tab it was typed in. */
   async exitClosesTab(ok) {
     const w = world()
