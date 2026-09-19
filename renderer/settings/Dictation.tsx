@@ -203,14 +203,16 @@ function MicField({ value, disabled }: { value: string; disabled: boolean }): JS
 }
 
 /** "X Uninstall" (owner, 2026-09-19): it frees the disk, and says so by name.
- *  Quiet until hovered, because it is the one destructive control in the row. */
+ *  A BUTTON, the same one Download is: a first cut drew it as bare text to keep
+ *  the destructive control quiet, and it read as a label rather than something
+ *  to press (owner, the same evening). */
 function Uninstall({ onClick, what }: { onClick: () => void; what: string }): JSX.Element {
   return (
     <button
       data-uninstall
       onClick={onClick}
       title={`Delete ${what} from this PC. Prism and Prism Terminal share it.`}
-      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11.5px] font-semibold text-[var(--p-dim)] transition hover:bg-[var(--p-hover)] hover:text-[var(--p-text)]"
+      className={`flex items-center gap-1.5 ${button}`}
     >
       <svg viewBox="0 0 24 24" width={11} height={11} fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
         <path d="M6 6l12 12M18 6L6 18" />
