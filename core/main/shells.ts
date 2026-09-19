@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import type { ShellDef } from '@shared/types'
+import type { ShellDef } from '../shared/types'
 import { PS_FILE_STYLE, PS_PROMPT_HOOK } from './termPrompt'
 
 // The shells this machine actually has. Prism never execs a renderer-supplied

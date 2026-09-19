@@ -5,12 +5,43 @@ every tab, terminal themes that colour the whole window. Electron + React 19 + T
 Tailwind v4, node-pty + xterm. x64, Windows 10 1809+ / 11, per-user unsigned NSIS installer,
 GitHub Releases.
 
-## Where it came from
+## This repo is the terminal of TWO apps
 
-Lifted out of **Prism** (`../Prism`) at commit `4196c3a` (v0.50.3), 2026-09-18, owner decision.
-The code was COPIED: Prism keeps its own terminal and is never edited from here. The two drift; a
-fix worth having in both is ported by hand. Prism's CLAUDE.md holds the long history of WHY the
-terminal behaves as it does (search it for the date in a copied comment).
+**`core/` is the terminal, and Prism embeds it** (owner, 2026-09-19, #15: "this terminal app is just
+an extraction of the main Prism app and should therefore be reflected in both apps... all should be
+synced, unless it conflicts with one app, then you need to ask me", and "why can't this repo be the
+core?"). Read [`core/README.md`](core/README.md) before touching anything under `core/`: it is the
+contract. In one paragraph: what IS the terminal lives in `core/` once; what is an app's shell stays
+in the app; every place the two apps legitimately differ is a DECLARED field of `TermHostConfig`
+(`core/renderer/host.ts`), never a fork, and adding one is an owner decision; defaults are per host
+so an update never silently changes what an existing user sees; the bridge to main is written once
+(`core/shared/channels.ts`, `core/preload/api.ts`, `core/main/ipc.ts`). This app is one host
+(`src/renderer/src/termHost.ts`); Prism is the other.
+
+- **THE TERMINAL'S SETTINGS ARE THE CORE'S TOO** (owner, 2026-09-19: "they shouldn't be synced in
+  terms of personalization, but the setting names, types, how they function and so on should be the
+  same"). `core/renderer/settings`: the field primitives, `TerminalAppearanceSettings` (theme wall and
+  editor, font, size, acrylic, the two indicator colours) and the rows `ShellSetting` /
+  `AgentIndicatorSetting`. Each app composes its OWN page round them (`components/Settings.tsx` here
+  is only the page plus this app's rows: new tabs, Explorer menu, version). Values are per app (own
+  userData), never shared. `settings/options.ts` lists every terminal option by id; a unit test holds
+  the list and the sections together, and each app's e2e (`options`) asserts its page shows that
+  list and no terminal-looking row of its own. A row outside the list is a fork.
+- **A terminal change goes in `core/`**, and is a change to Prism too: say so in the PR, and ask the
+  owner when it would conflict with how Prism works. App-shell changes (tabs, start screen, window)
+  stay in `src/`.
+- **`core/` is lint-walled** (`eslint.config.js`): relative imports only (a consumer resolves
+  `@shared` against ITS OWN tree, MEASURED, silently), never `window.prism` (use `termApi()`), never
+  a host's `src/`, never `electron`, never `chromeTheme`. The app reaches the core through `@core`.
+- **Carry the superset**: a capability only Prism uses (`cdTerm`, `decideFollow`, following the host
+  style) lives in `core/` anyway; deleting it here takes it from Prism.
+- Prism consumes `core/` as a DEV dependency pinned to a `core-v*` tag of the `core-dist` branch
+  (`git subtree split --prefix=core`). Tags: `core-v*` for the core, `v*` for this app.
+
+**History.** Made 2026-09-18 by COPYING Prism's terminal at Prism `4196c3a`, on the recommendation
+"new repo, Prism untouched". That copy drifted within a day, which is what the core exists to end.
+Prism's CLAUDE.md still holds the long history of WHY the terminal behaves as it does (search it for
+the date in a copied comment).
 
 Design spec and plan: `docs/superpowers/specs/2026-09-18-prism-terminal-design.md`,
 `docs/superpowers/plans/2026-09-18-prism-terminal.md`. Owner decisions are marked `(owner)` there.
@@ -68,20 +99,22 @@ terminal theme, anything that reads or shows files.
   build's Ctrl+Shift+T and its "ask" default). `newTabPrefs`: mode `folder` is the default and a
   folder of `''` means the user's own, which main resolves (`homeDir()`); `ask` is the option.
   Ctrl+T is therefore taken from whatever runs in the shell (Claude Code's task list), knowingly.
-  Close tab stays Ctrl+SHIFT+W: plain Ctrl+W is delete-word in every readline.
+  **Ctrl+W closes a tab, in BOTH apps** (owner, 2026-09-19, reversing the first build's
+  Ctrl+Shift+W, which still works). Known cost, accepted: the shell loses delete-word on that chord;
+  Ctrl+Backspace does the same job.
 - **The window's edge is a faint hairline that follows the theme** (owner, same day;
   `windowEdge.ts` + Prism's `dwmHelper.ts`). DWM's border is always one physical pixel, so it cannot
   be thinner; what reads as thickness is contrast, so it is drawn a small step off the theme's own
   ground, and removed when maximized or fullscreen. Chromium rewrites the DWM attributes when the
   backdrop changes, so it is re-applied, debounced, after every material or ground change. Off
   under `--e2e` (the helper is a PowerShell that compiles a P/Invoke per launch).
-- **Closing a TAB asks whenever its shell hosts an agent, working or idle** (2026-09-19, #8, owner:
-  "the prompt when you close a tab with an active agent didn't work, it just closed"). The first
-  build asked only mid-answer; an agent waiting at its own prompt is still a conversation the close
-  ends, and Prism's rule (ask while an agent is LIVE) is the one that was expected. The question
-  names the agent, and how long it has worked when it is working. Closing the WINDOW still asks
-  only while one is WORKING, on purpose: idle agents resume at the next launch, so nothing is lost.
-  A plain shell closes unasked, and Off means off. Proved by the e2e `closeAsk` scenario.
+- **THE CLOSE QUESTION IS ONE RULE, NOT A SETTING** (owner, 2026-09-19, #15: "remove the setting but
+  just have it on smart mode by default, so it won't ask if you're in a normal shell but if you're
+  working with an agent it will ask"). `core/renderer/lib/agentClose.ts`, the same in Prism: a plain
+  shell closes unasked; a tab whose shell HOSTS an agent asks, working or idle (an agent waiting at
+  its own prompt is still a conversation the close ends), and names it and how long it has worked;
+  closing the WINDOW is held only while one is mid-answer, since idle agents come back at the next
+  launch. It replaced this app's on/off switch and Prism's three modes. Proved by the e2e `closeAsk`.
 - **The title bar has a settings cog and NO menu** (owner, same day: a menu of Settings + Quit was
   cut to the cog). Nothing in the UI needs to quit the app any more; the X does.
 - **The theme drives the chrome** through the real `--p-*` tokens (`lib/chromeTheme.ts`). Every ink is
@@ -133,8 +166,8 @@ terminal theme, anything that reads or shows files.
 
 ## Layout
 
-`src/main` (index.ts is wiring only; terminal, shells, termPrompt, agentDetect, agentPoll,
-agentResume, tabsStore, windowState, material, windowEdge, dwmHelper, verbSwitch, shellVerb,
+`core/` (the terminal, shared with Prism: see above). `src/main` (index.ts is wiring only;
+planRestore, tabsStore, windowState, material, windowEdge, dwmHelper, verbSwitch, shellVerb,
 update, argv),
 `src/preload`, `src/shared` (termCwd, types), `src/renderer/src` (App.tsx owns the tab list and the
 keys; components/; lib/ is pure and tested). One responsibility per file; aliases `@shared`,

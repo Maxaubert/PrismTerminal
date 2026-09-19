@@ -1,5 +1,6 @@
-import { deriveAnsi, legiblePalette, type Ansi16 } from './termAnsi'
+import { deriveAnsi, legiblePalette, normalizeColor, type Ansi16 } from './termAnsi'
 import { customTermTheme } from './termLook'
+import { followsHostStyle, hostDefaults } from '../host'
 
 // The terminal owns its colours. Inside Prism it could also WEAR THE APP STYLE
 // (read --p-bg / --p-text / --p-accent-hi off :root); Prism Terminal has no app
@@ -11,6 +12,54 @@ export interface TermTheme extends Partial<Ansi16> {
   foreground: string
   cursor: string
   selectionBackground: string
+}
+
+/**
+ * FOLLOWING THE HOST'S STYLE (theme id 'style'). Only where the host HAS styles
+ * (Prism): it publishes its surfaces as CSS custom properties on :root, so the
+ * terminal reads those instead of owning colours, and a style switch restyles
+ * running shells. Prism Terminal has no styles to follow; there the terminal
+ * theme drives the window, and `followsHostStyle` is false.
+ */
+
+/** Pure: style surfaces in, xterm theme out. Fallbacks are the default dark,
+ *  for the moment before the style has painted. */
+export function buildTermTheme(bg: string, text: string, accent: string, flatBg?: string): TermTheme {
+  const b = bg.trim() || '#0b0b0f'
+  const t = text.trim() || '#d7dae1'
+  const a = accent.trim() || '#5b5bd6'
+  // The ANSI sixteen are DERIVED from the base, not assumed: edit a style's
+  // background toward red and red text adapts instead of vanishing into it.
+  // The maths run against the FLAT surface: an acrylic style publishes an
+  // rgba() background, which is fine to PAINT but not to measure against -
+  // unparsed it turned every hue pure black.
+  return {
+    background: b,
+    foreground: t,
+    cursor: a,
+    selectionBackground: `${a}55`,
+    ...deriveAnsi(normalizeColor(flatBg?.trim() || b, '#101215'), t)
+  }
+}
+
+/** What the host's style says, right now. */
+export function readTermTheme(): TermTheme {
+  const cs = getComputedStyle(document.documentElement)
+  return buildTermTheme(
+    cs.getPropertyValue('--p-bg'),
+    cs.getPropertyValue('--p-text'),
+    cs.getPropertyValue('--p-accent-hi'),
+    // The flat twin of --p-bg: guaranteed hex, exists exactly because
+    // "the contrast maths read it, and neither wants an rgba".
+    cs.getPropertyValue('--p-side-flat')
+  )
+}
+
+/** Call `cb` whenever the host's style repaints :root. Returns the stop function. */
+export function watchTermTheme(cb: (t: TermTheme) => void): () => void {
+  const mo = new MutationObserver(() => cb(readTermTheme()))
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] })
+  return () => mo.disconnect()
 }
 
 /**
@@ -328,6 +377,8 @@ export function presetAccent(themeId: string): string | undefined {
 }
 
 export function resolveTermTheme(themeId: string): TermTheme {
+  // The host's own style, where it has one to follow.
+  if (themeId === 'style' && followsHostStyle()) return readTermTheme()
   if (themeId === 'custom') {
     const c = customTermTheme()
     if (c)
@@ -342,6 +393,8 @@ export function resolveTermTheme(themeId: string): TermTheme {
   // TERM_PRESETS[0] is 'prism'; the find cannot miss, the fallback is for the type.
   const p =
     TERM_PRESETS.find((x) => x.id === themeId) ??
+    // An id nothing answers to: the host's own default, where that is a preset.
+    TERM_PRESETS.find((x) => x.id === hostDefaults().theme) ??
     TERM_PRESETS.find((x) => x.id === DEFAULT_TERM_THEME) ??
     TERM_PRESETS[0]
   return {

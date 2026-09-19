@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CHROME_COLOUR_TOKENS, chromeTokens } from './chromeTheme'
-import { TERM_PRESETS, resolveTermTheme, type TermTheme } from './termTheme'
-import { contrastRatio } from './termAnsi'
+import { TERM_PRESETS, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
+import { contrastRatio } from '@core/renderer/lib/termAnsi'
 
 describe('chromeTokens', () => {
   it.each(TERM_PRESETS.map((p) => p.id))(
