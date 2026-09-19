@@ -63,7 +63,7 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
 ## How each app consumes it
 
 **Prism Terminal** (this repo): directly, through the app-side alias `@core`.
-The app's tests, lint and the 13 e2e scenarios are the core's gate.
+The app's tests, lint and the 14 e2e scenarios are the core's gate.
 
 **Prism**: as a dev dependency pinned to a tag of the `core-dist` branch, which
 is this folder on its own (`git subtree split --prefix=core`), so the package is
@@ -97,12 +97,19 @@ lockfile but ships against Prism's.
 2. Bump `core/package.json`'s version. Publish: `git subtree split --prefix=core -b core-dist`,
    tag `core-v<version>`, push the branch and the tag. Tags are `core-v*` for the
    core and `v*` for the app, since this repo is both.
-3. In Prism: bump the pin, run Prism's own gate (typecheck, unit, its terminal
-   e2e), install, PR. The core's lint and unit tests run only here; Prism's gate
-   on it is its compiler and its e2e.
+3. In Prism, and only after ASKING THE OWNER (2026-09-19: a core release is
+   never pulled into Prism unasked): bump the pin, run `npm run e2e:terminal`
+   (Prism's terminal gate: every scenario the terminal can break, required
+   green for any pin bump, because Prism has the larger footprint and so more
+   ways to break), then Prism's usual gate, install, PR. The core's lint and
+   unit tests run only here; Prism's gate on it is its compiler and its e2e.
 
 ## Status (2026-09-19)
 
-Prism Terminal runs entirely on this core. Prism's adoption is in progress and
-deliberately incremental: see issue #15 for what has moved, what is waiting on
-an owner answer, and the questions themselves.
+Prism Terminal runs entirely on this core. Prism's adoption is written and
+waiting on the owner's review as three stacked draft PRs (Prism #155, #156 and
+the step-3 PR): identical files, then the panel / look stores / bridge, then the
+settings, the indicator's rules and the close question. Until this branch merges
+Prism pins a release candidate (`core-v0.1.0-rc.N`); the first real tag,
+`core-v0.1.0`, is cut from `main` after the merge and Prism is repointed at it.
+Issue #15 holds the decisions and what is left.
