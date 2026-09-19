@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { DetectedAgent } from '../../shared/types'
 import { activitySuppressed, inputEcho, markBorn, startupOutput } from './termActivity'
 import { forgetAgentTitle, readAgentTitle } from './agentTitle'
@@ -44,13 +44,13 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
   const titled = useRef(new Set<string>())
   /** The one clearing timer per fallback-scored session. */
   const fallbackTimers = useRef(new Map<string, number>())
-  const stopFallback = (id: string): void => {
+  const stopFallback = useCallback((id: string): void => {
     const t = fallbackTimers.current.get(id)
     if (t !== undefined) {
       clearTimeout(t)
       fallbackTimers.current.delete(id)
     }
-  }
+  }, [])
 
   useEffect(
     () =>
@@ -86,7 +86,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           return next
         })
       }),
-    []
+    [stopFallback]
   )
 
   useEffect(
@@ -123,7 +123,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           )
         }
       }),
-    []
+    [stopFallback]
   )
 
   /**
@@ -161,7 +161,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           return next
         })
       }),
-    []
+    [stopFallback]
   )
 
   // Finished-while-away: an agent that STOPS working on a background tab
@@ -187,7 +187,8 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     })
   }, [workingIds, activeId, agentIds])
 
-  const forget = (id: string): void => {
+  // STABLE: a host subscribes to the pty's exit ONCE and calls this from there.
+  const forget = useCallback((id: string): void => {
     outputRuns.current.delete(id)
     titled.current.delete(id)
     agentKinds.current.delete(id)
@@ -196,7 +197,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     setAgentIds((prev) => without(prev, id))
     setWorkingIds((prev) => without(prev, id))
     setDoneIds((prev) => without(prev, id))
-  }
+  }, [stopFallback])
 
   return { agentIds, workingIds, doneIds, agentKinds, forget }
 }
