@@ -20,7 +20,11 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
 
 1. **What is the terminal lives here, once.** The pty and shells, the prompt
    bootstrap, agent detection / poll / resume, the panel, find, link painting,
-   the agent indicator's rules, the paste rule, the theme and look stores.
+   the agent indicator's rules and colours, the close question, the paste rule,
+   the theme and look stores, **and the terminal's SETTINGS UI** (`renderer/settings`):
+   the owner's rule is that the two apps' terminal settings are the same
+   settings, "the setting names, types, how they function", while the personal
+   VALUES stay per app (each has its own storage; nothing is shared).
 2. **What is an app's shell stays in the app.** Prism: roots and the wall, the
    sidebar, the split dock, several shells per tab, app styles. Prism Terminal:
    folder tabs, the start screen, window chrome from the theme, the lifecycle.
@@ -28,7 +32,8 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
    two legitimately differ is a field of `TermHostConfig` in
    [`renderer/host.ts`](renderer/host.ts): the default each untouched setting
    reads as, whether there is a host style to follow, who paints the ground,
-   which chords the app owns. If a difference is not on that page, it is a fork,
+   what an unpicked indicator colour resolves to, what "acrylic" means as a
+   terminal setting, which chords the app owns. If a difference is not on that page, it is a fork,
    and a fork is what this exists to end. Adding a field is an owner decision.
 4. **Defaults are per host on purpose.** An update must never silently change
    what an existing user sees. Where the owner picks one value for both apps,
