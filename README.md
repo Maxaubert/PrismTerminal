@@ -36,6 +36,9 @@ and want to know, at a glance, which one has finished.
   tab in its window.
 - **New tabs your way.** The + opens in your user folder, or in one folder you choose, or asks each
   time. Right-click the + for pinned and recent folders.
+- **Links look like links.** A URL printed in the terminal is highlighted and underlined all the
+  time, not only under the pointer, and a click opens it. The colour is blue, moved as far as your
+  theme's background needs for it to stay readable, custom backgrounds included.
 - **Made for the way AI CLIs are used.** An image on the clipboard pastes into Claude Code, copied
   files paste as quoted paths, a file dropped on the window types its path, Shift+Enter is a
   newline, and Ctrl+C over a selection copies instead of interrupting.
