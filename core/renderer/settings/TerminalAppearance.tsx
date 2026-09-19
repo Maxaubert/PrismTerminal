@@ -361,7 +361,13 @@ export function TerminalAppearanceSettings(): JSX.Element {
     <div className={ROWS} data-pref="term-theme">
       <div className="border-b border-[color:var(--p-line)] py-2.5">
         <ThemeHead
-          sub="Whole palettes, ANSI colours included. The window wears the theme you pick."
+          // Where the host has styles of its own the window wears THOSE; only a
+          // host with none (Prism Terminal) dresses its window in the theme.
+          sub={
+            followsHostStyle()
+              ? 'Whole palettes, ANSI colours included. Follow style wears the app style.'
+              : 'Whole palettes, ANSI colours included. The window wears the theme you pick.'
+          }
           save={
             <SaveButton
               dirty={termDirty}
