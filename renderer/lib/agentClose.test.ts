@@ -14,5 +14,8 @@ describe('the close question', () => {
     expect(closeQuestionTitle('tab', null)).toMatch(/end the agent/)
     expect(closeQuestionTitle('tab', 90_000)).toMatch(/Stop the agent/)
     expect(closeQuestionTitle('window', 90_000)).toMatch(/window/)
+    // An install quits the app, so it asks the window's question in its own words.
+    expect(closeQuestionTitle('install', 90_000)).toMatch(/Stop the agent and install/)
+    expect(closeQuestionTitle('install', 90_000)).not.toMatch(/window/)
   })
 })
