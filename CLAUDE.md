@@ -110,6 +110,16 @@ terminal theme, anything that reads or shows files.
   on a resize (reflow) and on a theme change; not on the alternate screen. Columns are counted in
   CELLS, since a wide character is one character and two cells. xterm splits a row into spans as
   it likes, so the e2e finds a link's span by POSITION, never by its text.
+- **A file dropped on the terminal types its quoted path, and the terminal answers a right-click**
+  (2026-09-19, #16). Both lived in Prism's `TermDock.tsx`, the split dock, and went with it when
+  the dock was stripped, while the README, the spec and PR #3 went on listing the drop as shipped
+  for a day: NOTHING IN A FEATURE LIST IS TRUE UNTIL A TEST HAS DONE IT. They are on App's terminal
+  host now (`data-term-host`): the drop goes through `quotePaths` and `termInput`, never Enter, and
+  only over a shell; the menu is Paste (the terminal's own paste rule, via `pasteInto`), Find in
+  scrollback and Close tab, with no Copy row because xterm owns its selection. The e2e performs a
+  REAL drop with Chromium's drag events (`Input.dispatchDragEvent` carrying a file path): a
+  synthetic DataTransfer holds a File with no path and proves nothing about `getPathForFile`.
+  When a Prism component is stripped, grep what ELSE it owned before calling a feature kept.
 - **Opacity is a number read defensively** (`termOpacity`): `Number(null)` is 0, and never-set must
   read as opaque.
 - **Explorer verbs**: HKCU, `reg.exe` with argv only, on `Directory` and `Directory\Background`, no

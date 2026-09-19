@@ -12,7 +12,7 @@
 // that "closed" its window has left a process holding the single-instance lock.
 import { _electron as electron } from 'playwright-core'
 import { execFileSync, spawn } from 'child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { createRequire } from 'module'
@@ -505,6 +505,49 @@ const scenarios = {
     )
     ok(!!light, 'on a light theme the link takes another colour that reads there')
     ok(!!light && light.blue, `and it is still a blue (${light ? light.rgb + ' at ' + light.ratio.toFixed(1) + ':1' : 'none'})`)
+    await app.close().catch(() => {})
+  },
+
+  /** A file dropped on the terminal types its quoted path and never sends it;
+   *  the terminal answers a right-click. */
+  async dropAndMenu(ok) {
+    const w = world()
+    const file = join(w.alpha, 'my notes.txt') // a space, so the quoting is visible
+    writeFileSync(file, 'x')
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    await until(async () => (await tabLabels(page)).length === 1)
+    await typeLine(page, 'cls')
+    await sleep(600)
+    // A REAL drop: Chromium's own drag events carrying a file path, which is
+    // what Explorer hands over. A synthetic DataTransfer would carry a File
+    // with no path, and prove nothing about getPathForFile.
+    const box = await page.locator('[data-term-region]').boundingBox()
+    const x = Math.round(box.x + box.width / 2)
+    const y = Math.round(box.y + box.height / 2)
+    const cdp = await page.context().newCDPSession(page)
+    const data = { items: [], files: [file], dragOperationsMask: 1 }
+    for (const type of ['dragEnter', 'dragOver', 'drop']) {
+      await cdp.send('Input.dispatchDragEvent', { type, x, y, data })
+    }
+    const typed = await until(async () => (await termText(page)).includes('my notes.txt'), 8000)
+    ok(typed, 'a file dropped on the terminal types its path')
+    const text = (await termText(page)).replace(/\s+/g, ' ')
+    ok(/["']?[A-Z]:\\[^"']*my notes\.txt["']/.test(text), `and the path is quoted, since it holds a space (${text.slice(-90)})`)
+    ok(!/is not recognized|CommandNotFound|ObjectNotFound/.test(text), 'and it was NOT sent: nothing ran')
+    // Clear what the drop typed, so the shell is at a clean prompt again.
+    await page.keyboard.press('Escape')
+    // The right-click menu: Paste, Find, Close tab.
+    await page.locator('[data-term-region]').click({ button: 'right', position: { x: 200, y: 120 } })
+    const rows = await until(
+      async () => {
+        const t = await page.locator('[role="menu"] [role="menuitem"]').allTextContents()
+        return t.length ? t : null
+      },
+      4000
+    )
+    ok(!!rows && ['Paste', 'Find in scrollback', 'Close tab'].every((l) => rows.some((r) => r.includes(l))), `the terminal answers a right-click (${JSON.stringify(rows)})`)
+    await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Find in scrollback' }).click()
+    ok(await until(async () => (await page.locator('[data-term-find], input[placeholder*="ind"]').count()) > 0, 4000), 'and its Find row opens the find bar')
     await app.close().catch(() => {})
   },
 
