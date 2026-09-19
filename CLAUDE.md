@@ -33,6 +33,27 @@ so an update never silently changes what an existing user sees; the bridge to ma
   a ruined page, because they asserted that rows EXIST. The `options` scenario now MEASURES the
   layout (card width, wall rows, row padding) and writes `.e2e-shots/settings-*.png`. After any change
   that moves UI between `src/` and `core/`, LOOK at those screenshots before calling it done.
+- **MERGING TO MAIN SHIPS, IN BOTH APPS** (#23; owner, 2026-09-19: "that compiled copy needs to be auto
+  bumped when a new Prism Terminal release or merge to main happens", and "users of the app can get
+  an update available banner"). Three workflows:
+  - `release.yml`: a push to main with a NEW `package.json` version builds the installer and publishes
+    `v<version>` as the latest release, which is what the in-app update chip looks for. A version
+    already released publishes nothing and does not fail. So: bump the version in the PR when a release
+    is meant (patch for fixes, minor for features).
+  - `core-release.yml`: a push to main that touches `core/` re-splits `core-dist`, tags
+    `core-v<core/package.json version>`, and opens a PR in Maxaubert/Prism that bumps the pin AND
+    Prism's version (minor when the core's major.minor moved, else patch). It then WAITS for that PR's
+    checks, which now include Prism's terminal gate on a runner (`terminal-gate.yml` there; MEASURED
+    green 3 of 3, real dictation included). Repo variable `PRISM_AUTO_MERGE = 'true'`: it merges the
+    PR and Prism releases itself. Anything else (the default): the green PR waits for a person. A red
+    check never merges. Auto-merge is a STANDING EXCEPTION to "never merge without the owner's word";
+    only the owner switches it on, and it covers these bot-made bump PRs and nothing else.
+  - `ci.yml`'s `core-version` job: **a PR that changes `core/` MUST bump `core/package.json`'s
+    version**, or it fails on the PR (a released tag is never moved).
+  Never split, tag or push `core-dist` by hand on main any more; release candidates cut from an open
+  PR's branch (`core-v0.2.0-rc.N`) are the one exception. The bump needs the secret
+  `PRISM_BUMP_TOKEN` (fine-grained, Maxaubert/Prism, Contents + Pull requests read/write); without it
+  the workflow warns and only releases the core.
 - **A terminal change goes in `core/`**, and is a change to Prism too: say so in the PR, and ask the
   owner when it would conflict with how Prism works. App-shell changes (tabs, start screen, window)
   stay in `src/`.
