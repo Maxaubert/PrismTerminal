@@ -6,14 +6,16 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
 import { decidePaste } from '../lib/termPaste'
 import { registerPaste, reportCwd, reportTitle } from '../lib/termBus'
-import { parseOsc9 } from '@shared/termCwd'
-import { resolveTermTheme } from '../lib/termTheme'
+import { parseOsc9 } from '../../shared/termCwd'
+import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
+import { followsHostStyle, paintsGround, termApi, termHost } from '../host'
 import { normalizeColor } from '../lib/termAnsi'
 import { linkColor } from '../lib/termLinks'
 import { attachLinkPaint, type LinkPainter } from '../lib/termLinkPaint'
 import {
   onTermLookChange,
   termBaseFontPx,
+  termAcrylic,
   termFontStack,
   termThemeId
 } from '../lib/termLook'
@@ -48,8 +50,16 @@ interface Session {
 
 const sessions = new Map<string, Session>()
 
+/** What a link wears on the theme in force: blue, moved as far as this
+ *  ground (a preset's, or one the user picked) needs for it to read. */
+function currentLinkColor(): string {
+  const theme = resolveTermTheme(termThemeId())
+  return linkColor(theme.background, theme.foreground)
+}
+
 /**
- * The theme as painted: the theme's colours on a TRANSPARENT canvas.
+ * The theme as painted. Where the PANEL paints the ground (`paintsGround`,
+ * the host's word), it is the theme's colours on a TRANSPARENT canvas:
  *
  * THE PANEL PAINTS THE GROUND, NOT XTERM (2026-09-19, owner screenshot: a grey
  * bar along the bottom of a black terminal). xterm sizes itself in whole rows,
@@ -67,15 +77,14 @@ const sessions = new Map<string, Session>()
  * defaults to the background; on a clear background that would be a hole, so
  * it is named.
  */
-/** What a link wears on the theme in force: blue, moved as far as this
- *  ground (a preset's, or one the user picked) needs for it to read. */
-function currentLinkColor(): string {
+function currentTermTheme(): ReturnType<typeof resolveTermTheme> & { cursorAccent?: string } {
   const theme = resolveTermTheme(termThemeId())
-  return linkColor(theme.background, theme.foreground)
-}
-
-function currentTermTheme(): ReturnType<typeof resolveTermTheme> & { cursorAccent: string } {
-  const theme = resolveTermTheme(termThemeId())
+  if (!paintsGround()) {
+    // The HOST paints behind the panel (Prism's dock does), so the canvas
+    // carries the ground as it always did there: clear only when the terminal
+    // is following an acrylic style, so the window's material shows through.
+    return termThemeId() === 'style' && termAcrylic() ? { ...theme, background: '#00000000' } : theme
+  }
   // Flattened first: a custom theme may hold #rgb or an rgba().
   const solid = normalizeColor(theme.background, '#0b0b0f')
   return { ...theme, background: '#00000000', cursorAccent: solid }
@@ -150,7 +159,7 @@ function refitSession(id: string, s: Session): void {
   if (!s.el.clientWidth || !s.el.clientHeight) return
   suppressActivity(id)
   fitKeepingCursorLine(s.term, s.fit)
-  window.prism.termResize(id, s.term.cols, s.term.rows)
+  termApi().termResize(id, s.term.cols, s.term.rows)
 }
 
 // One restyler for every running shell, driven by the Terminal settings
@@ -172,6 +181,13 @@ function applyLook(): void {
   }
 }
 onTermLookChange(applyLook)
+// A host with styles of its own repaints :root when the style changes, and a
+// terminal following it has to follow that too. Armed lazily: the host has
+// not been configured yet when this module is first evaluated.
+let styleWatch: (() => void) | null = null
+function watchHostStyle(): void {
+  if (!styleWatch && followsHostStyle()) styleWatch = watchTermTheme(() => applyLook())
+}
 
 /** Ctrl+scroll: zoom THIS session's text, unpersisted. */
 function zoomSession(id: string, delta: number): void {
@@ -292,6 +308,7 @@ export function onTermFindResults(
 }
 
 function createSession(id: string, root: string, shellId: string | undefined): Session {
+  watchHostStyle()
   const term = new Terminal({
     cursorBlink: true,
     scrollback: 10000,
@@ -322,7 +339,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // a terminal that didn't bother.
   term.loadAddon(new Unicode11Addon())
   term.unicode.activeVersion = '11'
-  term.loadAddon(new WebLinksAddon((_e, url) => window.prism.openExternal(url)))
+  term.loadAddon(new WebLinksAddon((_e, url) => termApi().openExternal(url)))
   // The addon makes a link clickable and underlines it under the pointer; this
   // is what makes it LOOK like a link the rest of the time.
   const links = attachLinkPaint(term, currentLinkColor)
@@ -341,7 +358,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   term.onKey(() => markTouched(id))
   term.onData((d) => {
     if (looksTyped(d)) markTouched(id)
-    window.prism.termInput(id, d)
+    termApi().termInput(id, d)
   })
   // The prompt's own report of where the shell is (#99): OSC 9;9, the
   // Windows Terminal convention, printed by the hook main put in the
@@ -389,10 +406,10 @@ function createSession(id: string, root: string, shellId: string | undefined): S
    * growing a second, wrong copy of it.
    */
   const pasteHere = (): void => {
-    const decision = decidePaste(window.prism.readClipboard())
+    const decision = decidePaste(termApi().readClipboard())
     if (decision.kind === 'key') {
       markTouched(id)
-      window.prism.termInput(id, '')
+      termApi().termInput(id, '')
     } else if (decision.kind === 'text') {
       markTouched(id) // a paste is typing; bracketed, it starts with ESC
       term.paste(decision.data)
@@ -400,7 +417,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   }
 
   const unsub = [
-    window.prism.onTermData((forId, data) => {
+    termApi().onTermData((forId, data) => {
       if (forId === id) {
         stopSpin()
         term.write(data)
@@ -430,34 +447,19 @@ function createSession(id: string, root: string, shellId: string | undefined): S
       term.clearSelection()
       return false
     }
-    // Find in the scrollback. Explicitly, and BEFORE the block below, whose
-    // regex is case-insensitive and ignores shift: widening it to include f
-    // would cost the shell plain Ctrl+F as well.
-    if ((e.key === 'f' || e.key === 'F') && e.ctrlKey && e.shiftKey && !e.altKey) return false
-    // The app's tab-management keys work over a focused shell (no shell uses
-    // them): returning false keeps xterm from also feeding bytes to the pty.
-    // App's window listener does the actual work. Ctrl+, is Settings.
-    if (
-      e.ctrlKey &&
-      !e.altKey &&
-      (e.key === 'Tab' || /^[1-9]$/.test(e.key) || e.key === ',')
-    ) {
-      return false
-    }
-    // New tab is Ctrl+T (owner, 2026-09-18), with or without shift, as it is
-    // in Prism and in every browser. That takes the chord from whatever runs
-    // in the shell (Claude Code uses Ctrl+T for its task list), which is the
-    // owner's trade. Close tab stays Ctrl+SHIFT+W: plain Ctrl+W deletes a word
-    // in every readline, and yielding it would swallow a key people type all
-    // day. The shift is tested for the same reason it is for find above.
-    if (e.ctrlKey && !e.altKey && (e.key === 't' || e.key === 'T')) return false
-    if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'w' || e.key === 'W')) return false
+    // THE HOST'S CHORDS (core/renderer/host). Which keys belong to the app
+    // even over a focused shell is the one thing the two apps disagree about
+    // (Prism closes a tab on Ctrl+W and toggles the panel on Ctrl+`; Prism
+    // Terminal leaves Ctrl+W to the shell as delete-word), so the host says.
+    // Returning false keeps xterm from ALSO feeding the bytes to the pty: left
+    // to xterm, Ctrl+` became a NUL, which counted as the user typing.
+    if (termHost().ownsKey(e)) return false
     if (e.key === 'Enter' && e.shiftKey) {
       // Newline-without-submit, the continuation form Claude Code accepts
       // everywhere. This is what /terminal-setup exists to configure; here it
       // simply works.
       markTouched(id) // input like any other: its repaint is echo, not work
-      window.prism.termInput(id, '\\\r')
+      termApi().termInput(id, '\\\r')
       return false
     }
     if ((e.key === 'v' || e.key === 'V') && e.ctrlKey && !e.shiftKey) {
@@ -466,7 +468,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     }
     if ((e.key === 'v' || e.key === 'V') && e.ctrlKey && e.shiftKey) {
       // The escape hatch: plain text paste even when an image rides along.
-      const clip = window.prism.readClipboard()
+      const clip = termApi().readClipboard()
       if (clip.text) {
         markTouched(id)
         term.paste(clip.text)
@@ -482,14 +484,14 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // A session restored over a Claude conversation launches straight into it:
   // the resume id rides the SPAWN (main builds it into the shell's startup
   // command), so nothing is ever visibly typed.
-  void window.prism.termSpawn(id, root, shellId, resume ?? undefined).then((ok) => {
+  void termApi().termSpawn(id, root, shellId, resume ?? undefined).then((ok) => {
     if (!ok && sessions.has(id)) {
       term.write('\x1b[31mCould not start the shell.\x1b[0m\r\n')
       return
     }
     // The spawn is done: re-assert the real size once. The first fit can race
     // a slow spawn, and a static window will never resize on its own.
-    if (sessions.has(id)) window.prism.termResize(id, term.cols, term.rows)
+    if (sessions.has(id)) termApi().termResize(id, term.cols, term.rows)
   })
   return session
 }
@@ -523,7 +525,7 @@ export default function TerminalPanel({
       // The redraw this resize provokes is us, not the shell working.
       suppressActivity(sessionId)
       fitKeepingCursorLine(s.term, s.fit)
-      window.prism.termResize(sessionId, s.term.cols, s.term.rows)
+      termApi().termResize(sessionId, s.term.cols, s.term.rows)
     }
     refit()
     const ro = new ResizeObserver(refit)
@@ -551,14 +553,15 @@ export default function TerminalPanel({
     }
   }, [sessionId, root, shellId])
 
-  // The panel paints the ground and the canvas over it is clear (see
-  // currentTermTheme): the 4px frame, the rows and the strip under the last
-  // row are one surface in one coat.
+  // Where the panel paints the ground, the 4px frame, the rows and the strip
+  // under the last row are one surface in one coat (see currentTermTheme).
+  // Where the host paints behind it, the panel adds nothing: a second
+  // translucent coat is a visibly darker panel than the rest of the window.
   return (
     <div
       ref={box}
       data-term-region
-      className="h-full w-full min-h-0 min-w-0 bg-[var(--p-bg)] p-1"
+      className={`h-full w-full min-h-0 min-w-0 p-1 ${paintsGround() ? 'bg-[var(--p-bg)]' : ''}`}
     />
   )
 }

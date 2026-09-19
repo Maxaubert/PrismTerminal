@@ -1,18 +1,12 @@
-/** A shell main detected on this machine; the only things term:spawn launches. */
-export interface ShellDef {
-  id: string
-  name: string
-  exe: string
-  args: string[]
-}
+// The terminal's own types come from the core; the rest here is this app's.
+export type { AgentKind, DetectedAgent, ShellDef } from '@core/shared/types'
+import type { AgentKind } from '@core/shared/types'
 
 /** The two agents whose sessions can be resumed, each by its own flag:
  *  `claude --resume <id>` and `codex resume --last`. */
-export type AgentKind = 'claude' | 'codex'
 
 /** What the agent poll can find under a shell. 'other' (aider, gemini) still
  *  lights the tab, it just has nothing to come back to, so it is never saved. */
-export type DetectedAgent = AgentKind | 'other'
 
 /** A tab as tabs.json holds it: the folder its shell was in, and the agent it
  *  hosted at the last report, when that agent is one that can be resumed. */

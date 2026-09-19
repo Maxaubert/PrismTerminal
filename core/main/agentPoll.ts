@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import type { DetectedAgent } from '@shared/types'
+import type { DetectedAgent } from '../shared/types'
 import { parseProcLines, treeAgentKind } from './agentDetect'
 import { livePids, ptyOutputTicks } from './terminal'
 

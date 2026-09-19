@@ -4,8 +4,8 @@ import TerminalPanel, {
   disposeTermSession,
   ensureTermSession,
   focusTermSession
-} from './components/TerminalPanel'
-import TermFind from './components/TermFind'
+} from '@core/renderer/components/TerminalPanel'
+import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import TitleBar from './components/TitleBar'
 import EmptyState from './components/EmptyState'
@@ -23,18 +23,18 @@ import {
   tabLabels,
   type TabState
 } from './lib/tabs'
-import { useAgentIndicator } from './lib/useAgentIndicator'
-import { humanFor, workingFor } from './lib/agentClock'
-import { forgetSession, markResume, markTouched } from './lib/termActivity'
-import { onCwd, pasteInto } from './lib/termBus'
-import { quotePaths } from './lib/termPaste'
+import { useAgentIndicator } from '@core/renderer/lib/useAgentIndicator'
+import { humanFor, workingFor } from '@core/renderer/lib/agentClock'
+import { forgetSession, markResume, markTouched } from '@core/renderer/lib/termActivity'
+import { onCwd, pasteInto } from '@core/renderer/lib/termBus'
+import { quotePaths } from '@core/renderer/lib/termPaste'
 import { ContextMenu } from './components/ContextMenu'
-import { rememberRoot } from './lib/recentRoots'
-import { savedShellId } from './lib/termPrefs'
+import { rememberRoot } from '@core/renderer/lib/recentRoots'
+import { savedShellId } from '@core/renderer/lib/termPrefs'
 import { newTabFolder, newTabMode } from './lib/newTabPrefs'
 import { confirmClose } from './lib/closePrefs'
-import { onTermLookChange, termAcrylic, termOpacity, termThemeId } from './lib/termLook'
-import { presetAccent, resolveTermTheme } from './lib/termTheme'
+import { onTermLookChange, termAcrylic, termOpacity, termThemeId } from '@core/renderer/lib/termLook'
+import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { applyChrome, chromeTokens } from './lib/chromeTheme'
 
 const Settings = lazy(() => import('./components/Settings'))

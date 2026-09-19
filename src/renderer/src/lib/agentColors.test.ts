@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { themeAgentColors } from './agentColors'
 import { chromeTokens } from './chromeTheme'
-import { contrastRatio } from './termAnsi'
-import { TERM_PRESETS, presetAccent, resolveTermTheme } from './termTheme'
+import { contrastRatio } from '@core/renderer/lib/termAnsi'
+import { TERM_PRESETS, presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 
 describe('themeAgentColors', () => {
   it('working IS the chrome accent of the theme', () => {

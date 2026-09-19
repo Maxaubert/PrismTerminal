@@ -1,4 +1,7 @@
 import { useSyncExternalStore } from 'react'
+import { followsHostStyle, hostDefaults, type AgentIndicator } from '../host'
+
+export type { AgentIndicator }
 
 // The terminal's persisted look: which theme it wears and its base font size.
 // Same tiny-store shape as tabPrefs. Per-SESSION font zoom (Ctrl+scroll) is
@@ -18,7 +21,11 @@ const notify = (): void => listeners.forEach((l) => l())
  *  stored 'style' reads as 'prism' rather than as a theme nothing can resolve. */
 export function termThemeId(): string {
   const v = localStorage.getItem(THEME_KEY)
-  return !v || v === 'style' ? 'prism' : v
+  // Never touched: the HOST's default ('style' in Prism, a preset here). A
+  // stored 'style' where the host has no style to follow reads as that
+  // default too, rather than as a theme nothing can resolve.
+  if (!v || (v === 'style' && !followsHostStyle())) return hostDefaults().theme
+  return v
 }
 
 export function setTermThemeId(id: string): void {
@@ -85,7 +92,9 @@ const OPACITY_KEY = 'prism.term.opacity'
  *  the follow-style terminal alone and was on by default; here it works with
  *  any theme and is OFF until asked for. */
 export function termAcrylic(): boolean {
-  return localStorage.getItem(ACRYLIC_KEY) === '1'
+  const v = localStorage.getItem(ACRYLIC_KEY)
+  // Never touched: the host's default (on in Prism, off in Prism Terminal).
+  return v === null ? hostDefaults().acrylic : v === '1'
 }
 export function setTermAcrylic(on: boolean): void {
   localStorage.setItem(ACRYLIC_KEY, on ? '1' : '0')
@@ -105,7 +114,6 @@ export function setTermOpacity(pct: number): void {
 
 const AGENT_IND_KEY = 'prism.term.agentIndicator'
 
-export type AgentIndicator = 'off' | 'minimal' | 'full'
 
 /** How a working agent shows on its tab: not at all, a line under the tab,
  *  or the whole tab turning. MINIMAL is the default (owner, 2026-09-18; it was
@@ -114,7 +122,7 @@ export type AgentIndicator = 'off' | 'minimal' | 'full'
  *  paints. */
 export function agentIndicator(): AgentIndicator {
   const v = localStorage.getItem(AGENT_IND_KEY)
-  return v === 'full' || v === 'off' ? v : 'minimal'
+  return v === 'full' || v === 'minimal' || v === 'off' ? v : hostDefaults().indicator
 }
 
 export function setAgentIndicator(v: AgentIndicator): void {
@@ -135,7 +143,7 @@ const HEX = /^#[0-9a-f]{6}$/i
  */
 export function agentColorChoice(): string {
   const v = localStorage.getItem(AGENT_COLOR_KEY)
-  return v && HEX.test(v) ? v : ''
+  return v && HEX.test(v) ? v : hostDefaults().agentColor
 }
 
 /** A hex picks a colour; '' gives the choice back to the theme. */
@@ -149,7 +157,7 @@ export function setAgentColor(hex: string): void {
  *  a BACKGROUND tab wears it until the tab is visited. */
 export function agentDoneColorChoice(): string {
   const v = localStorage.getItem(AGENT_DONE_KEY)
-  return v && HEX.test(v) ? v : ''
+  return v && HEX.test(v) ? v : hostDefaults().agentDoneColor
 }
 
 export function setAgentDoneColor(hex: string): void {
@@ -178,15 +186,26 @@ export interface CustomTermTheme {
 
 /** What every non-colour terminal setting is out of the box. Picking any
  *  theme returns to these; deviating from them is what "Save changes" saves. */
-export const TERM_EXTRA_DEFAULTS = {
-  font: 'cascadia',
-  fontPct: 100,
-  indicator: 'minimal' as AgentIndicator,
-  // '' = the theme's own (see agentColorChoice).
-  indicatorColor: '',
-  doneColor: '',
-  acrylic: false,
-  opacity: 100
+export function termExtraDefaults(): {
+  font: string
+  fontPct: number
+  indicator: AgentIndicator
+  indicatorColor: string
+  doneColor: string
+  acrylic: boolean
+  opacity: number
+} {
+  const d = hostDefaults()
+  return {
+    font: 'cascadia',
+    fontPct: 100,
+    indicator: d.indicator,
+    // '' = the theme's own (see agentColorChoice).
+    indicatorColor: d.agentColor,
+    doneColor: d.agentDoneColor,
+    acrylic: d.acrylic,
+    opacity: 100
+  }
 }
 
 /** Selecting a theme overwrites the terminal settings with their defaults:
