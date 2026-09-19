@@ -2,6 +2,9 @@
 //
 //   npm run e2e            every scenario
 //   npm run e2e -- theme   only the scenarios whose name contains "theme"
+//   PT_E2E_PACKAGED=1      drive dist/win-unpacked (after `npm run package`) instead of out/:
+//                          what proves the INSTALLER's layout, e.g. that the speech engine is
+//                          where the packaged app looks for it
 //
 // OFFSCREEN and UNFOCUSED, as Prism's is. Electron has no headless mode and a
 // truly hidden window stops answering clicks, so each window is PARKED
@@ -12,7 +15,8 @@
 // that "closed" its window has left a process holding the single-instance lock.
 import { _electron as electron } from 'playwright-core'
 import { execFileSync, spawn } from 'child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import { createHash } from 'crypto'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, truncateSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { createRequire } from 'module'
@@ -20,9 +24,14 @@ import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 const electronPath = require('electron')
 const MAIN = resolve(process.cwd(), 'out/main/index.js')
+const PACKAGED = process.env.PT_E2E_PACKAGED === '1' ? resolve(process.cwd(), 'dist/win-unpacked/PrismTerminal.exe') : null
 const PROFILE_NAME = 'pt-e2e-profile'
 const only = process.argv.slice(2).filter((a) => !a.startsWith('-'))
 
+if (PACKAGED && !existsSync(PACKAGED)) {
+  console.error('dist/win-unpacked/PrismTerminal.exe is missing: run "npm run package" first.')
+  process.exit(1)
+}
 if (!existsSync(MAIN)) {
   console.error('out/main/index.js is missing: run "npm run build" first (npm run e2e does).')
   process.exit(1)
@@ -46,7 +55,7 @@ function reapStrays() {
       [
         '-NoProfile',
         '-Command',
-        `Get-CimInstance Win32_Process -Filter "Name='electron.exe'" | ` +
+        `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'electron.exe' -or $_.Name -eq 'PrismTerminal.exe' } | ` +
           `Where-Object { $_.CommandLine -like '*${PROFILE_NAME}*' } | ` +
           'ForEach-Object { $_.ProcessId }'
       ],
@@ -74,10 +83,11 @@ function world() {
   return dirs
 }
 
-async function launch(w, { args = [], pick } = {}) {
+async function launch(w, { args = [], pick, env = {} } = {}) {
   const app = await electron.launch({
-    args: [MAIN, `--user-data-dir=${w.profile}`, '--e2e', ...args],
-    env: { ...process.env, ...(pick ? { PT_E2E_PICK: pick } : {}) }
+    ...(PACKAGED ? { executablePath: PACKAGED } : {}),
+    args: [...(PACKAGED ? [] : [MAIN]), `--user-data-dir=${w.profile}`, '--e2e', ...args],
+    env: { ...process.env, ...(pick ? { PT_E2E_PICK: pick } : {}), ...env }
   })
   const page = await app.firstWindow()
   await app.evaluate(park)
@@ -117,6 +127,57 @@ async function until(fn, ms = 20000, step = 150) {
     if (v) return v
     if (Date.now() > end) return v
     await sleep(step)
+  }
+}
+
+/**
+ * What the dictation scenario speaks with and listens through (#13), fetched
+ * ONCE into .e2e-cache and checked against a SHA-256 every run: the Tiny model
+ * (75 MB; its url, size and checksum are read out of the core's own catalog,
+ * so the e2e downloads exactly what the app would) and whisper.cpp's sample
+ * clip of a known sentence.
+ */
+const CACHE = resolve(process.cwd(), '.e2e-cache')
+const JFK = {
+  url: 'https://raw.githubusercontent.com/ggml-org/whisper.cpp/b0a11594aec50892a02cd8d129eee2dfe93a8bb8/samples/jfk.wav',
+  sha256: '59dfb9a4acb36fe2a2affc14bacbee2920ff435cb13cc314a08c13f66ba7860e'
+}
+const sha256File = (file) => createHash('sha256').update(readFileSync(file)).digest('hex')
+async function cached(name, url, sha256) {
+  mkdirSync(CACHE, { recursive: true })
+  const file = join(CACHE, name)
+  if (existsSync(file) && sha256File(file) === sha256) return file
+  console.log(`  (fetching ${name} into .e2e-cache, once)`)
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`${name}: download failed (${res.status})`)
+  writeFileSync(file, Buffer.from(await res.arrayBuffer()))
+  const got = sha256File(file)
+  if (got !== sha256) throw new Error(`${name}: SHA-256 mismatch (${got})`)
+  return file
+}
+function tinyModel() {
+  // The catalog builds its model urls from ONE pinned Hugging Face commit, so
+  // that is what is read here: the same commit, the same file, the same sha.
+  const src = readFileSync(resolve(process.cwd(), 'core/shared/dictationCatalog.ts'), 'utf8')
+  const commit = src.match(/const MODELS_COMMIT = '([0-9a-f]{40})'/)?.[1]
+  const block = src.slice(src.indexOf("id: 'tiny'"))
+  const file = block.match(/url:\s*model\('([^']+)'\)/)?.[1]
+  const sha256 = block.match(/sha256:\s*'([0-9a-f]{64})'/)?.[1]
+  if (!commit || !file || !sha256) throw new Error('the catalog no longer spells the tiny model the way the e2e reads it')
+  return { url: `https://huggingface.co/ggerganov/whisper.cpp/resolve/${commit}/${file}`, sha256 }
+}
+/** Speech servers started out of THIS checkout's engine folder, and no others:
+ *  the owner's own dictation tool runs a whisper-server of its own. */
+function ourSpeechServers() {
+  try {
+    const out = execFileSync(
+      'powershell.exe',
+      ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "Name='whisper-server.exe'" | Where-Object { $_.ExecutablePath -like '*\\vendor\\whisper\\*' -or $_.ExecutablePath -like '*\\win-unpacked\\resources\\bin\\whisper\\*' } | Measure-Object).Count`],
+      { encoding: 'utf8', windowsHide: true }
+    )
+    return Number(out.trim()) || 0
+  } catch {
+    return -1
   }
 }
 
@@ -497,7 +558,11 @@ const scenarios = {
           const hi = Math.max(lum(...ink), lum(...ground))
           const lo = Math.min(lum(...ink), lum(...ground))
           const ratio = (hi + 0.05) / (lo + 0.05)
-          return ink.join(',') === '78,161,255' || ratio < 4.5
+          // Wait for the DECORATED colour. After a theme switch there is a frame or
+          // two where the row is repainted and the link's decoration is not back yet:
+          // the span then wears the plain text ink, which reads fine and is not a
+          // link colour at all (MEASURED: 62,62,62 accepted two runs in three).
+          return ink.join(',') === '78,161,255' || ratio < 4.5 || !(ink[2] > ink[0])
             ? null
             : { rgb: ink.join(','), ratio, blue: ink[2] > ink[0] }
         }),
@@ -557,14 +622,20 @@ const scenarios = {
    *  terminal settings the same settings. */
   async options(ok) {
     const w = world()
-    const { app, page } = await launch(w, { args: [w.alpha] })
+    // No NVIDIA card, as far as this run is concerned: the GPU row is offered only
+    // where one is found, and the parity list has to be the same on every PC.
+    const { app, page } = await launch(w, { args: [w.alpha], env: { PT_E2E_NVIDIA: '0', PT_DICTATION_ROOT: join(w.profile, 'dictation') } })
     await until(async () => (await tabLabels(page)).length === 1)
-    const src = readFileSync(resolve(process.cwd(), 'core/renderer/settings/options.ts'), 'utf8')
-    const wanted = [...src.matchAll(/\{\s*id: '([a-z-]+)'/g)].map((m) => m[1]).sort()
-    ok(wanted.length >= 9, `the core lists the terminal options (${wanted.length})`)
+    const ids = (file, keep = () => true) =>
+      [...readFileSync(resolve(process.cwd(), file), 'utf8').matchAll(/\{\s*id: '([a-z-]+)'[^}]*\}/g)].filter((m) => keep(m[0])).map((m) => m[1])
+    const wanted = [
+      ...ids('core/renderer/settings/options.ts'),
+      ...ids('core/renderer/settings/dictationOptions.ts', (row) => !row.includes('onlyWhere'))
+    ].sort()
+    ok(wanted.length >= 17, `the core lists the terminal and dictation options (${wanted.length})`)
     await page.locator('[data-title-settings]').click()
     const shown = new Set()
-    for (const tab of ['general', 'appearance']) {
+    for (const tab of ['general', 'appearance', 'dictation']) {
       await page.locator(`[data-settings-tab="${tab}"]`).click()
       await sleep(400)
       for (const id of await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))) shown.add(id)
@@ -583,6 +654,15 @@ const scenarios = {
     // a check that a row EXISTS cannot see that. Measured, so it can: a theme
     // card has a card's width and the wall wraps into rows, a row has its
     // padding, and the options of a segmented control do not overlap.
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-dictation.png') }).catch(() => {})
+    ok((await page.locator('[data-pref="dictation-gpu"]').count()) === 0, 'the GPU row is not offered without an NVIDIA card')
+    const dictRow = await page.evaluate(() => {
+      const r = document.querySelector('[data-dictation-item="base"]')
+      return r ? { pad: parseFloat(getComputedStyle(r).paddingTop), w: Math.round(r.getBoundingClientRect().width) } : null
+    })
+    ok(!!dictRow && dictRow.pad >= 8 && dictRow.w > 400, `the model manager is laid out (${JSON.stringify(dictRow)})`)
+    await page.locator('[data-settings-tab="appearance"]').click()
+    await sleep(400)
     const look = await page.evaluate(() => {
       const box = (e) => e.getBoundingClientRect()
       const cards = [...document.querySelectorAll('[data-term-card]')].map(box)
@@ -611,6 +691,208 @@ const scenarios = {
     })
     ok(overlaps === 0, `no two controls in a row overlap (${overlaps} do)`)
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-general.png') }).catch(() => {})
+    await app.close().catch(() => {})
+  },
+
+  /**
+   * DICTATION, REALLY (#13): a fake microphone plays a known sentence, the real
+   * bundled engine hears it with the Tiny model, and the words must arrive on
+   * the prompt line with no Enter. Nothing here is stubbed except the person.
+   */
+  async dictation(ok) {
+    const w = world()
+    const tiny = tinyModel()
+    const model = await cached('ggml-tiny.bin', tiny.url, tiny.sha256)
+    const clip = await cached('jfk.wav', JFK.url, JFK.sha256)
+    const root = join(w.profile, 'dictation')
+    mkdirSync(join(root, 'models'), { recursive: true })
+    copyFileSync(model, join(root, 'models', 'tiny.bin'))
+    // Unpackaged, the engine is the fetched folder. PACKAGED, the app is told
+    // nothing: it has to find the engine where the installer put it.
+    const engine = PACKAGED ? resolve(process.cwd(), 'dist/win-unpacked/resources/bin/whisper') : resolve(process.cwd(), 'vendor/whisper')
+    ok(existsSync(join(engine, 'whisper-server.exe')), `the speech engine is in ${PACKAGED ? 'the packaged app' : 'vendor/whisper'}`)
+    ok(existsSync(join(engine, 'vcomp140.dll')) && existsSync(join(engine, 'LICENSE-whisper.cpp.txt')), 'with the C++ runtime and the MIT notice beside it')
+    const { app, page } = await launch(w, {
+      args: [w.alpha],
+      env: { PT_E2E_MIC: clip, PT_DICTATION_ROOT: root, PT_E2E_NVIDIA: '0', ...(PACKAGED ? {} : { PT_WHISPER_DIR: engine }) }
+    })
+    await until(async () => (await tabLabels(page)).length === 1)
+    await page.waitForFunction(
+      () => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()),
+      null,
+      { timeout: 45000 }
+    )
+    const pill = () => page.locator('[data-dictation-pill]')
+    const hold = async (ms) => {
+      await page.keyboard.down('AltRight')
+      await sleep(ms)
+    }
+
+    // OFF MEANS OFF: the key does nothing, and nothing is running.
+    await page.locator('.xterm').first().click({ force: true })
+    await hold(700)
+    ok((await pill().count()) === 0, 'with dictation off, the key does nothing')
+    await page.keyboard.up('AltRight')
+    ok(ourSpeechServers() === 0, 'and no speech server exists')
+
+    // On, from the Settings page, with the e2e's model as the active one.
+    await page.evaluate(() => {
+      localStorage.setItem('prism.dictation.model', 'tiny')
+      localStorage.setItem('prism.dictation.sounds', '0')
+    })
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="dictation"]').click()
+    await page.locator('[data-pref="dictation-enabled"] [role="switch"]').click()
+    ok(
+      (await page.locator('[data-pref="dictation-enabled"] [role="switch"]').getAttribute('aria-checked')) === 'true',
+      'the Dictation page switches it on'
+    )
+    await page.locator('[data-tab]').first().click()
+    await page.locator('.xterm').first().click({ force: true })
+    const rowsTop = () => page.evaluate(() => Math.round(document.querySelector('.xterm .xterm-rows')?.getBoundingClientRect().top ?? -1))
+    const topBefore = await rowsTop()
+
+    // AltGr TYPING IS NOT DICTATION: Ctrl+RightAlt with a key, as a Norwegian
+    // keyboard sends for "@", must never open the microphone.
+    await page.keyboard.down('ControlLeft')
+    await page.keyboard.down('AltRight')
+    await sleep(60)
+    await page.keyboard.down('Digit2')
+    await page.keyboard.up('Digit2')
+    await sleep(400)
+    ok((await pill().count()) === 0, 'AltGr typing does not start a dictation')
+    await page.keyboard.up('AltRight')
+    await page.keyboard.up('ControlLeft')
+    await page.keyboard.press('Escape') // drop whatever the chord left on the prompt line
+
+    // Hold, speak (the fake microphone does), release.
+    await hold(300)
+    ok(await until(async () => (await pill().getAttribute('data-dictation-pill').catch(() => null)) === 'listening', 8000), 'holding Right Alt opens the pill: Listening')
+    ok((await page.locator('[data-tab] [data-dictation-mark]').count()) === 1, 'and the tab wears the mic mark')
+    ok((await rowsTop()) === topBefore, 'the pill does not move the terminal')
+    const moved = await until(
+      async () =>
+        page.evaluate(() =>
+          [...document.querySelectorAll('[data-dictation-bar]')].some((b) => parseFloat(b.style.transform.replace(/[^0-9.]/g, '')) > 0.2)
+        ),
+      8000
+    )
+    ok(moved, 'the level meter moves while the clip plays: a live mic is visible at once')
+    const live = await until(async () => ((await page.locator('[data-dictation-live]').textContent().catch(() => '')) ?? '').trim(), 15000)
+    ok(!!live, `live text appears while still listening ("${live}")`)
+    await sleep(4000)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-listening.png') }).catch(() => {})
+    await sleep(5000) // let the whole sentence play
+    const before = await termText(page)
+    await page.keyboard.up('AltRight')
+    ok(await until(async () => (await pill().getAttribute('data-dictation-pill').catch(() => null)) === 'transcribing', 4000), 'releasing says Transcribing')
+    const heard = await until(async () => /ask not what your country/i.test((await termText(page)).replace(/\s+/g, ' ')), 30000)
+    ok(heard, 'the spoken sentence arrives on the prompt line')
+    ok(await until(async () => (await pill().count()) === 0, 5000), 'and the pill goes away')
+    const after = await termText(page)
+    ok(
+      (after.match(/PS [^>]*>/g) ?? []).length === (before.match(/PS [^>]*>/g) ?? []).length,
+      'NO ENTER was sent: there is no new prompt, the text is still being edited'
+    )
+    ok(ourSpeechServers() === 1, 'one speech server is resident while dictation is on')
+
+    // Escape cancels and pastes nothing.
+    await page.keyboard.press('Escape')
+    await sleep(300)
+    const clean = await termText(page)
+    await hold(300)
+    await until(async () => (await pill().count()) === 1, 8000)
+    await sleep(2500)
+    await page.keyboard.press('Escape')
+    await page.keyboard.up('AltRight')
+    ok(await until(async () => (await pill().count()) === 0, 4000), 'Escape cancels a dictation')
+    await sleep(1500)
+    ok((await termText(page)) === clean, 'and nothing is pasted')
+
+    // Off again: the server goes with the switch.
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="dictation"]').click()
+    await page.locator('[data-pref="dictation-enabled"] [role="switch"]').click()
+    ok(await until(() => ourSpeechServers() === 0, 8000), 'switching dictation off kills the speech server')
+    await app.close().catch(() => {})
+    ok(await until(() => ourSpeechServers() === 0, 8000), 'and none outlives the app')
+  },
+
+  /**
+   * THE MODEL MANAGER, WITH THINGS IN IT (#13, owner's notes of 2026-09-19): a
+   * model and the GPU engine are STAGED as installed (a sparse file of the
+   * catalogued size, a pack folder with its marker), so the rows can be read
+   * in the states a user actually lives in, without a gigabyte of downloads.
+   */
+  async dictationPage(ok) {
+    const w = world()
+    const src = readFileSync(resolve(process.cwd(), 'core/shared/dictationCatalog.ts'), 'utf8')
+    const entry = (id) => {
+      const block = src.slice(src.indexOf(`id: '${id}'`))
+      return { bytes: Number(block.match(/bytes:\s*(\d+)/)[1]), sha256: block.match(/sha256:\s*\n?\s*'([0-9a-f]{64})'/)[1] }
+    }
+    const root = join(w.profile, 'dictation')
+    mkdirSync(join(root, 'models'), { recursive: true })
+    const base = join(root, 'models', 'base.bin')
+    writeFileSync(base, '')
+    truncateSync(base, entry('base').bytes)
+    const gpu = entry('gpu-pack')
+    const pack = join(root, 'engines', `gpu-pack-${gpu.sha256.slice(0, 12)}`)
+    mkdirSync(join(pack, 'Release'), { recursive: true })
+    writeFileSync(join(pack, 'Release', 'whisper-server.exe'), '')
+    writeFileSync(join(pack, 'prism-installed.json'), JSON.stringify({ id: 'gpu-pack', bytes: gpu.bytes, sha256: gpu.sha256 }))
+
+    const { app, page } = await launch(w, { args: [w.alpha], env: { PT_E2E_NVIDIA: '1', PT_DICTATION_ROOT: root } })
+    await until(async () => (await tabLabels(page)).length === 1)
+    await page.evaluate(() => {
+      localStorage.setItem('prism.dictation.enabled', '1')
+      localStorage.setItem('prism.dictation.model', 'base')
+    })
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="dictation"]').click()
+    await page.waitForSelector('[data-dictation-item="gpu-pack"][data-state="installed"]', { timeout: 8000 })
+    ok((await page.locator('[data-settings-tab="dictation"]').getAttribute('aria-current')) === 'page' && (await page.locator('[data-settings-tab="general"]').getAttribute('aria-current')) === null, 'the rail marks Dictation as the page in front')
+    await page.mouse.move(900, 300)
+    await sleep(400)
+
+    const names = await page.evaluate(() => [...document.querySelectorAll('[data-dictation-item] [data-item-name]')].map((e) => e.textContent.trim()))
+    ok(names.length === 5 && names.slice(0, 4).every((n) => n.startsWith('Whisper ')), `models carry their full names (${JSON.stringify(names)})`)
+    const marks = await page.evaluate(() => [...document.querySelectorAll('[data-dictation-item] [data-vendor]')].map((e) => e.getAttribute('data-vendor')))
+    ok(marks.filter((m) => m === 'openai').length === 4 && marks.filter((m) => m === 'nvidia').length === 1, `every row leads with its vendor's mark (${marks.join(',')})`)
+    const mark = await page.evaluate(() => {
+      const row = document.querySelector('[data-dictation-item="base"]').getBoundingClientRect()
+      const m = document.querySelector('[data-dictation-item="base"] [data-vendor]').getBoundingClientRect()
+      const name = document.querySelector('[data-dictation-item="base"] [data-item-name]').getBoundingClientRect()
+      return { left: m.left < name.left, centred: Math.abs(m.top + m.height / 2 - (row.top + row.height / 2)) < 2, size: Math.round(m.width) }
+    })
+    ok(mark.left && mark.centred && mark.size >= 28, `the mark sits left of the name, centred on the row (${JSON.stringify(mark)})`)
+
+    const row = (id) => page.locator(`[data-dictation-item="${id}"]`)
+    ok(((await row('base').locator('[data-item-badge]').textContent()) ?? '').trim() === 'Active', 'the model in use says Active')
+    ok((await row('base').locator('[data-uninstall]').count()) === 1, 'an installed model offers Uninstall')
+    const same = await page.evaluate(() => {
+      const cs = (el) => { const s = getComputedStyle(el); return [s.backgroundColor, s.borderTopWidth, s.borderTopColor, s.borderRadius, s.color].join('|') }
+      return cs(document.querySelector('[data-dictation-item="base"] [data-uninstall]')) === cs(document.querySelector('[data-dictation-item="small"] button'))
+    })
+    ok(same, 'and it is a button like Download: same fill, border, radius and ink')
+    const words = ((await page.locator('[data-dictation-settings]').textContent()) ?? '')
+    ok(!/\bDelete\b|\bRemove\b/.test(words), 'and nothing on the page says Delete or Remove')
+
+    ok(((await row('gpu-pack').locator('[data-item-badge]').textContent()) ?? '').trim() === 'Enabled', 'the GPU engine says Enabled')
+    ok(((await row('gpu-pack').locator('[data-gpu-toggle]').textContent()) ?? '').trim() === 'Disable', 'and offers Disable')
+    ok((await row('large-v3-turbo').locator('text=Recommended').count()) === 1, 'with the GPU on, Turbo is the recommended model')
+    const fills = await page.evaluate(() => ['small', 'large-v3-turbo', 'large-v3'].map((id) => getComputedStyle(document.querySelector(`[data-dictation-item="${id}"] button`)).backgroundColor))
+    ok(new Set(fills).size === 1, `and its Download button is the same as every other (${fills.join(' | ')})`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-models.png') }).catch(() => {})
+
+    // DISABLE UNINSTALLS IT, ENABLE DOWNLOADS IT (owner, 2026-09-19): one control.
+    ok((await row('gpu-pack').locator('[data-uninstall]').count()) === 0, 'the GPU row has no second control beside Disable')
+    await row('gpu-pack').locator('[data-gpu-toggle]').click()
+    ok(await until(async () => (await row('gpu-pack').getAttribute('data-state')) === 'absent', 8000), 'Disable takes the engine off the disk')
+    ok(!existsSync(pack), 'for real')
+    ok((await row('gpu-pack').locator('[data-item-badge]').count()) === 0, 'the Enabled badge goes')
+    ok(((await row('gpu-pack').locator('button').textContent()) ?? '').trim() === 'Enable', 'and the button offers Enable again')
+    ok((await row('base').locator('text=Recommended').count()) === 1, 'with the GPU off, Base is the recommended model again')
     await app.close().catch(() => {})
   },
 

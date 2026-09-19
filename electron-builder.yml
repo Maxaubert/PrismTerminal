@@ -13,6 +13,14 @@ files:
   - '!build/**'
   - '!assets/**'
   - '!dist/**'
+  # The e2e's cache (a 75 MB test model), its screenshots, the core's source
+  # (compiled into out/ already) and the speech engine, which ships through
+  # extraResources below: left in, the first alone added 73 MB to the installer
+  # (MEASURED, 110 MB -> 184 MB, the day dictation landed).
+  - '!.e2e-cache/**'
+  - '!.e2e-shots/**'
+  - '!vendor/**'
+  - '!core/**'
 # node-pty is the app's one native module. Its .node binaries, the conpty
 # helper dir and winpty-agent.exe must live on the real file system - Windows
 # cannot spawn an exe or load a DLL out of an asar archive.
@@ -25,6 +33,11 @@ npmRebuild: false
 extraResources:
   - from: build/icon.ico
     to: icon.ico
+  # The speech engine for dictation (#13): whisper.cpp's official CPU build,
+  # fetched by `npm run fetch:bin` against a pinned SHA-256. Beside the app, not
+  # in the asar: it is an exe and its DLLs, and Windows has to be able to run it.
+  - from: vendor/whisper
+    to: bin/whisper
 win:
   icon: build/icon.ico
   executableName: PrismTerminal

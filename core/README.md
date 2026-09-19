@@ -28,6 +28,14 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
 2. **What is an app's shell stays in the app.** Prism: roots and the wall, the
    sidebar, the split dock, several shells per tab, app styles. Prism Terminal:
    folder tabs, the start screen, window chrome from the theme, the lifecycle.
+   Dictation (#13) is in here too, whole: the key, the microphone, the engine,
+   the model store, the pill, the tab mark and its Settings page. A host wires
+   it with four lines: `registerDictationIpc` in main, `createDictationApi` in
+   the preload, the `dictation` field of its host config, and
+   `useDictationArm` + `<DictationPill>` where its terminal is drawn. It also
+   runs `core/tools/fetch-whisper.mjs <dir>` at build time and ships that folder
+   as `resources/bin/whisper`, and grants its own window the `media` permission
+   (audio only).
 3. **A difference between the apps is DECLARED, never forked.** Every place the
    two legitimately differ is a field of `TermHostConfig` in
    [`renderer/host.ts`](renderer/host.ts): the default each untouched setting
@@ -97,16 +105,29 @@ lockfile but ships against Prism's.
 
 ## Releasing the core
 
-1. Land the change in Prism Terminal (PR, the app's full gate).
-2. Bump `core/package.json`'s version. Publish: `git subtree split --prefix=core -b core-dist`,
-   tag `core-v<version>`, push the branch and the tag. Tags are `core-v*` for the
-   core and `v*` for the app, since this repo is both.
-3. In Prism, and only after ASKING THE OWNER (2026-09-19: a core release is
-   never pulled into Prism unasked): bump the pin, run `npm run e2e:terminal`
-   (Prism's terminal gate: every scenario the terminal can break, required
-   green for any pin bump, because Prism has the larger footprint and so more
-   ways to break), then Prism's usual gate, install, PR. The core's lint and
-   unit tests run only here; Prism's gate on it is its compiler and its e2e.
+Nobody does, by hand (PrismTerminal #23; owner, 2026-09-19: "that compiled copy
+needs to be auto bumped when a new Prism Terminal release or merge to main
+happens"). Land the change through a PR in Prism Terminal, WITH a bump of
+`core/package.json`'s version (CI fails the PR otherwise: a released tag is never
+moved). On merge, `.github/workflows/core-release.yml`:
+
+1. re-splits this folder into `core-dist` and tags `core-v<version>`. Tags are
+   `core-v*` for the core and `v*` for the app, since this repo is both;
+2. opens a PR in Prism bumping the pin and Prism's own version;
+3. waits for that PR's checks, which include Prism's TERMINAL GATE on a GitHub
+   runner (`terminal-gate.yml` there): the built app driven through every
+   scenario the terminal can break, real dictation included. Prism has the larger
+   footprint and so more ways to break, which is why the proof runs there;
+4. merges it, if the owner has set the repo variable `PRISM_AUTO_MERGE` to
+   `true`, and Prism releases itself; otherwise the green PR waits for a person.
+   A red check never merges.
+
+The one thing still cut by hand is a RELEASE CANDIDATE for an open PR
+(`core-v0.2.0-rc.N`, split from the PR's branch), so Prism's half can be built
+and tested before the core's half merges. The core's lint and unit tests run
+only here; Prism's gate on it is its compiler, its unit suite and that e2e.
+**Keep Prism's gate runner-safe:** nothing in those scenarios may assume one
+particular machine.
 
 ## Status (2026-09-19)
 

@@ -27,6 +27,42 @@ so an update never silently changes what an existing user sees; the bridge to ma
   userData), never shared. `settings/options.ts` lists every terminal option by id; a unit test holds
   the list and the sections together, and each app's e2e (`options`) asserts its page shows that
   list and no terminal-looking row of its own. A row outside the list is a fork.
+- **THIS IS A PRODUCT FOR OTHER PEOPLE** (owner, 2026-09-19: "this isn't an app for just me. keep
+  that in mind with all things you implement"). A feature bundles or fetches what it needs and works
+  on a fresh Windows install: never lean on the owner's GPU, tools, caches or installed runtimes.
+- **DICTATION** (#13, 2026-09-19; spec in `docs/superpowers/specs/2026-09-19-dictation-design.md`).
+  Built ONCE in `core/`, for Prism too. Hold Right Alt, speak, release: the FINAL text is pasted at the
+  cursor of the shell that was in front when you started. The rules that must not regress:
+  - **It is the FOURTH written exception to "the app never types into your shell"** (with the agent
+    resume, Prism's `Set-Location`, and drop-to-type-path): the user spoke it on purpose, it arrives as
+    one bracketed paste, and it NEVER carries Enter or a newline (`cleanTranscript` and the panel's
+    `pasteSpokenText` both strip them; the e2e asserts no new prompt appears).
+  - **Off means off.** Default off. With it off no key listener is armed, no process exists, nothing
+    downloads. Switching it off kills the server. The e2e counts `whisper-server.exe` processes.
+  - **Local only.** Audio goes renderer -> main -> `whisper-server` on 127.0.0.1 and is never written to
+    disk. Official whisper.cpp binaries only, nothing we compile; every download (engine, models, the
+    NVIDIA pack) is pinned by SHA-256 in `core/shared/dictationCatalog.ts` and an unverified file is
+    deleted, never loaded. Model urls are pinned to a Hugging Face COMMIT, not `main`.
+  - **Right Alt is AltGr** on Norwegian and most European keyboards (Windows sends Ctrl+RightAlt, then
+    the key). So a bare-modifier hotkey is a SOLO HOLD of 200 ms; any other key during that window
+    means it was typing. `core/renderer/lib/dictationKey.ts` is the pure reducer, heavily tested.
+  - **Live text is provisional and only SHOWN** (in the pill); only the final pass is pasted. MEASURED:
+    a phrase heard wrong at 6 s was corrected by 8 s, and text typed into a prompt cannot be unsent.
+  - **The engine ships its own C++ runtime.** whisper.cpp's exe and DLLs import MSVCP140 /
+    VCRUNTIME140(_1) / VCOMP140, which neither official zip carries and a fresh Windows may lack.
+    `core/tools/fetch-whisper.mjs` copies them app-local from the build machine, only if validly
+    signed by Microsoft, plus the MIT notice. The GPU pack finds them through PATH (the engine sets it).
+  - **Shared files, per-app values.** Models and the GPU pack live in `%LOCALAPPDATA%\PrismDictation`
+    (both apps; never removed by an uninstall); every setting VALUE is per app.
+  - **GPU:** the official CUDA 12.4 pack (643 MB) is an optional download, offered only when an NVIDIA
+    adapter is found. MEASURED on an RTX 5090: it runs (first run 9 s compiling kernels), Large-v3 then
+    answers in 0.36-0.5 s. AMD/Intel stay on CPU (Base/Small) until there is an official build.
+  - **Testing is REAL:** the `dictation` e2e feeds Chromium's fake microphone a WAV
+    (`PT_E2E_MIC`), runs the real bundled engine with the Tiny model (cached in `.e2e-cache/`), and
+    asserts the sentence lands on the prompt line. Not machine-testable, so on the hands-on list: how
+    it sounds, AltGr on a physical keyboard, pause-media against a real player.
+  - Re-pinning the engine: `fetch-whisper.mjs` and `ENGINE` in the catalog must agree (a test holds
+    them together), and the GPU pack must be the SAME release tag.
 - **A PAGE THAT WORKS IS NOT A PAGE THAT LOOKS RIGHT** (#20, 2026-09-19). Moving the settings into
   `core/` dropped every Tailwind class used only there (`core/` is outside the scanned root; the fix
   is the `@source` line at the top of `index.css`, do not remove it). All 14 e2e scenarios passed over

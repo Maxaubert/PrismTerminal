@@ -1,6 +1,7 @@
 import { useEffect, useState, type JSX, type ReactNode } from 'react'
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../lib/newTabPrefs'
 import { Pref, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
+import { DictationSettings } from '@core/renderer/settings/Dictation'
 import { TerminalAppearanceSettings } from '@core/renderer/settings/TerminalAppearance'
 import { AgentIndicatorSetting, ShellSetting } from '@core/renderer/settings/TerminalBehaviour'
 
@@ -119,7 +120,7 @@ function GeneralTab(): JSX.Element {
 
 /* ---------- page shell ---------- */
 
-type TabId = 'general' | 'appearance'
+type TabId = 'general' | 'appearance' | 'dictation'
 
 const Ico = ({ d }: { d: string }): JSX.Element => (
   <svg
@@ -137,7 +138,8 @@ const Ico = ({ d }: { d: string }): JSX.Element => (
   </svg>
 )
 
-// How the app behaves, then what it looks like.
+// How the app behaves, what it looks like, then the one optional feature
+// that is big enough for a page of its own (#13).
 const TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   {
     id: 'general',
@@ -152,6 +154,11 @@ const TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
     icon: (
       <Ico d="M12 3a9 9 0 1 0 0 18 3 3 0 0 0 0-6 3 3 0 0 1 0-6h3a6 6 0 0 0-3-6ZM7.5 10.5h.01M10 7h.01M14 7h.01" />
     )
+  },
+  {
+    id: 'dictation',
+    label: 'Dictation',
+    icon: <Ico d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3ZM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
   }
 ]
 
@@ -210,7 +217,13 @@ export default function Settings(): JSX.Element {
           </h2>
         </header>
         <div className="p-scroll min-h-0 flex-1 overflow-y-auto px-6 py-2">
-          {tab === 'general' ? <GeneralTab /> : <TerminalAppearanceSettings />}
+          {tab === 'general' ? (
+            <GeneralTab />
+          ) : tab === 'appearance' ? (
+            <TerminalAppearanceSettings />
+          ) : (
+            <DictationSettings />
+          )}
         </div>
       </div>
     </div>

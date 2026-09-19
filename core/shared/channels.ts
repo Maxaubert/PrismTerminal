@@ -17,3 +17,18 @@ export const CH = {
   clipboardRead: 'clipboard:read',
   openExternal: 'shell:open-external'
 } as const
+
+/** Dictation's channels (#13). A table of its own: dictation is optional, and
+ *  a host wires it with a separate call on each side of the bridge. */
+export const DCH = {
+  info: 'dictation:info',
+  status: 'dictation:status',
+  download: 'dictation:download',
+  cancel: 'dictation:cancel',
+  remove: 'dictation:remove',
+  progress: 'dictation:progress',
+  transcribe: 'dictation:transcribe',
+  stop: 'dictation:stop',
+  mediaPause: 'dictation:media-pause',
+  mediaResume: 'dictation:media-resume'
+} as const
