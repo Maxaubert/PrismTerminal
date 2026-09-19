@@ -876,6 +876,8 @@ const scenarios = {
     ok(((await row('gpu-pack').locator('[data-item-badge]').textContent()) ?? '').trim() === 'Enabled', 'the GPU engine says Enabled')
     ok(((await row('gpu-pack').locator('[data-gpu-toggle]').textContent()) ?? '').trim() === 'Disable', 'and offers Disable')
     ok((await row('large-v3-turbo').locator('text=Recommended').count()) === 1, 'with the GPU on, Turbo is the recommended model')
+    const fills = await page.evaluate(() => ['small', 'large-v3-turbo', 'large-v3'].map((id) => getComputedStyle(document.querySelector(`[data-dictation-item="${id}"] button`)).backgroundColor))
+    ok(new Set(fills).size === 1, `and its Download button is the same as every other (${fills.join(' | ')})`)
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-models.png') }).catch(() => {})
 
     await row('gpu-pack').locator('[data-gpu-toggle]').click()

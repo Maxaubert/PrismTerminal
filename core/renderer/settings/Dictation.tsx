@@ -310,8 +310,6 @@ function ItemRow({
         ) : state === 'installed' ? (
           installed
         ) : (
-          // One filled button per list: the recommended pick (and the GPU
-          // engine, alone in its own). Four accent buttons in a column is a wall.
           <button className={getPrimary ? primary : button} onClick={onDownload}>
             {failure && failure !== 'cancelled' ? 'Retry' : getLabel}
           </button>
@@ -469,7 +467,11 @@ export function DictationSettings(): JSX.Element | null {
                 recommended={m.id === rec?.id}
                 warn={m.needsGpu && !gpuOn ? 'Slow without GPU acceleration: seconds per sentence on a CPU.' : null}
                 getLabel="Download"
-                getPrimary={m.id === rec?.id}
+                // The same quiet button on every row (owner, 2026-09-19: "the
+                // recommended shouldn't have a different download button"). The
+                // badge is what recommends; a second signal on the button made
+                // one row shout.
+                getPrimary={false}
                 onDownload={() => download(m.id)}
                 onCancel={() => api.dictationCancel(m.id)}
                 installed={
