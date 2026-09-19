@@ -50,6 +50,16 @@ so an update never silently changes what an existing user sees; the bridge to ma
     only the owner switches it on, and it covers these bot-made bump PRs and nothing else.
   - `ci.yml`'s `core-version` job: **a PR that changes `core/` MUST bump `core/package.json`'s
     version**, or it fails on the PR (a released tag is never moved).
+  **AUTO-MERGE IS ON** (owner, 2026-09-19: "we can say that they automerge"; `PRISM_AUTO_MERGE=true`).
+  **AND THE RATCHET THAT MAKES IT SAFE** (owner, the same message: "if it ever, and it probably will
+  at some point, create a bug in only one app, we'll make a test that it needs to pass, so the
+  automation gets more and more secure over time"). So: a bug that reaches EITHER app through a core
+  change is never just fixed. FIRST it becomes a scenario that fails on the broken build, in the suite
+  that guards the app it broke: Prism's `terminal-gate` (`tools/e2e/run.mjs` there, listed in
+  `e2e:terminal`, and RUNNER-SAFE so it runs in CI) or this repo's e2e. THEN the fix. A bump that
+  passed the gate and still broke something is a hole in the gate, and the hole is the first thing
+  to close. If a bump ever has to be undone: revert the bump PR in Prism (its pin goes back to the
+  previous `core-v*` tag, which still exists) and publish a patch; never move or delete a tag.
   Never split, tag or push `core-dist` by hand on main any more; release candidates cut from an open
   PR's branch (`core-v0.2.0-rc.N`) are the one exception. The bump needs the secret
   `PRISM_BUMP_TOKEN` (fine-grained, Maxaubert/Prism, Contents + Pull requests read/write); without it
