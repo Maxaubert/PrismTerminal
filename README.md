@@ -62,7 +62,11 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
 
 ## How each app consumes it
 
-**Prism Terminal** (this repo): directly, through the app-side alias `@core`.
+**Prism Terminal** (this repo): directly, through the app-side alias `@core`,
+plus ONE line in `src/renderer/src/index.css`: `@source '../../../core';`. Tailwind
+scans from the renderer root down and `core/` is outside it, so without the line
+a utility used only in here is never generated, silently (#20: it took the whole
+Settings page apart, with every functional test green).
 The app's tests, lint and the 14 e2e scenarios are the core's gate.
 
 **Prism**: as a dev dependency pinned to a tag of the `core-dist` branch, which
