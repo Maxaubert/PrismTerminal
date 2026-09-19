@@ -41,6 +41,18 @@ export default function UpdateDialog({
   const box = useRef<HTMLDivElement>(null)
   const notes = useMemo(() => parseReleaseNotes(info.notes), [info.notes])
   const title = `Update to ${info.version}`
+  // THE KEY LISTENER IS REGISTERED ONCE and reads the latest onCancel from a
+  // ref, so a host may hand in an inline arrow. Keyed on the callback, an
+  // effect like this one is torn down and put back on every render of the
+  // host, and that has a hole in it (MEASURED in this app's own Dialog,
+  // 2026-09-20): when another keydown listener on the window sets state during
+  // the same Escape, React flushes the effect between the two listeners, the
+  // old one is removed before its turn and the new one is not called for an
+  // event already being dispatched. Escape then does nothing.
+  const cancel = useRef(onCancel)
+  useEffect(() => {
+    cancel.current = onCancel
+  })
 
   useEffect(() => {
     // Focus lands on Install, as it lands on the primary action of every other
@@ -50,7 +62,7 @@ export default function UpdateDialog({
       if (e.key === 'Escape') {
         e.stopPropagation()
         e.preventDefault()
-        onCancel()
+        cancel.current()
         return
       }
       // A PLAIN Tab only. Ctrl+Tab is the host's own chord (it steps the tab
@@ -73,7 +85,7 @@ export default function UpdateDialog({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [onCancel])
+  }, [])
 
   return (
     // data-owns-escape: both apps have a capture-phase Escape of their own that
