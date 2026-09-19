@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react'
-import { savedShellId, saveShellId } from '../lib/termPrefs'
+import { savedShellId, saveShellId } from '@core/renderer/lib/termPrefs'
 import { setConfirmClose, useConfirmClose } from '../lib/closePrefs'
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../lib/newTabPrefs'
 import {
   FONT_PCTS,
   TERM_FONTS,
-  TERM_EXTRA_DEFAULTS,
+  termExtraDefaults,
   agentIndicator,
   applyCustomExtras,
   resetTermExtras,
@@ -30,10 +30,10 @@ import {
   useTermThemeId,
   type AgentIndicator,
   type CustomTermTheme
-} from '../lib/termLook'
-import { resolveTermTheme, TERM_PRESETS } from '../lib/termTheme'
+} from '@core/renderer/lib/termLook'
+import { resolveTermTheme, TERM_PRESETS } from '@core/renderer/lib/termTheme'
 import { useAgentColors } from '../lib/agentColors'
-import { luminance, normalizeColor } from '../lib/termAnsi'
+import { luminance, normalizeColor } from '@core/renderer/lib/termAnsi'
 
 // Settings WRITES STORES and nothing else. The window's chrome and its acrylic
 // material follow the terminal theme, and App is the one listening to
@@ -585,7 +585,7 @@ function pickPreset(id: string): void {
   const volume = agentIndicator()
   setTermThemeId(id)
   resetTermExtras()
-  if (volume !== TERM_EXTRA_DEFAULTS.indicator) setAgentIndicator(volume)
+  if (volume !== termExtraDefaults().indicator) setAgentIndicator(volume)
 }
 
 function AppearanceTab(): JSX.Element {
@@ -644,12 +644,12 @@ function AppearanceTab(): JSX.Element {
   // is by JSON and key order is part of that.
   const src = themeId === 'custom' && custom ? custom : null
   const baseline = {
-    font: src?.font ?? TERM_EXTRA_DEFAULTS.font,
-    fontPct: src?.fontPct ?? TERM_EXTRA_DEFAULTS.fontPct,
-    indicatorColor: src?.indicatorColor ?? TERM_EXTRA_DEFAULTS.indicatorColor,
-    doneColor: src?.doneColor ?? TERM_EXTRA_DEFAULTS.doneColor,
-    acrylic: src?.acrylic ?? TERM_EXTRA_DEFAULTS.acrylic,
-    opacity: src?.opacity ?? TERM_EXTRA_DEFAULTS.opacity
+    font: src?.font ?? termExtraDefaults().font,
+    fontPct: src?.fontPct ?? termExtraDefaults().fontPct,
+    indicatorColor: src?.indicatorColor ?? termExtraDefaults().indicatorColor,
+    doneColor: src?.doneColor ?? termExtraDefaults().doneColor,
+    acrylic: src?.acrylic ?? termExtraDefaults().acrylic,
+    opacity: src?.opacity ?? termExtraDefaults().opacity
   }
   const termDirty = JSON.stringify(extras) !== JSON.stringify(baseline)
   const saveTermSetup = (): void => {

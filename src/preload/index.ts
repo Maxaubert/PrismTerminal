@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { DetectedAgent, Restored, SavedTabs, ShellDef, UpdateInfo } from '@shared/types'
+import { createTermApi } from '@core/preload/api'
+import type { Restored, SavedTabs, UpdateInfo } from '@shared/types'
 
 // The renderer's whole view of the machine. SANDBOXED: nothing here touches
 // node, and the only electron modules used are ones a sandboxed preload is
@@ -16,38 +17,9 @@ const api = {
   /* ----- the terminal ----- */
 
   /** The shells main detected; the only things term:spawn will ever launch. */
-  termShells: (): Promise<ShellDef[]> => ipcRenderer.invoke('term:shells'),
-  /** `cwd` that is not an existing folder spawns in the user's own folder.
-   *  `resume` is what restoreTabs handed back for this tab, untouched. */
-  termSpawn: (id: string, cwd: string, shellId?: string, resume?: string): Promise<boolean> =>
-    ipcRenderer.invoke('term:spawn', id, cwd, shellId, resume),
-  termInput: (id: string, data: string): void => ipcRenderer.send('term:input', id, data),
-  termResize: (id: string, cols: number, rows: number): void =>
-    ipcRenderer.send('term:resize', id, cols, rows),
-  termKill: (id: string): void => ipcRenderer.send('term:kill', id),
-  /** Start a shell in `cwd` ahead of the click. Best-effort. */
-  termPrewarm: (cwd: string, shellId?: string): void =>
-    ipcRenderer.send('term:prewarm', cwd, shellId),
-  onTermData: (cb: (id: string, data: string) => void): (() => void) => on('term:data', cb),
-  /** An AI CLI (Claude Code, codex...) appeared or left a session's shell. */
-  onTermAgent: (cb: (id: string, has: boolean, kind: DetectedAgent | null) => void): (() => void) =>
-    on('term:agent', cb),
-  /** The shell ended by itself (`exit`); a shell main was told to kill says nothing. */
-  onTermExit: (cb: (id: string) => void): (() => void) => on('term:exit', cb),
-  /**
-   * What the clipboard holds RIGHT NOW, for the terminal's paste rule. An
-   * image forwards the ^V key (a clipboard-aware TUI like Claude Code reads
-   * the image itself); text becomes a bracketed paste; copied files paste as
-   * quoted paths. The decision itself is pure and lives in lib/termPaste.
-   * Synchronous, as the key handler that calls it has to be; main does the
-   * reading, since a sandboxed preload has no clipboard module.
-   */
-  readClipboard: (): { image: boolean; text: string; files: string[] } =>
-    ipcRenderer.sendSync('clipboard:read') as { image: boolean; text: string; files: string[] },
-  /** The web-links addon's click-through: external URLs go to the OS browser. */
-  openExternal: (url: string): void => {
-    if (/^https?:/i.test(url)) ipcRenderer.send('shell:open-external', url)
-  },
+  // THE TERMINAL'S BRIDGE IS THE CORE'S (core/preload/api): the member names,
+  // their signatures and the channel names exist once, for this app and Prism.
+  ...createTermApi(ipcRenderer),
   /** The real path of a File from a drop (the sandbox hides `File.path`). */
   getDroppedPath: (file: File): string => webUtils.getPathForFile(file),
   /** A dropped path as the folder a tab would open in: a folder is itself, a

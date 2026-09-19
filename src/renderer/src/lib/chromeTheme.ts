@@ -1,5 +1,5 @@
-import type { TermTheme } from './termTheme'
-import { contrastRatio, ensureContrast, luminance, mixHex, normalizeColor } from './termAnsi'
+import type { TermTheme } from '@core/renderer/lib/termTheme'
+import { contrastRatio, ensureContrast, luminance, mixHex, normalizeColor } from '@core/renderer/lib/termAnsi'
 
 // The window wears the terminal's theme. Every chrome colour is derived from
 // the theme's background, foreground and blue, and whatever falls short of a

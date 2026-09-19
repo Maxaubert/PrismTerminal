@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX, type ReactNode } from 'react'
-import { pinnedRoots, plusMenuList, recentRoots } from '../lib/recentRoots'
+import { pinnedRoots, plusMenuList, recentRoots } from '@core/renderer/lib/recentRoots'
 
 /**
  * The start screen: the window with no tab open (owner, 2026-09-18, with

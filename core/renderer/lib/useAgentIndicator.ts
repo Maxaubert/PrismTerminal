@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import type { DetectedAgent } from '@shared/types'
+import type { DetectedAgent } from '../../shared/types'
 import { activitySuppressed, inputEcho, markBorn, startupOutput } from './termActivity'
 import { forgetAgentTitle, readAgentTitle } from './agentTitle'
 import { noteWorking } from './agentClock'
 import { onTitle } from './termBus'
+import { termApi } from '../host'
 
 /**
  * Which tabs host an agent, which are mid-answer, and which finished while
@@ -53,7 +54,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
 
   useEffect(
     () =>
-      window.prism.onTermAgent((id, present, kind) => {
+      termApi().onTermAgent((id, present, kind) => {
         if (present && kind) agentKinds.current.set(id, kind)
         else if (!present) {
           agentKinds.current.delete(id)
@@ -90,7 +91,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
 
   useEffect(
     () =>
-      window.prism.onTermData((id) => {
+      termApi().onTermData((id) => {
         // A session whose agent SAYS what it is doing (through the title,
         // see onTitle below) is never scored from its output: the agent's
         // own word is exact, and its repaints would only second-guess it.

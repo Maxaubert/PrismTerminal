@@ -7,11 +7,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@shared': resolve(__dirname, 'src/shared'),
-      '@renderer': resolve(__dirname, 'src/renderer/src')
+      '@renderer': resolve(__dirname, 'src/renderer/src'),
+      '@core': resolve(__dirname, 'core')
     }
   },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'core/**/*.test.ts'],
     environment: 'node',
     // The renderer's stores read localStorage at import time; the setup gives
     // them one so their pure logic can be tested without a browser.

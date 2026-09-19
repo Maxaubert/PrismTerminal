@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { chromeTokens } from './chromeTheme'
-import { contrastRatio, ensureContrast, normalizeColor } from './termAnsi'
-import { presetAccent, resolveTermTheme } from './termTheme'
+import { contrastRatio, ensureContrast, normalizeColor } from '@core/renderer/lib/termAnsi'
+import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import {
   useAgentColorChoice,
   useAgentDoneColorChoice,
   useCustomTermTheme,
   useTermThemeId
-} from './termLook'
+} from '@core/renderer/lib/termLook'
 
 /**
  * What the agent indicators wear when the user has not picked a colour: the

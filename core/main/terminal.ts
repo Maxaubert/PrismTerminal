@@ -1,4 +1,5 @@
 import type { IPty } from 'node-pty'
+import { cdCommand } from '../shared/termCwd'
 import { detectShells, shellById } from './shells'
 import { cmdPrompt } from './termPrompt'
 
@@ -62,6 +63,8 @@ interface Session {
   /** The onData/onExit subscriptions, disposed BEFORE the pty is killed so no
    *  callback can fire into a session that is being torn down. */
   subs: Array<{ dispose(): void }>
+  /** Which shell this is, for the one line Prism may write into it (#99). */
+  defId: string
 }
 
 /**
@@ -134,6 +137,23 @@ export function ptyEnv(from: NodeJS.ProcessEnv, shellId?: string): Record<string
   // the user already had.
   if (shellId === 'cmd') env.PROMPT = cmdPrompt(prompt)
   return env
+}
+
+/**
+ * Move a shell to `path` (#99): the SECOND command Prism ever writes itself,
+ * beside the agent resume (owner decision, 2026-09-04). Composed here, next to
+ * the first one, from the shell id main spawned - never from text the
+ * renderer sends. The renderer holds the guard (idle prompt, nothing typed,
+ * no agent); main only knows how to say it in the shell's own language.
+ * False when there is no session or no way to say it (WSL).
+ */
+export function cdTerm(id: string, path: string): boolean {
+  const s = sessions.get(id)
+  if (!s) return false
+  const line = cdCommand(s.defId, path)
+  if (!line) return false
+  s.pty.write(line)
+  return true
 }
 
 const sessions = new Map<string, Session>()
@@ -224,7 +244,7 @@ type Send = (channel: string, ...args: unknown[]) => void
 /**
  * Spawn a shell for `id`, cwd at `root`. Refuses a live id (the renderer asked
  * twice; the first shell wins). node-pty is imported here rather than at module
- * top so the window's launch path never touches the native module.
+ * top so the resident window's launch path never touches the native module.
  */
 /**
  * A restored Claude session rides the shell's OWN startup command, so nothing
@@ -277,7 +297,7 @@ export async function spawnTerm(
         send('term:exit', id)
       })
     ]
-    sessions.set(id, { pty: w.pty, batcher, subs })
+    sessions.set(id, { pty: w.pty, batcher, subs, defId: w.defId })
     const want = desiredSize.get(id)
     if (want) resizeTerm(id, want.cols, want.rows)
     return true
@@ -305,7 +325,7 @@ export async function spawnTerm(
         send('term:exit', id)
       })
     ]
-    sessions.set(id, { pty: p, batcher, subs })
+    sessions.set(id, { pty: p, batcher, subs, defId: def.id })
     return true
   } catch {
     return false // shell missing or ConPTY refused; the renderer shows the line

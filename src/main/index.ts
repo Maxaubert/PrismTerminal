@@ -4,15 +4,16 @@ import { stat } from 'fs/promises'
 import { homedir } from 'os'
 import { dirname, join } from 'path'
 import type { Restored, SavedTabs, UpdateInfo } from '@shared/types'
-import { startAgentPoll, pollAgentsSoon } from './agentPoll'
-import { claudeSessions, planRestore, validResume } from './agentResume'
+import { claudeSessions } from '@core/main/agentResume'
+import { registerTermIpc } from '@core/main/ipc'
+import { planRestore } from './planRestore'
 import { foldersFromArgv } from './argv'
 import { acrylicOk, createMaterial } from './material'
 import { stopDwmHelper, warmDwmHelper } from './dwmHelper'
 import { createWindowEdge } from './windowEdge'
-import { detectShells } from './shells'
+import { detectShells } from '@core/main/shells'
 import { createTabsStore } from './tabsStore'
-import { killAll, killTerm, prewarmShell, resizeTerm, spawnTerm, writeTerm } from './terminal'
+import { killAll } from '@core/main/terminal'
 import { installUpdate, watchForUpdates } from './update'
 import { createVerbSwitch } from './verbSwitch'
 import { readWindowState, watchWindowState } from './windowState'
@@ -335,70 +336,21 @@ function wireIpc(): void {
   // spawn: the shell is one main detected (spawnTerm's own), the folder exists
   // (else the user's own folder, not a refusal: a shell somewhere beats none),
   // and the resume is a session id's shape.
-  ipcMain.handle('term:shells', () => detectShells())
-  ipcMain.handle(
-    'term:spawn',
-    async (_e, id: string, cwd: string, shellId?: string, resume?: string) => {
-      if (typeof id !== 'string' || !id) return false
-      const dir = (await isDir(cwd)) ? cwd : homedir()
-      const ok = await spawnTerm(
-        id,
-        dir,
-        typeof shellId === 'string' ? shellId : undefined,
-        send,
-        validResume(typeof resume === 'string' ? resume : undefined)
-      )
-      // Warm the agent-poll pipeline now: the first CIM query is the slow one.
-      if (ok) pollAgentsSoon()
-      return ok
-    }
-  )
-  ipcMain.on('term:input', (_e, id: string, d: string) => {
-    if (typeof id === 'string' && typeof d === 'string') writeTerm(id, d)
-  })
-  ipcMain.on('term:resize', (_e, id: string, c: number, r: number) => resizeTerm(id, c, r))
-  ipcMain.on('term:kill', (_e, id: string) => killTerm(id))
-  // The renderer says which folder the next tab will open in (the fixed-folder
-  // new-tab mode); main starts its shell ahead of the click. Best-effort.
-  ipcMain.on('term:prewarm', (_e, cwd: string, shellId?: string) => {
-    void isDir(cwd).then((ok) => {
-      if (ok && !awaitingRestore)
-        void prewarmShell(cwd, typeof shellId === 'string' ? shellId : undefined)
-    })
-  })
-  startAgentPoll((id, has, kind) => send('term:agent', id, has, kind))
-
-  /**
-   * What the clipboard holds RIGHT NOW, for the terminal's paste rule. An
-   * image forwards the ^V key (a clipboard-aware TUI like Claude Code reads
-   * the image itself); text becomes a bracketed paste; copied files paste as
-   * quoted paths. SYNCHRONOUS on purpose: the rule runs inside a key handler
-   * that has to answer xterm before the event is gone, and the read is a few
-   * microseconds. It lives in main because a sandboxed preload has no clipboard.
-   */
-  ipcMain.on('clipboard:read', (e) => {
-    try {
-      const formats = clipboard.availableFormats()
-      const files = formats.includes('FileNameW')
-        ? clipboard
-            .readBuffer('FileNameW')
-            .toString('ucs2')
-            .replace(/\0+$/, '')
-            .split('\0')
-            .filter(Boolean)
-        : []
-      e.returnValue = {
-        image: formats.some((f) => f.startsWith('image/')),
-        text: clipboard.readText(),
-        files
-      }
-    } catch {
-      e.returnValue = { image: false, text: '', files: [] }
-    }
-  })
-  // The terminal's clickable links. http(s) only, checked on both sides.
-  ipcMain.on('shell:open-external', (_e, url: string) => {
-    if (typeof url === 'string' && /^https?:\/\//i.test(url)) void shell.openExternal(url)
+  // THE TERMINAL'S BRIDGE IS THE CORE'S (core/main/ipc): the channels, the
+  // argument checks, the resume shape check, the clipboard read, the link
+  // opener and the agent poll are registered there, once, for this app and
+  // for Prism. What is this app's own is where a shell may start.
+  registerTermIpc({
+    ipcMain,
+    send,
+    clipboard,
+    openExternal: (url) => void shell.openExternal(url),
+    // No wall here: a folder that has gone falls back to the user's own.
+    spawnDir: async (cwd) => ((await isDir(cwd)) ? cwd : homedir()),
+    // Not while the strip is still being rebuilt from tabs.json.
+    mayPrewarm: async (cwd) => !awaitingRestore && (await isDir(cwd)),
+    // Prism's reroot. This app never moves a shell it did not start there.
+    mayCd: () => false
   })
   // A tab's "Show in File Explorer": a folder that exists, and nothing else.
   ipcMain.on('shell:show-folder', (_e, p: string) => {

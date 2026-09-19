@@ -6,12 +6,12 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
-    resolve: { alias: { '@shared': resolve('src/shared') } },
+    resolve: { alias: { '@shared': resolve('src/shared'), '@core': resolve('core') } },
     build: { rollupOptions: { input: { index: resolve(__dirname, 'src/main/index.ts') } } }
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
-    resolve: { alias: { '@shared': resolve('src/shared') } },
+    resolve: { alias: { '@shared': resolve('src/shared'), '@core': resolve('core') } },
     build: { rollupOptions: { input: { index: resolve(__dirname, 'src/preload/index.ts') } } }
   },
   renderer: {
@@ -19,7 +19,8 @@ export default defineConfig({
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),
-        '@shared': resolve('src/shared')
+        '@shared': resolve('src/shared'),
+        '@core': resolve('core')
       }
     },
     plugins: [react(), tailwindcss()],
