@@ -75,6 +75,13 @@ terminal theme, anything that reads or shows files.
   ground, and removed when maximized or fullscreen. Chromium rewrites the DWM attributes when the
   backdrop changes, so it is re-applied, debounced, after every material or ground change. Off
   under `--e2e` (the helper is a PowerShell that compiles a P/Invoke per launch).
+- **Closing a TAB asks whenever its shell hosts an agent, working or idle** (2026-09-19, #8, owner:
+  "the prompt when you close a tab with an active agent didn't work, it just closed"). The first
+  build asked only mid-answer; an agent waiting at its own prompt is still a conversation the close
+  ends, and Prism's rule (ask while an agent is LIVE) is the one that was expected. The question
+  names the agent, and how long it has worked when it is working. Closing the WINDOW still asks
+  only while one is WORKING, on purpose: idle agents resume at the next launch, so nothing is lost.
+  A plain shell closes unasked, and Off means off. Proved by the e2e `closeAsk` scenario.
 - **The title bar has a settings cog and NO menu** (owner, same day: a menu of Settings + Quit was
   cut to the cog). Nothing in the UI needs to quit the app any more; the X does.
 - **The theme drives the chrome** through the real `--p-*` tokens (`lib/chromeTheme.ts`). Every ink is

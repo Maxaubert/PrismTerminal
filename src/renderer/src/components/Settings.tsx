@@ -978,10 +978,10 @@ function GeneralTab(): JSX.Element {
       </Pref>
       <Pref
         id="confirm-close"
-        label="Ask before closing a working agent"
-        hint="Closing a tab, or the window, while Claude or Codex is working asks first. Off means off."
+        label="Ask before closing an agent"
+        hint="Closing a tab that hosts Claude or Codex asks first, working or idle. Closing the window asks only while one is working: idle agents come back at the next launch. Off means off."
       >
-        <Switch on={askClose} onChange={setConfirmClose} label="Ask before closing a working agent" />
+        <Switch on={askClose} onChange={setConfirmClose} label="Ask before closing an agent" />
       </Pref>
       {/* Explorer's own menu. Windows 11 hides classic verbs behind "Show more
           options", and saying so is better than the user hunting for it. */}
