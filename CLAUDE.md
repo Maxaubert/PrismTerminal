@@ -23,7 +23,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
   same"). `core/renderer/settings`: the field primitives, `TerminalAppearanceSettings` (theme wall and
   editor, font, size, acrylic, the two indicator colours) and the rows `ShellSetting` /
   `AgentIndicatorSetting`. Each app composes its OWN page round them (`components/Settings.tsx` here
-  is only the page plus this app's rows: new tabs, Explorer menu, version). Values are per app (own
+  is only the page plus this app's rows: new tabs, Explorer menu, window edges, version). Values are per app (own
   userData), never shared. `settings/options.ts` lists every terminal option by id; a unit test holds
   the list and the sections together, and each app's e2e (`options`) asserts its page shows that
   list and no terminal-looking row of its own. A row outside the list is a fork.
@@ -180,7 +180,30 @@ terminal theme, anything that reads or shows files.
   be thinner; what reads as thickness is contrast, so it is drawn a small step off the theme's own
   ground, and removed when maximized or fullscreen. Chromium rewrites the DWM attributes when the
   backdrop changes, so it is re-applied, debounced, after every material or ground change. Off
-  under `--e2e` (the helper is a PowerShell that compiles a P/Invoke per launch).
+  under `--e2e` (the helper is a PowerShell that compiles a P/Invoke per launch). How BIG the step
+  is now follows the Edges setting below (2026-09-19, #27): the hairline is the default and is the
+  step it always was.
+- **EDGES ARE A SETTING, AND THE DEFAULT IS THE WINDOW AS IT WAS** (owner, 2026-09-19, #27: "add
+  the option to specify the edges that you have in the Terminal app, like we have in the main app,
+  where you can choose like Hairline, Faint, or like Solid edges, or even No edges"). Settings >
+  Appearance > Edges (`window-edges`, localStorage `prism.window.edges`, store `lib/edgesPrefs.ts`).
+  THIS APP'S row, not the core's: the edges are the window's chrome, which in Prism belongs to the
+  app style and has an Edges row of its own there, so it is in the `options` e2e's closed list of
+  this app's rows and its key is not `prism.term.*`. EVERY edge in the window reads one of two
+  tokens (`--p-divider`, the chrome's line; `--p-line`, the list's), core's components included, so
+  the choice is applied ONCE, where `chromeTokens` derives those two, and no component knows the
+  setting exists. The numbers are in `src/shared/windowEdges.ts` (shared because main reads them
+  too): hairline is 7/10% and 9/12% (dark/light), EXACTLY what was hard-coded before, so nobody's
+  window changed; faint (2.2/3.5%) and solid (16/18%) are Prism's `faint` and `strong`, the owner's
+  word for the latter being Solid; none is alpha 00, still a colour, so a border keeps its width
+  and nothing shifts (the e2e compares the layout across all four). Unlike Prism, `--p-line`
+  follows too: the owner asked for every edge, and "no edges" with ruled settings rows is half a
+  setting. The DWM border round the window follows as well (`window:edges` tells main, which
+  validates it; `edgeFor` scales its step, and none is DWMWA_COLOR_NONE, what a maximized window
+  already gets). That half is unit-tested only: the DWM helper is off under `--e2e`, so the e2e
+  asserts what main HEARD, and how the border looks is on the hands-on list. The `edges` e2e
+  measures real edges (a tab separator, the title bar's rule, the settings rail, a settings row),
+  WAITING for each to arrive, since the strip's border colour transitions over 550ms.
 - **THE CLOSE QUESTION IS ONE RULE, NOT A SETTING** (owner, 2026-09-19, #15: "remove the setting but
   just have it on smart mode by default, so it won't ask if you're in a normal shell but if you're
   working with an agent it will ask"). `core/renderer/lib/agentClose.ts`, the same in Prism: a plain
@@ -229,9 +252,18 @@ terminal theme, anything that reads or shows files.
 - **Opacity is a number read defensively** (`termOpacity`): `Number(null)` is 0, and never-set must
   read as opaque.
 - **Explorer verbs**: HKCU, `reg.exe` with argv only, on `Directory` and `Directory\Background`, no
-  `*`. On by default but APPLIED ONCE (marker file), never in dev and never under `--e2e`, and the
-  Settings switch reports what the REGISTRY says. `shellVerbParity.test.ts` asserts the uninstaller
-  deletes every key the app writes.
+  `*`. On by default, put back at launch unless somebody said no (the off-marker is the one fact
+  stored), never in dev and never under `--e2e`, and the Settings switch reports what the REGISTRY
+  says. `shellVerbParity.test.ts` asserts the uninstaller deletes every key the app writes.
+  **BOTH ENTRIES READ "Open terminal here" AND NEITHER NAMES THE APP** (owner, 2026-09-19, #27:
+  "have it say Open Terminal here and don't have any of them mention Prism, you can see that by
+  the logo"; they were "Open in Prism Terminal" and "Open Prism Terminal here"). An install that
+  already had them is RELABELLED by `reconcile` at launch, under the narrowest rule that does it:
+  no "no" on record, the key present AND pointing at this exe (each key judged on its own), its
+  label readable and different, and then only the label value is written. It never turns on an
+  entry somebody turned off (that case does not even query), and `allowed` still gates it like
+  every other write. The label is read by matching `REG_SZ`, never the value's name, because
+  reg.exe prints "(Default)" in the language of the Windows it runs on.
 - **Renderer is sandboxed** (`sandbox: true`, context isolation on). The preload reaches the
   clipboard through main for that reason. `will-navigate` and window-open allow http(s) only.
 - The preload global is `window.prism` and localStorage keys are `prism.term.*`, kept from Prism so
@@ -242,7 +274,7 @@ terminal theme, anything that reads or shows files.
 `core/` (the terminal, shared with Prism: see above). `src/main` (index.ts is wiring only;
 planRestore, tabsStore, windowState, material, windowEdge, dwmHelper, verbSwitch, shellVerb,
 update, argv),
-`src/preload`, `src/shared` (termCwd, types), `src/renderer/src` (App.tsx owns the tab list and the
+`src/preload`, `src/shared` (termCwd, types, windowEdges), `src/renderer/src` (App.tsx owns the tab list and the
 keys; components/; lib/ is pure and tested). One responsibility per file; aliases `@shared`,
 `@renderer`. No new runtime dependency without a reason; today there are eight.
 

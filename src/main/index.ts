@@ -13,6 +13,7 @@ import { foldersFromArgv } from './argv'
 import { acrylicOk, createMaterial } from './material'
 import { stopDwmHelper, warmDwmHelper } from './dwmHelper'
 import { createWindowEdge } from './windowEdge'
+import { DEFAULT_WINDOW_EDGES, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 import { detectShells } from '@core/main/shells'
 import { createTabsStore } from './tabsStore'
 import { killAll } from '@core/main/terminal'
@@ -79,11 +80,16 @@ const material = createMaterial(() => mainWindow)
 // The faint hairline round a floating window; the rules are windowEdge.ts's.
 // Not under --e2e: a parked window has no edge anyone sees, and the helper is a
 // PowerShell that compiles a P/Invoke, once per launch, thirty launches a run.
+// How strongly the user wants edges drawn (#27). The choice lives in the page's
+// localStorage, so main is TOLD it (`window:edges`, at launch and on a change)
+// and holds the default, the border as it always was, until it has been.
+let windowEdges: WindowEdges = DEFAULT_WINDOW_EDGES
 const edge = E2E
   ? { apply: (): void => {} }
   : createWindowEdge(
       () => mainWindow,
-      () => material.bg()
+      () => material.bg(),
+      () => windowEdges
     )
 
 /** Every event to the renderer goes through here: a pty can outlive the
@@ -510,6 +516,15 @@ function wireIpc(): void {
     material.setBg(hex)
     edge.apply() // the edge is a step off the ground, so it follows the theme
   })
+  // The edges setting (#27). Validated, never trusted: anything that is not one
+  // of the four words is the default. Not persisted here: the page says it at
+  // every launch, as it says the ground.
+  ipcMain.on('window:edges', (_e, edges: unknown) => {
+    windowEdges = validWindowEdges(edges)
+    edge.apply()
+  })
+  // The DWM border itself is off under --e2e, so the suite asks what main HEARD.
+  if (E2E) ipcMain.handle('e2e:window-edges', () => windowEdges)
 }
 
 // Single instance: a second launch (the verb, a shortcut, a command line)

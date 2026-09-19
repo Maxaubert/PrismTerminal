@@ -1,5 +1,12 @@
 import { rm, stat, writeFile } from 'fs/promises'
-import { installVerb, removeVerb, shouldWriteVerb, verbInstalled } from './shellVerb'
+import {
+  installVerb,
+  relabelVerb,
+  removeVerb,
+  shouldWriteVerb,
+  staleLabelKeys,
+  verbInstalled
+} from './shellVerb'
 
 /**
  * The Explorer verb's switch: the launch-time default, the Settings toggle,
@@ -55,9 +62,27 @@ export function createVerbSwitch(opts: VerbSwitchOpts): VerbSwitch {
         // The registry rather than a marker: it is the thing that is actually
         // wrong after an upgrade, and `verbInstalled` already checks the command
         // points at THIS build, so a moved install repoints itself too.
-        if (!shouldWriteVerb(saidNo, saidNo ? true : await verbInstalled(exe))) return
+        if (shouldWriteVerb(saidNo, saidNo ? true : await verbInstalled(exe))) {
+          writes += 1
+          await installVerb(exe)
+          return
+        }
+        // AN ENTRY THAT IS ON KEEPS UP WITH ITS LABEL (owner, 2026-09-19, #27:
+        // the entries stopped naming the app, and "installs that already have
+        // the entry switched on must be relabelled, not left with the old
+        // text"). A present verb is otherwise left alone, so without this an
+        // existing user would read "Open in Prism Terminal" for ever while a
+        // fresh install read "Open terminal here". The rule is as narrow as it
+        // can be made: only with no "no" on record, only a key that is there
+        // and points at THIS build, only when its label reads as something
+        // else, and then only the label is written. It can never turn ON an
+        // entry somebody turned off: that case leaves on the next line, without
+        // asking the registry anything.
+        if (saidNo) return
+        const stale = await staleLabelKeys(exe)
+        if (stale.length === 0) return
         writes += 1
-        await installVerb(exe)
+        await relabelVerb(stale)
       } catch {
         /* no userData, no registry: the switch in Settings still works */
       }

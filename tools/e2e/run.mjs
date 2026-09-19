@@ -644,7 +644,9 @@ const scenarios = {
     ok(missing.length === 0, `every terminal option is on the page (missing: ${JSON.stringify(missing)})`)
     // What is left must be THIS APP's rows, a closed list: a terminal-looking
     // row outside the core's list is a fork.
-    const own = ['newtab-mode', 'explorer-verb', 'app-version']
+    // 'window-edges' (#27) is the window's chrome, which in Prism belongs to
+    // the app style and has a row of its own there: this app's, not the core's.
+    const own = ['newtab-mode', 'explorer-verb', 'app-version', 'window-edges']
     const extra = [...shown].filter((id) => !wanted.includes(id) && !own.includes(id))
     ok(extra.length === 0, `and nothing else claims to be a setting (extra: ${JSON.stringify(extra)})`)
     ok((await page.locator('[data-pref="confirm-close"]').count()) === 0, 'the close question is not a setting any more')
@@ -691,6 +693,175 @@ const scenarios = {
     })
     ok(overlaps === 0, `no two controls in a row overlap (${overlaps} do)`)
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-general.png') }).catch(() => {})
+    await app.close().catch(() => {})
+  },
+
+  /**
+   * THE WINDOW'S EDGES (#27; owner, 2026-09-19: "Hairline, Faint, or like Solid
+   * edges, or even No edges"). Every edge in the window reads one of two
+   * tokens, so what is MEASURED is real edges, not the tokens: the line
+   * between two tabs, the rule under the title bar, the settings rail's edge
+   * (all the chrome's line) and the rule under a settings row (the list's).
+   * Each pick must reach all of them, in the right order of strength, with
+   * "none" transparent; the default must be the window exactly as it was; and
+   * the choice must survive a relaunch. A screenshot per option goes into
+   * .e2e-shots/, because a page that works is not a page that looks right.
+   *
+   * Nothing here sleeps and reads: the strip's border colour TRANSITIONS
+   * (550ms), so every measurement waits until the edge has arrived at the
+   * token it should be wearing.
+   */
+  async edges(ok) {
+    const w = world()
+    // Two tabs, so there IS a line between tabs to measure.
+    let { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open, so a tab separator exists')
+    const probe = (pg) =>
+      pg.evaluate(() => {
+        const parts = (c) => (c.match(/[\d.]+/g) ?? []).map(Number)
+        const alpha = (c) => (parts(c).length >= 4 ? parts(c)[3] : 1)
+        const rgb = (c) => parts(c).slice(0, 3).join(',')
+        // A token as the engine resolves it, so a token and an edge are
+        // compared in the same words (rgba(), alpha to two or three places).
+        const token = (name) => {
+          const span = document.createElement('span')
+          span.style.color = getComputedStyle(document.documentElement).getPropertyValue(name)
+          document.body.appendChild(span)
+          const c = getComputedStyle(span).color
+          span.remove()
+          return c
+        }
+        const tab = document.querySelector('[data-tab]')
+        const title = document.querySelector('[data-title-bar]')
+        const rail = document.querySelector('[data-settings-page] aside')
+        const row = document.querySelector('[data-pref="window-edges"]')
+        const css = (el, prop) => (el ? getComputedStyle(el)[prop] : null)
+        const edges = {
+          tab: css(tab, 'borderRightColor'),
+          title: css(title, 'borderBottomColor'),
+          rail: css(rail, 'borderRightColor'),
+          row: css(row, 'borderBottomColor')
+        }
+        return {
+          divider: alpha(token('--p-divider')),
+          line: alpha(token('--p-line')),
+          ink: rgb(token('--p-divider')),
+          raw: {
+            divider: getComputedStyle(document.documentElement).getPropertyValue('--p-divider').trim(),
+            line: getComputedStyle(document.documentElement).getPropertyValue('--p-line').trim()
+          },
+          tab: edges.tab === null ? null : alpha(edges.tab),
+          tabInk: edges.tab === null ? null : rgb(edges.tab),
+          title: edges.title === null ? null : alpha(edges.title),
+          rail: edges.rail === null ? null : alpha(edges.rail),
+          row: edges.row === null ? null : alpha(edges.row),
+          // A border keeps its pixel whatever its colour: nothing may move.
+          tabWidth: tab ? tab.getBoundingClientRect().width : 0,
+          titleHeight: title ? title.getBoundingClientRect().height : 0,
+          tabBorder: css(tab, 'borderRightWidth'),
+          pressed: document.querySelector('[data-pref="window-edges"] [aria-pressed="true"]')?.getAttribute('data-seg') ?? null,
+          stored: localStorage.getItem('prism.window.edges')
+        }
+      })
+    const near = (a, b) => a !== null && Math.abs(a - b) < 0.004
+    /** Wait until every edge on screen wears its token (transitions done) AND
+     *  the state asked for is the one in force; the probe that satisfied both. */
+    const settled = (pg, also = () => true) =>
+      until(async () => {
+        const p = await probe(pg)
+        const chrome = [p.tab, p.title, ...(p.rail === null ? [] : [p.rail])]
+        const arrived = chrome.every((a) => near(a, p.divider)) && (p.row === null || near(p.row, p.line))
+        return arrived && also(p) ? p : null
+      }, 15000)
+
+    // THE DEFAULT IS THE WINDOW AS IT WAS: the numbers chromeTheme hard-coded
+    // before there was a choice, on the default theme, with nothing stored.
+    const first = await settled(page)
+    ok(!!first, 'at launch every edge wears its token')
+    ok(first?.stored === null, 'nothing is stored until somebody chooses')
+    ok(
+      first?.raw.divider === '#ffffff12' && first?.raw.line === '#ffffff17',
+      `the default is exactly the look before the setting existed (${first?.raw.divider}, ${first?.raw.line})`
+    )
+    ok(near(first?.tab ?? null, 0.07), `the line between tabs is the 7% hairline it always was (${first?.tab})`)
+    ok((await page.evaluate(() => window.prism.e2eWindowEdges())) === 'hairline', 'main holds a hairline for the window border')
+
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    const row = page.locator('[data-pref="window-edges"]')
+    await row.waitFor({ state: 'visible', timeout: 10000 })
+    await row.scrollIntoViewIfNeeded()
+    ok(
+      (await page.locator('[data-pref="window-edges"] [data-seg]').allTextContents()).join('|') === 'Hairline|Faint|Solid|None',
+      'Settings > Appearance has an Edges row: Hairline, Faint, Solid, None'
+    )
+    ok((await settled(page))?.pressed === 'hairline', 'with Hairline pressed, since that is what is in force')
+    ok(near((await probe(page)).row, 0.09), 'a settings row wears the 9% list line it always did')
+
+    // Each option in turn, ending on one that is NOT the default, so the
+    // relaunch below proves something.
+    const seen = {}
+    for (const id of ['faint', 'none', 'hairline', 'solid']) {
+      await page.locator(`[data-pref="window-edges"] [data-seg="${id}"]`).click()
+      const p = await settled(page, (q) => q.pressed === id && q.stored === id)
+      ok(!!p, `${id}: picked, stored, and every edge has arrived at its token`)
+      if (!p) continue
+      seen[id] = p
+      ok(
+        (await until(async () => (await page.evaluate(() => window.prism.e2eWindowEdges())) === id, 5000)) === true,
+        `${id}: main was told, for the border round the window`
+      )
+      await row.scrollIntoViewIfNeeded()
+      await page.screenshot({ path: resolve(process.cwd(), `.e2e-shots/edges-${id}.png`) }).catch(() => {})
+    }
+    const all = ['none', 'faint', 'hairline', 'solid'].every((id) => !!seen[id])
+    ok(all, 'all four options were measured')
+    if (all) {
+      const { none, faint, hairline, solid } = seen
+      for (const edge of ['tab', 'title', 'rail', 'row']) {
+        ok(none[edge] === 0, `none: the ${edge} edge is transparent (alpha ${none[edge]})`)
+        ok(
+          faint[edge] > 0 && faint[edge] < hairline[edge] && hairline[edge] < solid[edge],
+          `${edge}: faint < hairline < solid (${faint[edge]} < ${hairline[edge]} < ${solid[edge]})`
+        )
+      }
+      ok(near(hairline.tab, 0.07) && near(hairline.row, 0.09), 'going back to Hairline is going back to the old look')
+      ok(solid.tabInk === '255,255,255', `on a dark ground the line is white ink (${solid.tabInk})`)
+      // Transparent, not absent: the border keeps its width, so nothing shifts.
+      // The width is whatever one CSS pixel snaps to on this display (MEASURED
+      // 0.888889px at 225% scaling), so it is compared, never assumed to be 1px.
+      const widths = new Set(Object.values(seen).map((p) => `${p.tabWidth}|${p.titleHeight}|${p.tabBorder}`))
+      ok(
+        widths.size === 1 && parseFloat(none.tabBorder) > 0,
+        `no option moves the layout, and "none" keeps its border's width (${[...widths].join(' ; ')})`
+      )
+    }
+
+    // A light theme: the same choice, in black ink at the light ground's alpha.
+    await page.locator('[data-term-card="github"]').first().click()
+    const lightSolid = await settled(page, (q) => q.ink === '0,0,0' && q.pressed === 'solid')
+    ok(!!lightSolid && near(lightSolid.tab, 0.18), `on a light theme Solid is black ink at 18% (${lightSolid?.tabInk} @ ${lightSolid?.tab})`)
+
+    // AND IT SURVIVES A RELAUNCH: quit properly (localStorage is flushed on the
+    // way out), come back, and measure before Settings is even opened.
+    const gone = new Promise((r) => app.process().on('exit', r))
+    await page.evaluate(() => window.prism.quitApp()).catch(() => {})
+    await Promise.race([gone, sleep(10000)])
+    ;({ app, page } = await launch(w))
+    ok(await until(async () => (await tabLabels(page)).length === 2), 'a relaunch brings the tabs back')
+    const back = await settled(page, (q) => q.stored === 'solid' && near(q.tab, 0.18))
+    ok(!!back, `the relaunched window draws Solid edges before Settings is opened (tab ${back?.tab}, stored ${back?.stored})`)
+    ok(
+      (await until(async () => (await page.evaluate(() => window.prism.e2eWindowEdges())) === 'solid', 5000)) === true,
+      'and main was told again at launch'
+    )
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    ok(
+      (await until(async () => (await probe(page)).pressed === 'solid', 10000)) === true,
+      'and the row shows Solid pressed'
+    )
+    ok((await page.evaluate(() => window.prism.e2eRegWrites())) === 0, 'no registry write was attempted under --e2e')
     await app.close().catch(() => {})
   },
 

@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { addArgs, pointsAt, queryArgs, removeArgs, shouldWriteVerb, verbKeys, verbSpec } from './shellVerb'
+import {
+  VERB_LABEL,
+  addArgs,
+  labelArgs,
+  labelQueryArgs,
+  pointsAt,
+  queryArgs,
+  readLabel,
+  removeArgs,
+  shouldWriteVerb,
+  verbKeys,
+  verbSpec
+} from './shellVerb'
 
 const EXE = 'C:\\Users\\Admin\\AppData\\Local\\Programs\\Prism Terminal\\PrismTerminal.exe'
 
@@ -28,13 +40,19 @@ describe('the Explorer verb', () => {
     // %1 is empty on a background click: the verb would launch Prism with no
     // path at all, which is exactly the "nothing happens" this fixes.
     const bg = verbKeys().find((k) => k.includes('Background'))!
-    expect(verbSpec(bg)).toEqual({ label: 'Open Prism Terminal here', arg: '%V' })
-    expect(verbSpec(verbKeys()[0])).toEqual({ label: 'Open in Prism Terminal', arg: '%1' })
+    expect(verbSpec(bg)).toEqual({ label: 'Open terminal here', arg: '%V' })
+    expect(verbSpec(verbKeys()[0])).toEqual({ label: 'Open terminal here', arg: '%1' })
   })
 
-  it('says where you land, on the verb that lands you somewhere else', () => {
-    const flat = addArgs(EXE).map((a) => a.join(' ')).join('\n')
-    expect(flat).toContain('Open Prism Terminal here')
+  it('says what it does and never names the app, on both entries', () => {
+    // Owner, 2026-09-19 (#27): "have it say Open Terminal here and don't have
+    // any of them mention Prism, you can see that by the logo".
+    expect(VERB_LABEL).toBe('Open terminal here')
+    const labels = addArgs(EXE)
+      .filter((a) => a.includes('/ve') && !a[1].endsWith('\\command'))
+      .map((a) => a[a.length - 2])
+    expect(labels).toEqual(['Open terminal here', 'Open terminal here'])
+    for (const l of labels) expect(l.toLowerCase()).not.toContain('prism')
   })
 
   it('quotes the path inside the command, so a folder with spaces survives', () => {
@@ -44,7 +62,7 @@ describe('the Explorer verb', () => {
 
   it('names the menu item and gives it the app icon', () => {
     const flat = addArgs(EXE).map((a) => a.join(' ')).join('\n')
-    expect(flat).toContain('Open in Prism Terminal')
+    expect(flat).toContain('Open terminal here')
     expect(flat).toContain(`${EXE},0`)
   })
 
@@ -96,6 +114,57 @@ HKEY_CURRENT_USER\\Software\\Classes\\Directory\\shell\\PrismTerminal\\command
 
   it('reads an empty answer as absent', () => {
     expect(pointsAt('', EXE)).toBe(false)
+  })
+})
+
+describe('reading and rewriting the label', () => {
+  const DIR = verbKeys()[0]
+  // What reg.exe printed on this machine, 2026-09-19, CRLF and all.
+  const english =
+    '\r\nHKEY_CURRENT_USER\\Software\\Classes\\Directory\\shell\\PrismTerminal\r\n' +
+    '    (Default)    REG_SZ    Open in Prism Terminal\r\n\r\n'
+
+  it('reads the label reg.exe printed, without its line ending', () => {
+    expect(readLabel(english)).toBe('Open in Prism Terminal')
+  })
+
+  it('does not depend on the word (Default), which Windows translates', () => {
+    expect(readLabel(english.replace('(Default)', '(Standard)'))).toBe('Open in Prism Terminal')
+  })
+
+  it('reads the new label back as itself, so a relabelled entry is not relabelled again', () => {
+    expect(readLabel(english.replace('Open in Prism Terminal', VERB_LABEL))).toBe(VERB_LABEL)
+  })
+
+  it('answers null when there is nothing to read, which is not the same as stale', () => {
+    expect(readLabel('')).toBeNull()
+    expect(
+      readLabel('ERROR: The system was unable to find the specified registry key or value.')
+    ).toBeNull()
+  })
+
+  it('asks for the key itself, not its command, and rewrites only the default value', () => {
+    expect(labelQueryArgs(DIR)).toEqual(['query', DIR, '/ve'])
+    expect(labelArgs(DIR)).toEqual([
+      'add',
+      DIR,
+      '/ve',
+      '/t',
+      'REG_SZ',
+      '/d',
+      'Open terminal here',
+      '/f'
+    ])
+    // Never the Icon and never the command: a relabel touches the text alone.
+    expect(labelArgs(DIR)).not.toContain('Icon')
+    expect(labelArgs(DIR)[1].endsWith('\\command')).toBe(false)
+  })
+
+  it('can ask about either key, and asks about the folder verb by default', () => {
+    expect(queryArgs(verbKeys()[1])[1]).toContain(
+      '\\Directory\\Background\\shell\\PrismTerminal\\command'
+    )
+    expect(queryArgs()[1]).toContain('\\Directory\\shell\\PrismTerminal\\command')
   })
 })
 
