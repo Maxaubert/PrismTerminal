@@ -1,10 +1,12 @@
 # prism-term-core
 
-The terminal shared by **Prism Terminal** and **Prism**. One copy, two apps.
+What **Prism Terminal** and **Prism** share. One copy, two apps.
 
-This folder is the terminal. Prism Terminal is an app built around it; Prism is a
-media viewer that embeds it. Both compile this same TypeScript source, so a
-terminal feature or fix is written once and reaches both.
+This folder is the terminal, and since 2026-09-19 (#28) the few other things the
+two apps must show identically: today that is the update chip and the window it
+opens. Prism Terminal is an app built around it; Prism is a media viewer that
+embeds it. Both compile this same TypeScript source, so a feature or fix in here
+is written once and reaches both.
 
 ## Why it exists
 
@@ -36,6 +38,31 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
    runs `core/tools/fetch-whisper.mjs <dir>` at build time and ships that folder
    as `resources/bin/whisper`, and grants its own window the `media` permission
    (audio only).
+   **AND WHAT THE TWO APPS MUST SHOW IDENTICALLY, TERMINAL OR NOT** (#28, owner,
+   2026-09-19). This WIDENS the core, on purpose, from "the terminal" to "what
+   the two apps share". Asked to build the update window (*"when you click the
+   Update badge, it opens like a pop window, which shows the change log or like
+   patch notes for the new update, and then you can choose cancel or install"*)
+   and to show it in both apps, the question was whether to write it twice; the
+   owner's answer: *"yes keep the core"*. So these live here although none is
+   terminal: `shared/updateTypes.ts` (the offer), `shared/releaseNotes.ts` (a
+   release body as SAFE plain entries), `main/updatePreview.ts` (the
+   `--preview-update` fake), `renderer/lib/updateFlow.ts` + `useUpdateFlow.ts`
+   (the rules and the hook) and `renderer/components/UpdateChip.tsx` +
+   `UpdateDialog.tsx`. The bar for anything further is the same: both apps would
+   otherwise write it, and it must look and behave the same in both. An app's
+   own shell still does not come in (rule 2). A host wires the update with: the
+   release body as `notes` in its own update check, `wantsPreview` /
+   `previewUpdate` / `runPreviewInstall` in main, `useUpdateFlow(bridge, guard)`
+   where its title bar is drawn, `<UpdateChip>` in the bar and ONE
+   `<UpdateDialog>` at the root. The `guard` is the host's own question before
+   an install, which ends in the app quitting: Prism Terminal asks about a
+   working agent, Prism about unsaved text as well.
+   Two rules travel with it. **The notes are plain text**: they are text off the
+   network in a window that can reach the bridge, so they are parsed to strings
+   and printed as text nodes; never HTML, never rendered markdown, never an
+   anchor. **The chip never changes width**, in any phase: every label is laid
+   out in one cell and only the current one is visible.
 3. **A difference between the apps is DECLARED, never forked.** Every place the
    two legitimately differ is a field of `TermHostConfig` in
    [`renderer/host.ts`](renderer/host.ts): the default each untouched setting
@@ -64,6 +91,10 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
 - **Carry the superset.** If one app needs a capability the other does not
   (`cdTerm`, `decideFollow`, following the host style), it lives here and the
   other app simply does not call it. Deleting it here takes it from both.
+- **Components outside the terminal take PROPS ONLY.** The update chip and its
+  dialog never reach for a bridge, not even `termApi()`: a host hands the hook
+  the three preload members it needs (`UpdateBridge`), so the same components
+  drop into a host whose terminal is not even mounted.
 - CSS: the core uses Tailwind utilities and the `--p-*` tokens both apps define,
   plus the classes `.p-agent-run` and `.p-scroll` and the `.xterm` rules in each
   app's `index.css`. A new token or class needed here must be added to BOTH.
@@ -75,7 +106,7 @@ plus ONE line in `src/renderer/src/index.css`: `@source '../../../core';`. Tailw
 scans from the renderer root down and `core/` is outside it, so without the line
 a utility used only in here is never generated, silently (#20: it took the whole
 Settings page apart, with every functional test green).
-The app's tests, lint and the 14 e2e scenarios are the core's gate.
+The app's tests, lint and the e2e scenarios are the core's gate.
 
 **Prism**: as a dev dependency pinned to a tag of the `core-dist` branch, which
 is this folder on its own (`git subtree split --prefix=core`), so the package is

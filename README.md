@@ -54,6 +54,13 @@ and want to know, at a glance, which one has finished.
 - **It asks before it interrupts.** Closing a tab that hosts an agent asks first, and says which
   agent and how long it has been working; a plain shell just closes. Not a setting: it simply does
   the sensible thing.
+- **Updates tell you what is in them.** When a newer release exists, an Update button appears in
+  the title bar. Click it and a window lists what changed, with Cancel and Install. Nothing is
+  downloaded until you choose Install; the button then fills as the download runs, and the app
+  restarts into the new version. If an agent is mid-answer it asks first, since installing
+  restarts the app. To see the button and its window without waiting for a release, start the app
+  with `--preview-update`: it shows a made-up update, touches neither the network nor any
+  installer, and says so when its pretend install finishes.
 
 <div align="center">
 <img src="assets/terminal-light.png" alt="The same window wearing a light theme: the whole chrome turns light with it" width="420">

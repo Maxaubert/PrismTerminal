@@ -26,6 +26,9 @@ import {
 import { useAgentIndicator } from '@core/renderer/lib/useAgentIndicator'
 import { useDictationArm } from '@core/renderer/lib/useDictation'
 import { DictationPill } from '@core/renderer/components/DictationPill'
+import UpdateChip from '@core/renderer/components/UpdateChip'
+import UpdateDialog from '@core/renderer/components/UpdateDialog'
+import { useUpdateFlow } from '@core/renderer/lib/useUpdateFlow'
 import { humanFor, workingFor } from '@core/renderer/lib/agentClock'
 import { forgetSession, markResume, markTouched } from '@core/renderer/lib/termActivity'
 import { onCwd, pasteInto } from '@core/renderer/lib/termBus'
@@ -57,6 +60,9 @@ interface Ask {
   agent: { kind: DetectedAgent; forMs: number | null }
   /** How many OTHER tabs are also mid-answer (the window question only). */
   others: number
+  /** The window question asked on behalf of an update install (#28): what to
+   *  run on "yes", in place of closing the window. */
+  install?: () => void
 }
 
 let seq = 0
@@ -244,6 +250,46 @@ export default function App(): JSX.Element {
     [agentKinds]
   )
 
+  /**
+   * THE UPDATE CHIP AND ITS WINDOW (#28). Both are the core's, the same in
+   * Prism; what is this app's is the question an install has to get past.
+   * Installing ends in the app QUITTING under the installer, and main
+   * pre-answers the close question for it, so an agent mid-answer would be
+   * killed without a word. (It was, until this change: main's comment said the
+   * page settles that first, which was Prism's page and never this one.) The
+   * rule is the window's own, `holdsWindowClose`: only an agent that is
+   * WORKING holds it, since idle ones come back at the next launch. It is asked
+   * when Install is chosen, before a byte is downloaded.
+   */
+  const installGuard = useCallback(
+    (start: () => void) => {
+      const { state: st, workingIds: working } = live.current
+      const busy = shellTabs(st)
+        .filter((t) => working.has(t.id))
+        .map((t) => ({ t, forMs: workingFor(t.id) ?? 0 }))
+        .sort((a, b) => b.forMs - a.forMs)
+      if (!holdsWindowClose(busy.length)) {
+        start()
+        return
+      }
+      const first = busy[0]
+      setAsk({
+        target: 'window',
+        label: tabLabels(st.tabs)[st.tabs.indexOf(first.t)],
+        agent: { kind: agentKinds.current.get(first.t.id) ?? 'other', forMs: first.forMs },
+        others: busy.length - 1,
+        install: start
+      })
+    },
+    [agentKinds]
+  )
+  const update = useUpdateFlow(window.prism, installGuard)
+  /** The running version, for the window's "You have" line. Asked once. */
+  const [version, setVersion] = useState('')
+  useEffect(() => {
+    void window.prism.appVersion().then(setVersion)
+  }, [])
+
   // Tell main what is open, whenever it changes: persistence for next launch,
   // and whether closing the window would interrupt anything.
   useEffect(() => {
@@ -268,8 +314,8 @@ export default function App(): JSX.Element {
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
   // keyboard back: clicking or dragging a tab is not "I left the shell".
   useEffect(() => {
-    if (activeShell && !ask && !findOpen) focusTermSession(activeShell.id)
-  }, [activeShell, ask, findOpen])
+    if (activeShell && !ask && !findOpen && !update.state.open) focusTermSession(activeShell.id)
+  }, [activeShell, ask, findOpen, update.state.open])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -328,7 +374,19 @@ export default function App(): JSX.Element {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden text-[var(--p-text)]">
-      <TitleBar onSettings={() => setState(openSettings)} />
+      <TitleBar
+        onSettings={() => setState(openSettings)}
+        chip={
+          <UpdateChip
+            info={update.state.info}
+            phase={update.state.phase}
+            pct={update.state.pct}
+            onOpen={update.open}
+            notice={update.state.notice}
+            onDismissNotice={update.dismissNotice}
+          />
+        }
+      />
       {tabs.length > 0 && (
         <TabStrip
           tabs={tabs}
@@ -429,7 +487,10 @@ export default function App(): JSX.Element {
 
       {ask && (
         <Dialog
-          title={closeQuestionTitle(ask.target === 'window' ? 'window' : 'tab', ask.agent.forMs)}
+          title={closeQuestionTitle(
+            ask.install ? 'install' : ask.target === 'window' ? 'window' : 'tab',
+            ask.agent.forMs
+          )}
           body={
             // Naming the work is the whole point of asking: an idle prompt and
             // an agent eleven minutes into an answer are not the same close.
@@ -446,7 +507,10 @@ export default function App(): JSX.Element {
                 <span className="text-[var(--p-text)]">{ask.label}</span>
                 {ask.others > 0 &&
                   `, and ${ask.others} other ${ask.others === 1 ? 'tab is' : 'tabs are'} working too`}
-                . Closing kills the shell, and the answer with it.
+                .{' '}
+                {ask.install
+                  ? 'Installing restarts the app, which kills the shell, and the answer with it.'
+                  : 'Closing kills the shell, and the answer with it.'}
               </>
             )
           }
@@ -454,16 +518,32 @@ export default function App(): JSX.Element {
           choices={[
             { label: 'Cancel', onPick: () => setAsk(null) },
             {
-              label: ask.target === 'window' ? 'Close window' : 'Close tab',
+              label: ask.install
+                ? 'Install and restart'
+                : ask.target === 'window'
+                  ? 'Close window'
+                  : 'Close tab',
               primary: true,
               onPick: () => {
-                const target = ask.target
+                const { target, install } = ask
                 setAsk(null)
-                if (target === 'window') window.prism.confirmClose()
+                if (install) install()
+                else if (target === 'window') window.prism.confirmClose()
                 else closeNow(target)
               }
             }
           ]}
+        />
+      )}
+
+      {/* Mounted once, here: the chip lives in the title bar, the window it
+          opens belongs to the whole app. */}
+      {update.state.open && update.state.info && (
+        <UpdateDialog
+          info={update.state.info}
+          currentVersion={version}
+          onInstall={update.install}
+          onCancel={update.cancel}
         />
       )}
     </div>

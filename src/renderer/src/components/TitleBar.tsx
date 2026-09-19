@@ -1,5 +1,4 @@
-import type { JSX } from 'react'
-import UpdateChip from './UpdateChip'
+import type { JSX, ReactNode } from 'react'
 
 /**
  * The frameless window's top strip: the mark and the name, a drag region, the
@@ -10,12 +9,23 @@ import UpdateChip from './UpdateChip'
  * Prism's bar, by subtraction: no file name, no panel toggle, no Tools. What
  * it keeps is the shape - 36px, the title surface, glyph-only 32x28 buttons -
  * so the two apps read as one family.
+ *
+ * The update chip is handed in (`chip`), not built here: it is the core's
+ * component since #28, and its state lives in App beside the window it opens,
+ * so the bar only gives it its place.
  */
 
 const BTN =
   'grid h-7 w-8 place-items-center rounded text-[var(--p-icon)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)]'
 
-export default function TitleBar({ onSettings }: { onSettings: () => void }): JSX.Element {
+export default function TitleBar({
+  onSettings,
+  chip
+}: {
+  onSettings: () => void
+  /** The update chip, or nothing when there is no update. */
+  chip?: ReactNode
+}): JSX.Element {
   const w = window.prism
   return (
     <div
@@ -43,7 +53,7 @@ export default function TitleBar({ onSettings }: { onSettings: () => void }): JS
       <span className="shrink-0 font-semibold text-[var(--p-accent-hi)]">Prism Terminal</span>
       {/* The rest of the bar is the handle the window is moved by. */}
       <span className="min-w-0 flex-1" />
-      <UpdateChip />
+      {chip}
       <div className="no-drag flex items-center gap-1">
         <button
           className={BTN}

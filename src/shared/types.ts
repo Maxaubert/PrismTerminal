@@ -33,6 +33,7 @@ export interface Restored {
   active: number
 }
 
-/** A newer release on GitHub (main/update.ts finds it). It lives here so the
- *  preload and the renderer can name it without importing from main. */
-export type UpdateInfo = { version: string; url: string; mock?: boolean }
+/** A newer release on GitHub (main/update.ts finds it). The shape is the
+ *  core's since #28, because the chip and the window that show it are: both
+ *  apps carry the same offer to the same components. */
+export type { UpdateInfo } from '@core/shared/updateTypes'
