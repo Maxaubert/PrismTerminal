@@ -33,6 +33,17 @@ so an update never silently changes what an existing user sees; the bridge to ma
   a ruined page, because they asserted that rows EXIST. The `options` scenario now MEASURES the
   layout (card width, wall rows, row padding) and writes `.e2e-shots/settings-*.png`. After any change
   that moves UI between `src/` and `core/`, LOOK at those screenshots before calling it done.
+- **THE CORE RELEASES ITSELF AND OPENS PRISM'S BUMP** (#23; owner, 2026-09-19: "that compiled copy
+  needs to be auto bumped when a new Prism Terminal release or merge to main happens").
+  `.github/workflows/core-release.yml`: every push to main that touches `core/` re-splits `core-dist`,
+  tags `core-v<core/package.json version>`, and opens a PR in Maxaubert/Prism bumping the pin. OPENED,
+  NOT MERGED (the owner's pick): Prism's `npm run e2e:terminal` runs only on the owner's machine, so a
+  person runs it and says merge. So: **a PR that changes `core/` MUST bump `core/package.json`'s
+  version** (`ci.yml`'s `core-version` job fails the PR otherwise; a released tag is never moved).
+  Never split, tag or push `core-dist` by hand on main any more; release candidates for an open PR
+  (`core-v0.2.0-rc.N`, cut by hand from the branch) are the one exception. The bump step needs the
+  secret `PRISM_BUMP_TOKEN` (fine-grained, Maxaubert/Prism, Contents + Pull requests read/write);
+  without it the workflow warns and only releases.
 - **A terminal change goes in `core/`**, and is a change to Prism too: say so in the PR, and ask the
   owner when it would conflict with how Prism works. App-shell changes (tabs, start screen, window)
   stay in `src/`.

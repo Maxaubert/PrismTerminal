@@ -1,0 +1,138 @@
+# THE CORE RELEASES ITSELF, AND TELLS PRISM (#23).
+#
+# core/ is the terminal of TWO apps. Prism builds against a pinned tag of the
+# `core-dist` branch, so a core change reaches Prism only when (1) core-dist is
+# re-split, (2) a core-v<version> tag is pushed, and (3) Prism's pin is bumped.
+# All three were done by hand, which is how an app falls silently behind.
+# Owner, 2026-09-19: "that compiled copy needs to be auto bumped when a new
+# Prism Terminal release or merge to main happens."
+#
+# So, on every push to main that touches core/:
+#   1. split core/ into core-dist and tag it core-v<core/package.json version>;
+#   2. open a PR in Maxaubert/Prism that bumps the pin to that tag.
+#
+# THE PR IS OPENED, NOT MERGED (owner's pick, "option B"). Prism's terminal gate
+# (`npm run e2e:terminal`) drives real windows and real shells and runs only on
+# the owner's machine, so CI cannot prove a bump is safe; a person runs the gate
+# and says merge. What this guarantees is that the bump EXISTS: Prism cannot fall
+# behind without an open PR saying so.
+#
+# Step 2 needs a token that can write to the Prism repo, since this repo's own
+# GITHUB_TOKEN cannot: a fine-grained token on Maxaubert/Prism with Contents and
+# Pull requests read/write, stored here as the secret PRISM_BUMP_TOKEN. Without
+# it step 2 says so and is skipped; step 1 still happens.
+name: core-release
+
+on:
+  push:
+    branches: [main]
+    paths: ['core/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: core-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      fresh: ${{ steps.tag.outputs.fresh }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Split core/ and tag it
+        id: tag
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          version=$(node -p "require('./core/package.json').version")
+          tag="core-v$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          git subtree split --prefix=core -b core-dist-new
+          tree=$(git rev-parse 'core-dist-new^{tree}')
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            if [ "$(git rev-parse "$tag^{tree}")" = "$tree" ]; then
+              echo "::notice::$tag already holds exactly this core. Nothing to release."
+              echo "fresh=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # A tag is a promise to everyone who pinned it. It is never moved.
+            echo "::error::core/ changed but core/package.json still says $version, and $tag already exists with different contents. Bump the version in core/package.json (ci.yml checks this on the PR)."
+            exit 1
+          fi
+          git push -f origin core-dist-new:core-dist
+          git tag "$tag" core-dist-new
+          git push origin "$tag"
+          echo "fresh=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::Released $tag"
+
+  bump-prism:
+    needs: release
+    if: needs.release.outputs.fresh == 'true'
+    runs-on: ubuntu-latest
+    env:
+      BUMP_TOKEN: ${{ secrets.PRISM_BUMP_TOKEN }}
+      TAG: ${{ needs.release.outputs.tag }}
+    steps:
+      - name: No token, no bump
+        if: env.BUMP_TOKEN == ''
+        run: |
+          echo "::warning::$TAG is released, but the secret PRISM_BUMP_TOKEN is not set, so no PR was opened in Maxaubert/Prism. Bump Prism's pin by hand, or add the secret (see the top of core-release.yml) and re-run this workflow."
+
+      - uses: actions/checkout@v4
+        if: env.BUMP_TOKEN != ''
+        with:
+          repository: Maxaubert/Prism
+          token: ${{ secrets.PRISM_BUMP_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        if: env.BUMP_TOKEN != ''
+        with:
+          node-version: 22
+
+      - name: Bump the pin and open the PR
+        if: env.BUMP_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ secrets.PRISM_BUMP_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch="chore/$TAG"
+          if [ -n "$(git ls-remote --heads origin "$branch")" ]; then
+            echo "::notice::$branch already exists in Prism. Leaving it alone."
+            exit 0
+          fi
+          current=$(node -p "require('./package.json').devDependencies['prism-term-core']")
+          want="github:Maxaubert/PrismTerminal#$TAG"
+          if [ "$current" = "$want" ]; then
+            echo "::notice::Prism already pins $TAG."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          npm pkg set "devDependencies.prism-term-core=$want"
+          # The lockfile only: nothing is installed or run on this runner.
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          git add package.json package-lock.json
+          git commit -m "build(terminal): pin prism-term-core to $TAG"
+          git push origin "$branch"
+          gh pr create --repo Maxaubert/Prism --base main --head "$branch" \
+            --title "Terminal core: pin prism-term-core to $TAG" \
+            --body "Opened automatically by PrismTerminal's \`core-release\` workflow: the shared terminal core released **$TAG**, and Prism pinned \`$current\`.
+
+          What changed in the core: https://github.com/Maxaubert/PrismTerminal/commits/main/core
+
+          **Before merging** (Prism's CLAUDE.md, the rule for any pin bump):
+          - [ ] \`npm run e2e:terminal\` is green on the owner's machine (CI cannot run it)
+          - [ ] the version in \`package.json\` is bumped if this changes what a user sees
+          - [ ] the build is installed and looked at
+
+          Merging this publishes a Prism release with the new core, as any merge to main does."
