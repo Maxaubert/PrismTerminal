@@ -1253,6 +1253,20 @@ const scenarios = {
     ok((await page.locator('[data-update-chip]').count()) === 0, 'no flag, no chip')
     const calls = await page.evaluate(() => window.prism.e2eUpdateCalls())
     ok(calls.checks === 0 && calls.installs === 0, `and the real watcher stayed off (${JSON.stringify(calls)})`)
+    // THE APP IS USUALLY ALREADY RUNNING when somebody tries the flag, and it is
+    // single-instance: that launch hands its command line over and ends. The
+    // running app has to honour the flag, or `--preview-update` on the installed
+    // app would do nothing anyone could see. (Not under PT_E2E_PACKAGED: the
+    // second launch here is the unpackaged entry script.)
+    if (!PACKAGED) {
+      const child = spawn(electronPath, [MAIN, `--user-data-dir=${w.profile}`, '--e2e', '--preview-update'], { stdio: 'ignore' })
+      const code = await new Promise((r) => child.on('exit', r))
+      ok(code === 0, 'a second launch with --preview-update exits, as every second launch does')
+      ok(await until(async () => (await page.locator('[data-update-chip]').count()) === 1, 8000), 'and the RUNNING app shows the preview chip')
+      ok((await tabLabels(page)).length === 1, 'without opening a tab for it')
+      const after = await page.evaluate(() => window.prism.e2eUpdateCalls())
+      ok(after.checks === 0, 'still without asking GitHub')
+    }
     await app.close().catch(() => {})
   },
 
