@@ -9,9 +9,9 @@ import { NO_UPDATE, updateFlow, type UpdateFlow } from './updateFlow'
 //
 // THE BRIDGE IS HANDED IN, as everything a host owns is (core/README.md): the
 // core never reads `window.prism`. Both apps' preloads already spell these
-// three members the same way, so each passes its own bridge object as it is.
+// members the same way, so each passes its own bridge object as it is.
 
-/** The three members of a host's preload this needs. */
+/** The members of a host's preload this needs. */
 export interface UpdateBridge {
   /** Subscribe to the offer; returns the unsubscribe. */
   onUpdate(cb: (info: UpdateInfo) => void): () => void
@@ -20,6 +20,13 @@ export interface UpdateBridge {
   /** Download and hand off. Resolves false when nothing was installed; on
    *  success the app quits under the installer and this never matters. */
   installUpdate(url: string): Promise<boolean>
+  /**
+   * Stop the download that `installUpdate` is running (#32). `installUpdate`
+   * then resolves false, which is how the page hears it stopped. OPTIONAL: a
+   * host that cannot stop one leaves it out, and the window's Cancel is then
+   * disabled for the length of the install rather than being a button that lies.
+   */
+  cancelUpdate?(): void
 }
 
 /**
@@ -37,14 +44,29 @@ export interface UpdateFlowHandle {
   state: UpdateFlow
   /** The chip was clicked. */
   open: () => void
-  /** Cancel, Escape, a click outside. */
+  /** Cancel or Close, Escape, a press outside. Does nothing mid-install. */
   cancel: () => void
   /** Install was chosen in the window. */
   install: () => void
+  /** Cancel was pressed during the download. Undefined when the host's bridge
+   *  cannot stop one, which is what the window reads to disable the button. */
+  abort: (() => void) | undefined
   dismissNotice: () => void
 }
 
-export function useUpdateFlow(bridge: UpdateBridge, guard?: InstallGuard): UpdateFlowHandle {
+/**
+ * `covered`: something that OUTRANKS the update window is on screen (a close
+ * question, in both apps). The window is hidden for as long as that is true,
+ * mid-install included, and a running install's window comes back afterwards.
+ * It is the one way the window leaves during an install, and it is the host's,
+ * never the user's: a question about losing work mounted UNDER a window that
+ * cannot be closed would take the focus where nobody can see it.
+ */
+export function useUpdateFlow(
+  bridge: UpdateBridge,
+  guard?: InstallGuard,
+  covered = false
+): UpdateFlowHandle {
   const [state, dispatch] = useReducer(updateFlow, NO_UPDATE)
   // The latest of both, for callbacks that must stay stable.
   const live = useRef({ state, guard })
@@ -55,11 +77,23 @@ export function useUpdateFlow(bridge: UpdateBridge, guard?: InstallGuard): Updat
   useEffect(() => bridge.onUpdate((info) => dispatch({ type: 'available', info })), [bridge])
   useEffect(() => bridge.onUpdateProgress((pct) => dispatch({ type: 'progress', pct })), [bridge])
 
+  const running = state.phase !== 'idle'
   useEffect(() => {
-    if (state.notice === null) return
+    if (covered) dispatch({ type: 'hide' })
+    else if (running) dispatch({ type: 'open' })
+    // `state.open` is a dependency on purpose: an install that STARTS while the
+    // question is still on its way out opens the window, and this puts it away
+    // again until the question has gone.
+  }, [covered, running, state.open])
+
+  // The line under the chip only: with the window up, the ending is said IN it
+  // and stays until the window is closed.
+  const loose = state.notice !== null && !state.open
+  useEffect(() => {
+    if (!loose) return
     const t = setTimeout(() => dispatch({ type: 'dismiss' }), NOTICE_MS)
     return () => clearTimeout(t)
-  }, [state.notice])
+  }, [loose])
 
   const open = useCallback(() => dispatch({ type: 'open' }), [])
   const cancel = useCallback(() => dispatch({ type: 'cancel' }), [])
@@ -69,9 +103,6 @@ export function useUpdateFlow(bridge: UpdateBridge, guard?: InstallGuard): Updat
     const { state: s, guard: g } = live.current
     const info = s.info
     if (!info || s.phase !== 'idle') return
-    // The window goes either way: the host's own question, if it has one, must
-    // not be asked from behind it, and progress is the chip's to show.
-    dispatch({ type: 'cancel' })
     const start = (): void => {
       dispatch({ type: 'install' })
       void bridge.installUpdate(info.url).then(
@@ -82,9 +113,20 @@ export function useUpdateFlow(bridge: UpdateBridge, guard?: InstallGuard): Updat
     // A PREVIEW ASKS NOTHING. The host's question is "this will close the app
     // and end what your agent is doing", and a preview closes nothing: asking
     // it there would be the app lying to make a demo look real.
-    if (info.mock || !g) start()
-    else g(start)
+    if (info.mock || !g) return start()
+    // The host's own question must not be asked from behind the window, so the
+    // window steps aside for it. `install` brings it back as the progress
+    // window if the answer is yes; a no leaves it closed, as Cancel would.
+    dispatch({ type: 'hide' })
+    g(start)
   }, [bridge])
 
-  return { state, open, cancel, install, dismissNotice }
+  const canAbort = typeof bridge.cancelUpdate === 'function'
+  const abort = useCallback(() => {
+    if (live.current.state.phase !== 'downloading') return
+    dispatch({ type: 'abort' })
+    bridge.cancelUpdate?.()
+  }, [bridge])
+
+  return { state, open, cancel, install, abort: canAbort ? abort : undefined, dismissNotice }
 }
