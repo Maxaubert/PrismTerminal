@@ -54,6 +54,14 @@ export interface TermPreloadApi {
    * reading, since a sandboxed preload has no clipboard module.
    */
   readClipboard(): ClipboardRead
+  /**
+   * Put TEXT on the clipboard (#12, the help panel's copy buttons). Through
+   * main rather than `navigator.clipboard`: that one refuses unless the
+   * document has the focus ("Document is not focused"), and a copy button
+   * that works on some presses and not others is worse than none. Text only,
+   * and main caps its length. Answers whether it was written.
+   */
+  writeClipboard(text: string): Promise<boolean>
   /** The web-links addon's click-through: external URLs go to the OS browser. */
   openExternal(url: string): void
 }
@@ -79,6 +87,7 @@ export function createTermApi(ipc: IpcRendererLike): TermPreloadApi {
     onTermAgent: (cb) => on(CH.agent, cb),
     onTermExit: (cb) => on(CH.exit, cb),
     readClipboard: () => ipc.sendSync(CH.clipboardRead) as ClipboardRead,
+    writeClipboard: (text) => ipc.invoke(CH.clipboardWrite, text) as Promise<boolean>,
     openExternal: (url) => {
       if (/^https?:/i.test(url)) ipc.send(CH.openExternal, url)
     }
