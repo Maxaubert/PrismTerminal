@@ -15,6 +15,7 @@ export const CH = {
   agent: 'term:agent',
   exit: 'term:exit',
   clipboardRead: 'clipboard:read',
+  clipboardWrite: 'clipboard:write',
   openExternal: 'shell:open-external'
 } as const
 

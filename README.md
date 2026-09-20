@@ -67,6 +67,29 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
    and printed as text nodes; never HTML, never rendered markdown, never an
    anchor. **The chip never changes width**, in any phase: every label is laid
    out in one cell and only the current one is visible.
+   **COMMAND HELP (#12)** is the second thing in here that is not terminal, under
+   the same bar: `shared/help/` (the catalogue, six files of curated entries; its
+   pure offline search; `catalogue.test.ts`, the gate for content),
+   `renderer/lib/helpPrefs.ts`, `renderer/components/HelpPanel.tsx` and
+   `renderer/settings/Help.tsx` + `helpOptions.ts`. A host wires it with:
+   `helpEnabled()` / `useHelpEnabled()` to decide whether its way in exists at
+   all (on by default; off means no button and no key); ONE `<HelpPanel>` at its
+   root, lazy-loaded since it brings the catalogue with it, handed `shell`
+   (`shellOfShellId` of the shell in front, from the light `shared/help/shells.ts`),
+   `monoFont` (`termFontStack()`), `onCopy` (the bridge's `writeClipboard`, which
+   goes through main because `navigator.clipboard` refuses an unfocused
+   document), `onPickShell` and `onClose`; its key in `ownsKey`, tested against
+   `helpEnabled()`, so xterm yields it exactly when the host takes it (Prism
+   Terminal uses a bare F1); and `<HelpSetting opensWith="...">` on its settings
+   page, which says what that host's way in is. As with the update window, a
+   host that raises a question of its own while the popup is up must PUT IT
+   AWAY first and must not open it over one: they are the same layer. The same
+   goes for a chord that puts something ELSE in front while it is up (another
+   tab, a new tab, a find bar): a terminal takes the focus as it attaches, and a
+   popup left over a focused shell has its questions typed into that shell. Two rules
+   travel with it. **It never inserts and never runs**: the component has no
+   session id and no bridge, only `onCopy`, and a host must not give it more.
+   **Copy is exact**: the text on screen, placeholders included, never trimmed.
 3. **A difference between the apps is DECLARED, never forked.** Every place the
    two legitimately differ is a field of `TermHostConfig` in
    [`renderer/host.ts`](renderer/host.ts): the default each untouched setting
