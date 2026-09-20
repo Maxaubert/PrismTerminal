@@ -1,4 +1,5 @@
 import { configureTermCore } from '@core/renderer/host'
+import { helpEnabled } from '@core/renderer/lib/helpPrefs'
 import { themeAgentColors } from './lib/agentColors'
 
 /**
@@ -38,6 +39,13 @@ configureTermCore({
   // there is nothing further for this app to refuse.
   dictation: { api: window.prism, canDictate: () => true },
   ownsKey: (e) => {
+    // COMMAND HELP IS F1 (#12), the key every Windows program answers help
+    // with. Bare, and only while the setting is on: switched off, F1 is the
+    // shell's again. Known cost, accepted: PSReadLine's own F1 (the help page
+    // for the command under the cursor) and F1 in a full-screen program under
+    // WSL (vim, htop, mc) do not arrive while it is on. Shift+F1 and Ctrl+F1
+    // are left to the shell.
+    if (e.key === 'F1' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) return helpEnabled()
     if (!e.ctrlKey || e.altKey) return false
     const k = e.key.toLowerCase()
     // Next / previous tab, jump to a tab, Settings.

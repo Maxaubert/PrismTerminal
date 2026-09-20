@@ -4,6 +4,7 @@ import { setWindowEdges, useWindowEdges } from '../lib/edgesPrefs'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
 import { Pref, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
 import { DictationSettings } from '@core/renderer/settings/Dictation'
+import { HelpSetting } from '@core/renderer/settings/Help'
 import { TerminalAppearanceSettings } from '@core/renderer/settings/TerminalAppearance'
 import { AgentIndicatorSetting, ShellSetting } from '@core/renderer/settings/TerminalBehaviour'
 
@@ -97,6 +98,8 @@ function GeneralTab(): JSX.Element {
       </Pref>
       <ShellSetting />
       <AgentIndicatorSetting />
+      {/* The core's row (#12); the way in is this app's, so this app says it. */}
+      <HelpSetting opensWith="F1, or the ? in the title bar." />
       {/* Explorer's own menu. Windows 11 hides classic verbs behind "Show more
           options", and saying so is better than the user hunting for it. The
           hint QUOTES the entry (#27): it no longer names the app, so the row

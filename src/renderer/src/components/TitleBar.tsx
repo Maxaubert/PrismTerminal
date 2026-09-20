@@ -2,8 +2,8 @@ import type { JSX, ReactNode } from 'react'
 
 /**
  * The frameless window's top strip: the mark and the name, a drag region, the
- * update chip when there is one, the settings cog, and the three window
- * buttons. A cog and not a menu (owner, 2026-09-18): a menu of one row is
+ * update chip when there is one, the command help button (#12, when that
+ * setting is on), the settings cog, and the three window buttons. A cog and not a menu (owner, 2026-09-18): a menu of one row is
  * chrome.
  *
  * Prism's bar, by subtraction: no file name, no panel toggle, no Tools. What
@@ -20,9 +20,13 @@ const BTN =
 
 export default function TitleBar({
   onSettings,
+  onHelp,
   chip
 }: {
   onSettings: () => void
+  /** Open the command help popup; absent when the setting is off, and the
+   *  button goes with it. */
+  onHelp?: () => void
   /** The update chip, or nothing when there is no update. */
   chip?: ReactNode
 }): JSX.Element {
@@ -55,6 +59,31 @@ export default function TitleBar({
       <span className="min-w-0 flex-1" />
       {chip}
       <div className="no-drag flex items-center gap-1">
+        {onHelp && (
+          <button
+            className={BTN}
+            onClick={onHelp}
+            title="Command help (F1)"
+            aria-label="Command help"
+            data-title-help
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width={15}
+              height={15}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M9.4 9.3a2.7 2.7 0 1 1 4 2.4c-.9.5-1.4 1.1-1.4 2.1" />
+              <path d="M12 17.2v.01" />
+            </svg>
+          </button>
+        )}
         <button
           className={BTN}
           onClick={onSettings}
