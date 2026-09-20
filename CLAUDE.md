@@ -152,6 +152,22 @@ so an update never silently changes what an existing user sees; the bridge to ma
     session id, no `termInput`, no bridge. It is NOT a fifth exception to "the app never types into
     your shell", and adding Run or Insert is a fresh owner decision. The `helpPanel` e2e reads the
     terminal's text before the popup is touched and after every search, copy and Enter in it.
+  - **IT IS A TABLE, ONE COMMAND PER ROW** (owner, 2026-09-20: "this has too much text, it just
+    needs the header and the command. no sub text and no highlighted ones. just a simple,
+    minimalist but still elegant and beautiful searchable table", and "make the rows alternate in
+    colour kind of like Prism Explorer"). An entry was a block (title, a sentence of summary, a
+    bordered command box, a labelled box per variant, a list of placeholders) and two of them
+    filled the popup. Now `rowsFor` FLATTENS an entry into rows: its own, named by the task, and
+    one per variant named by what was that variant's label. Two columns under a header, every row
+    34px, the command on one line and truncated (the copy and the tooltip carry the whole text),
+    zebra-striped with `color-mix(var(--p-text) 3.5%)` and the first row plain, which is Prism's
+    own rule. The summary and the placeholders are GONE FROM THE SCREEN and still read by the
+    search, which is why the catalogue keeps writing them. NOTHING IS MARKED until somebody points
+    at a row or walks the list: the cursor exists from row 0, so one Down marks it, but a table
+    that opens with a row already filled reads as a selection nobody made. A DANGER is a mark on
+    the row now (an amber triangle, its sentence on the title and in an sr-only span), not a
+    paragraph: the e2e still reads the sentence, and a row that deletes things must not look like
+    one that lists them.
   - **COPY IS EXACT.** What goes on the clipboard is the text on screen, placeholders and all: a
     command with FOLDER in it fails loudly when pasted unedited, and a panel that guessed would
     fail quietly. It goes through main (`clipboard:write`, text only, refused past 4000 characters,
