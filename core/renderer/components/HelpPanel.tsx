@@ -1,0 +1,572 @@
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import {
+  ALL_HELP,
+  HELP_CATEGORIES,
+  HELP_SHELLS,
+  isKeyPress,
+  type HelpEntry,
+  type HelpShellChoice
+} from '../../shared/help/index'
+import { searchHelp } from '../../shared/help/search'
+
+/**
+ * THE COMMAND HELP POPUP (#12). Owner, 2026-09-19: "an easy to use panel where
+ * you can find shell commands to use the shell more effectively... searchable...
+ * metadata on each command so a natural-language search finds it", and on
+ * 2026-09-20: "a pop up with copy icons for easy copying". One copy, for both
+ * apps.
+ *
+ * IT SHOWS, AND IT COPIES ON REQUEST. NOTHING ELSE. Owner, 2026-09-19: "picking
+ * a command in the help panel does NOT insert it into the shell". So this file
+ * has no way to reach a shell at all: it takes no session id, imports no
+ * bridge, and the one thing it can do to the outside world is hand a string to
+ * `onCopy`. A person reads the command, copies it, pastes it themselves and
+ * presses Enter themselves, which is the whole safety model: several of these
+ * commands delete things. Do not add "Run" or "Insert" without a fresh owner
+ * decision; it would be a fifth exception to "the app never types into your
+ * shell", and the first one that carries Enter in spirit.
+ *
+ * WHAT IS COPIED IS THE EXACT TEXT ON SCREEN, placeholders and all. A command
+ * with FOLDER in it fails loudly when pasted unedited, which is the right
+ * failure; a panel that guessed the folder would fail quietly.
+ *
+ * Props only, like the update window: no bridge, no store, no host. The
+ * clipboard is handed in because each host has its own way to it (and
+ * `navigator.clipboard` refuses when the document has no focus). The catalogue
+ * is curated text that ships with the app, so unlike the release notes there
+ * is nothing here off the network; it is still printed as text nodes only.
+ *
+ * It sits on the OPAQUE surface token for the reason the update window does:
+ * `--p-bg` carries the window's alpha on an acrylic theme, and nobody can read
+ * a command through the desktop.
+ */
+
+/** How many entries are drawn at first, and how many more each time the end
+ *  of the list comes into view. The catalogue is a few hundred entries with
+ *  several command boxes each: all at once is some ten thousand nodes built
+ *  before the first frame, for a list nobody has scrolled yet. */
+const FIRST_PAGE = 40
+const NEXT_PAGE = 60
+/** A search answers with at most this many. Past the first dozen nobody is
+ *  reading; they are retyping. */
+const MAX_RESULTS = 50
+/** How long a copy button says so. */
+const COPIED_MS = 1500
+
+const CATEGORY_NAME = new Map(HELP_CATEGORIES.map((c) => [c.id, c.name]))
+
+/** The list in the order it is drawn, which is the order Up and Down walk. */
+function rowsFor(shell: HelpShellChoice, query: string): HelpEntry[] {
+  if (query.trim() !== '') return searchHelp(ALL_HELP, query, { shell, limit: MAX_RESULTS }).map((h) => h.entry)
+  // Browsing: by category, in the panel's own order, catalogue order within.
+  const mine = ALL_HELP.filter((e) => e.shell === shell || e.shell === 'any')
+  return HELP_CATEGORIES.flatMap((c) => mine.filter((e) => e.category === c.id))
+}
+
+const CopyIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+  </svg>
+)
+const CheckIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </svg>
+)
+
+/**
+ * One command in its own box, with its copy button at the right edge. The
+ * button is a FIXED square and its answer is laid OVER the box beside it, so
+ * "Copied" arriving and leaving moves nothing: a list that twitches under the
+ * pointer on every copy is a list you mis-click in.
+ */
+function CommandBox({
+  command,
+  copyKey,
+  copied,
+  failed,
+  mono,
+  onCopy
+}: {
+  command: string
+  /** Names this box among all the boxes on screen: `<entry id>#<n>`. */
+  copyKey: string
+  copied: boolean
+  failed: boolean
+  mono: string
+  onCopy: (key: string, command: string) => void
+}): JSX.Element {
+  if (isKeyPress(command))
+    return (
+      // A key to press is drawn as key caps and has no copy button: the
+      // characters "Ctrl+C" on a clipboard help nobody.
+      <div data-help-keys className="flex items-center gap-2 py-0.5">
+        <span className="flex items-center gap-1">
+          {command.split('+').map((k, i) => (
+            <kbd
+              key={i}
+              className="rounded border border-[color:var(--p-line)] bg-[var(--p-control)] px-1.5 py-0.5 text-[11.5px] font-semibold text-[var(--p-text)]"
+              style={{ fontFamily: mono }}
+            >
+              {k}
+            </kbd>
+          ))}
+        </span>
+        <span className="text-[11.5px] text-[var(--p-dim)]">A key to press, not text to paste</span>
+      </div>
+    )
+  return (
+    <div
+      data-help-command-box
+      className="relative flex items-stretch rounded-md border border-[color:var(--p-line)] bg-[var(--p-control)]"
+    >
+      <code
+        data-help-command
+        className="min-w-0 flex-1 select-text whitespace-pre-wrap px-3 py-2 text-[12.5px] leading-[1.55] text-[var(--p-text)] [overflow-wrap:anywhere]"
+        style={{ fontFamily: mono }}
+      >
+        {command}
+      </code>
+      {(copied || failed) && (
+        // Over the box, not in the row: nothing is pushed aside. Opaque, so
+        // the end of a long command does not show through the word.
+        <span
+          data-help-copied
+          aria-hidden
+          className={`pointer-events-none absolute right-[38px] top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+            failed
+              ? 'bg-[var(--p-side-flat)] text-[var(--p-text)]'
+              : 'bg-[var(--p-accent)] text-[var(--p-on-accent)]'
+          }`}
+        >
+          {failed ? 'Could not copy' : 'Copied'}
+        </span>
+      )}
+      <button
+        type="button"
+        data-help-copy={copyKey}
+        onClick={(e) => {
+          e.stopPropagation()
+          onCopy(copyKey, command)
+        }}
+        title="Copy"
+        aria-label={`Copy: ${command}`}
+        className={`grid w-9 shrink-0 place-items-center self-stretch rounded-r-md border-l border-[color:var(--p-line)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--p-accent-hi)] ${
+          copied
+            ? 'text-[var(--p-accent-hi)]'
+            : 'text-[var(--p-icon)] hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)]'
+        }`}
+        style={{ minHeight: 32 }}
+      >
+        {copied ? <CheckIcon /> : <CopyIcon />}
+      </button>
+    </div>
+  )
+}
+
+export default function HelpPanel({
+  shell,
+  monoFont,
+  onCopy,
+  onPickShell,
+  onClose
+}: {
+  /** The command language of the shell in front; which chip starts selected. */
+  shell: HelpShellChoice
+  /** The terminal's own font stack: a command is shown in the face it will be
+   *  typed in. */
+  monoFont: string
+  /** Put this exact text on the clipboard; answer whether it got there. */
+  onCopy: (text: string) => Promise<boolean> | boolean
+  /** Somebody chose a shell chip by hand: the host may remember it. */
+  onPickShell?: (shell: HelpShellChoice) => void
+  onClose: () => void
+}): JSX.Element {
+  const box = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLInputElement>(null)
+  const list = useRef<HTMLDivElement>(null)
+  const sentinel = useRef<HTMLDivElement>(null)
+  const [query, setQuery] = useState('')
+  const [chip, setChip] = useState<HelpShellChoice>(shell)
+  const [active, setActive] = useState(0)
+  const [limit, setLimit] = useState(FIRST_PAGE)
+  const [copied, setCopied] = useState<{ key: string; ok: boolean } | null>(null)
+  /** What a screen reader is told. Its own state, since two copies of the same
+   *  command must both be announced and an unchanged string is not. */
+  const [said, setSaid] = useState('')
+
+  const rows = useMemo(() => rowsFor(chip, query), [chip, query])
+  const searching = query.trim() !== ''
+
+  // A new question is a new list: back to the top, first page, first entry.
+  // Done while RENDERING, not in an effect: an effect would draw one frame of
+  // the new list with the old highlight somewhere down it.
+  const [listKey, setListKey] = useState(`${chip}|${query}`)
+  if (listKey !== `${chip}|${query}`) {
+    setListKey(`${chip}|${query}`)
+    setActive(0)
+    setLimit(FIRST_PAGE)
+  }
+  useEffect(() => {
+    list.current?.scrollTo({ top: 0 })
+  }, [listKey])
+
+  const copy = (key: string, command: string): void => {
+    void Promise.resolve(onCopy(command))
+      .catch(() => false)
+      .then((ok) => {
+        setCopied({ key, ok })
+        setSaid(ok ? `Copied: ${command}` : 'Could not copy to the clipboard')
+      })
+  }
+  // The answer leaves by itself. Keyed on the OBJECT, so copying the same box
+  // twice restarts the clock instead of inheriting what is left of the first.
+  useEffect(() => {
+    if (!copied) return
+    const t = setTimeout(() => {
+      setCopied(null)
+      setSaid('')
+    }, COPIED_MS)
+    return () => clearTimeout(t)
+  }, [copied])
+
+  // The end of the drawn list came into view: draw the next page.
+  useEffect(() => {
+    const el = sentinel.current
+    const root = list.current
+    if (!el || !root) return
+    const io = new IntersectionObserver(
+      (hits) => {
+        if (hits.some((h) => h.isIntersecting)) setLimit((n) => n + NEXT_PAGE)
+      },
+      { root, rootMargin: '600px' }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [listKey, limit])
+
+  // Only a move made BY KEY scrolls the list: a click on an entry is already
+  // where the eye is, and scrolling it under the pointer is how the next click
+  // lands on the wrong row.
+  const moved = useRef(false)
+
+  // THE KEY LISTENER IS REGISTERED ONCE and reads the latest of everything from
+  // a ref, for the reason the update window's is (MEASURED there): keyed on
+  // its callbacks, the effect is torn down and put back on every render, and
+  // a keydown that lands between the two is heard by nobody.
+  const live = useRef({ rows, active, copy, onClose })
+  useEffect(() => {
+    live.current = { rows, active, copy, onClose }
+  })
+
+  useEffect(() => {
+    // FOCUS RETURNS WHERE IT CAME FROM. The shell had the keyboard when the
+    // popup opened (its hidden textarea was the active element), so closing
+    // hands it straight back: the next keystroke must land in the shell, not
+    // on a button left behind the popup. A host that manages focus itself
+    // simply focuses again afterwards.
+    const before = document.activeElement as HTMLElement | null
+    input.current?.focus()
+    const onKey = (e: KeyboardEvent): void => {
+      const { rows: r, active: a } = live.current
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        e.preventDefault()
+        live.current.onClose()
+        return
+      }
+      // Chords are the host's (new tab, close tab, Settings...): they keep
+      // working over the popup, and none of them is read here.
+      if (e.ctrlKey || e.altKey || e.metaKey) return
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'PageDown' || e.key === 'PageUp') {
+        if (!r.length) return
+        const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : e.key === 'PageDown' ? 5 : -5
+        const next = Math.max(0, Math.min(r.length - 1, a + step))
+        e.preventDefault()
+        e.stopPropagation()
+        // An entry past the drawn page has to exist before it can be shown.
+        setLimit((n) => (next + 5 > n ? next + NEXT_PAGE : n))
+        setActive(next)
+        moved.current = true
+        return
+      }
+      if (e.key === 'Enter') {
+        // On a button, Enter is that button's own press (a chip, a variant's
+        // copy, Close). Anywhere else it copies the highlighted entry.
+        if ((e.target as HTMLElement | null)?.closest('button')) return
+        e.preventDefault()
+        e.stopPropagation()
+        const entry = r[a]
+        if (!entry) return
+        if (isKeyPress(entry.command)) setSaid(`${entry.command} is a key to press, not text to copy`)
+        else live.current.copy(`${entry.id}#0`, entry.command)
+        return
+      }
+      // A PLAIN Tab only: Ctrl+Tab is the host's chord (the lesson of the
+      // update window, where one press both switched tabs and moved the focus).
+      if (e.key !== 'Tab') return
+      // Tab stays inside. Behind this is a terminal, and a Tab that wandered
+      // out of the popup would be typed into somebody's shell.
+      const stops = [
+        ...(box.current?.querySelectorAll<HTMLElement>('input, button:not([disabled]), [tabindex="0"]') ?? [])
+      ]
+      if (!stops.length) return
+      const at = stops.indexOf(document.activeElement as HTMLElement)
+      const next = at < 0 ? 0 : (at + (e.shiftKey ? -1 : 1) + stops.length) % stops.length
+      e.preventDefault()
+      e.stopPropagation()
+      stops[next].focus()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      if (before && before.isConnected && before !== document.body) before.focus()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!moved.current) return
+    moved.current = false
+    list.current?.querySelector(`[data-help-index="${active}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [active, limit])
+
+  const drawn = rows.slice(0, limit)
+  const activeId = rows[active] ? `help-entry-${rows[active].id}` : undefined
+
+  return (
+    // data-owns-escape: both apps have a capture-phase Escape of their own that
+    // must stand down while an overlay is up.
+    <div
+      data-owns-escape
+      data-help-scrim
+      className="no-drag fixed inset-0 z-50 grid place-items-center bg-black/55 p-6"
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <div
+        ref={box}
+        data-help-panel
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command help"
+        onMouseDown={(e) => e.stopPropagation()}
+        className="flex h-[min(82vh,680px)] w-full max-w-[760px] flex-col overflow-hidden rounded-[var(--p-radius)] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] shadow-[0_24px_70px_rgba(0,0,0,.6)]"
+      >
+        {/* The question. */}
+        <div className="flex shrink-0 items-center gap-2.5 border-b border-[color:var(--p-line)] px-4 py-3">
+          <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="var(--p-dim)" strokeWidth="2" strokeLinecap="round" className="shrink-0" aria-hidden>
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="M16 16l4.5 4.5" />
+          </svg>
+          <input
+            ref={input}
+            data-help-search
+            type="text"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="help-results"
+            aria-activedescendant={activeId}
+            aria-label="Search commands. Up and Down move through the results, Enter copies the highlighted command."
+            autoComplete="off"
+            spellCheck={false}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            // It teaches by example: what to type is the first thing a
+            // newcomer does not know.
+            placeholder="Try: find big files, what is using port 3000, undo last commit"
+            className="min-w-0 flex-1 bg-transparent text-[14px] text-[var(--p-text)] placeholder:text-[var(--p-dim2)] focus:outline-none"
+          />
+          <button
+            type="button"
+            data-help-close
+            onClick={onClose}
+            title="Close (Esc)"
+            aria-label="Close"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded text-[var(--p-icon)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)]"
+          >
+            <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+              <path d="M7 7l10 10M17 7L7 17" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Which shell. Git, the agents and the package managers read the same
+            in all three, so they are in every list and are not a chip. */}
+        <div className="flex shrink-0 items-center gap-1.5 border-b border-[color:var(--p-line)] px-4 py-2">
+          <div role="group" aria-label="Shell" className="flex items-center gap-1.5">
+            {HELP_SHELLS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                data-help-shell={s.id}
+                aria-pressed={chip === s.id}
+                onClick={() => {
+                  setChip(s.id)
+                  onPickShell?.(s.id)
+                  input.current?.focus()
+                }}
+                className={`rounded-full border px-2.5 py-1 text-[12px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)] ${
+                  chip === s.id
+                    ? 'border-transparent bg-[var(--p-accent)] text-[var(--p-on-accent)]'
+                    : 'border-[color:var(--p-line)] text-[var(--p-text-soft)] hover:bg-[var(--p-hover)] hover:text-[var(--p-text)]'
+                }`}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+          <span className="min-w-0 flex-1" />
+          <span data-help-count role="status" className="shrink-0 text-[11.5px] text-[var(--p-dim)]">
+            {searching
+              ? rows.length === 0
+                ? 'No results'
+                : `${rows.length}${rows.length === MAX_RESULTS ? '+' : ''} ${rows.length === 1 ? 'result' : 'results'}`
+              : `${rows.length} commands`}
+          </span>
+        </div>
+
+        {/* The answers. The list scrolls, the popup does not. */}
+        <div
+          ref={list}
+          id="help-results"
+          data-help-list
+          role="listbox"
+          aria-label={searching ? 'Results' : 'All commands'}
+          className="p-scroll min-h-0 flex-1 overflow-y-auto"
+        >
+          {rows.length === 0 && (
+            <p data-help-empty className="px-5 py-8 text-center text-[12.5px] leading-relaxed text-[var(--p-dim)]">
+              Nothing matches. Say it another way (what you want to DO, such as "delete a folder"), or try another
+              shell.
+            </p>
+          )}
+          {drawn.map((entry, i) => {
+            const header = !searching && (i === 0 || drawn[i - 1].category !== entry.category)
+            const isActive = i === active
+            const commands = [
+              { label: '', command: entry.command },
+              ...(entry.variants ?? []).map((v) => ({ label: v.label, command: v.command }))
+            ]
+            return (
+              <div key={entry.id}>
+                {header && (
+                  <h3
+                    data-help-category={entry.category}
+                    className="sticky top-0 z-10 border-b border-[color:var(--p-line)] bg-[var(--p-side-flat)] px-5 pb-1.5 pt-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--p-dim)]"
+                  >
+                    {CATEGORY_NAME.get(entry.category) ?? entry.category}
+                  </h3>
+                )}
+                <div
+                  id={`help-entry-${entry.id}`}
+                  role="option"
+                  aria-selected={isActive}
+                  data-help-id={entry.id}
+                  data-help-index={i}
+                  data-help-active={isActive || undefined}
+                  onMouseDown={() => setActive(i)}
+                  className={`border-b border-l-2 border-b-[color:var(--p-line)] px-5 py-3.5 ${
+                    isActive ? 'border-l-[color:var(--p-accent-hi)] bg-[var(--p-hover)]' : 'border-l-transparent'
+                  }`}
+                >
+                  <div className="flex items-baseline gap-3">
+                    <h4 data-help-task className="min-w-0 flex-1 text-[13.5px] font-semibold leading-snug text-[var(--p-text)]">
+                      {entry.task}
+                    </h4>
+                    {searching && (
+                      <span className="shrink-0 text-[11px] text-[var(--p-dim2)]">
+                        {CATEGORY_NAME.get(entry.category) ?? entry.category}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--p-text-soft)]">{entry.summary}</p>
+                  <div className="mt-2.5 flex flex-col gap-2">
+                    {commands.map((c, n) => (
+                      <div key={n} data-help-variant={n}>
+                        {c.label && <p className="mb-1 text-[11.5px] text-[var(--p-dim)]">{c.label}</p>}
+                        <CommandBox
+                          command={c.command}
+                          copyKey={`${entry.id}#${n}`}
+                          copied={copied?.key === `${entry.id}#${n}` && copied.ok}
+                          failed={copied?.key === `${entry.id}#${n}` && !copied.ok}
+                          mono={monoFont}
+                          onCopy={copy}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {entry.placeholders && (
+                    <dl data-help-placeholders className="mt-2.5 flex flex-col gap-1">
+                      {Object.entries(entry.placeholders).map(([name, what]) => (
+                        <div key={name} className="flex items-baseline gap-2 text-[11.5px] leading-snug">
+                          <dt
+                            className="shrink-0 rounded bg-[var(--p-hover-hi)] px-1 py-px font-semibold text-[var(--p-text)]"
+                            style={{ fontFamily: monoFont }}
+                          >
+                            {name}
+                          </dt>
+                          <dd className="min-w-0 text-[var(--p-dim)]">{what}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  {entry.danger && (
+                    // The ink is the theme's own text and only the mark and
+                    // the rule are amber: an amber sentence is unreadable on
+                    // half the light themes, and this is the one line in the
+                    // entry that has to be read.
+                    <div
+                      data-help-danger
+                      role="note"
+                      className="mt-2.5 flex items-start gap-2 rounded-md border-l-2 border-[#e0a100] bg-[color-mix(in_srgb,#e0a100_13%,transparent)] px-2.5 py-1.5 text-[12px] leading-snug text-[var(--p-text)]"
+                    >
+                      <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="#e0a100" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-px shrink-0" aria-hidden>
+                        <path d="M12 3.5l9.5 16.5h-19z" />
+                        <path d="M12 10v4.5M12 17.5v.01" />
+                      </svg>
+                      <span>
+                        <span className="font-semibold">Careful. </span>
+                        {entry.danger}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+          {drawn.length < rows.length && <div ref={sentinel} data-help-more className="h-8" aria-hidden />}
+        </div>
+
+        {/* The rule, said where it is read: a newcomer's first question about a
+            panel of commands is whether clicking one runs it. */}
+        <div className="flex shrink-0 items-center gap-3 border-t border-[color:var(--p-line)] px-4 py-2 text-[11.5px] text-[var(--p-dim)]">
+          <span data-help-rule className="min-w-0 flex-1 truncate">
+            Nothing is typed or run for you: copy a command, then paste it yourself.
+          </span>
+          <span className="hidden shrink-0 items-center gap-1.5 sm:flex" aria-hidden>
+            <Key>Up</Key>
+            <Key>Down</Key>
+            <span>move</span>
+            <Key>Enter</Key>
+            <span>copy</span>
+            <Key>Esc</Key>
+            <span>close</span>
+          </span>
+        </div>
+        {/* What a screen reader hears: the visible "Copied" is decoration. */}
+        <span data-help-said role="status" aria-live="polite" className="sr-only">
+          {said}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function Key({ children }: { children: string }): JSX.Element {
+  return (
+    <kbd className="rounded border border-[color:var(--p-line)] bg-[var(--p-control)] px-1 py-px font-sans text-[10.5px] font-semibold text-[var(--p-text-soft)]">
+      {children}
+    </kbd>
+  )
+}
