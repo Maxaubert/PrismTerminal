@@ -140,7 +140,11 @@ const DESTRUCTIVE: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'Set-Content / Out-File', re: /\b(?:Set-Content|Out-File)\b/i },
   { name: 'Clear-Content', re: /\bClear-Content\b/i },
   { name: 'npm cache clean', re: /\bnpm\s+cache\s+clean\b/ },
-  { name: 'sed -i', re: /\bsed\s+-i(?!\.)/ }
+  { name: 'sed -i', re: /\bsed\s+-i(?!\.)/ },
+  // A single > writes OVER the file it names. Not >>, not a numbered stream's
+  // own (2>nul, 2>&1), not the bin (nul, /dev/null, $null), not an arrow (->, =>).
+  { name: 'redirect over a file', re: /(?<![>0-9&=-])>(?!>)\s*(?!nul\b|\/dev\/null|\$null|&)\S/i },
+  { name: 'download over a file', re: /\bcurl(?:\.exe)?\b.*\s-\w*[oO]\b|-OutFile\b/ }
 ]
 
 const destructiveHits = (e: HelpEntry): string[] =>
@@ -191,13 +195,17 @@ describe('the help catalogue', () => {
     expect(bad.map((e) => e.id)).toEqual([])
   })
 
-  it('keeps every command to one line, trimmed, with no angle-bracket placeholder', () => {
+  it('keeps every command to one line of plain ASCII, trimmed, with no angle-bracket placeholder', () => {
     const bad: string[] = []
     for (const e of ALL_HELP)
       for (const c of commandsOf(e)) {
         // A shell reads "<NAME>" as redirection from a file called NAME. A lone
         // "<" or ">" is real redirection and is allowed; a bracketed word is not.
-        if (!c || c !== c.trim() || /[\r\n]/.test(c) || /<[A-Za-z][A-Za-z0-9_ -]*>/.test(c)) bad.push(`${e.id}: ${c}`)
+        // Printable ASCII only (which also rules out a line break): a curly quote
+        // or a non-breaking space looks right on screen and is a different
+        // command to a shell.
+        if (!c || c !== c.trim() || /[^\x20-\x7e]/.test(c) || /<[A-Za-z][A-Za-z0-9_ -]*>/.test(c))
+          bad.push(`${e.id}: ${c}`)
       }
     expect(bad).toEqual([])
   })
@@ -209,11 +217,11 @@ describe('the help catalogue', () => {
     expect(files.filter((f) => readFileSync(join(__dirname, f), 'utf8').includes(EM_DASH))).toEqual([])
   })
 
-  it('gives every entry 6 to 14 keywords, lower case, none twice', () => {
+  it('gives every entry 6 to 16 keywords, lower case, none twice', () => {
     const bad = ALL_HELP.filter(
       (e) =>
         e.keywords.length < 6 ||
-        e.keywords.length > 14 ||
+        e.keywords.length > 16 ||
         new Set(e.keywords).size !== e.keywords.length ||
         e.keywords.some((k) => !k.trim() || k !== k.trim() || k !== k.toLowerCase())
     )
@@ -261,7 +269,13 @@ describe('the help catalogue', () => {
       'git checkout -- FILE',
       'git branch -D NAME',
       'dd if=/dev/zero of=/dev/sda',
-      'mkfs.ext4 /dev/sdb1'
+      'mkfs.ext4 /dev/sdb1',
+      'tree /f /a > tree.txt',
+      'echo TEXT> NAME',
+      'COMMAND *> FILE',
+      'curl -L -o FILE URL',
+      'curl -LO URL',
+      'Invoke-WebRequest URL -OutFile FILE'
     ])
       expect(probe(c), c).not.toEqual([])
     for (const c of [
@@ -272,7 +286,15 @@ describe('the help catalogue', () => {
       'Get-Help Remove-Item',
       'git branch -d NAME',
       'git restore --staged FILE',
-      'sed -i.bak s/A/B/ FILE'
+      'sed -i.bak s/A/B/ FILE',
+      'COMMAND >> FILE',
+      'COMMAND 2>nul',
+      'COMMAND *> $null',
+      'COMMAND 2>/dev/null',
+      'whoami /groups | findstr /c:"S-1-16-12288" >nul && echo elevated',
+      "COMMAND | awk '{print $2}'",
+      'curl -I URL',
+      'curl -s https://ifconfig.me'
     ])
       expect(probe(c), c).toEqual([])
   })
@@ -344,7 +366,14 @@ const QUESTIONS: Readonly<Record<HelpShellChoice, ReadonlyArray<[string, string[
     ['set an environment variable', ['ps-env-set-session']],
     ['how much disk space is left', ['ps-disk-space']],
     ['/compact', ['claude-compact']],
-    ['install a program', ['pkg-winget-install']]
+    ['install a program', ['pkg-winget-install']],
+    ['how do i see whats in this folder', ['ps-list-files']],
+    ['what files are here', ['ps-list-files']],
+    ['ls -la', ['ps-list-files']],
+    ['newest files', ['ps-recent-files', 'ps-list-files']],
+    ['search for a word in all files', ['ps-search-in-files']],
+    ['direcotry size', ['ps-folder-size']],
+    ['close a frozen program', ['ps-stop-process']]
   ],
   cmd: [
     ['list files', ['cmd-list-files']],
@@ -360,7 +389,11 @@ const QUESTIONS: Readonly<Record<HelpShellChoice, ReadonlyArray<[string, string[
     ['what is my ip address', ['cmd-ip-address']],
     ['rename a file', ['cmd-rename']],
     ['undo last commit', ['git-undo-last-commit']],
-    ['add to path', ['cmd-add-to-path']]
+    ['add to path', ['cmd-add-to-path']],
+    ['how do i see whats in this folder', ['cmd-list-files']],
+    ['show me the files here', ['cmd-list-files']],
+    ['newest files', ['cmd-list-files']],
+    ['copy output to clipboard', ['cmd-pipe']]
   ],
   bash: [
     ['how do I find big files', ['sh-biggest-files']],
@@ -374,7 +407,12 @@ const QUESTIONS: Readonly<Record<HelpShellChoice, ReadonlyArray<[string, string[
     ['install a package with apt', ['sh-apt-install']],
     ['how much disk space is left', ['sh-disk-free']],
     ['undo last commit', ['git-undo-last-commit']],
-    ['resume my last claude conversation', ['claude-continue', 'claude-resume']]
+    ['resume my last claude conversation', ['claude-continue', 'claude-resume']],
+    ['how do i see whats in this folder', ['sh-list-files']],
+    ['what files are here', ['sh-list-files']],
+    ['how do i exit vim', ['sh-edit-file']],
+    ['where are my windows files', ['sh-windows-drives']],
+    ['script says bad interpreter ^M', ['sh-line-endings']]
   ]
 }
 

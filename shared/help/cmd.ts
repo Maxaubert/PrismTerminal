@@ -159,6 +159,8 @@ export const CMD_HELP: readonly HelpEntry[] = [
       { label: 'Folders only', command: 'tree' },
       { label: 'Save it as plain text you can paste anywhere', command: 'tree /f /a > tree.txt' }
     ],
+    danger:
+      'The variant that saves to tree.txt replaces a file of that name if one is already there.',
     keywords: [
       'tree',
       'folder structure',
@@ -293,8 +295,12 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'ls',
       'list files',
       'show files',
+      'see files',
+      'files here',
+      'what files are here',
+      'whats in this folder',
       'what is in this folder',
-      'get-childitem',
+      'list everything',
       'directory listing',
       'sort by date',
       'sort by size',
@@ -388,6 +394,8 @@ export const CMD_HELP: readonly HelpEntry[] = [
       NAME: 'The file to create, for example notes.txt',
       TEXT: 'The first line of the file'
     },
+    danger:
+      'The echo variant replaces everything in the file if it already exists. The main command never does.',
     keywords: [
       'touch',
       'create file',
@@ -812,6 +820,7 @@ export const CMD_HELP: readonly HelpEntry[] = [
       FILE: 'What to call the saved file',
       URL: 'The full address, starting https://'
     },
+    danger: 'A file of the same name is replaced without a question.',
     keywords: [
       'curl',
       'download',
@@ -1030,6 +1039,8 @@ export const CMD_HELP: readonly HelpEntry[] = [
     variants: [
       { label: 'Save it to a file before closing', command: 'doskey /history > history.txt' }
     ],
+    danger:
+      'The variant that saves to history.txt replaces a file of that name if one is already there.',
     keywords: [
       'history',
       'doskey',

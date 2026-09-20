@@ -83,7 +83,10 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
    Terminal uses a bare F1); and `<HelpSetting opensWith="...">` on its settings
    page, which says what that host's way in is. As with the update window, a
    host that raises a question of its own while the popup is up must PUT IT
-   AWAY first and must not open it over one: they are the same layer. Two rules
+   AWAY first and must not open it over one: they are the same layer. The same
+   goes for a chord that puts something ELSE in front while it is up (another
+   tab, a new tab, a find bar): a terminal takes the focus as it attaches, and a
+   popup left over a focused shell has its questions typed into that shell. Two rules
    travel with it. **It never inserts and never runs**: the component has no
    session id and no bridge, only `onCopy`, and a host must not give it more.
    **Copy is exact**: the text on screen, placeholders included, never trimmed.

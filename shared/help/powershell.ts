@@ -61,14 +61,18 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'dir',
       'ls -l',
       'ls -la',
+      'list everything',
       'list files',
       'show files',
+      'see files',
+      'files here',
+      'what files are here',
+      'whats in this folder',
       'what is in this folder',
       'directory listing',
       'folder contents',
       'gci',
-      'sort by date',
-      'sort by size'
+      'sort by date'
     ]
   },
   {
@@ -425,6 +429,7 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'what changed',
       'new files',
       'latest files',
+      'newest files',
       'modified in the last',
       'what did it touch',
       'files edited'
@@ -468,6 +473,7 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'findstr',
       'findstr /s',
       'search in files',
+      'search all files for a word',
       'find text in files',
       'which file contains',
       'search code',

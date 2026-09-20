@@ -606,6 +606,8 @@ describe('meaningfulWords', () => {
 describe('stem', () => {
   it('folds plurals, -ing, -ed, -er and -est', () => {
     expect(stem('biggest')).toBe('big')
+    // "newest files" is about what changed last, "new file" about making one.
+    expect(stem('newest')).not.toBe('new')
     expect(stem('bigger')).toBe('big')
     expect(stem('largest')).toBe('large')
     expect(stem('files')).toBe('file')
