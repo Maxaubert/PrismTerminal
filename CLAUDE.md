@@ -190,6 +190,30 @@ so an update never silently changes what an existing user sees; the bridge to ma
     the row now (an amber triangle, its sentence on the title and in an sr-only span), not a
     paragraph: the e2e still reads the sentence, and a row that deletes things must not look like
     one that lists them.
+  - **A ROW SAYS WHAT IT IS, AND CARRIES HIDDEN WORDS** (owner, 2026-09-20: "they should be ultra
+    concise and they should not say things like copy it to the clipboard. what is it? and they
+    should be very searchable. including a lot of meta tags that are not visible to the user but
+    lets them search easier"). Every variant label was written as a CAPTION under its parent's
+    title, and the table turned each one into a row name: "Copy it to the clipboard" now says
+    nothing. So a name is at most 8 words and 54 characters, never opens with it/this/also/
+    another, never leans on the row above, and differs from every other name in its entry; and
+    every variant carries 3 to 12 lower-case `keywords` that are NEVER drawn, at least two of
+    them words the name does not already contain. `catalogue.test.ts` enforces all of it, which
+    is what makes the rewrite reviewable: 828 rows were renamed and keyed by six agents, and the
+    same test says whether the next edit still holds. The entry SUMMARY is still written and
+    still read by the search even though the panel no longer draws it.
+  - **THE WIDTH IS THE USER'S** (same day: "you also need to be able to adjust the width of this
+    since some text can be seen"). A row is one line and truncates, so the width is how a long
+    command is read in place: an edge is dragged (the popup is centred, so one pixel of pointer
+    is two of width), Left and Right do the same on the focused grip, and it is remembered per
+    app in `prism.help.width`, clamped 560-1400 on the way in AND on the way out. NEVER SET IS
+    NOT ZERO: `Number(null)` is 0 and a naive clamp read that as the narrowest popup, which the
+    e2e caught as a footer line cut short.
+  - **NO SENTENCE UNDER THE LIST** (same day: "remove this line"). It used to read "Nothing is
+    typed or run for you: copy a command, then paste it yourself". The rule has not changed and
+    is still proved where it counts - the component cannot reach a shell, and the e2e reads the
+    terminal's text before and after everything it does - but the footer is the keys and
+    nothing else.
   - **COPY IS EXACT.** What goes on the clipboard is the text on screen, placeholders and all: a
     command with FOLDER in it fails loudly when pasted unedited, and a panel that guessed would
     fail quietly. It goes through main (`clipboard:write`, text only, refused past 4000 characters,

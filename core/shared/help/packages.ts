@@ -28,6 +28,14 @@
  * winget could not be run at all on the machine this was written on, so its
  * five entries are from its documentation. WSL was not available either; the
  * Ubuntu variants (python3, .venv/bin/activate) were reasoned, not run.
+ *
+ * EVERY NAME STANDS ALONE (2026-09-20). The panel draws one command per row,
+ * a name and the command and nothing else, so a variant label that read as a
+ * caption under its parent ("A particular version", "The short spelling",
+ * "Remove one") named nothing at all once the row was on its own in a search
+ * result. Each label now says what the command IS, and each carries hidden
+ * keywords of its own, never drawn, so the row is findable in the words
+ * somebody would actually type.
  */
 import type { HelpEntry } from './types'
 
@@ -41,7 +49,13 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
     summary:
       'Searches the Windows package catalogue by name. winget is built into Windows 11, the equivalent of apt or brew. Note the Id column in the results: that is what you install by.',
     command: 'winget search NAME',
-    variants: [{ label: 'See the details of one package before installing it', command: 'winget show --id PACKAGE_ID' }],
+    variants: [
+      {
+        label: "Show a package's details before installing",
+        command: 'winget show --id PACKAGE_ID',
+        keywords: ['winget show', 'package info', 'version publisher license', 'what does this install', 'inspect before installing', 'download size']
+      }
+    ],
     placeholders: { NAME: 'Part of the program name, such as node or python', PACKAGE_ID: 'The Id from the search results, such as Git.Git' },
     keywords: [
       'winget',
@@ -65,9 +79,21 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
       'Downloads and installs a program by its exact Id. Windows may show its usual permission prompt. Open a NEW terminal tab afterwards, or the shell will not find the new command.',
     command: 'winget install --id PACKAGE_ID -e',
     variants: [
-      { label: 'Git', command: 'winget install --id Git.Git -e' },
-      { label: 'Node.js (the long-term support version), which brings npm', command: 'winget install --id OpenJS.NodeJS.LTS -e' },
-      { label: 'PowerShell 7', command: 'winget install --id Microsoft.PowerShell -e' }
+      {
+        label: 'Install Git',
+        command: 'winget install --id Git.Git -e',
+        keywords: ['git for windows', 'git bash', 'version control', 'git is not recognized', 'clone a repo', 'source control']
+      },
+      {
+        label: 'Install Node.js LTS, which brings npm',
+        command: 'winget install --id OpenJS.NodeJS.LTS -e',
+        keywords: ['nodejs', 'node', 'javascript runtime', 'get npm', 'npm is not recognized', 'long term support', 'nvm']
+      },
+      {
+        label: 'Install PowerShell 7',
+        command: 'winget install --id Microsoft.PowerShell -e',
+        keywords: ['pwsh', 'powershell core', 'newer powershell', 'upgrade from 5.1', 'cross platform shell', 'modern shell']
+      }
     ],
     placeholders: { PACKAGE_ID: 'The Id shown by winget search, such as Python.Python.3.13' },
     keywords: [
@@ -92,8 +118,16 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
       'Upgrades every program winget knows a newer version of. Run plain winget upgrade first to see the list without changing anything.',
     command: 'winget upgrade --all',
     variants: [
-      { label: 'Only list what has an update', command: 'winget upgrade' },
-      { label: 'Update one program', command: 'winget upgrade --id PACKAGE_ID -e' }
+      {
+        label: 'List which programs have an update waiting',
+        command: 'winget upgrade',
+        keywords: ['what is out of date', 'check for updates', 'dry run', 'see updates without installing', 'available versions', 'apt list --upgradable']
+      },
+      {
+        label: 'Update one program by Id',
+        command: 'winget upgrade --id PACKAGE_ID -e',
+        keywords: ['upgrade a single app', 'just one program', 'newer version of one thing', 'targeted update', 'brew upgrade formula']
+      }
     ],
     placeholders: { PACKAGE_ID: 'The Id from the upgrade list' },
     keywords: [
@@ -115,7 +149,13 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
     task: 'See which programs are installed (winget)',
     summary: 'Lists installed programs with their versions, including ones that were not installed through winget.',
     command: 'winget list',
-    variants: [{ label: 'Only those matching a name', command: 'winget list NAME' }],
+    variants: [
+      {
+        label: 'Search the installed programs by name',
+        command: 'winget list NAME',
+        keywords: ['do i have it', 'is this app installed', 'which version', 'filter the list', 'find an installed program', 'add remove programs']
+      }
+    ],
     placeholders: { NAME: 'Part of the program name' },
     keywords: [
       'installed programs',
@@ -158,8 +198,16 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
       'Run it in a folder that has a package.json, typically straight after cloning: it downloads every dependency the project lists into node_modules.',
     command: 'npm install',
     variants: [
-      { label: 'Exactly the versions in package-lock.json, from scratch (it deletes node_modules first)', command: 'npm ci' },
-      { label: 'Start a brand-new project: create a package.json', command: 'npm init -y' }
+      {
+        label: 'Clean install from package-lock.json (npm ci)',
+        command: 'npm ci',
+        keywords: ['reproducible install', 'exact locked versions', 'deletes node_modules', 'ci build', 'continuous integration', 'fresh install', 'lockfile']
+      },
+      {
+        label: 'Create a package.json for a new project',
+        command: 'npm init -y',
+        keywords: ['npm init', 'start a project', 'scaffold', 'new node project', 'default answers', 'make package.json']
+      }
     ],
     keywords: [
       'npm install',
@@ -183,8 +231,16 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
     summary: 'Downloads a package and records it under dependencies in package.json, so everyone who installs the project gets it too.',
     command: 'npm install PACKAGE',
     variants: [
-      { label: 'A particular version', command: 'npm install PACKAGE@VERSION' },
-      { label: 'See what the newest published version is, without installing', command: 'npm view PACKAGE version' }
+      {
+        label: 'Install an exact npm package version',
+        command: 'npm install PACKAGE@VERSION',
+        keywords: ['pin a version', 'specific version', 'older version', 'downgrade', 'at sign version', 'yarn add package@1.2.3']
+      },
+      {
+        label: 'Check the newest published version of a package',
+        command: 'npm view PACKAGE version',
+        keywords: ['npm view', 'npm info', 'latest on npmjs', 'what version exists', 'lookup without installing', 'registry']
+      }
     ],
     placeholders: { PACKAGE: 'The package name on npmjs.com, such as express', VERSION: 'A version number, such as 4.18.2' },
     keywords: [
@@ -207,7 +263,13 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
     summary:
       'For tools needed while developing but not by the finished program: test runners, linters, TypeScript, bundlers. Recorded under devDependencies.',
     command: 'npm install --save-dev PACKAGE',
-    variants: [{ label: 'The short spelling', command: 'npm install -D PACKAGE' }],
+    variants: [
+      {
+        label: 'Add a dev dependency, short form -D',
+        command: 'npm install -D PACKAGE',
+        keywords: ['save-dev shorthand', 'npm i -d', 'not needed in production', 'devdependencies', 'build tooling', 'linter']
+      }
+    ],
     placeholders: { PACKAGE: 'The package name, such as typescript or vitest' },
     keywords: [
       'dev dependency',
@@ -235,7 +297,7 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
     id: 'pkg-npm-scripts',
     shell: 'any',
     category: 'packages',
-    task: 'See which scripts a project has (npm)',
+    task: 'List a project\'s npm scripts',
     summary:
       'With no script name, npm run lists every script defined in package.json (dev, build, test and so on) and the command behind each. The quickest way to learn how a project is started.',
     command: 'npm run',
@@ -259,9 +321,21 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
       'Runs one of the scripts from package.json. A dev server keeps running until you press Ctrl+C in its tab.',
     command: 'npm run SCRIPT',
     variants: [
-      { label: 'The usual development server', command: 'npm run dev' },
-      { label: 'The usual production build', command: 'npm run build' },
-      { label: 'test and start need no "run"', command: 'npm test' }
+      {
+        label: 'Start the development server',
+        command: 'npm run dev',
+        keywords: ['localhost', 'hot reload', 'vite', 'watch mode', 'serve the site', 'live server', 'npm start']
+      },
+      {
+        label: 'Build the project for production',
+        command: 'npm run build',
+        keywords: ['compile', 'bundle', 'dist folder', 'release build', 'deploy', 'webpack vite output']
+      },
+      {
+        label: 'Run the tests, no "run" needed',
+        command: 'npm test',
+        keywords: ['npm t', 'unit tests', 'vitest jest', 'check it works', 'test suite', 'npm run test']
+      }
     ],
     placeholders: { SCRIPT: 'A script name from npm run, such as dev or build' },
     keywords: [
@@ -280,13 +354,21 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
     id: 'pkg-npx',
     shell: 'any',
     category: 'packages',
-    task: 'Run a package once without installing it (npx)',
+    task: 'Run a package once without installing (npx)',
     summary:
       'Runs a command that ships inside an npm package. It uses the copy in this project when there is one; otherwise it downloads the package to a cache (asking first) and runs it from there.',
     command: 'npx PACKAGE',
     variants: [
-      { label: 'Example: check TypeScript types with the project\'s own compiler', command: 'npx tsc --noEmit' },
-      { label: 'Answer yes to the download question in advance', command: 'npx --yes PACKAGE' }
+      {
+        label: "Check TypeScript types with the project's compiler",
+        command: 'npx tsc --noEmit',
+        keywords: ['typescript', 'tsc', 'typecheck', 'compile errors', 'no emit', 'type errors without building']
+      },
+      {
+        label: 'Skip the npx download prompt',
+        command: 'npx --yes PACKAGE',
+        keywords: ['non interactive', 'ok to proceed', 'unattended script', 'auto confirm', 'npx -y', 'github actions']
+      }
     ],
     placeholders: { PACKAGE: 'The package whose command to run, such as create-vite' },
     keywords: [
@@ -329,8 +411,16 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
       'Moves every dependency to the newest version that the ranges in package.json allow (the Wanted column of npm outdated). It does not jump to a new major version; ask for that by name.',
     command: 'npm update',
     variants: [
-      { label: 'Only one package', command: 'npm update PACKAGE' },
-      { label: 'Jump one package to the very latest, major versions included', command: 'npm install PACKAGE@latest' }
+      {
+        label: 'Update one package only',
+        command: 'npm update PACKAGE',
+        keywords: ['single dependency', 'targeted upgrade', 'bump one library', 'leave the rest alone', 'one at a time']
+      },
+      {
+        label: 'Move one package to the latest major version',
+        command: 'npm install PACKAGE@latest',
+        keywords: ['breaking change', 'major upgrade', 'newest release', 'jump versions', 'ignore the semver range', 'package@latest']
+      }
     ],
     placeholders: { PACKAGE: 'The package name' },
     keywords: [
@@ -348,14 +438,26 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
     id: 'pkg-npm-global',
     shell: 'any',
     category: 'packages',
-    task: 'See or install global npm tools',
+    task: 'See which npm tools are installed globally',
     summary:
       'Global packages are command-line tools available in every folder (the Codex CLI is one) rather than parts of one project. This lists the ones you have.',
     command: 'npm ls -g --depth=0',
     variants: [
-      { label: 'Install a tool globally', command: 'npm install -g PACKAGE' },
-      { label: 'Remove one', command: 'npm uninstall -g PACKAGE' },
-      { label: 'Where global tools live (that folder must be on PATH)', command: 'npm config get prefix' }
+      {
+        label: 'Install a command-line tool globally',
+        command: 'npm install -g PACKAGE',
+        keywords: ['npm i -g', 'available everywhere', 'install the codex cli', 'system wide', 'cli', 'not just this project']
+      },
+      {
+        label: 'Uninstall a global npm tool',
+        command: 'npm uninstall -g PACKAGE',
+        keywords: ['remove a cli', 'npm rm -g', 'delete a global package', 'clean up tools', 'get rid of a command']
+      },
+      {
+        label: 'Where global npm tools are installed',
+        command: 'npm config get prefix',
+        keywords: ['npm prefix', 'add to path', 'installed but command not found', 'bin folder', 'global location', 'appdata npm']
+      }
     ],
     placeholders: { PACKAGE: 'The package name, such as @openai/codex' },
     keywords: [
@@ -377,7 +479,13 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
     summary:
       'A last resort for installs that fail with integrity or corrupted-download errors. Try the verify variant first: it checks the cache and removes only what is broken or unneeded.',
     command: 'npm cache clean --force',
-    variants: [{ label: 'Check and tidy the cache instead of emptying it', command: 'npm cache verify' }],
+    variants: [
+      {
+        label: 'Verify and tidy the npm cache',
+        command: 'npm cache verify',
+        keywords: ['without deleting the cache', 'repair the cache', 'is the cache broken', 'garbage collect', 'reclaim disk space', 'checksum']
+      }
+    ],
     keywords: [
       'clear cache',
       'npm cache',
@@ -401,11 +509,31 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
       "A venv is a private set of Python packages for ONE project, kept in a .venv folder, so projects cannot break each other. Create it once, then activate it in every new terminal tab before working: the prompt shows (.venv) while it is on.",
     command: 'python -m venv .venv',
     variants: [
-      { label: 'Activate, in PowerShell', command: '.\\.venv\\Scripts\\Activate.ps1' },
-      { label: 'Activate, in bash on Linux or WSL (where the create step is python3 -m venv .venv)', command: 'source .venv/bin/activate' },
-      { label: 'Activate, in cmd', command: '.venv\\Scripts\\activate.bat' },
-      { label: 'Activate, in Git Bash on Windows', command: 'source .venv/Scripts/activate' },
-      { label: 'Switch it off again, in any shell', command: 'deactivate' }
+      {
+        label: 'Activate the venv in PowerShell',
+        command: '.\\.venv\\Scripts\\Activate.ps1',
+        keywords: ['activate.ps1', 'pwsh', 'running scripts is disabled', 'execution policy', 'prompt shows .venv', 'windows']
+      },
+      {
+        label: 'Activate the venv on Linux or WSL',
+        command: 'source .venv/bin/activate',
+        keywords: ['bash', 'ubuntu', 'python3 -m venv', 'source activate', 'bin/activate', 'wsl', 'macos']
+      },
+      {
+        label: 'Activate the venv in cmd',
+        command: '.venv\\Scripts\\activate.bat',
+        keywords: ['command prompt', 'activate.bat', 'batch file', 'dos prompt', 'cmd.exe']
+      },
+      {
+        label: 'Activate the venv in Git Bash',
+        command: 'source .venv/Scripts/activate',
+        keywords: ['mingw', 'msys', 'bash on windows', 'scripts/activate', 'no bin folder on windows', 'git for windows']
+      },
+      {
+        label: 'Deactivate the venv, in any shell',
+        command: 'deactivate',
+        keywords: ['turn it off', 'leave the environment', 'exit venv', 'back to system python', 'prompt back to normal']
+      }
     ],
     keywords: [
       'venv',
@@ -431,9 +559,21 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
       'Installs into the active virtual environment (activate one first). Spelling it python -m pip makes sure the pip belongs to the Python you are actually running. On Ubuntu the command is python3.',
     command: 'python -m pip install PACKAGE',
     variants: [
-      { label: 'A particular version', command: 'python -m pip install PACKAGE==VERSION' },
-      { label: 'Upgrade one you already have', command: 'python -m pip install --upgrade PACKAGE' },
-      { label: 'Remove one', command: 'python -m pip uninstall PACKAGE' }
+      {
+        label: 'Install an exact Python package version',
+        command: 'python -m pip install PACKAGE==VERSION',
+        keywords: ['pin a version', 'double equals', 'downgrade', 'older release', 'specific release', 'requirements pinning']
+      },
+      {
+        label: 'Upgrade a package you already have',
+        command: 'python -m pip install --upgrade PACKAGE',
+        keywords: ['pip -u', 'newer version', 'update a library', 'pip install -u', 'bring it up to date']
+      },
+      {
+        label: 'Uninstall a Python package',
+        command: 'python -m pip uninstall PACKAGE',
+        keywords: ['remove a library', 'delete a package', 'pip remove', 'get rid of a module', 'clean up the venv']
+      }
     ],
     placeholders: { PACKAGE: 'The package name on pypi.org, such as requests', VERSION: 'A version number, such as 2.32.0' },
     keywords: [
@@ -476,7 +616,13 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
     summary:
       'Writes every package in the active environment, with its exact version, to requirements.txt, so someone else (or you, later) can recreate it. Do it inside the venv, or the file lists your whole machine.',
     command: 'python -m pip freeze > requirements.txt',
-    variants: [{ label: 'Only print the list, write nothing', command: 'python -m pip freeze' }],
+    variants: [
+      {
+        label: 'Print the package list without writing a file',
+        command: 'python -m pip freeze',
+        keywords: ['pip freeze', 'see the versions', 'without overwriting requirements.txt', 'copy the output', 'check before saving', 'stdout']
+      }
+    ],
     keywords: [
       'freeze',
       'pip freeze',
@@ -497,9 +643,21 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
     summary: 'Lists the packages in the active environment with their versions.',
     command: 'python -m pip list',
     variants: [
-      { label: 'Only those with a newer version available', command: 'python -m pip list --outdated' },
-      { label: 'Details of one package: version, location, what it depends on', command: 'python -m pip show PACKAGE' },
-      { label: 'Which Python and which pip this shell is using', command: 'python -m pip --version' }
+      {
+        label: 'List Python packages with an update available',
+        command: 'python -m pip list --outdated',
+        keywords: ['out of date', 'newer versions', 'check for upgrades', 'stale libraries', 'what needs updating']
+      },
+      {
+        label: "Show a package's version, location and dependencies",
+        command: 'python -m pip show PACKAGE',
+        keywords: ['pip show', 'where is it installed', 'requires', 'required-by', 'package details', 'site-packages']
+      },
+      {
+        label: 'Which Python and pip this shell uses',
+        command: 'python -m pip --version',
+        keywords: ['pip version', 'wrong interpreter', 'am i in the venv', 'python path', 'which pip', 'python3 vs python']
+      }
     ],
     placeholders: { PACKAGE: 'The package name' },
     keywords: [
@@ -519,16 +677,21 @@ export const PACKAGES_HELP: readonly HelpEntry[] = [
     id: 'pkg-command-not-found',
     shell: 'any',
     category: 'packages',
-    task: 'Fix "command not found" right after installing',
+    task: 'Fix "command not found" after installing',
     summary:
       'A shell reads PATH, the list of folders it looks for programs in, once, when it starts, and an installer changes PATH for shells started AFTER it. So first close this tab and open a new one. This command then shows where Windows finds the program: no result means its folder is not on PATH (or, for a global npm tool, see npm config get prefix).',
     command: 'where.exe NAME',
     variants: [
-      { label: 'In bash', command: 'which NAME' },
       {
-        label: 'PowerShell: re-read PATH in this tab without restarting it',
+        label: 'Find where a command lives, in bash',
+        command: 'which NAME',
+        keywords: ['which', 'bash', 'wsl', 'git bash', 'command location', 'linux equivalent of where']
+      },
+      {
+        label: 'Reload PATH in this tab (PowerShell)',
         command:
-          '$env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")'
+          '$env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")',
+        keywords: ['refreshenv', 'without restarting the terminal', 'env:path', 'pick up a new install', 'machine and user path', 'just installed']
       }
     ],
     placeholders: { NAME: 'The command that is not found, such as node or claude' },

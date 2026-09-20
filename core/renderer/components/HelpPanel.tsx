@@ -8,6 +8,7 @@ import {
   type HelpShellChoice
 } from '../../shared/help/index'
 import { searchHelp } from '../../shared/help/search'
+import { clampHelpWidth, HELP_WIDTH, setHelpWidth, useHelpWidth } from '../lib/helpPrefs'
 
 /**
  * THE COMMAND HELP POPUP (#12). Owner, 2026-09-19: "an easy to use panel where
@@ -254,6 +255,69 @@ export default function HelpPanel({
   onClose: () => void
 }): JSX.Element {
   const box = useRef<HTMLDivElement>(null)
+  // HOW WIDE IT IS, and it is DRAGGED rather than typed (owner, 2026-09-20:
+  // "you also need to be able to adjust the width of this since some text can
+  // be seen"). A row is one line and truncates, so the width is the only way
+  // to read a long command in place. Remembered per app; see helpPrefs.
+  const width = useHelpWidth()
+  const drag = useRef<{ x: number; from: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const onGrab = (e: React.PointerEvent<HTMLDivElement>): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    drag.current = { x: e.clientX, from: box.current?.getBoundingClientRect().width ?? width }
+    setDragging(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onDrag = (e: React.PointerEvent<HTMLDivElement>): void => {
+    const d = drag.current
+    if (!d) return
+    // The popup is CENTRED, so it grows from both edges at once: one pixel of
+    // pointer is two of width, or the edge runs away from the pointer.
+    const side = e.currentTarget.dataset.helpGrip === 'left' ? -1 : 1
+    setHelpWidth(d.from + (e.clientX - d.x) * 2 * side)
+  }
+  const onDrop = (e: React.PointerEvent<HTMLDivElement>): void => {
+    drag.current = null
+    setDragging(false)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+  /** The keyboard's way to the same thing, on a focused grip. */
+  const onGripKey = (e: React.KeyboardEvent<HTMLDivElement>, side: number): void => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    e.preventDefault()
+    e.stopPropagation()
+    const step = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 80 : 20) * side
+    setHelpWidth((box.current?.getBoundingClientRect().width ?? width) + step)
+  }
+  const grip = (side: 'left' | 'right'): JSX.Element => (
+    <div
+      data-help-grip={side}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Popup width"
+      aria-valuenow={width}
+      aria-valuemin={HELP_WIDTH.min}
+      aria-valuemax={HELP_WIDTH.max}
+      tabIndex={0}
+      onPointerDown={onGrab}
+      onPointerMove={onDrag}
+      onPointerUp={onDrop}
+      onPointerCancel={onDrop}
+      onKeyDown={(e) => onGripKey(e, side === 'left' ? -1 : 1)}
+      // A hit area wider than the line it draws: a 1px target is a target
+      // nobody hits. The line itself only shows while it is being used or
+      // pointed at, so a popup at rest has no furniture on it.
+      // INSIDE the box: it has overflow-hidden, and a grip hanging over the
+      // edge is clipped to nothing - the pointer then finds no target at all
+      // (measured: the drag moved the width by 0).
+      className={`absolute inset-y-0 ${side === 'left' ? 'left-0' : 'right-0'} z-10 w-2 cursor-ew-resize focus-visible:outline-none`}
+    >
+      <div
+        className={`mx-auto h-full w-px transition-opacity ${dragging ? 'bg-[var(--p-accent-hi)] opacity-100' : 'bg-[var(--p-divider)] opacity-0 hover:opacity-100'}`}
+      />
+    </div>
+  )
   const input = useRef<HTMLInputElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const sentinel = useRef<HTMLDivElement>(null)
@@ -392,7 +456,7 @@ export default function HelpPanel({
       // Tab stays inside. Behind this is a terminal, and a Tab that wandered
       // out of the popup would be typed into somebody's shell.
       const stops = [
-        ...(box.current?.querySelectorAll<HTMLElement>('input, button:not([disabled]), [tabindex="0"]') ?? [])
+        ...(box.current?.querySelectorAll<HTMLElement>('input, button:not([disabled])') ?? [])
       ]
       if (!stops.length) return
       const at = stops.indexOf(document.activeElement as HTMLElement)
@@ -434,8 +498,11 @@ export default function HelpPanel({
         aria-modal="true"
         aria-label="Command help"
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex h-[min(82vh,680px)] w-full max-w-[760px] flex-col overflow-hidden rounded-[var(--p-radius)] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] shadow-[0_24px_70px_rgba(0,0,0,.6)]"
+        style={{ width: clampHelpWidth(width) }}
+        className="relative flex h-[min(82vh,680px)] max-w-full flex-col overflow-hidden rounded-[var(--p-radius)] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] shadow-[0_24px_70px_rgba(0,0,0,.6)]"
       >
+        {grip('left')}
+        {grip('right')}
         {/* The question. */}
         <div className="flex shrink-0 items-center gap-2.5 border-b border-[color:var(--p-line)] px-4 py-3">
           <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="var(--p-dim)" strokeWidth="2" strokeLinecap="round" className="shrink-0" aria-hidden>
@@ -571,12 +638,13 @@ export default function HelpPanel({
           {drawn.length < rows.length && <div ref={sentinel} data-help-more className="h-8" aria-hidden />}
         </div>
 
-        {/* The rule, said where it is read: a newcomer's first question about a
-            panel of commands is whether clicking one runs it. */}
-        <div className="flex shrink-0 items-center gap-3 border-t border-[color:var(--p-line)] px-4 py-2 text-[11.5px] text-[var(--p-dim)]">
-          <span data-help-rule className="min-w-0 flex-1 truncate">
-            Nothing is typed or run for you: copy a command, then paste it yourself.
-          </span>
+        {/* The keys, and nothing else. The sentence that used to sit here -
+            "Nothing is typed or run for you: copy a command, then paste it
+            yourself" - was REMOVED (owner, 2026-09-20: "remove this line").
+            The rule it stated has not changed and is still enforced where it
+            matters: this component cannot reach a shell at all, and the e2e
+            reads the terminal's text before and after everything it does. */}
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-[color:var(--p-line)] px-4 py-2 text-[11.5px] text-[var(--p-dim)]">
           <span className="hidden shrink-0 items-center gap-1.5 sm:flex" aria-hidden>
             <Key>Up</Key>
             <Key>Down</Key>

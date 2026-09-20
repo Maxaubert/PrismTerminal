@@ -45,8 +45,19 @@ export interface HelpEntry {
    *  replaces (FOLDER, NAME, PORT): never angle brackets, which a shell reads
    *  as redirection. One line where the shell allows it. */
   command: string
-  /** Optional: further ready-to-copy variations, each with what it changes. */
-  variants?: ReadonlyArray<{ label: string; command: string }>
+  /**
+   * Further ready-to-copy commands. Each is a ROW OF ITS OWN in the panel
+   * (2026-09-20), so `label` is that row's NAME and has to stand alone: "Copy
+   * the path to the clipboard", never "Copy it to the clipboard", which only
+   * meant anything under its parent's title. Its `keywords` are that row's own
+   * hidden words, read by the search and never shown; the entry's keywords
+   * cover every row, so these are only what is true of THIS one.
+   */
+  variants?: ReadonlyArray<{
+    label: string
+    command: string
+    keywords?: ReadonlyArray<string>
+  }>
   /** What each placeholder stands for, when the command has any. */
   placeholders?: Readonly<Record<string, string>>
   /**
@@ -54,6 +65,11 @@ export interface HelpEntry {
    * everyday phrasing, the name of the same thing in another shell ("ls",
    * "dir", "grep"), the symptom ("port already in use"). Lower case. This is
    * what makes "how do I find big files" land, so be generous: 6 to 16.
+   *
+   * NONE OF THIS IS ON SCREEN (owner, 2026-09-20: "a lot of meta tags that are
+   * not visible to the user but lets them search easier"). The row shows its
+   * name and its command; the summary and these words are what the search
+   * reads, which is why both keep being written even though neither is drawn.
    */
   keywords: ReadonlyArray<string>
   /** Set on anything that deletes, overwrites, kills or cannot be undone: one
