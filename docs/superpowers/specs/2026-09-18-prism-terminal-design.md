@@ -116,6 +116,8 @@ argument and a visible window: just raise it.
 
 **Explorer verbs** (owner): classic HKCU verbs via `reg.exe` (argv only), on `Directory`
 ("Open in Prism Terminal", `%1`) and `Directory\Background` ("Open Prism Terminal here", `%V`).
+(Labels superseded 2026-09-19, #27, owner: both entries read "Open terminal here", since the icon
+already names the app; an install that has the old text is relabelled at launch.)
 NO verb under `*`. Key name `PrismTerminal`, distinct from Prism's. On by default, applied once
 (marker file in userData), switchable in Settings, reports what the REGISTRY says, never in dev
 or under `--e2e`. The NSIS uninstall macro deletes both keys, and a parity test asserts every key

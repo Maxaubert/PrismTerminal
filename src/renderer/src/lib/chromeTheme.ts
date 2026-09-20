@@ -1,5 +1,6 @@
 import type { TermTheme } from '@core/renderer/lib/termTheme'
 import { contrastRatio, ensureContrast, luminance, mixHex, normalizeColor } from '@core/renderer/lib/termAnsi'
+import { EDGE_ALPHA, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 
 // The window wears the terminal's theme. Every chrome colour is derived from
 // the theme's background, foreground and blue, and whatever falls short of a
@@ -73,8 +74,20 @@ export const alphaHex = (pct: number): string =>
  * since a panel you can read the terminal through is a smear rather than a
  * layer. Every value is #rrggbb or #rrggbbaa, never rgba(): xterm's search
  * decorations and the contrast maths both want hex.
+ *
+ * `edges` is the user's choice of how strongly the window draws its lines
+ * (#27). It is applied HERE, to the two tokens every edge in the window reads
+ * (`--p-divider`, `--p-line`: the title bar's rule, the tab separators, the
+ * settings rows, a control's outline, a menu's border), so no component has to
+ * know the setting exists and the shared settings in core/ follow it without
+ * being touched. The default is the look the window had before the choice.
  */
-export function chromeTokens(theme: TermTheme, opacityPct = 100, wantedAccent?: string): ChromeTokens {
+export function chromeTokens(
+  theme: TermTheme,
+  opacityPct = 100,
+  wantedAccent?: string,
+  edges: WindowEdges = 'hairline'
+): ChromeTokens {
   // Flattened before any maths: a theme may publish rgba() or #rrggbbaa, which
   // is fine to paint and NaN to measure, and NaN is how a hue walks to black.
   const bg = normalizeColor(theme.background ?? '', FALLBACK_BG)
@@ -126,6 +139,11 @@ export function chromeTokens(theme: TermTheme, opacityPct = 100, wantedAccent?: 
   // The window is ONE sheet (Prism, owner decision 2026-09-03): the title bar,
   // the tab strip and the ground are the same colour at the same alpha, or on
   // glass they read as panes butted together.
+  // The edges (#27): the same ink, at the alpha the choice asks for. Validated
+  // rather than trusted, since it comes out of localStorage. "None" is alpha
+  // 00 and still a colour, so a border keeps its pixel and nothing moves.
+  const edgeAlpha = EDGE_ALPHA[validWindowEdges(edges)]
+  const shade = light ? 'light' : 'dark'
   const glass = opacityPct < 100
   const sheet = glass ? bg + alphaHex(opacityPct) : bg
   const vars: Record<string, string> = {
@@ -149,8 +167,8 @@ export function chromeTokens(theme: TermTheme, opacityPct = 100, wantedAccent?: 
     '--p-icon': dim,
     '--p-hover': ink + alphaHex(light ? 7 : 6),
     '--p-hover-hi': ink + alphaHex(light ? 12 : 11),
-    '--p-divider': ink + alphaHex(light ? 10 : 7),
-    '--p-line': ink + alphaHex(light ? 12 : 9),
+    '--p-divider': ink + alphaHex(edgeAlpha.divider[shade]),
+    '--p-line': ink + alphaHex(edgeAlpha.line[shade]),
     '--p-preview': stage,
     // Form controls sit INTO the page, not on a platform: quieter than the stage.
     '--p-control': mixHex(bg, fg, light ? 0.09 : 0.035),

@@ -38,10 +38,11 @@ and want to know, at a glance, which one has finished.
 - **The theme is the window.** About forty terminal themes, a custom-theme editor, fifteen fonts.
   The title bar, tabs, menus and settings take their colours from the terminal theme you pick, and
   every colour is checked against a contrast floor, so no theme can make an unreadable window.
-  Acrylic works with any of them, with an opacity slider.
-- **Open a tab where you are.** "Open in Prism Terminal" on a folder and "Open Prism Terminal here"
-  on empty space, in Explorer's right-click menu. If the app is running, the folder arrives as a new
-  tab in its window.
+  Acrylic works with any of them, with an opacity slider. The lines between the parts of the window,
+  and the border round it, are yours to set: hairline, faint, solid, or none.
+- **Open a tab where you are.** "Open terminal here", with the app's icon beside it, on a folder and
+  on the empty space inside one, in Explorer's right-click menu. If the app is running, the folder
+  arrives as a new tab in its window.
 - **New tabs your way.** The + opens in your user folder, or in one folder you choose, or asks each
   time. Right-click the + for pinned and recent folders.
 - **Links look like links.** A URL printed in the terminal is highlighted and underlined all the

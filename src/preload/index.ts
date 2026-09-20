@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { createTermApi } from '@core/preload/api'
 import { createDictationApi } from '@core/preload/dictationApi'
 import type { Restored, SavedTabs, UpdateInfo } from '@shared/types'
+import type { WindowEdges } from '@shared/windowEdges'
 
 // The renderer's whole view of the machine. SANDBOXED: nothing here touches
 // node, and the only electron modules used are ones a sandboxed preload is
@@ -73,6 +74,10 @@ const api = {
   /** The theme's SOLID ground as #rrggbb: the window's own colour whenever the
    *  material is off. Not persisted: say it at launch and on a theme change. */
   setWindowBg: (hex: string): void => ipcRenderer.send('window:bg', hex),
+  /** How strongly the window draws its edges (#27), so the DWM border round it
+   *  follows the lines inside it. Not persisted in main: say it at launch and
+   *  on a change. Main reads anything it does not know as the default. */
+  setWindowEdges: (edges: WindowEdges): void => ipcRenderer.send('window:edges', edges),
   windowMinimize: (): void => ipcRenderer.send('window:minimize'),
   windowToggleMaximize: (): void => ipcRenderer.send('window:toggle-maximize'),
   /** Closes the window, which quits (after the agent question, if one is due). */
@@ -100,7 +105,10 @@ const api = {
   installUpdate: (url: string): Promise<boolean> => ipcRenderer.invoke('update:install', url),
 
   /** The e2e's verbGuard: registry writes attempted this session. Must be 0. */
-  e2eRegWrites: (): Promise<number> => ipcRenderer.invoke('e2e:reg-writes')
+  e2eRegWrites: (): Promise<number> => ipcRenderer.invoke('e2e:reg-writes'),
+  /** The e2e's: the edges setting as MAIN heard it (the DWM border it drives is
+   *  off under --e2e, so what main was told is what can be asserted). */
+  e2eWindowEdges: (): Promise<string> => ipcRenderer.invoke('e2e:window-edges')
 }
 
 export type PrismApi = typeof api

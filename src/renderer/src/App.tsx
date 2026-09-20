@@ -43,6 +43,7 @@ import {
 import { onTermLookChange, termAcrylic, termOpacity, termThemeId } from '@core/renderer/lib/termLook'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { applyChrome, chromeTokens } from './lib/chromeTheme'
+import { onWindowEdgesChange, windowEdges } from './lib/edgesPrefs'
 
 const Settings = lazy(() => import('./components/Settings'))
 
@@ -61,13 +62,22 @@ interface Ask {
 let seq = 0
 const nextId = (): string => 't' + Date.now().toString(36) + '-' + String((seq += 1))
 
-/** The window wears the terminal's theme; main hears about the material. */
+/** The window wears the terminal's theme; main hears about the material. The
+ *  edges setting (#27) rides the same paint: it changes two of the tokens, and
+ *  main is told so the DWM border round the window follows the lines in it. */
 function paintChrome(): void {
   const acrylic = termAcrylic()
   const id = termThemeId()
-  const tokens = chromeTokens(resolveTermTheme(id), acrylic ? termOpacity() : 100, presetAccent(id))
+  const edges = windowEdges()
+  const tokens = chromeTokens(
+    resolveTermTheme(id),
+    acrylic ? termOpacity() : 100,
+    presetAccent(id),
+    edges
+  )
   applyChrome(tokens)
   window.prism.setWindowBg(tokens.vars['--p-bg-solid'])
+  window.prism.setWindowEdges(edges)
   void window.prism.setAcrylic(acrylic)
 }
 
@@ -97,7 +107,12 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     paintChrome()
-    return onTermLookChange(paintChrome)
+    const offLook = onTermLookChange(paintChrome)
+    const offEdges = onWindowEdgesChange(paintChrome)
+    return () => {
+      offLook()
+      offEdges()
+    }
   }, [])
 
   const openTab = useCallback((cwd: string, resume?: string): string => {

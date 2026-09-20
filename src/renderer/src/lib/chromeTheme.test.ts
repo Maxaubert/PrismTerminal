@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CHROME_COLOUR_TOKENS, chromeTokens } from './chromeTheme'
 import { TERM_PRESETS, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
+import { WINDOW_EDGES } from '@shared/windowEdges'
 
 describe('chromeTokens', () => {
   it.each(TERM_PRESETS.map((p) => p.id))(
@@ -81,5 +82,68 @@ describe('chromeTokens', () => {
     expect(mode).toBe('dark')
     expect(vars['--p-bg-solid']).toBe('#0b0b0f')
     for (const v of Object.values(vars)) expect(v).toMatch(/^#[0-9a-f]{6}([0-9a-f]{2})?$/i)
+  })
+})
+
+// #27 (owner, 2026-09-19): "add the option to specify the edges ... Hairline,
+// Faint, or like Solid edges, or even No edges". Every edge in the window reads
+// one of two tokens, so the choice is applied where those two are derived.
+describe('the window edges', () => {
+  /** The alpha channel of a #rrggbbaa token, 0-255. */
+  const alpha = (hex: string): number => parseInt(hex.slice(7, 9), 16)
+  const LINES = ['--p-divider', '--p-line'] as const
+
+  it('hairline is the default, and is EXACTLY what the window looked like before there was a choice', () => {
+    // The numbers chromeTheme hard-coded before #27: the ink at 7% and 9% on a
+    // dark ground, 10% and 12% on a light one. Nobody's window changes until
+    // they choose, and the stylesheet's :root fallbacks stay true.
+    const dark = chromeTokens(resolveTermTheme('prism')).vars
+    expect(dark['--p-divider']).toBe('#ffffff12')
+    expect(dark['--p-line']).toBe('#ffffff17')
+    const light = chromeTokens(resolveTermTheme('github')).vars
+    expect(light['--p-divider']).toBe('#0000001a')
+    expect(light['--p-line']).toBe('#0000001f')
+    for (const id of ['prism', 'github']) {
+      const t = resolveTermTheme(id)
+      expect(chromeTokens(t, 100, undefined, 'hairline').vars).toEqual(chromeTokens(t).vars)
+    }
+  })
+
+  it.each(['prism', 'github'])('%s: none < faint < hairline < solid, on both line tokens', (id) => {
+    const of = (e: (typeof WINDOW_EDGES)[number]): Record<string, string> =>
+      chromeTokens(resolveTermTheme(id), 100, undefined, e).vars
+    for (const name of LINES) {
+      expect(alpha(of('none')[name]), name).toBe(0)
+      expect(alpha(of('faint')[name]), name).toBeGreaterThan(0)
+      expect(alpha(of('faint')[name]), name).toBeLessThan(alpha(of('hairline')[name]))
+      expect(alpha(of('hairline')[name]), name).toBeLessThan(alpha(of('solid')[name]))
+    }
+  })
+
+  it('no edges is a TRANSPARENT colour, never a missing one', () => {
+    // A border keeps its pixel of layout, so nothing in the window moves when
+    // the edges go; and every token stays hex, which the rest of this file
+    // already demands of the whole table.
+    const { vars } = chromeTokens(resolveTermTheme('prism'), 100, undefined, 'none')
+    expect(vars['--p-divider']).toBe('#ffffff00')
+    expect(vars['--p-line']).toBe('#ffffff00')
+  })
+
+  it('moves the two line tokens and nothing else', () => {
+    // Hover fills, the ground, the inks: an edges setting that changed any of
+    // those would be a second theme picker.
+    const base = chromeTokens(resolveTermTheme('dracula')).vars
+    for (const e of WINDOW_EDGES) {
+      const v = chromeTokens(resolveTermTheme('dracula'), 100, undefined, e).vars
+      for (const name of CHROME_COLOUR_TOKENS) {
+        if ((LINES as readonly string[]).includes(name)) continue
+        expect(v[name], `${e} ${name}`).toBe(base[name])
+      }
+    }
+  })
+
+  it('reads anything it does not know as the default', () => {
+    const t = resolveTermTheme('prism')
+    expect(chromeTokens(t, 100, undefined, 'dotted' as never).vars).toEqual(chromeTokens(t).vars)
   })
 })

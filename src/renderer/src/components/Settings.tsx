@@ -1,5 +1,7 @@
 import { useEffect, useState, type JSX, type ReactNode } from 'react'
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../lib/newTabPrefs'
+import { setWindowEdges, useWindowEdges } from '../lib/edgesPrefs'
+import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
 import { Pref, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
 import { DictationSettings } from '@core/renderer/settings/Dictation'
 import { TerminalAppearanceSettings } from '@core/renderer/settings/TerminalAppearance'
@@ -10,7 +12,7 @@ import { AgentIndicatorSetting, ShellSetting } from '@core/renderer/settings/Ter
 // in Prism (`core/renderer/settings`); only the personal values differ, and
 // each app keeps its own. What is left in this file is the page (two tabs and
 // a rail) and the rows that are about THIS app: where a new tab opens, the
-// Explorer menu, the version.
+// Explorer menu, the window's edges, the version.
 //
 // Settings WRITES STORES and nothing else. The window's chrome and its acrylic
 // material follow the terminal theme, and App is the one listening to
@@ -96,16 +98,22 @@ function GeneralTab(): JSX.Element {
       <ShellSetting />
       <AgentIndicatorSetting />
       {/* Explorer's own menu. Windows 11 hides classic verbs behind "Show more
-          options", and saying so is better than the user hunting for it. */}
+          options", and saying so is better than the user hunting for it. The
+          hint QUOTES the entry (#27): it no longer names the app, so the row
+          has to say which line of Explorer's menu it is talking about. */}
       <Pref
         id="explorer-verb"
         label="Explorer menu"
-        hint={verbBusy ? 'Asking Windows…' : 'On Windows 11 it is under Show more options.'}
+        hint={
+          verbBusy
+            ? 'Asking Windows…'
+            : '"Open terminal here" on a folder. On Windows 11 it is under Show more options.'
+        }
       >
         <Switch
           on={verb}
           onChange={setVerb}
-          label="Open in Prism Terminal in the Explorer menu"
+          label="Open terminal here, in the Explorer menu"
           disabled={verbBusy}
         />
       </Pref>
@@ -115,6 +123,54 @@ function GeneralTab(): JSX.Element {
         </span>
       </Pref>
     </div>
+  )
+}
+
+/* ---------- appearance ---------- */
+
+// WEAKEST TO STRONGEST, the order Prism's own Edges row uses (None, Faint,
+// Hairline, Strong). The owner asked for the option "like we have in the main
+// app", and a segmented control that is a scale reads as one only when its
+// steps are in order; the order he happened to say them in ("Hairline, Faint,
+// or like Solid edges, or even No edges") was a sentence, not a layout. The
+// names come from the ids in `WINDOW_EDGES`, so the two lists cannot drift.
+const EDGE_NAMES: Record<WindowEdges, string> = {
+  none: 'None',
+  faint: 'Faint',
+  hairline: 'Hairline',
+  solid: 'Solid'
+}
+const EDGE_OPTIONS: Array<{ id: WindowEdges; name: string }> = WINDOW_EDGES.map((id) => ({
+  id,
+  name: EDGE_NAMES[id]
+}))
+
+/**
+ * The Appearance page: the terminal's look, which is the core's and the same in
+ * Prism, and under it THIS APP'S one row about its own window (owner,
+ * 2026-09-19, #27: "add the option to specify the edges that you have in the
+ * Terminal app, like we have in the main app").
+ *
+ * It is this app's and not the core's because the edges are the window's
+ * chrome: in Prism that belongs to the app style, which has an Edges row of its
+ * own, so a terminal option for it there would be a second control over the
+ * same lines. It sits in the e2e's closed list of this app's rows for the same
+ * reason. No `ROWS` wrapper: the list above ends in its own bottom rule, and a
+ * second top rule under it would be a doubled line (at "solid", a visible one).
+ */
+function AppearanceTab(): JSX.Element {
+  const edges = useWindowEdges()
+  return (
+    <>
+      <TerminalAppearanceSettings />
+      <Pref
+        id="window-edges"
+        label="Edges"
+        hint="The lines between the parts of the window, and the border round it."
+      >
+        <Segmented value={edges} onChange={setWindowEdges} options={EDGE_OPTIONS} />
+      </Pref>
+    </>
   )
 }
 
@@ -220,7 +276,7 @@ export default function Settings(): JSX.Element {
           {tab === 'general' ? (
             <GeneralTab />
           ) : tab === 'appearance' ? (
-            <TerminalAppearanceSettings />
+            <AppearanceTab />
           ) : (
             <DictationSettings />
           )}
