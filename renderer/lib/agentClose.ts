@@ -34,8 +34,18 @@ export const AGENT_NAMES: Record<DetectedAgent, string> = {
 }
 
 /** What the question says. `forMs` is how long the agent has been mid-answer,
- *  null when it is only present, waiting at its own prompt. */
-export function closeQuestionTitle(target: 'tab' | 'window', forMs: number | null): string {
+ *  null when it is only present, waiting at its own prompt.
+ *
+ *  `install` (#28) is the window question by another door: installing an update
+ *  ends in the app quitting, so it is held by the same rule (`holdsWindowClose`)
+ *  and asked BEFORE the download. It says what it is about to do, because
+ *  "close the window?" over an Install button is a question about something
+ *  the user did not ask for. */
+export function closeQuestionTitle(
+  target: 'tab' | 'window' | 'install',
+  forMs: number | null
+): string {
+  if (target === 'install') return 'Stop the agent and install the update?'
   if (target === 'window') return 'Stop the agent and close the window?'
   return forMs === null ? 'Close the tab and end the agent?' : 'Stop the agent and close?'
 }
