@@ -1327,17 +1327,30 @@ const scenarios = {
     const entries = await dialog.locator('[data-update-entry]').allTextContents()
     ok(entries.length >= 5, `the sample notes are listed (${entries.length} entries)`)
     ok(entries[0].startsWith('The update button opens a window'), `as the pull requests' titles ("${entries[0]}")`)
-    ok(entries.some((e) => /\(#\d+\)$/.test(e)), 'each keeping its number as text')
+    // SORTED UNDER HEADINGS, worded for a reader (owner, 2026-09-20: "headers
+    // bug fixes, new features, so on... not like a git commit").
+    const sections = await dialog.locator('[data-update-section]').evaluateAll((els) =>
+      els.map((el) => ({ heading: el.querySelector('h3')?.textContent?.trim() ?? '', lines: [...el.querySelectorAll('[data-update-entry]')].map((li) => (li.textContent ?? '').trim()) }))
+    )
+    ok(sections.map((x) => x.heading).join('|') === 'New features|Bug fixes|Under the hood', `the notes are sorted under headings (${sections.map((x) => `${x.heading}: ${x.lines.length}`).join(', ')})`)
+    ok(sections[1]?.lines[0] === 'A prompt survives the window getting narrower and wider again', `a fix reads as a sentence, its "fix(terminal):" gone ("${sections[1]?.lines[0]}")`)
+    ok(entries.every((e) => !/\(#\d+\)\s*$/.test(e) && !/^[a-z]+(\([^)]*\))?!?:/.test(e) && e[0] === e[0].toUpperCase()), 'no line ends in a pull request number or starts with a commit type, and each starts with a capital')
     const text = (await dialog.textContent()) ?? ''
     ok(!/by @/.test(text), 'no author tail ("by @") reaches the window')
     ok(!/https?:|github\.com/.test(text), 'and no url does')
     ok(!/Full Changelog|New Contributors|first contribution|What's Changed/.test(text), 'nor the boilerplate round the list')
     ok((await dialog.locator('a').count()) === 0, 'there is no <a> element in it')
     ok(
-      (await dialog.locator('[data-update-notes]').evaluate((el) => [...el.querySelectorAll('*')].every((n) => ['H3', 'UL', 'LI', 'SPAN', 'P'].includes(n.tagName)))) === true,
+      (await dialog.locator('[data-update-notes]').evaluate((el) => [...el.querySelectorAll('*')].every((n) => ['SECTION', 'H3', 'UL', 'LI', 'SPAN', 'P'].includes(n.tagName)))) === true,
       'the notes are text in plain elements, nothing a body could have brought with it'
     )
-    ok(((await dialog.locator('[data-update-preview]').textContent()) ?? '').includes('preview'), 'a preview says that it is one')
+    ok(!/This is a preview/.test(text) && (await dialog.locator('[data-update-preview]').count()) === 0, 'a preview is not announced up front: the window is shown as it will be')
+    const bare = await dialog.locator('[data-update-notes]').evaluate((el) => {
+      const cs = getComputedStyle(el)
+      const alpha = Number((cs.backgroundColor.match(/[\d.]+/g) ?? [])[3] ?? 1)
+      return { alpha, border: ['Top', 'Right', 'Bottom', 'Left'].map((side) => parseFloat(cs[`border${side}Width`])).reduce((a, b) => a + b, 0) }
+    })
+    ok(bare.alpha === 0 && bare.border === 0, `the notes sit on the window's own ground: no fill, no border (alpha ${bare.alpha}, border ${bare.border}px)`)
     const look = await dialog.evaluate((el) => {
       const notes = el.querySelector('[data-update-notes]')
       const alpha = (c) => Number((c.match(/[\d.]+/g) ?? [])[3] ?? 1)
@@ -1507,7 +1520,8 @@ const scenarios = {
         return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
       }
       const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
-      const ground = lum(getComputedStyle(el.querySelector('[data-update-notes]')).backgroundColor)
+      // The notes have no ground of their own: they are on the dialog's.
+      const ground = lum(getComputedStyle(el).backgroundColor)
       const entry = lum(getComputedStyle(el.querySelector('[data-update-entry]')).color)
       return { box: lum(getComputedStyle(el).backgroundColor), contrast: ratio(ground, entry) }
     })
@@ -1683,7 +1697,7 @@ const scenarios = {
     ok(dom.forbidden === 0, `nothing the body asked for is an element (${dom.forbidden} anchors, images, scripts or frames)`)
     ok(dom.pwned === null, 'and its handler never ran')
     ok(!/evil\.example|https?:|by @/.test(dom.text), 'no url or author is printed either')
-    ok(/an image tag \(#1\)/.test(dom.text) && /a link and an anchor \(#2\)/.test(dom.text), 'what is left of each line is its words')
+    ok(/An image tag/.test(dom.text) && /A link and an anchor/.test(dom.text), 'what is left of each line is its words')
     ok(dom.entries === 20 && dom.more === '+ 10 more', `the list is capped and counts the rest (${dom.entries} shown, "${dom.more}")`)
     ok(dom.scrolls, 'the list scrolls inside the window')
     ok(dom.installOnScreen, 'and Cancel and Install stay on screen under it')

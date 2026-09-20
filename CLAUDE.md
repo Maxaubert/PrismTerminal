@@ -86,6 +86,16 @@ so an update never silently changes what an existing user sees; the bridge to ma
     renderer, `dangerouslySetInnerHTML` or an `<a>` on this path. The `updateNotes` e2e hands the
     real page a hostile body and asserts the DOM: no anchor, image, script or frame, and the
     handler never ran.
+  - **THE NOTES ARE SORTED UNDER HEADINGS AND WORDED FOR A READER** (#32; owner, 2026-09-20: "make
+    it look a bit better like having headers bug fixes, new features, so on. make it look proper
+    and not like a git commit", and "dont have the changelog inside a container, i just want it on
+    the main window bg", and of the "This is a preview" line: "dont show this text").
+    `shared/releaseGroups.ts` takes the parser's PLAIN STRINGS and only moves and trims them:
+    New features / Improvements / Bug fixes / Under the hood, by a conventional-commit prefix
+    (taken off) or how the title reads; an unmarked title is a feature; "Phone:" names a part of
+    the app and stays; the trailing "(#31)" goes; each line starts with a capital. The notes sit
+    on the dialog's own ground (no fill, no border, still scrolling inside a capped height), and a
+    preview is not announced up front: what it did is said where it ends.
   - **THE CHIP IS ACCENT-FILLED, AND THE WINDOW STAYS FOR THE INSTALL AND DRAWS THE BAR** (#32;
     owner, 2026-09-20: "have the update available button be accented colour. and when you click
     install keep me with the panel open and have the progress bar straight there, kind of like the
