@@ -7,7 +7,14 @@ GitHub Releases.
 
 ## This repo is the terminal of TWO apps
 
-**`core/` is the terminal, and Prism embeds it** (owner, 2026-09-19, #15: "this terminal app is just
+**`core/` is WHAT THE TWO APPS SHARE, and Prism embeds it.** It began as the terminal and nothing
+else; on 2026-09-19 (#28) the owner widened it on purpose. Asked whether the update window should be
+built twice or once, the answer was "yes keep the core", so the update chip, the window it opens,
+the release-notes parser and the update preview live in `core/` although none of them is terminal.
+The test for what belongs there is now "would the two apps otherwise each write this, and must it
+look and behave the same in both", not "is it part of the terminal". What an app's shell IS (tabs,
+roots, the window, its own settings page) still stays in the app. The terminal half is the older rule
+(owner, 2026-09-19, #15: "this terminal app is just
 an extraction of the main Prism app and should therefore be reflected in both apps... all should be
 synced, unless it conflicts with one app, then you need to ask me", and "why can't this repo be the
 core?"). Read [`core/README.md`](core/README.md) before touching anything under `core/`: it is the
@@ -63,6 +70,56 @@ so an update never silently changes what an existing user sees; the bridge to ma
     it sounds, AltGr on a physical keyboard, pause-media against a real player.
   - Re-pinning the engine: `fetch-whisper.mjs` and `ENGINE` in the catalog must agree (a test holds
     them together), and the GPU pack must be the SAME release tag.
+- **THE UPDATE CHIP OPENS A WINDOW; IT DOES NOT INSTALL** (#28; owner, 2026-09-19: "when you click
+  the Update badge, it opens like a pop window, which shows the change log or like patch notes for
+  the new update, and then you can choose cancel or install"). Built ONCE in `core/` for both apps:
+  `shared/updateTypes.ts`, `shared/releaseNotes.ts`, `main/updatePreview.ts`,
+  `renderer/lib/updateFlow.ts` (the pure reducer) + `useUpdateFlow.ts` (the hook; the host hands in
+  its bridge and its install guard), `renderer/components/UpdateChip.tsx` + `UpdateDialog.tsx`
+  (props only). This app's own part is `src/main/update.ts` (where to look: the repo, the installer's
+  name), the wiring in `main/index.ts`, and App's install guard. The rules that must not regress:
+  - **THE NOTES ARE PLAIN TEXT, NEVER HTML, NEVER MARKDOWN, NEVER A LINK.** They are a GitHub release
+    body: text off the network, in a window that can reach the bridge to main. `parseReleaseNotes`
+    reduces the body to a capped list of strings (the "by @user in url" tail dropped, the pull
+    request number kept as text, New Contributors and Full Changelog dropped, controls and the
+    bidi overrides stripped) and the dialog prints each as a text node. Do not add a markdown
+    renderer, `dangerouslySetInnerHTML` or an `<a>` on this path. The `updateNotes` e2e hands the
+    real page a hostile body and asserts the DOM: no anchor, image, script or frame, and the
+    handler never ran.
+  - **THE CHIP NEVER CHANGES WIDTH** (Prism's standing design: "the chip IS the progress bar, one
+    shape for every state, it never changes width"). The shape always was one; the width was NOT,
+    MEASURED with the fix taken out: 104.8px idle, 54.8px at "7%", 96.0px installing, because the
+    pill is sized by its label. Every label is always laid out in one grid cell and only the one
+    that applies is visible. The e2e samples the width and the left edge through a whole install.
+  - **THE LABEL'S INK FOLLOWS WHAT IS BEHIND IT.** The fill is a second copy of the chip in the
+    accent with `--p-on-accent`, clipped to the percentage; the copy underneath wears `--p-text`.
+    One ink for the whole label (the first build, and Prism's chip) put white "35%" on a pale blue
+    remainder on a light theme. That was seen in the e2e's screenshot and in none of its
+    assertions, which is the #20 lesson again; it is measured now.
+  - **`--preview-update`** (owner: "make like a fake update"), in the INSTALLED app too and under
+    `--e2e`: main offers the core's fake (next minor, a realistic generated body, `mock: true`) and
+    the real watcher never starts. Install then runs about three seconds of fake progress, answers
+    "nothing was installed", and the chip says "Preview only: nothing was installed". It must never
+    fetch, write a file, spawn anything or quit; `update.ts` counts checks and installs and the e2e
+    asserts both are 0, that no `prismterminal-update-*` folder or process appeared, and that the
+    app is still answering afterwards. What main OFFERED decides (`pendingUpdate.mock`), never what
+    the page sent. A second launch with the flag previews in the running app, only when nothing
+    real is on offer. An unpackaged build previews unasked (it replaced the old inert mock chip);
+    under `--e2e` without the flag there is no chip and no network, as before.
+  - **INSTALL IS HELD BY THE WINDOW'S OWN RULE.** Installing ends in a quit that main pre-answers
+    (`closeAgreed`), so App's install guard asks first while an agent is WORKING
+    (`holdsWindowClose`; title `closeQuestionTitle('install', ...)`, button "Install and restart").
+    Until #28 nothing in this app asked: main's comment said the page settles it, which was true of
+    Prism's page and never of this one. A preview asks nothing, since it quits nothing. A download
+    that fails now says so under the chip, where it used to fall back to "Update" in silence. The
+    `updateGuard` e2e drives the question, Cancel, the go-ahead and the failure line with an offer
+    whose url `installUpdate` refuses before it sends a byte (`PT_E2E_UPDATE_OFFER`, e2e only).
+  - **ONE QUESTION AT A TIME** (review of #28, 2026-09-20). The app's chords still work over the
+    update window, so Ctrl+W on an agent's tab (or Alt+F4) raised the close question UNDER it, with
+    the focus on "Close tab" where nobody could see it: Enter, aimed at Install, ended the agent.
+    MEASURED in the e2e with the fix taken out. App now puts the update window away whenever a
+    question (`ask`) appears; `updateGuard` holds it. The window's Tab trap also leaves Ctrl+Tab
+    alone, which used to switch tabs AND move the focus inside the window in one press.
 - **A PAGE THAT WORKS IS NOT A PAGE THAT LOOKS RIGHT** (#20, 2026-09-19). Moving the settings into
   `core/` dropped every Tailwind class used only there (`core/` is outside the scanned root; the fix
   is the `@source` line at the top of `index.css`, do not remove it). All 14 e2e scenarios passed over
@@ -124,7 +181,7 @@ Design spec and plan: `docs/superpowers/specs/2026-09-18-prism-terminal-design.m
 In: tabs (a tab is ONE shell and its folder, nothing else), the agent indicator, themes + custom
 theme + fonts + acrylic, tab restore with agent resume, the + with ask / fixed-folder modes and its
 pinned + recent list, the start screen, find in scrollback, the paste and drop rules, close
-confirmation, Explorer verbs, update chip, single instance.
+confirmation, Explorer verbs, the update chip and its window, single instance.
 
 Out, each a fresh owner decision and not a natural next step: split panes, several shells per tab,
 per-shell profiles, a tray icon, multiple windows, SSH management, app styles separate from the
@@ -286,8 +343,9 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
 - `npm run e2e` builds and drives the app through Playwright over CDP, PARKED offscreen and
   unfocusable (`--e2e`), each scenario in its own profile and reaping its processes (the app is
   single-instance, so a stray one takes every later launch's folder and exits it).
-  `npm run e2e -- <name>` runs the scenarios whose name contains `<name>`. Under `--e2e`: no verb write, no updater, and
-  `PT_E2E_PICK` answers the folder chooser. An app whose stand-in agent is "working" will hold
+  `npm run e2e -- <name>` runs the scenarios whose name contains `<name>`. Under `--e2e`: no verb write, no updater
+  (unless `--preview-update` asks for the fake one, or `PT_E2E_UPDATE_OFFER` hands over a
+  real-shaped offer that cannot download), and `PT_E2E_PICK` answers the folder chooser. An app whose stand-in agent is "working" will hold
   `app.close()` on the close question; end scenarios idle.
 - CI (`ci.yml`): typecheck + lint + unit on PR and push to main. The e2e is the local pre-push gate.
 - Shipping follows the global rules: issue, branch, PR, squash-merge, never commit to main, never

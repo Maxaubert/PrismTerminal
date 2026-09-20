@@ -92,7 +92,10 @@ const api = {
 
   /* ----- the update check ----- */
 
-  /** A newer release exists (mock: true in unpackaged builds, as a preview). */
+  // These three are the core's UpdateBridge (core/renderer/lib/useUpdateFlow),
+  // spelled the same in Prism's preload: the chip and its window are shared.
+  /** A newer release exists, with its notes (mock: true for a preview:
+   *  `--preview-update`, or any unpackaged build). */
   onUpdate: (cb: (info: UpdateInfo) => void): (() => void) => {
     const off = on('update:available', cb)
     // Ask main to replay an offer that arrived before this renderer loaded.
@@ -101,14 +104,19 @@ const api = {
   },
   /** Download percentage while an update installs. */
   onUpdateProgress: (cb: (pct: number) => void): (() => void) => on('update:progress', cb),
-  /** Download the named installer and hand off to it; the app quits under it. */
+  /** Download the named installer and hand off to it; the app quits under it.
+   *  False when nothing was installed, which is always the case for a preview. */
   installUpdate: (url: string): Promise<boolean> => ipcRenderer.invoke('update:install', url),
 
   /** The e2e's verbGuard: registry writes attempted this session. Must be 0. */
   e2eRegWrites: (): Promise<number> => ipcRenderer.invoke('e2e:reg-writes'),
   /** The e2e's: the edges setting as MAIN heard it (the DWM border it drives is
    *  off under --e2e, so what main was told is what can be asserted). */
-  e2eWindowEdges: (): Promise<string> => ipcRenderer.invoke('e2e:window-edges')
+  e2eWindowEdges: (): Promise<string> => ipcRenderer.invoke('e2e:window-edges'),
+  /** The e2e's: release checks sent and installs attempted this session. A
+   *  preview, fake install included, must leave both at 0. */
+  e2eUpdateCalls: (): Promise<{ checks: number; installs: number }> =>
+    ipcRenderer.invoke('e2e:update-calls')
 }
 
 export type PrismApi = typeof api

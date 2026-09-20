@@ -16,7 +16,7 @@
 import { _electron as electron } from 'playwright-core'
 import { execFileSync, spawn } from 'child_process'
 import { createHash } from 'crypto'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, truncateSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, truncateSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { createRequire } from 'module'
@@ -862,6 +862,420 @@ const scenarios = {
       'and the row shows Solid pressed'
     )
     ok((await page.evaluate(() => window.prism.e2eRegWrites())) === 0, 'no registry write was attempted under --e2e')
+    await app.close().catch(() => {})
+  },
+
+  /**
+   * THE UPDATE WINDOW (#28; owner, 2026-09-19: "when you click the Update badge,
+   * it opens like a pop window, which shows the change log or like patch notes
+   * for the new update, and then you can choose cancel or install", and "make
+   * like a fake update"). Driven through `--preview-update`, which is the
+   * owner's own way in, so the scenario proves the preview and the window at
+   * once: the chip is in the title bar, a click opens the window and installs
+   * NOTHING, the notes are plain text (no anchor, no author tail, no url), every
+   * way out closes it, and Install runs the fake progress in the chip, ends on
+   * the preview line, and leaves the network, the disk and the process list
+   * exactly as they were.
+   *
+   * THE CHIP'S WIDTH IS MEASURED IN EVERY PHASE, sampled the whole way through
+   * the install rather than read once per state: the design is that it never
+   * changes, and before this change it did (the pill was sized by a label that
+   * went from "Update 0.5.0" to "7%"). Screenshots of the chip, the window and
+   * the progress go to .e2e-shots/, on a dark theme and on a light one.
+   */
+  async updateWindow(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: ['--preview-update', w.alpha] })
+    await until(async () => (await tabLabels(page)).length === 1)
+    const current = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')).version
+    const [major, minor] = current.split('.').map(Number)
+    const next = `${major}.${minor + 1}.0`
+    const shot = (name) => page.screenshot({ path: resolve(process.cwd(), `.e2e-shots/${name}.png`) }).catch(() => {})
+    const chip = page.locator('[data-title-bar] [data-update-chip]')
+    const dialog = page.locator('[data-update-dialog]')
+    const shownLabel = () => page.evaluate(() => document.querySelector('[data-update-chip] [data-update-label="shown"]')?.textContent ?? '')
+    const closed = () => until(async () => (await dialog.count()) === 0, 4000, 50)
+    const opened = () => until(async () => (await dialog.count()) === 1, 4000, 50)
+
+    ok(await until(async () => (await chip.count()) === 1, 8000), 'with --preview-update the chip is in the title bar, under --e2e too')
+    ok((await shownLabel()) === `Update ${next}`, `it offers the next minor after ${current} ("${await shownLabel()}")`)
+    ok((await dialog.count()) === 0, 'and nothing opens by itself')
+    const width0 = await chip.evaluate((el) => el.getBoundingClientRect().width)
+    const left0 = await chip.evaluate((el) => el.getBoundingClientRect().left)
+    await shot('update-chip-dark')
+
+    // What an install would leave behind, read BEFORE anything is clicked.
+    const updateDirs = () => readdirSync(tmpdir()).filter((n) => n.startsWith('prismterminal-update-')).sort().join('|')
+    // The hand-off a real install spawns names that temp folder on its command
+    // line. The query's own PowerShell names it too, so it leaves itself out.
+    const installers = () => {
+      try {
+        return execFileSync(
+          'powershell.exe',
+          ['-NoProfile', '-Command', "@(Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like '*prismterminal-update-*' }).Count"],
+          { encoding: 'utf8', windowsHide: true }
+        ).trim()
+      } catch {
+        return 'unknown'
+      }
+    }
+    const dirsBefore = updateDirs()
+    const installersBefore = installers()
+
+    await chip.click()
+    ok(await opened(), 'a click on the chip opens the window')
+    ok((await page.evaluate(() => window.prism.e2eUpdateCalls())).installs === 0, 'and installs nothing: the click used to download and quit')
+    ok(((await dialog.locator('h2').textContent()) ?? '') === `Update to ${next}`, 'its title names the version')
+    ok(((await dialog.locator('[data-update-current]').textContent()) ?? '').trim() === `You have ${current}`, `and a quiet line says what is running (${current})`)
+    const entries = await dialog.locator('[data-update-entry]').allTextContents()
+    ok(entries.length >= 5, `the sample notes are listed (${entries.length} entries)`)
+    ok(entries[0].startsWith('The update button opens a window'), `as the pull requests' titles ("${entries[0]}")`)
+    ok(entries.some((e) => /\(#\d+\)$/.test(e)), 'each keeping its number as text')
+    const text = (await dialog.textContent()) ?? ''
+    ok(!/by @/.test(text), 'no author tail ("by @") reaches the window')
+    ok(!/https?:|github\.com/.test(text), 'and no url does')
+    ok(!/Full Changelog|New Contributors|first contribution|What's Changed/.test(text), 'nor the boilerplate round the list')
+    ok((await dialog.locator('a').count()) === 0, 'there is no <a> element in it')
+    ok(
+      (await dialog.locator('[data-update-notes]').evaluate((el) => [...el.querySelectorAll('*')].every((n) => ['H3', 'UL', 'LI', 'SPAN', 'P'].includes(n.tagName)))) === true,
+      'the notes are text in plain elements, nothing a body could have brought with it'
+    )
+    ok(((await dialog.locator('[data-update-preview]').textContent()) ?? '').includes('preview'), 'a preview says that it is one')
+    const look = await dialog.evaluate((el) => {
+      const notes = el.querySelector('[data-update-notes]')
+      const alpha = (c) => Number((c.match(/[\d.]+/g) ?? [])[3] ?? 1)
+      const box = el.getBoundingClientRect()
+      const buttons = [...el.querySelectorAll('button')].map((b) => (b.textContent ?? '').trim())
+      return {
+        alpha: alpha(getComputedStyle(el).backgroundColor),
+        overflow: getComputedStyle(notes).overflowY,
+        maxHeight: getComputedStyle(notes).maxHeight,
+        inside: box.top >= 0 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth,
+        buttons,
+        focused: (document.activeElement?.textContent ?? '').trim()
+      }
+    })
+    ok(look.alpha === 1, `the window is on the opaque surface (alpha ${look.alpha})`)
+    ok(look.overflow === 'auto' && look.maxHeight !== 'none', `the list scrolls inside a capped height (${look.overflow}, ${look.maxHeight})`)
+    ok(look.inside, 'the whole window is on screen')
+    ok(look.buttons.join('|') === 'Cancel|Install', `the choices are Cancel and Install, in that order (${look.buttons.join('|')})`)
+    ok(look.focused === 'Install', 'Install is the primary, and holds the focus')
+    await shot('update-dialog-dark')
+
+    await page.keyboard.press('Escape')
+    ok(await closed(), 'Escape closes it')
+    ok((await chip.count()) === 1 && (await shownLabel()) === `Update ${next}`, 'and the offer is still there')
+    await chip.click()
+    await opened()
+    await dialog.locator('[data-update-cancel]').click()
+    ok(await closed(), 'Cancel closes it')
+    await chip.click()
+    await opened()
+    await page.mouse.click(8, 300)
+    ok(await closed(), 'and so does a press outside it')
+    ok((await page.evaluate(() => window.prism.e2eUpdateCalls())).installs === 0, 'none of which installed anything')
+
+    // Install: sample the chip the whole way, so a width that moved for one
+    // frame is caught as surely as one that stayed moved.
+    await chip.click()
+    await opened()
+    await page.evaluate(() => {
+      window.__chip = []
+      window.__chipTimer = setInterval(() => {
+        const c = document.querySelector('[data-update-chip]')
+        if (!c) return
+        window.__chip.push({
+          w: c.getBoundingClientRect().width,
+          phase: c.dataset.phase,
+          label: c.querySelector('[data-update-label="shown"]')?.textContent ?? '',
+          left: c.getBoundingClientRect().left
+        })
+      }, 25)
+    })
+    await dialog.locator('[data-update-install]').click()
+    ok(await closed(), 'Install closes the window')
+    ok(
+      await until(() => page.evaluate(() => document.querySelector('[data-update-chip]')?.dataset.phase === 'downloading'), 4000, 25),
+      'and the progress starts in the chip'
+    )
+    await until(() => page.evaluate(() => Number(document.querySelector('[data-update-chip]')?.getAttribute('aria-valuenow') ?? 0) >= 35), 6000, 25)
+    await shot('update-progress-dark')
+    const notice = page.locator('[data-update-notice]')
+    ok(await until(async () => (await notice.count()) === 1, 10000, 50), 'the fake install ends with a line under the chip')
+    ok(((await notice.textContent()) ?? '').trim() === 'Preview only: nothing was installed', `which says what happened ("${((await notice.textContent()) ?? '').trim()}")`)
+    await shot('update-notice-dark')
+    const samples = await page.evaluate(() => {
+      clearInterval(window.__chipTimer)
+      return window.__chip
+    })
+    const phases = [...new Set(samples.map((s) => s.phase))]
+    ok(['idle', 'downloading', 'installing'].every((p) => phases.includes(p)), `the chip went through every phase (${phases.join(', ')}; ${samples.length} samples)`)
+    const pcts = samples.filter((s) => s.phase === 'downloading').map((s) => parseInt(s.label, 10))
+    ok(pcts.length > 5 && pcts.every((p, i) => i === 0 || p >= pcts[i - 1]), `the percentage only rises (${pcts[0]}% to ${pcts.at(-1)}%)`)
+    ok(samples.some((s) => s.phase === 'installing' && s.label === 'Installing…'), 'and ends on "Installing"')
+    const widths = [...new Set(samples.map((s) => s.w.toFixed(3)))]
+    ok(widths.length === 1 && Math.abs(Number(widths[0]) - width0) < 0.01, `THE CHIP'S WIDTH IS IDENTICAL IN EVERY PHASE (${widths.join(', ')}px; idle ${width0.toFixed(3)}px)`)
+    // It is anchored on its right, so a width that changed shows as a left edge
+    // that jumped; measured on its own because that jump is what the eye sees.
+    const lefts = [...new Set(samples.map((s) => s.left.toFixed(3)))]
+    ok(lefts.length === 1 && Math.abs(Number(lefts[0]) - left0) < 0.01, `and its left edge never moved (${lefts.join(', ')})`)
+    ok(await until(async () => (await chip.getAttribute('data-phase')) === 'idle' && (await shownLabel()) === `Update ${next}`, 4000, 50), 'the chip is back to idle, offering the same update')
+
+    // What a preview must not have done.
+    const calls = await page.evaluate(() => window.prism.e2eUpdateCalls())
+    ok(calls.checks === 0, `GitHub was never asked (${calls.checks} release checks)`)
+    ok(calls.installs === 0, `no download was started (${calls.installs} installs)`)
+    ok(updateDirs() === dirsBefore, 'no installer was downloaded: no update folder appeared in temp')
+    ok(installers() === installersBefore, `no installer process was spawned (${installersBefore} before, ${installers()} after)`)
+    // The line leaves by itself after 8 seconds. A real install quits the app
+    // 400ms after the download, so an app that is still answering once the line
+    // has gone is an app the preview did not quit.
+    ok(await until(async () => (await notice.count()) === 0, 12000, 100), 'the line goes away by itself')
+    ok((await app.windows()).length === 1 && (await page.evaluate(() => 1 + 1)) === 2, 'and the app never quit')
+    ok((await tabLabels(page)).length === 1 && /PS [^>]*>/.test(await termText(page)), 'with its shell still running')
+
+    // The same, on a light theme.
+    await page.keyboard.press('Control+,')
+    await page.locator('[data-settings-tab="appearance"]').click()
+    await page.locator('[data-term-card="github"]').first().click()
+    ok(await until(() => page.evaluate(() => document.documentElement.dataset.mode === 'light')), 'on a light theme')
+    const widthLight = await chip.evaluate((el) => el.getBoundingClientRect().width)
+    ok(Math.abs(widthLight - width0) < 0.01, `the chip is the same width (${widthLight.toFixed(3)}px)`)
+    await shot('update-chip-light')
+    await chip.click()
+    ok(await opened(), 'the window opens over Settings too')
+    const lightLook = await dialog.evaluate((el) => {
+      const lum = (c) => {
+        const [r, g, b] = (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
+        const lin = (v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4)
+        return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+      }
+      const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+      const ground = lum(getComputedStyle(el.querySelector('[data-update-notes]')).backgroundColor)
+      const entry = lum(getComputedStyle(el.querySelector('[data-update-entry]')).color)
+      return { box: lum(getComputedStyle(el).backgroundColor), contrast: ratio(ground, entry) }
+    })
+    ok(lightLook.box > 0.4, `its surface is light (luminance ${lightLook.box.toFixed(2)})`)
+    ok(lightLook.contrast >= 4.5, `and the notes read on it (${lightLook.contrast.toFixed(1)}:1)`)
+    await shot('update-dialog-light')
+    await dialog.locator('[data-update-install]').click()
+    await until(() => page.evaluate(() => Number(document.querySelector('[data-update-chip]')?.getAttribute('aria-valuenow') ?? 0) >= 35), 6000, 25)
+    await shot('update-progress-light')
+    // The label's ink, mid-install on a LIGHT theme: the first build set one ink
+    // for the whole label (the accent's), which is white here, over a pale
+    // remainder. Seen in the screenshot, so now it is measured: the copy over
+    // the unfilled part wears the theme's text, the clipped copy the accent's.
+    const ink = await page.evaluate(() => {
+      const resolve = (token) => {
+        const probe = document.createElement('span')
+        probe.style.color = `var(${token})`
+        document.body.appendChild(probe)
+        const c = getComputedStyle(probe).color
+        probe.remove()
+        return c
+      }
+      const chipEl = document.querySelector('[data-update-chip]')
+      return {
+        phase: chipEl.dataset.phase,
+        base: getComputedStyle(chipEl.querySelector('[data-update-label="shown"]')).color,
+        fill: getComputedStyle(chipEl.querySelector('[data-update-fill]')).color,
+        clip: getComputedStyle(chipEl.querySelector('[data-update-fill]')).clipPath,
+        text: resolve('--p-text'),
+        onAccent: resolve('--p-on-accent')
+      }
+    })
+    ok(ink.phase !== 'idle' && ink.base === ink.text, `mid-install the label over the unfilled part is in the theme's text (${ink.base})`)
+    ok(ink.fill === ink.onAccent && /^inset\(/.test(ink.clip), `and the copy over the fill is in the accent's ink, clipped to the percentage (${ink.clip})`)
+    ok(await until(async () => (await notice.count()) === 1, 10000, 50), 'a second preview install runs to its end as well')
+    await notice.click()
+    ok(await until(async () => (await notice.count()) === 0, 3000, 50), 'and a click puts the line away')
+    await app.close().catch(() => {})
+  },
+
+  /**
+   * INSTALL ENDS IN A QUIT, SO A WORKING AGENT IS ASKED ABOUT FIRST (#28). Main
+   * pre-answers the close question for an install, and until this change
+   * nothing in this app asked it: Install would have killed an agent mid-answer
+   * without a word. A preview asks nothing (it quits nothing), so this scenario
+   * is handed a real-shaped offer whose url the installer refuses before it
+   * sends a byte: the question, Cancel, the go-ahead and the line a FAILED
+   * install leaves are all driven with no network and no download. It also
+   * shows what the window says for a release with no notes at all.
+   */
+  async updateGuard(ok) {
+    const w = world()
+    const { app, page } = await launch(w, {
+      args: [w.alpha],
+      env: { PT_E2E_UPDATE_OFFER: 'https://example.invalid/PrismTerminal-Setup-x64-99.0.0.exe' }
+    })
+    await until(async () => (await tabLabels(page)).length === 1)
+    const chip = page.locator('[data-update-chip]')
+    const updateDialog = page.locator('[data-update-dialog]')
+    const question = page.locator('[role="dialog"]:not([data-update-dialog])')
+    const installs = async () => (await page.evaluate(() => window.prism.e2eUpdateCalls())).installs
+    ok(await until(async () => (await chip.count()) === 1, 8000), 'a real-shaped offer shows the chip')
+    // As closeAsk does: let the process poll say "no agent" once, then have a
+    // shell stand in for Claude through the title, idle first and then working.
+    await typeLine(page, 'echo ready')
+    await sleep(6000)
+    await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
+    await until(() => page.evaluate(() => !!document.querySelector('[data-agent-present]')), 8000, 50)
+
+    await chip.click()
+    ok(await until(async () => (await updateDialog.count()) === 1, 4000, 50), 'the chip opens the window')
+    ok((await updateDialog.locator('[data-update-entry]').count()) === 0, 'a release with no notes lists nothing')
+    ok(/No notes were published/.test((await updateDialog.locator('[data-update-notes]').textContent()) ?? ''), 'and says so in one line')
+    ok((await updateDialog.locator('[data-update-preview]').count()) === 0, 'a real offer is not called a preview')
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/update-dialog-empty.png') }).catch(() => {})
+    // ONE QUESTION AT A TIME. The app's chords still work over the update
+    // window, and this tab hosts an agent, so Ctrl+W asks. The question used to
+    // mount UNDER the update window with the focus on "Close tab": Enter, aimed
+    // at Install, ended the agent. The window must give way to the question.
+    await page.keyboard.press('Control+w')
+    ok(await until(async () => (await question.count()) === 1, 4000, 50), 'Ctrl+W over the update window still asks about the agent')
+    ok(await until(async () => (await updateDialog.count()) === 0, 4000, 50), 'and the update window gives way, so the question is not hidden under it')
+    ok(await until(() => page.evaluate(() => (document.activeElement?.textContent ?? '').trim() === 'Close tab' && !!document.activeElement.closest('[role="dialog"]')), 4000, 50), 'the focus is on the question that can be seen')
+    await page.keyboard.press('Escape')
+    ok(await until(async () => (await question.count()) === 0, 4000, 50), 'Escape backs out of it')
+    ok((await tabLabels(page)).length === 1 && (await installs()) === 0, 'with the tab still open and nothing installed')
+
+    await page.locator('.xterm').first().click({ force: true })
+    await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x25D0 + ' Claude Code'")
+    ok(await until(() => page.evaluate(() => !!document.querySelector('[data-agent-state="working"]')), 8000, 50), 'an agent is mid-answer')
+    await chip.click()
+    await until(async () => (await updateDialog.count()) === 1, 4000, 50)
+    await updateDialog.locator('[data-update-install]').click()
+    ok(await until(async () => (await question.count()) === 1, 4000, 50), 'Install asks before it does anything')
+    ok((await updateDialog.count()) === 0, 'from in front of the update window, not from behind it')
+    const asked = (await question.textContent()) ?? ''
+    ok(asked.includes('Stop the agent and install the update?'), `in its own words ("${asked.slice(0, 40)}")`)
+    ok(/Claude/.test(asked) && /working for/.test(asked) && /Install and restart/.test(asked), 'naming the agent, how long it has worked, and what yes means')
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/update-agent-question.png') }).catch(() => {})
+    await page.keyboard.press('Escape')
+    ok(await until(async () => (await question.count()) === 0, 4000, 50), 'Cancel backs out')
+    ok((await installs()) === 0 && (await chip.getAttribute('data-phase')) === 'idle', 'and nothing was started')
+
+    await chip.click()
+    await until(async () => (await updateDialog.count()) === 1, 4000, 50)
+    await updateDialog.locator('[data-update-install]').click()
+    await until(async () => (await question.count()) === 1, 4000, 50)
+    await question.locator('[data-primary="true"]').click()
+    ok(await until(async () => (await installs()) === 1, 6000, 50), 'the go-ahead starts the install')
+    const notice = page.locator('[data-update-notice]')
+    ok(await until(async () => (await notice.count()) === 1, 8000, 50), 'an install that fails says so under the chip')
+    ok(/could not be downloaded/.test((await notice.textContent()) ?? ''), `in words ("${((await notice.textContent()) ?? '').trim()}")`)
+    ok(await until(async () => (await chip.getAttribute('data-phase')) === 'idle', 4000, 50), 'and the chip offers the update again')
+    // A failed install must not leave the close question pre-answered: the
+    // agent is still working, so closing the window still asks.
+    await page.locator('[data-window-close]').click()
+    ok(await until(async () => (await question.count()) === 1, 4000, 50), 'closing the window still asks about the agent afterwards')
+    ok(/close the window/.test((await question.textContent()) ?? ''), 'with the window question, not the install one')
+    await page.keyboard.press('Escape')
+    // End idle, or the close below is held on the question.
+    await page.locator('.xterm').first().click({ force: true })
+    await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
+    await until(() => page.evaluate(() => !document.querySelector('[data-agent-state="working"]')), 8000, 50)
+    await app.close().catch(() => {})
+  },
+
+  /**
+   * THE NOTES ARE TEXT OFF THE NETWORK (#28), so the rule is proved in the real
+   * page and not only in the parser's unit tests: a hostile, over-long body is
+   * handed to the window, and what is asserted is the DOM it produced. No
+   * element the body asked for exists (no anchor, no image, no script), its
+   * handler never ran, the list is capped with a count of the rest, it scrolls
+   * inside the window, and Cancel and Install are still on screen under it.
+   */
+  async updateNotes(ok) {
+    const w = world()
+    const hostile = [
+      "## What's Changed",
+      '* <img src=x onerror="window.__pwned = 1"> an image tag by @a in https://github.com/o/r/pull/1',
+      '* [a link](https://evil.example/login) and <a href="https://evil.example">an anchor</a> by @a in https://github.com/o/r/pull/2',
+      '* <script>window.__pwned = 2</script> a script by @a in https://github.com/o/r/pull/3',
+      '* <iframe src="https://evil.example"></iframe> a frame by @a in https://github.com/o/r/pull/4',
+      ...Array.from({ length: 26 }, (_, i) => `* Change number ${i + 5} with a title long enough to wrap onto a second line in the window by @a in https://github.com/o/r/pull/${i + 5}`),
+      '',
+      '**Full Changelog**: https://github.com/o/r/compare/v1...v2'
+    ].join('\n')
+    const { app, page } = await launch(w, {
+      args: [w.alpha],
+      env: { PT_E2E_UPDATE_OFFER: 'https://example.invalid/x.exe', PT_E2E_UPDATE_NOTES: hostile }
+    })
+    await until(async () => (await tabLabels(page)).length === 1)
+    const chip = page.locator('[data-update-chip]')
+    const dialog = page.locator('[data-update-dialog]')
+    await until(async () => (await chip.count()) === 1, 8000)
+    await chip.click()
+    ok(await until(async () => (await dialog.count()) === 1, 4000, 50), 'the window opens on a hostile body')
+    const dom = await dialog.evaluate((el) => {
+      const notes = el.querySelector('[data-update-notes]')
+      const install = el.querySelector('[data-update-install]').getBoundingClientRect()
+      return {
+        forbidden: [...el.querySelectorAll('a, img, script, iframe, [onerror], [href], [src]')].length,
+        entries: el.querySelectorAll('[data-update-entry]').length,
+        more: el.querySelector('[data-update-more]')?.textContent ?? '',
+        text: el.textContent ?? '',
+        scrolls: notes.scrollHeight > notes.clientHeight + 1,
+        installOnScreen: install.bottom <= innerHeight && install.top >= 0,
+        boxBottom: el.getBoundingClientRect().bottom,
+        pwned: window.__pwned ?? null
+      }
+    })
+    ok(dom.forbidden === 0, `nothing the body asked for is an element (${dom.forbidden} anchors, images, scripts or frames)`)
+    ok(dom.pwned === null, 'and its handler never ran')
+    ok(!/evil\.example|https?:|by @/.test(dom.text), 'no url or author is printed either')
+    ok(/an image tag \(#1\)/.test(dom.text) && /a link and an anchor \(#2\)/.test(dom.text), 'what is left of each line is its words')
+    ok(dom.entries === 20 && dom.more === '+ 10 more', `the list is capped and counts the rest (${dom.entries} shown, "${dom.more}")`)
+    ok(dom.scrolls, 'the list scrolls inside the window')
+    ok(dom.installOnScreen, 'and Cancel and Install stay on screen under it')
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/update-dialog-long.png') }).catch(() => {})
+    // A small window: the list gives way, the buttons do not.
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(560, 400))
+    ok(
+      await until(
+        () =>
+          page.evaluate(() => {
+            const el = document.querySelector('[data-update-dialog]')
+            const b = el.querySelector('[data-update-install]').getBoundingClientRect()
+            const box = el.getBoundingClientRect()
+            return innerHeight <= 420 && box.top >= 0 && box.bottom <= innerHeight && b.bottom <= box.bottom
+          }),
+        6000,
+        100
+      ),
+      'at the smallest window the whole dialog still fits, buttons included'
+    )
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/update-dialog-small.png') }).catch(() => {})
+    await page.keyboard.press('Escape')
+    await app.close().catch(() => {})
+  },
+
+  /** Without the flag there is NO chip under --e2e, and nothing asks GitHub:
+   *  the suite measures a title bar with no chip in it. */
+  async updateQuiet(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    await until(async () => (await tabLabels(page)).length === 1)
+    await typeLine(page, 'echo settled')
+    await until(async () => (await termText(page)).includes('settled'))
+    ok((await page.locator('[data-update-chip]').count()) === 0, 'no flag, no chip')
+    const calls = await page.evaluate(() => window.prism.e2eUpdateCalls())
+    ok(calls.checks === 0 && calls.installs === 0, `and the real watcher stayed off (${JSON.stringify(calls)})`)
+    // THE APP IS USUALLY ALREADY RUNNING when somebody tries the flag, and it is
+    // single-instance: that launch hands its command line over and ends. The
+    // running app has to honour the flag, or `--preview-update` on the installed
+    // app would do nothing anyone could see. (Not under PT_E2E_PACKAGED: the
+    // second launch here is the unpackaged entry script.)
+    if (!PACKAGED) {
+      const child = spawn(electronPath, [MAIN, `--user-data-dir=${w.profile}`, '--e2e', '--preview-update'], { stdio: 'ignore' })
+      const code = await new Promise((r) => child.on('exit', r))
+      ok(code === 0, 'a second launch with --preview-update exits, as every second launch does')
+      ok(await until(async () => (await page.locator('[data-update-chip]').count()) === 1, 8000), 'and the RUNNING app shows the preview chip')
+      ok((await tabLabels(page)).length === 1, 'without opening a tab for it')
+      const after = await page.evaluate(() => window.prism.e2eUpdateCalls())
+      ok(after.checks === 0, 'still without asking GitHub')
+    }
     await app.close().catch(() => {})
   },
 

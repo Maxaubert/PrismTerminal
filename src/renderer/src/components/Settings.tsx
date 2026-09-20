@@ -117,7 +117,7 @@ function GeneralTab(): JSX.Element {
           disabled={verbBusy}
         />
       </Pref>
-      <Pref id="app-version" label="Version" hint="Updates show as a chip in the title bar when there is one.">
+      <Pref id="app-version" label="Version" hint="An update shows as a button in the title bar. Click it to see what is new.">
         <span id="app-version" data-app-version className="font-mono text-[12px] text-[var(--p-text-soft)]">
           {version}
         </span>

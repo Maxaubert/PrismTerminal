@@ -17,7 +17,8 @@ import { DEFAULT_WINDOW_EDGES, validWindowEdges, type WindowEdges } from '@share
 import { detectShells } from '@core/main/shells'
 import { createTabsStore } from './tabsStore'
 import { killAll } from '@core/main/terminal'
-import { installUpdate, watchForUpdates } from './update'
+import { installUpdate, updateCalls, watchForUpdates } from './update'
+import { previewUpdate, runPreviewInstall, wantsPreview } from '@core/main/updatePreview'
 import { createVerbSwitch } from './verbSwitch'
 import { readWindowState, watchWindowState } from './windowState'
 
@@ -139,6 +140,15 @@ let firstRestore = true
 let pendingFolders: string[] = []
 
 const tabs = createTabsStore(join(app.getPath('userData'), 'tabs.json'))
+
+/** The newest update offer, remembered so a page that loads after it was made
+ *  still hears about it (`update:announce`), and so `update:install` can tell a
+ *  preview from a release by what main ITSELF offered. */
+let pendingUpdate: UpdateInfo | null = null
+function offerUpdate(info: UpdateInfo): void {
+  pendingUpdate = info
+  send('update:available', info)
+}
 
 /** A folder handed over by the verb, argv or a second launch: ALWAYS a new tab,
  *  even if another tab already sits in that folder. */
@@ -440,14 +450,29 @@ function wireIpc(): void {
 
   /* ----- the update check ----- */
 
-  // Watch GitHub Releases, and remember the newest offer so a renderer that
-  // loads after the tick still hears about it. Not under --e2e: an unpackaged
-  // build reports a MOCK update, and the suite measures a title bar without one.
-  let pendingUpdate: UpdateInfo | null = null
-  if (!E2E)
-    watchForUpdates((info) => {
-      pendingUpdate = info
-      send('update:available', info)
+  // The offer itself (`offerUpdate`, `pendingUpdate`) is up beside the
+  // lifecycle, because a SECOND launch can ask for the preview too.
+  //
+  // A PREVIEW (#28; owner, 2026-09-19: "I would want to see how the Update
+  // banner looks... make like a fake update"): `--preview-update`, in the
+  // installed app as well, announces the core's fake offer at once and the real
+  // watcher is never started, so the network is never touched. An unpackaged
+  // build previews without being asked, which is what the inert mock chip used
+  // to be for. Under --e2e NEITHER happens unless the flag is there: the suite
+  // measures a title bar with no chip in it, and must never ask GitHub.
+  if (wantsPreview(process.argv) || (!app.isPackaged && !E2E)) offerUpdate(previewUpdate(pkg.version))
+  else if (!E2E) watchForUpdates(offerUpdate)
+  // The e2e's updateGuard and updateNotes: a REAL-shaped offer (not a mock, so
+  // Install goes through the agent question) whose url `installUpdate` refuses
+  // before it sends anything, because it is not one of this repo's release
+  // assets. That is what lets the question and the failure line be driven with
+  // no network. The notes are the scenario's to choose: one hands over a
+  // hostile body, to prove in the real page that none of it is rendered.
+  else if (process.env.PT_E2E_UPDATE_OFFER)
+    offerUpdate({
+      version: '99.0.0',
+      url: process.env.PT_E2E_UPDATE_OFFER,
+      notes: process.env.PT_E2E_UPDATE_NOTES ?? ''
     })
   ipcMain.on('update:announce', (e) => {
     if (pendingUpdate) e.sender.send('update:available', pendingUpdate)
@@ -455,8 +480,15 @@ function wireIpc(): void {
   // Installing quits the app so NSIS can replace it, and a working agent
   // VETOES a quit (the close flow above) - the installer would then run over a
   // live exe while a dialog waited. The renderer settles that question before
-  // it asks for the install, so the quit is pre-answered here.
+  // it asks for the install (App's install guard), so the quit is pre-answered
+  // here.
   ipcMain.handle('update:install', async (_e, url: string) => {
+    // WHAT IS ON OFFER decides, never what the page sent: while the offer is a
+    // preview there is nothing this handler will download, whatever url it is
+    // handed. The fake runs the chip's progress and answers false, "nothing
+    // was installed", which is true. No fetch, no file, no installer, no quit,
+    // and the close question is NOT pre-answered.
+    if (pendingUpdate?.mock) return runPreviewInstall((pct) => send('update:progress', pct))
     if (typeof url !== 'string') return false
     closeAgreed = true
     const ok = await installUpdate(url, (pct) => send('update:progress', pct))
@@ -465,6 +497,9 @@ function wireIpc(): void {
     if (!ok) closeAgreed = false
     return ok
   })
+  // The e2e's updateWindow reads this after a whole preview, fake install
+  // included: release checks sent and installs attempted. Both must be 0.
+  if (E2E) ipcMain.handle('e2e:update-calls', () => updateCalls())
   // package.json's, not app.getVersion(): unpackaged, that one answers with
   // ELECTRON's version, and Settings then shows 43.x as the app's own.
   ipcMain.handle('app:version', () => pkg.version)
@@ -549,6 +584,10 @@ if (!app.requestSingleInstanceLock()) {
       createWindow()
       return
     }
+    // `PrismTerminal.exe --preview-update` while the app is already running is
+    // the likely way the flag gets used, and that launch ends here. Only when
+    // nothing is on offer: a preview never replaces a real update.
+    if (wantsPreview(argv) && !pendingUpdate) offerUpdate(previewUpdate(pkg.version))
     // The handoff is the case the foreground lock bites hardest: the app has
     // been sitting in the background for an hour, and the folder it is handed
     // must arrive in a window that is actually in front of you.

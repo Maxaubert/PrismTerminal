@@ -66,3 +66,79 @@ describe('isInstallerName', () => {
     expect(isInstallerName('')).toBe(false)
   })
 })
+
+describe('latestUpdate', () => {
+  // Re-imported so each case reads its own stubbed fetch and a fresh counter.
+  const load = async (): Promise<typeof import('./update')> => {
+    vi.resetModules()
+    return import('./update')
+  }
+  const asset = {
+    name: 'PrismTerminal-Setup-x64-0.8.0.exe',
+    browser_download_url:
+      'https://github.com/Maxaubert/PrismTerminal/releases/download/v0.8.0/PrismTerminal-Setup-x64-0.8.0.exe'
+  }
+  const serve = (json: unknown, ok = true): void => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok, json: async () => json }))
+    )
+  }
+
+  it("carries the release's body as the notes, raw", async () => {
+    const body = "## What's Changed\n* A change by @someone in https://github.com/o/r/pull/1"
+    serve({ tag_name: 'v0.8.0', body, assets: [asset] })
+    const { latestUpdate } = await load()
+    expect(await latestUpdate()).toEqual({ version: '0.8.0', url: asset.browser_download_url, notes: body })
+  })
+
+  it('reads a missing, null or non-string body as no notes, never as a crash', async () => {
+    for (const body of [undefined, null, 42, { x: 1 }]) {
+      serve({ tag_name: 'v0.8.0', body, assets: [asset] })
+      const { latestUpdate } = await load()
+      expect((await latestUpdate())?.notes).toBe('')
+    }
+  })
+
+  it('does not carry an enormous body over IPC: the head is all the dialog reads', async () => {
+    const { MAX_BODY_CHARS } = await import('@core/shared/releaseNotes')
+    serve({ tag_name: 'v0.8.0', body: 'x'.repeat(MAX_BODY_CHARS * 5), assets: [asset] })
+    const { latestUpdate } = await load()
+    expect((await latestUpdate())?.notes.length).toBe(MAX_BODY_CHARS)
+  })
+
+  it('offers nothing when the release is not newer, has no installer, or the request failed', async () => {
+    serve({ tag_name: 'v0.7.0', body: 'x', assets: [asset] })
+    expect(await (await load()).latestUpdate()).toBeNull()
+    serve({ tag_name: 'v0.8.0', body: 'x', assets: [{ name: 'latest.yml', browser_download_url: 'https://x.test/y' }] })
+    expect(await (await load()).latestUpdate()).toBeNull()
+    serve({ tag_name: 'v0.8.0', body: 'x', assets: [asset] }, false)
+    expect(await (await load()).latestUpdate()).toBeNull()
+  })
+
+  it('counts what it did, which is how the e2e proves a preview did nothing', async () => {
+    serve({ tag_name: 'v0.8.0', body: 'x', assets: [asset] })
+    const u = await load()
+    expect(u.updateCalls()).toEqual({ checks: 0, installs: 0 })
+    await u.latestUpdate()
+    expect(u.updateCalls()).toEqual({ checks: 1, installs: 0 })
+    // Refused before any request: the url is not one of this repo's installers.
+    expect(await u.installUpdate('https://example.com/a.exe', () => {})).toBe(false)
+    expect(u.updateCalls()).toEqual({ checks: 1, installs: 1 })
+  })
+})
+
+describe('watchForUpdates', () => {
+  it('never asks the network from an unpackaged build', async () => {
+    vi.resetModules()
+    const fetched = vi.fn()
+    vi.stubGlobal('fetch', fetched)
+    const { watchForUpdates, updateCalls } = await import('./update')
+    const sent = vi.fn()
+    watchForUpdates(sent)
+    await Promise.resolve()
+    expect(fetched).not.toHaveBeenCalled()
+    expect(sent).not.toHaveBeenCalled()
+    expect(updateCalls().checks).toBe(0)
+  })
+})

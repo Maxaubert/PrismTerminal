@@ -6,18 +6,36 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { MAX_BODY_CHARS } from '@core/shared/releaseNotes'
 import type { UpdateInfo } from '@shared/types'
 
 // The in-app update check. Releases publish themselves on every push to main
 // (release.yml), so the app's half is small: notice a newer v<version> on
-// GitHub, offer it in the title bar, and on click download the installer and
+// GitHub, offer it in the title bar, and on Install download the installer and
 // hand off to it. No feed, no signatures beyond what GitHub serves - the same
 // trust as downloading the release by hand.
+//
+// The offer carries the release's NOTES since #28 (owner, 2026-09-19: the chip
+// "opens like a pop window, which shows the change log or like patch notes").
+// They travel RAW and are never rendered: core/shared/releaseNotes turns them
+// into plain entries in the page. What is this app's own here is only where to
+// look (the repo, the installer's name); the chip, its window and the preview
+// are the core's, the same in Prism.
 
 const REPO = 'Maxaubert/PrismTerminal'
 const CHECK_EVERY_MS = 4 * 60 * 60 * 1000
 
 export type { UpdateInfo }
+
+/**
+ * What this file has DONE this session: release checks sent and installs
+ * attempted. Read only by the e2e (`e2e:update-calls`), whose `updateWindow`
+ * scenario runs a whole preview, fake install included, and then asserts both
+ * are still 0. "The preview touches nothing" is otherwise a claim about code
+ * that did not run, and those are the claims that rot.
+ */
+const calls = { checks: 0, installs: 0 }
+export const updateCalls = (): { checks: number; installs: number } => ({ ...calls })
 
 /** True when `a` names a strictly newer x.y.z than `b`. Non-numeric parts
  *  compare as 0, so a malformed tag never claims to be an upgrade. */
@@ -45,17 +63,20 @@ export function isInstallerName(name: string): boolean {
 
 /** The newest published release, when it beats the running version. */
 export async function latestUpdate(): Promise<UpdateInfo | null> {
+  calls.checks += 1
   const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
     headers: { accept: 'application/vnd.github+json', 'user-agent': 'PrismTerminal-update-check' }
   })
   if (!res.ok) return null
-  const rel = (await res.json()) as { tag_name?: string; assets?: ReleaseAsset[] }
+  const rel = (await res.json()) as { tag_name?: string; body?: unknown; assets?: ReleaseAsset[] }
   const version = String(rel.tag_name ?? '').replace(/^v/i, '')
   const asset = rel.assets?.find((a) => isInstallerName(a.name ?? ''))
   if (!version || !asset?.browser_download_url) return null
-  return newerVersion(version, app.getVersion())
-    ? { version, url: asset.browser_download_url }
-    : null
+  if (!newerVersion(version, app.getVersion())) return null
+  // The body is somebody else's JSON: anything but a string is "no notes". Only
+  // the head crosses to the page, since the head is all the parser reads.
+  const notes = typeof rel.body === 'string' ? rel.body.slice(0, MAX_BODY_CHARS) : ''
+  return { version, url: asset.browser_download_url, notes }
 }
 
 /** Only installers this repo's releases actually serve: parsed, not pattern
@@ -80,16 +101,14 @@ export function isReleaseAssetUrl(url: string): boolean {
 }
 
 /**
- * Start watching: once now, then every few hours. Unpackaged builds (dev,
- * e2e) never hit the network and instead report a MOCK update immediately,
- * so the title-bar chip can be seen and placed; the packaged app only ever
- * shows a real one.
+ * Start watching: once now, then every few hours. PACKAGED BUILDS ONLY: a dev
+ * or e2e build never asks the network. What an unpackaged build shows instead
+ * is the core's PREVIEW (index.ts decides, core/main/updatePreview is the fake),
+ * which replaced the inert mock this function used to send: a chip that could
+ * be seen but opened nothing was no way to look at the window behind it.
  */
 export function watchForUpdates(send: (info: UpdateInfo) => void): void {
-  if (!app.isPackaged) {
-    send({ version: app.getVersion(), url: '', mock: true })
-    return
-  }
+  if (!app.isPackaged) return
   const tick = (): void =>
     void latestUpdate()
       .then((u) => u && send(u))
@@ -104,6 +123,7 @@ export function watchForUpdates(send: (info: UpdateInfo) => void): void {
  * one runs at (per-user NSIS reinstalls in place). The app quits under it.
  */
 export async function installUpdate(url: string, onPct: (pct: number) => void): Promise<boolean> {
+  calls.installs += 1
   if (!isReleaseAssetUrl(url)) return false
   try {
     const res = await fetch(url, { headers: { 'user-agent': 'PrismTerminal-update-check' } })
