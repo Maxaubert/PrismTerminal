@@ -690,7 +690,7 @@ const scenarios = {
         placeholder: document.querySelector('[data-help-search]')?.getAttribute('placeholder') ?? ''
       }))
       ok(browse.headers[0] === 'folders' && browse.headers.length >= 2, `with no question it browses by category (${JSON.stringify(browse.headers)})`)
-      ok(browse.entries >= 20 && browse.entries <= 120, `and draws a first page, not the whole catalogue (${browse.entries} entries; "${browse.count}")`)
+      ok(browse.entries >= 20 && browse.entries <= 200, `and draws a first page, not the whole catalogue (${browse.entries} rows; "${browse.count}")`)
       ok(/find big files/.test(browse.placeholder) && /port 3000/.test(browse.placeholder), 'the placeholder teaches by example')
       await shot('help-browse-dark')
       // The rest of the list arrives as it is scrolled to: Git is far down.
@@ -718,13 +718,22 @@ const scenarios = {
       /* ----- the layout, measured ----- */
       const look = await page.evaluate(() => {
         const el = document.querySelector('[data-help-panel]')
-        const entry = document.querySelector('[data-help-id="ps-biggest-files"]')
+        const entry = document.querySelector('[data-help-id="ps-biggest-files"][data-help-variant="0"]')
         const copy = document.querySelector('[data-help-copy="ps-biggest-files#0"]')
         const code = entry.querySelector('[data-help-command]')
         const alpha = (c) => Number((c.match(/[\d.]+/g) ?? [])[3] ?? 1)
         const box = el.getBoundingClientRect()
         const b = copy.getBoundingClientRect()
-        const cbox = copy.closest('[data-help-command-box]').getBoundingClientRect()
+        const rows = [...document.querySelectorAll('[data-help-row]')]
+        const header = document.querySelector('[data-help-header]')
+        // A TABLE: every row one height, the columns starting at the same x as
+        // the header's, and the rows alternating in colour (owner, 2026-09-20).
+        const heights = [...new Set(rows.slice(0, 12).map((r) => Math.round(r.getBoundingClientRect().height)))]
+        const nameX = [...new Set(rows.slice(0, 12).map((r) => Math.round(r.querySelector('[data-help-task]').getBoundingClientRect().left)))]
+        const cmdX = [...new Set(rows.slice(0, 12).filter((r) => r.querySelector('[data-help-command]')).map((r) => Math.round(r.querySelector('[data-help-command]').getBoundingClientRect().left)))]
+        const fills = rows.slice(0, 6).map((r) => getComputedStyle(r).backgroundColor)
+        const anyMarked = document.querySelectorAll('[data-help-active]').length
+        const transparent = (c) => Number((c.match(/[\d.]+/g) ?? [])[3] ?? 1) === 0
         return {
           w: Math.round(box.width),
           h: Math.round(box.height),
@@ -734,7 +743,16 @@ const scenarios = {
           padY: parseFloat(getComputedStyle(entry).paddingTop),
           copyW: Math.round(b.width),
           copyH: Math.round(b.height),
-          copyAtRightEdge: Math.abs(b.right - cbox.right) <= 2,
+          copyAtRightEdge: Math.abs(b.right - (entry.getBoundingClientRect().right - 16)) <= 2,
+          heights,
+          nameX,
+          cmdX,
+          // Row 0 is the plain ground, row 1 the stripe: Prism's own pick.
+          zebra: transparent(fills[0]) && !transparent(fills[1]) && transparent(fills[2]) && fills[1] === fills[3],
+          anyMarked,
+          headerCols: header ? [...header.children].map((c) => Math.round(c.getBoundingClientRect().left)) : [],
+          // NO SUB TEXT (owner, 2026-09-20): a row is a name and a command.
+          subText: document.querySelectorAll('[data-help-placeholders], [data-help-summary], [data-help-command-box]').length,
           mono: getComputedStyle(code).fontFamily,
           termFont: getComputedStyle(document.querySelector('.xterm-rows') ?? document.body).fontFamily,
           listScrolls: getComputedStyle(document.querySelector('[data-help-list]')).overflowY,
@@ -747,53 +765,60 @@ const scenarios = {
       ok(look.w >= 560 && look.w <= 780 && look.h >= 380, `the popup is a popup-sized box (${look.w}x${look.h})`)
       ok(look.inside, 'wholly on screen')
       ok(look.alpha === 1, `on the opaque surface (alpha ${look.alpha})`)
-      ok(look.padX >= 16 && look.padY >= 10, `an entry has its padding (${look.padX}px / ${look.padY}px)`)
-      ok(look.copyW >= 28 && look.copyH >= 28, `the copy button is big enough to hit (${look.copyW}x${look.copyH})`)
-      ok(look.copyAtRightEdge, "and sits at the right edge of the command's box")
+      ok(look.padX >= 12, `a row has its padding (${look.padX}px)`)
+      ok(look.copyW >= 26 && look.copyH >= 26, `the copy button is big enough to hit (${look.copyW}x${look.copyH})`)
+      ok(look.copyAtRightEdge, 'and sits at the right edge of the row')
+      ok(look.heights.length === 1 && look.heights[0] >= 28, `IT IS A TABLE: every row is the same height (${look.heights.join(', ')}px)`)
+      ok(look.nameX.length === 1 && look.cmdX.length === 1, `its two columns start at one x each (${look.nameX.join(',')} / ${look.cmdX.join(',')})`)
+      ok(look.headerCols[0] === look.nameX[0] && look.headerCols[1] === look.cmdX[0], `and the header sits over them (${look.headerCols.join(', ')})`)
+      ok(look.zebra, 'the rows alternate in colour, the first row plain')
+      ok(look.anyMarked === 0, `and NOTHING is marked until somebody points at it or walks the list (${look.anyMarked} marked)`)
+      ok(look.subText === 0, `no sub text and no boxed commands: a row is a name and a command (${look.subText} found)`)
       ok(look.mono.split(',')[0].trim() === look.termFont.split(',')[0].trim(), `the command wears the terminal's face (${look.mono.split(',')[0]})`)
       ok(look.listScrolls === 'auto', 'the list scrolls, the popup does not')
       // Seen cut short with an ellipsis in the first screenshot, so it is measured.
       ok(look.ruleCut <= 0, `the line saying nothing is run for you is whole (${look.ruleCut}px cut off)`)
 
       /* ----- copy ----- */
-      const wantMain = await page.locator('[data-help-id="ps-biggest-files"] [data-help-variant="0"] [data-help-command]').textContent()
-      const heightBefore = await page.locator('[data-help-id="ps-biggest-files"]').evaluate((el) => el.getBoundingClientRect().height)
+      const mainRow = page.locator('[data-help-id="ps-biggest-files"][data-help-variant="0"]')
+      const wantMain = await mainRow.locator('[data-help-command]').textContent()
+      const heightBefore = await mainRow.evaluate((el) => el.getBoundingClientRect().height)
       await page.locator('[data-help-copy="ps-biggest-files#0"]').click()
       ok(
-        await until(async () => (await page.locator('[data-help-id="ps-biggest-files"] [data-help-copied]').count()) === 1, 3000, 25),
-        'the copy button answers in place'
+        await until(async () => (await page.locator('[data-help-copy="ps-biggest-files#0"]').getAttribute('title')) === 'Copied', 3000, 25),
+        'the copy button answers in place, in the button itself'
       )
-      ok(((await page.locator('[data-help-copied]').first().textContent()) ?? '').trim() === 'Copied', 'with "Copied"')
-      const heightDuring = await page.locator('[data-help-id="ps-biggest-files"]').evaluate((el) => el.getBoundingClientRect().height)
-      ok(heightDuring === heightBefore, `and the entry does not change height (${heightBefore} -> ${heightDuring})`)
+      const heightDuring = await mainRow.evaluate((el) => el.getBoundingClientRect().height)
+      ok(heightDuring === heightBefore, `and the row does not change height (${heightBefore} -> ${heightDuring})`)
       ok(!!wantMain && /Sort-Object/.test(wantMain) && (await clip()) === wantMain, `the clipboard holds the EXACT command ("${await clip()}")`)
       ok(/^Copied: /.test((await page.locator('[data-help-said]').textContent()) ?? ''), 'and a screen reader is told')
       ok(
-        await until(async () => (await page.locator('[data-help-copied]').count()) === 0, 4000, 50),
+        await until(async () => (await page.locator('[data-help-copy="ps-biggest-files#0"]').getAttribute('title')) === 'Copy', 4000, 50),
         'the answer leaves by itself'
       )
-      const heightAfter = await page.locator('[data-help-id="ps-biggest-files"]').evaluate((el) => el.getBoundingClientRect().height)
+      const heightAfter = await mainRow.evaluate((el) => el.getBoundingClientRect().height)
       ok(heightAfter === heightBefore, 'still without moving anything')
-      // Every variant has a button of its own, and copies ITS text.
-      const wantVariant = await page.locator('[data-help-id="ps-biggest-files"] [data-help-variant="1"] [data-help-command]').textContent()
+      // A VARIANT IS A ROW OF ITS OWN, named by what was its label, and copies
+      // its own text (owner, 2026-09-20: one command per row).
+      const variantRow = page.locator('[data-help-id="ps-biggest-files"][data-help-variant="1"]')
+      ok((await variantRow.count()) === 1 && ((await variantRow.locator('[data-help-task]').textContent()) ?? '').trim().length > 3, `a variant is a row of its own, with a name ("${((await variantRow.locator('[data-help-task]').textContent()) ?? '').trim()}")`)
+      const wantVariant = await variantRow.locator('[data-help-command]').textContent()
       await page.locator('[data-help-copy="ps-biggest-files#1"]').click()
       ok(!!wantVariant && wantVariant !== wantMain && (await until(async () => (await clip()) === wantVariant, 3000, 50)), "a variant's own button copies the variant")
 
       /* ----- the keyboard ----- */
       await page.locator('[data-help-search]').focus()
+      const markedAt = () => page.evaluate(() => Number(document.querySelector('[data-help-active]')?.getAttribute('data-help-index') ?? -1))
+      const from = await markedAt()
       await page.keyboard.press('ArrowDown')
-      const second = await until(
-        () => page.evaluate(() => {
-          const a = document.querySelector('[data-help-active]')
-          return a?.getAttribute('data-help-index') === '1' ? a.getAttribute('data-help-id') : null
-        }),
-        3000,
-        50
-      )
-      ok(!!second, `Down moves to the second result (${second})`)
-      const wantSecond = await page.locator(`[data-help-id="${second}"] [data-help-variant="0"] [data-help-command]`).textContent()
+      const to = await until(async () => {
+        const n = await markedAt()
+        return n >= 0 && n !== from ? n : null
+      }, 3000, 50)
+      ok(to === from + 1 || (from === -1 && to === 0), `Down moves the mark one row (${from} -> ${to})`)
+      const wantSecond = await page.locator(`[data-help-index="${to}"] [data-help-command]`).textContent()
       await page.keyboard.press('Enter')
-      ok(!!wantSecond && (await until(async () => (await clip()) === wantSecond, 3000, 50)), 'Enter copies the highlighted entry\'s main command')
+      ok(!!wantSecond && (await until(async () => (await clip()) === wantSecond, 3000, 50)), "Enter copies the marked row's command")
       await page.keyboard.press('ArrowUp')
       // Tab stays inside the popup: behind it is a shell, and a Tab that got out
       // would be typed into it.
@@ -807,15 +832,19 @@ const scenarios = {
       /* ----- a warning, and a key that is not a command ----- */
       await setQuery('delete a folder')
       ok(await until(async () => (await firstId()) === 'ps-delete-folder', 4000, 50), `"delete a folder" finds it (${await firstId()})`)
-      const danger = ((await page.locator('[data-help-id="ps-delete-folder"] [data-help-danger]').textContent()) ?? '').trim()
+      // The warning is a MARK on the row now, its sentence still there for the
+      // pointer and for a screen reader.
+      const dangerMark = page.locator('[data-help-id="ps-delete-folder"][data-help-variant="0"] [data-help-danger]')
+      const danger = ((await dangerMark.textContent()) ?? '').trim()
       ok(danger.length > 25 && /^Careful\./.test(danger), `and it carries its warning ("${danger.slice(0, 70)}...")`)
+      ok(/^Careful\./.test((await dangerMark.getAttribute('title')) ?? ''), 'said on hover as well as to a screen reader')
+      ok((await dangerMark.locator('svg').count()) === 1, 'and drawn as a mark, not a paragraph')
       await shot('help-danger-dark')
       await setQuery('stop a running command')
       const keys = await until(
         () => page.evaluate(() => {
-          const e = document.querySelector('[data-help-id="ps-cancel-command"]')
-          if (!e) return null
-          const v = e.querySelector('[data-help-variant="0"]')
+          const v = document.querySelector('[data-help-id="ps-cancel-command"][data-help-variant="0"]')
+          if (!v) return null
           return { caps: v.querySelectorAll('kbd').length, copy: v.querySelectorAll('[data-help-copy]').length }
         }),
         4000,
@@ -886,9 +915,12 @@ const scenarios = {
           return 0.2126 * r + 0.7152 * g + 0.0722 * b
         }
         const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
-        const code = document.querySelector('[data-help-id="ps-delete-folder"] [data-help-command]')
-        const boxBg = getComputedStyle(code.closest('[data-help-command-box]')).backgroundColor
-        return { command: ratio(lum(getComputedStyle(code).color), lum(boxBg)) }
+        const row = document.querySelector('[data-help-id="ps-delete-folder"][data-help-variant="0"]')
+        const code = row.querySelector('[data-help-command]')
+        // The row's own fill is a stripe over the panel, so the ground is the
+        // panel's: what the ink is actually read against.
+        const ground = getComputedStyle(document.querySelector('[data-help-panel]')).backgroundColor
+        return { command: ratio(lum(getComputedStyle(code).color), lum(ground)) }
       })
       ok(lightInk.command >= 4.5, `on a light theme the command still reads (${lightInk.command.toFixed(1)}:1)`)
       await page.keyboard.press('Escape')
@@ -1112,13 +1144,13 @@ const scenarios = {
     const near = (a, b) => a !== null && Math.abs(a - b) < 0.004
     /** Wait until every edge on screen wears its token (transitions done) AND
      *  the state asked for is the one in force; the probe that satisfied both. */
-    const settled = (pg, also = () => true) =>
+    const settled = (pg, also = () => true, ms = 15000) =>
       until(async () => {
         const p = await probe(pg)
         const chrome = [p.tab, p.title, ...(p.rail === null ? [] : [p.rail])]
         const arrived = chrome.every((a) => near(a, p.divider)) && (p.row === null || near(p.row, p.line))
         return arrived && also(p) ? p : null
-      }, 15000)
+      }, ms)
 
     // THE DEFAULT IS THE WINDOW AS IT WAS: the numbers chromeTheme hard-coded
     // before there was a choice, on the default theme, with nothing stored.
@@ -1190,12 +1222,22 @@ const scenarios = {
 
     // AND IT SURVIVES A RELAUNCH: quit properly (localStorage is flushed on the
     // way out), come back, and measure before Settings is even opened.
+    // THE OLD PROCESS MUST BE GONE FIRST, and that is waited for rather than
+    // slept through (it flaked once in a full run, 2026-09-20: the relaunched
+    // window never settled and read "stored undefined"). This app takes the
+    // single-instance lock, so launching while the old one is still shutting
+    // down hands the arguments to a window that is on its way out; and
+    // localStorage, which is what this assertion is about, is flushed on the
+    // way out. Ten seconds is plenty on a quiet machine and not always enough
+    // under a whole suite, which is exactly the shape of check the ratchet rule
+    // says to fix rather than re-run.
     const gone = new Promise((r) => app.process().on('exit', r))
     await page.evaluate(() => window.prism.quitApp()).catch(() => {})
-    await Promise.race([gone, sleep(10000)])
+    const exited = await Promise.race([gone.then(() => true), sleep(45000).then(() => false)])
+    ok(exited, 'the app quits when it is asked to, before anything relaunches it')
     ;({ app, page } = await launch(w))
-    ok(await until(async () => (await tabLabels(page)).length === 2), 'a relaunch brings the tabs back')
-    const back = await settled(page, (q) => q.stored === 'solid' && near(q.tab, 0.18))
+    ok(await until(async () => (await tabLabels(page)).length === 2, 20000), 'a relaunch brings the tabs back')
+    const back = await settled(page, (q) => q.stored === 'solid' && near(q.tab, 0.18), 30000)
     ok(!!back, `the relaunched window draws Solid edges before Settings is opened (tab ${back?.tab}, stored ${back?.stored})`)
     ok(
       (await until(async () => (await page.evaluate(() => window.prism.e2eWindowEdges())) === 'solid', 5000)) === true,
