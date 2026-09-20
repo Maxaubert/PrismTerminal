@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -121,15 +121,29 @@ export function watchForUpdates(send: (info: UpdateInfo) => void): void {
  * Download the installer to temp and hand off: a detached PowerShell waits
  * out the silent install, then starts the new build from the same path this
  * one runs at (per-user NSIS reinstalls in place). The app quits under it.
+ *
+ * `signal` (#32) is the update window's Cancel. It stops the DOWNLOAD only:
+ * the request and the write are both torn down, the partial installer is
+ * removed with its temp folder, and the answer is false, "nothing was
+ * installed", which is true. Once the installer has been spawned there is
+ * nothing here left to stop, and the page disables the button at that point.
  */
-export async function installUpdate(url: string, onPct: (pct: number) => void): Promise<boolean> {
+export async function installUpdate(
+  url: string,
+  onPct: (pct: number) => void,
+  signal?: AbortSignal
+): Promise<boolean> {
   calls.installs += 1
   if (!isReleaseAssetUrl(url)) return false
+  let dir: string | null = null
   try {
-    const res = await fetch(url, { headers: { 'user-agent': 'PrismTerminal-update-check' } })
+    const res = await fetch(url, {
+      headers: { 'user-agent': 'PrismTerminal-update-check' },
+      signal
+    })
     if (!res.ok || !res.body) return false
     const total = Number(res.headers.get('content-length')) || 0
-    const dir = await mkdtemp(join(tmpdir(), 'prismterminal-update-'))
+    dir = await mkdtemp(join(tmpdir(), 'prismterminal-update-'))
     const file = join(dir, 'PrismTerminal-Setup.exe')
     let got = 0
     const body = Readable.fromWeb(res.body as import('stream/web').ReadableStream)
@@ -137,7 +151,10 @@ export async function installUpdate(url: string, onPct: (pct: number) => void): 
       got += c.length
       if (total) onPct(Math.min(99, Math.round((got / total) * 100)))
     })
-    await pipeline(body, createWriteStream(file))
+    await pipeline(body, createWriteStream(file), { signal })
+    // A cancel that arrives after the last byte still wins: nothing has been
+    // spawned yet, and the user asked for nothing to be.
+    if (signal?.aborted) throw new Error('cancelled')
     onPct(100)
     // Single-quoted with quotes doubled, PowerShell's own escaping; both
     // paths are ours (temp dir, execPath) but interpolation stays safe anyway.
@@ -157,6 +174,8 @@ export async function installUpdate(url: string, onPct: (pct: number) => void): 
     setTimeout(() => app.quit(), 400)
     return true
   } catch {
+    // A failed or cancelled download leaves no half an installer in temp.
+    if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {})
     return false
   }
 }

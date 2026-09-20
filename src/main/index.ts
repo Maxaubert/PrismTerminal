@@ -145,6 +145,8 @@ const tabs = createTabsStore(join(app.getPath('userData'), 'tabs.json'))
  *  still hears about it (`update:announce`), and so `update:install` can tell a
  *  preview from a release by what main ITSELF offered. */
 let pendingUpdate: UpdateInfo | null = null
+/** The install that is running, if one is: what `update:cancel` aborts. */
+let updateRun: AbortController | null = null
 function offerUpdate(info: UpdateInfo): void {
   pendingUpdate = info
   send('update:available', info)
@@ -488,15 +490,32 @@ function wireIpc(): void {
     // handed. The fake runs the chip's progress and answers false, "nothing
     // was installed", which is true. No fetch, no file, no installer, no quit,
     // and the close question is NOT pre-answered.
-    if (pendingUpdate?.mock) return runPreviewInstall((pct) => send('update:progress', pct))
-    if (typeof url !== 'string') return false
-    closeAgreed = true
-    const ok = await installUpdate(url, (pct) => send('update:progress', pct))
-    // A download that FAILED must not leave the close question pre-answered
-    // for the rest of the session.
-    if (!ok) closeAgreed = false
-    return ok
+    // ONE AT A TIME, and the controller is this run's own: `update:cancel`
+    // aborts whatever is current, and a second Install cannot orphan the first
+    // one's controller (the page refuses a second anyway; this does not rely
+    // on it).
+    if (updateRun) return false
+    const run = new AbortController()
+    updateRun = run
+    try {
+      if (pendingUpdate?.mock)
+        return await runPreviewInstall((pct) => send('update:progress', pct), {
+          cancelled: () => run.signal.aborted
+        })
+      if (typeof url !== 'string') return false
+      closeAgreed = true
+      const ok = await installUpdate(url, (pct) => send('update:progress', pct), run.signal)
+      // A download that FAILED, or was CANCELLED, must not leave the close
+      // question pre-answered for the rest of the session.
+      if (!ok) closeAgreed = false
+      return ok
+    } finally {
+      updateRun = null
+    }
   })
+  // The update window's Cancel (#32). It names nothing: there is one download
+  // at most, and the page has no say in which.
+  ipcMain.on('update:cancel', () => updateRun?.abort())
   // The e2e's updateWindow reads this after a whole preview, fake install
   // included: release checks sent and installs attempted. Both must be 0.
   if (E2E) ipcMain.handle('e2e:update-calls', () => updateCalls())

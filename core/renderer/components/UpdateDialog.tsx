@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, type JSX } from 'react'
 import { moreLine, parseReleaseNotes } from '../../shared/releaseNotes'
-import type { UpdateInfo } from '../../shared/updateTypes'
+import type { UpdateInfo, UpdatePhase } from '../../shared/updateTypes'
 
 /**
  * The window the update chip opens (#28). Owner, 2026-09-19: "when you click
@@ -8,11 +8,24 @@ import type { UpdateInfo } from '../../shared/updateTypes'
  * like patch notes for the new update, and then you can choose cancel or
  * install." One copy, for both apps.
  *
- * Props only, like the chip. It closes on Cancel, on Escape, on a press
- * outside it, and on Install; from there the progress is the chip's to show.
- * Whether Install may start at once is the HOST's question (it ends in the app
- * quitting, and a working agent or unsaved text has a say), so this only
- * reports the choice.
+ * Props only, like the chip. It closes on Cancel, on Escape and on a press
+ * outside it. Whether Install may start at once is the HOST's question (it ends
+ * in the app quitting, and a working agent or unsaved text has a say), so this
+ * only reports the choice.
+ *
+ * IT STAYS FOR THE INSTALL, AND DRAWS THE BAR (#32). Owner, 2026-09-20: "when
+ * you click install keep me with the panel open and have the progress bar
+ * straight there, kind of like the way extract works for zip files in Prism."
+ * It used to close on Install and leave the progress to the chip. So, as the
+ * archive panel does it: the progress track is ALWAYS in the layout and only
+ * fades in, because a track inserted when the work began would push the buttons
+ * down and pull them back (the e2e measures that the box does not change size).
+ * While the install runs the window cannot be put away by the user: Escape and
+ * a press outside do nothing, and Cancel cancels the DOWNLOAD where the host
+ * can (`onAbort`), which is the only honest meaning it can have then. Once the
+ * installer has the file there is nothing left to cancel and the button says so
+ * by being disabled. How it ended (a failure, a preview) is said on the same
+ * line the progress was on, in the window the user is already looking at.
  *
  * THE NOTES ARE PLAIN TEXT, AND THAT IS A RULE, NOT A STYLE. They are a GitHub
  * release body, which is text off the network, shown in a window that can reach
@@ -29,18 +42,43 @@ import type { UpdateInfo } from '../../shared/updateTypes'
 export default function UpdateDialog({
   info,
   currentVersion,
+  phase = 'idle',
+  pct = 0,
+  aborting = false,
+  notice = null,
   onInstall,
-  onCancel
+  onCancel,
+  onAbort
 }: {
   info: UpdateInfo
   /** The running app's version; the quiet line under the title. */
   currentVersion: string
+  phase?: UpdatePhase
+  pct?: number
+  /** Cancel was pressed and the download has not stopped yet. */
+  aborting?: boolean
+  /** How the last install ended, while this window was up. */
+  notice?: string | null
   onInstall: () => void
+  /** Backing out while nothing runs. */
   onCancel: () => void
+  /** Stop the download. Left out by a host that cannot. */
+  onAbort?: () => void
 }): JSX.Element {
   const box = useRef<HTMLDivElement>(null)
   const notes = useMemo(() => parseReleaseNotes(info.notes), [info.notes])
-  const title = `Update to ${info.version}`
+  const running = phase !== 'idle'
+  const title = running ? `Updating to ${info.version}` : `Update to ${info.version}`
+  const status = aborting
+    ? 'Cancelling…'
+    : phase === 'downloading'
+      ? 'Downloading the update'
+      : phase === 'installing'
+        ? info.mock
+          ? 'Installing (preview: nothing is installed)'
+          : 'Installing. The app will close and reopen.'
+        : (notice ?? '')
+  const canAbort = phase === 'downloading' && !aborting && !!onAbort
   // THE KEY LISTENER IS REGISTERED ONCE and reads the latest onCancel from a
   // ref, so a host may hand in an inline arrow. Keyed on the callback, an
   // effect like this one is torn down and put back on every render of the
@@ -50,9 +88,17 @@ export default function UpdateDialog({
   // old one is removed before its turn and the new one is not called for an
   // event already being dispatched. Escape then does nothing.
   const cancel = useRef(onCancel)
+  const isRunning = useRef(running)
   useEffect(() => {
     cancel.current = onCancel
+    isRunning.current = running
   })
+
+  // Install is disabled the moment it is pressed, and a disabled button drops
+  // the focus to the body, behind which is a terminal. It goes to the box.
+  useEffect(() => {
+    if (running) box.current?.focus()
+  }, [running])
 
   useEffect(() => {
     // Focus lands on Install, as it lands on the primary action of every other
@@ -62,7 +108,9 @@ export default function UpdateDialog({
       if (e.key === 'Escape') {
         e.stopPropagation()
         e.preventDefault()
-        cancel.current()
+        // Swallowed either way, so the host's own Escape stays down; acted on
+        // only while nothing runs.
+        if (!isRunning.current) cancel.current()
         return
       }
       // A PLAIN Tab only. Ctrl+Tab is the host's own chord (it steps the tab
@@ -74,7 +122,8 @@ export default function UpdateDialog({
       // Tab stays inside. Behind this is a terminal, and a Tab that wandered
       // out of the dialog would be typed into somebody's shell.
       const stops = [
-        ...(box.current?.querySelectorAll<HTMLElement>('button, [tabindex="0"]') ?? [])
+        ...(box.current?.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]') ??
+          [])
       ]
       if (!stops.length) return
       const at = stops.indexOf(document.activeElement as HTMLElement)
@@ -96,16 +145,18 @@ export default function UpdateDialog({
       data-update-scrim
       className="no-drag fixed inset-0 z-50 grid place-items-center bg-black/55 p-6"
       role="presentation"
-      onMouseDown={onCancel}
+      onMouseDown={running ? undefined : onCancel}
     >
       <div
         ref={box}
         data-update-dialog
+        data-phase={phase}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-full w-full max-w-[460px] flex-col rounded-[var(--p-radius)] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] p-5 shadow-[0_24px_70px_rgba(0,0,0,.6)]"
+        className="flex max-h-full w-full max-w-[460px] flex-col rounded-[var(--p-radius)] focus:outline-none border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] p-5 shadow-[0_24px_70px_rgba(0,0,0,.6)]"
       >
         <h2 className="text-[14.5px] font-semibold text-[var(--p-text)]">{title}</h2>
         <p data-update-current className="mt-1 text-[12.5px] leading-relaxed text-[var(--p-dim)]">
@@ -156,19 +207,71 @@ export default function UpdateDialog({
             This is a preview. Install shows the progress and installs nothing.
           </p>
         )}
+        {/* ALWAYS IN THE LAYOUT, only fading in: see the note at the top. One
+            line of status with the percentage at its right, the track under
+            it. The ending is said on the status line, with the track gone. */}
+        <div
+          data-update-progress
+          data-active={running || !!notice}
+          aria-hidden={!running && !notice}
+          className={`mt-4 shrink-0 transition-opacity duration-200 ${running || notice ? 'opacity-100' : 'opacity-0'}`}
+        >
+          <div className="flex min-h-[18px] items-baseline justify-between gap-3 text-[12px] leading-[18px]">
+            <span data-update-status role="status" className="min-w-0 text-[var(--p-text-soft)]">
+              {status}
+            </span>
+            <span
+              data-update-pct
+              aria-hidden
+              className={`shrink-0 tabular-nums text-[var(--p-dim)] ${running ? '' : 'hidden'}`}
+            >
+              {pct}%
+            </span>
+          </div>
+          <div
+            data-update-track
+            {...(running
+              ? {
+                  role: 'progressbar',
+                  'aria-label': title,
+                  'aria-valuenow': pct,
+                  'aria-valuemin': 0,
+                  'aria-valuemax': 100
+                }
+              : {})}
+            className={`mt-1.5 h-1.5 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--p-text)_12%,transparent)] ${running ? '' : 'invisible'}`}
+          >
+            {/* No transition on the way back to 0: a bar that drains reads as
+                an install running backwards. */}
+            <div
+              data-update-fill
+              className={`h-full rounded-full bg-[var(--p-accent)] ${running ? 'transition-[width] duration-300 ease-out' : ''}`}
+              style={{ width: `${running ? pct : 0}%` }}
+            />
+          </div>
+        </div>
         <div className="mt-5 flex shrink-0 justify-end gap-2">
           <button
             data-update-cancel
-            onClick={onCancel}
-            className="rounded-lg border border-[color:var(--p-divider)] bg-[var(--p-hover)] px-3.5 py-1.5 text-[12.5px] font-semibold text-[var(--p-text-soft)] transition-colors hover:text-[var(--p-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)]"
+            onClick={running ? onAbort : onCancel}
+            disabled={running && !canAbort}
+            title={
+              running && !canAbort && !aborting
+                ? phase === 'installing'
+                  ? 'The installer has started'
+                  : 'This download cannot be cancelled'
+                : undefined
+            }
+            className="disabled:cursor-default disabled:opacity-45 disabled:hover:text-[var(--p-text-soft)] rounded-lg border border-[color:var(--p-divider)] bg-[var(--p-hover)] px-3.5 py-1.5 text-[12.5px] font-semibold text-[var(--p-text-soft)] transition-colors hover:text-[var(--p-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)]"
           >
-            Cancel
+            {!running && notice ? 'Close' : 'Cancel'}
           </button>
           <button
             data-update-install
             data-primary="true"
             onClick={onInstall}
-            className="rounded-lg bg-[var(--p-accent)] px-3.5 py-1.5 text-[12.5px] font-semibold text-[var(--p-on-accent)] transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)]"
+            disabled={running}
+            className="disabled:cursor-default disabled:opacity-45 disabled:hover:brightness-100 rounded-lg bg-[var(--p-accent)] px-3.5 py-1.5 text-[12.5px] font-semibold text-[var(--p-on-accent)] transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)]"
           >
             Install
           </button>
