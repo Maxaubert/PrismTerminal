@@ -304,17 +304,16 @@ export default function App(): JSX.Element {
     },
     [agentKinds]
   )
-  const update = useUpdateFlow(window.prism, installGuard)
   // ONE QUESTION AT A TIME. The app's chords still work while the update window
   // is up (Ctrl+W, Alt+F4), and a close question raised from behind it mounted
   // UNDER it: same z-index, earlier in the document. The question then took the
   // focus onto its primary button where nobody could see it, so Enter, pressed
   // at what looked like Install, closed the tab and ended the agent. A question
   // about losing work outranks a list of patch notes, so the window gives way.
-  const cancelUpdate = update.cancel
-  useEffect(() => {
-    if (ask) cancelUpdate()
-  }, [ask, cancelUpdate])
+  // That is the core's `covered` (#32): it holds mid-install too, where the
+  // user cannot close the window, and brings a running install's window back
+  // once the question has been answered.
+  const update = useUpdateFlow(window.prism, installGuard, !!ask)
 
   // COMMAND HELP (#12). It is the same layer as the update window and a close
   // question, so the same rule holds it: it never sits over either. It does not
@@ -461,9 +460,9 @@ export default function App(): JSX.Element {
           <UpdateChip
             info={update.state.info}
             phase={update.state.phase}
-            pct={update.state.pct}
             onOpen={update.open}
-            notice={update.state.notice}
+            // Under the chip only while the window is not up to say it itself.
+            notice={update.state.open ? null : update.state.notice}
             onDismissNotice={update.dismissNotice}
           />
         }
@@ -641,8 +640,13 @@ export default function App(): JSX.Element {
         <UpdateDialog
           info={update.state.info}
           currentVersion={version}
+          phase={update.state.phase}
+          pct={update.state.pct}
+          aborting={update.state.aborting}
+          notice={update.state.notice}
           onInstall={update.install}
           onCancel={update.cancel}
+          onAbort={update.abort}
         />
       )}
     </div>

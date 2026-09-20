@@ -86,20 +86,37 @@ so an update never silently changes what an existing user sees; the bridge to ma
     renderer, `dangerouslySetInnerHTML` or an `<a>` on this path. The `updateNotes` e2e hands the
     real page a hostile body and asserts the DOM: no anchor, image, script or frame, and the
     handler never ran.
-  - **THE CHIP NEVER CHANGES WIDTH** (Prism's standing design: "the chip IS the progress bar, one
-    shape for every state, it never changes width"). The shape always was one; the width was NOT,
-    MEASURED with the fix taken out: 104.8px idle, 54.8px at "7%", 96.0px installing, because the
-    pill is sized by its label. Every label is always laid out in one grid cell and only the one
-    that applies is visible. The e2e samples the width and the left edge through a whole install.
-  - **THE LABEL'S INK FOLLOWS WHAT IS BEHIND IT.** The fill is a second copy of the chip in the
-    accent with `--p-on-accent`, clipped to the percentage; the copy underneath wears `--p-text`.
-    One ink for the whole label (the first build, and Prism's chip) put white "35%" on a pale blue
-    remainder on a light theme. That was seen in the e2e's screenshot and in none of its
-    assertions, which is the #20 lesson again; it is measured now.
+  - **THE NOTES ARE SORTED UNDER HEADINGS AND WORDED FOR A READER** (#32; owner, 2026-09-20: "make
+    it look a bit better like having headers bug fixes, new features, so on. make it look proper
+    and not like a git commit", and "dont have the changelog inside a container, i just want it on
+    the main window bg", and of the "This is a preview" line: "dont show this text").
+    `shared/releaseGroups.ts` takes the parser's PLAIN STRINGS and only moves and trims them:
+    New features / Improvements / Bug fixes / Under the hood, by a conventional-commit prefix
+    (taken off) or how the title reads; an unmarked title is a feature; "Phone:" names a part of
+    the app and stays; the trailing "(#31)" goes; each line starts with a capital. The notes sit
+    on the dialog's own ground (no fill, no border, still scrolling inside a capped height), and a
+    preview is not announced up front: what it did is said where it ends.
+  - **THE CHIP IS ACCENT-FILLED, AND THE WINDOW STAYS FOR THE INSTALL AND DRAWS THE BAR** (#32;
+    owner, 2026-09-20: "have the update available button be accented colour. and when you click
+    install keep me with the panel open and have the progress bar straight there, kind of like the
+    way extract works for zip files in Prism"). This SUPERSEDES #28's "the window closes on Install
+    and the chip IS the progress bar" (Prism's 2026-08-24 design); do not rebuild either. The chip
+    is one label at one width in every phase, filled with `--p-sel-bg` and NOT `--p-accent`: both
+    apps derive that token as the accent moved until `--p-on-accent` clears 4.5:1, and the raw
+    accent is only held to a button's 3:1 (MEASURED on the chip: 10.2:1 on the GitHub light theme).
+    The window's progress track is ALWAYS in the layout and only fades in, the archive panel's own
+    rule, and the e2e samples the box every 25ms through a whole install: it never changes size.
+    While it runs the USER cannot put it away (Escape and a press outside do nothing); Cancel
+    cancels the DOWNLOAD (`cancelUpdate` on the bridge, optional, so a host that cannot stop one
+    gets a disabled button rather than one that lies) and is disabled once the installer has the
+    file. A cancel is not a failure and says nothing. A failure or a preview's end is said on the
+    status line IN the window (Close / Install again); the line under the chip survives only for
+    an ending with the window hidden. Main's half: one `AbortController` per run, passed to `fetch`
+    and the write, the partial installer removed with its temp folder.
   - **`--preview-update`** (owner: "make like a fake update"), in the INSTALLED app too and under
     `--e2e`: main offers the core's fake (next minor, a realistic generated body, `mock: true`) and
     the real watcher never starts. Install then runs about three seconds of fake progress, answers
-    "nothing was installed", and the chip says "Preview only: nothing was installed". It must never
+    "nothing was installed", and the window says "Preview only: nothing was installed". It must never
     fetch, write a file, spawn anything or quit; `update.ts` counts checks and installs and the e2e
     asserts both are 0, that no `prismterminal-update-*` folder or process appeared, and that the
     app is still answering afterwards. What main OFFERED decides (`pendingUpdate.mock`), never what
@@ -111,14 +128,16 @@ so an update never silently changes what an existing user sees; the bridge to ma
     (`holdsWindowClose`; title `closeQuestionTitle('install', ...)`, button "Install and restart").
     Until #28 nothing in this app asked: main's comment said the page settles it, which was true of
     Prism's page and never of this one. A preview asks nothing, since it quits nothing. A download
-    that fails now says so under the chip, where it used to fall back to "Update" in silence. The
+    that fails now says so in the window, where it used to fall back to "Update" in silence. The
     `updateGuard` e2e drives the question, Cancel, the go-ahead and the failure line with an offer
     whose url `installUpdate` refuses before it sends a byte (`PT_E2E_UPDATE_OFFER`, e2e only).
   - **ONE QUESTION AT A TIME** (review of #28, 2026-09-20). The app's chords still work over the
     update window, so Ctrl+W on an agent's tab (or Alt+F4) raised the close question UNDER it, with
     the focus on "Close tab" where nobody could see it: Enter, aimed at Install, ended the agent.
-    MEASURED in the e2e with the fix taken out. App now puts the update window away whenever a
-    question (`ask`) appears; `updateGuard` holds it. The window's Tab trap also leaves Ctrl+Tab
+    MEASURED in the e2e with the fix taken out. The update window is put away whenever a question
+    (`ask`) appears: that is `useUpdateFlow`'s `covered` argument since #32, the ONE way the window
+    leaves mid-install (the host's, never the user's), and a running install's window comes back
+    when the question has gone; `updateGuard` holds it. The window's Tab trap also leaves Ctrl+Tab
     alone, which used to switch tabs AND move the focus inside the window in one press.
 - **COMMAND HELP IS A POPUP THAT SHOWS AND COPIES, AND NOTHING ELSE** (#12; owner, 2026-09-19: "an
   easy to use panel where you can find shell commands... searchable... metadata on each command so a

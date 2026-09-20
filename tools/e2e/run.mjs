@@ -1223,11 +1223,16 @@ const scenarios = {
    * the preview line, and leaves the network, the disk and the process list
    * exactly as they were.
    *
-   * THE CHIP'S WIDTH IS MEASURED IN EVERY PHASE, sampled the whole way through
-   * the install rather than read once per state: the design is that it never
-   * changes, and before this change it did (the pill was sized by a label that
-   * went from "Update 0.5.0" to "7%"). Screenshots of the chip, the window and
-   * the progress go to .e2e-shots/, on a dark theme and on a light one.
+   * THE WINDOW STAYS FOR THE INSTALL AND DRAWS THE BAR (#32; owner, 2026-09-20:
+   * "keep me with the panel open and have the progress bar straight there, kind
+   * of like the way extract works for zip files in Prism"). So what is sampled
+   * the whole way through the install, every 25ms rather than once per state, is
+   * the WINDOW: that it never left, that its box never changed size (the track
+   * is always in the layout and only fades in, the archive panel's own rule),
+   * that the percentage only rose, and which of its buttons could be pressed
+   * when. The chip is sampled beside it: accent-filled, one label, one width.
+   * Cancel mid-download is driven too, and must leave nothing said. Screenshots
+   * go to .e2e-shots/, on a dark theme and on a light one.
    */
   async updateWindow(ok) {
     const w = world()
@@ -1248,6 +1253,52 @@ const scenarios = {
     ok((await dialog.count()) === 0, 'and nothing opens by itself')
     const width0 = await chip.evaluate((el) => el.getBoundingClientRect().width)
     const left0 = await chip.evaluate((el) => el.getBoundingClientRect().left)
+    // FILLED IN THE ACCENT (#32), and read off the pixels' own colours: the
+    // fill is the theme's accent family and not a grey, and the label on it
+    // clears the floor for small text.
+    const chipInk = () =>
+      chip.evaluate((el) => {
+        const rgb = (c) => (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
+        const lum = (c) => {
+          const lin = (v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4)
+          const [r, g, b] = rgb(c)
+          return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+        }
+        const resolve = (token, prop) => {
+          const probe = document.createElement('span')
+          probe.style[prop] = `var(${token})`
+          document.body.appendChild(probe)
+          const c = getComputedStyle(probe)[prop]
+          probe.remove()
+          return c
+        }
+        const bg = getComputedStyle(el).backgroundColor
+        const fg = getComputedStyle(el.querySelector('[data-update-label]')).color
+        const [r, g, b] = rgb(bg)
+        const [la, lb] = [lum(bg), lum(fg)]
+        return {
+          bg,
+          fg,
+          selBg: resolve('--p-sel-bg', 'backgroundColor'),
+          onAccent: resolve('--p-on-accent', 'color'),
+          // A grey has no spread between its channels; an accent does.
+          chroma: Math.max(r, g, b) - Math.min(r, g, b),
+          contrast: (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+        }
+      })
+    const inkDark = await chipInk()
+    ok(inkDark.bg === inkDark.selBg && inkDark.fg === inkDark.onAccent, `the chip is filled in the accent, its label in the accent's ink (${inkDark.bg})`)
+    ok(inkDark.chroma >= 40, `which is a colour and not the grey pill it was (channel spread ${inkDark.chroma})`)
+    ok(inkDark.contrast >= 4.5, `and the label reads on it (${inkDark.contrast.toFixed(1)}:1)`)
+    ok(
+      await page.evaluate(() => {
+        const c = document.querySelector('[data-update-chip]')
+        const r = c.getBoundingClientRect()
+        const group = [...document.querySelectorAll('[data-title-bar] button')].filter((b) => b !== c && b.getBoundingClientRect().left > innerWidth / 2)
+        return group.length > 0 && group.every((b) => b.getBoundingClientRect().left >= r.right - 0.5)
+      }),
+      'it is the LEFTMOST of the controls at the right of the title bar'
+    )
     await shot('update-chip-dark')
 
     // What an install would leave behind, read BEFORE anything is clicked.
@@ -1276,17 +1327,30 @@ const scenarios = {
     const entries = await dialog.locator('[data-update-entry]').allTextContents()
     ok(entries.length >= 5, `the sample notes are listed (${entries.length} entries)`)
     ok(entries[0].startsWith('The update button opens a window'), `as the pull requests' titles ("${entries[0]}")`)
-    ok(entries.some((e) => /\(#\d+\)$/.test(e)), 'each keeping its number as text')
+    // SORTED UNDER HEADINGS, worded for a reader (owner, 2026-09-20: "headers
+    // bug fixes, new features, so on... not like a git commit").
+    const sections = await dialog.locator('[data-update-section]').evaluateAll((els) =>
+      els.map((el) => ({ heading: el.querySelector('h3')?.textContent?.trim() ?? '', lines: [...el.querySelectorAll('[data-update-entry]')].map((li) => (li.textContent ?? '').trim()) }))
+    )
+    ok(sections.map((x) => x.heading).join('|') === 'New features|Bug fixes|Under the hood', `the notes are sorted under headings (${sections.map((x) => `${x.heading}: ${x.lines.length}`).join(', ')})`)
+    ok(sections[1]?.lines[0] === 'A prompt survives the window getting narrower and wider again', `a fix reads as a sentence, its "fix(terminal):" gone ("${sections[1]?.lines[0]}")`)
+    ok(entries.every((e) => !/\(#\d+\)\s*$/.test(e) && !/^[a-z]+(\([^)]*\))?!?:/.test(e) && e[0] === e[0].toUpperCase()), 'no line ends in a pull request number or starts with a commit type, and each starts with a capital')
     const text = (await dialog.textContent()) ?? ''
     ok(!/by @/.test(text), 'no author tail ("by @") reaches the window')
     ok(!/https?:|github\.com/.test(text), 'and no url does')
     ok(!/Full Changelog|New Contributors|first contribution|What's Changed/.test(text), 'nor the boilerplate round the list')
     ok((await dialog.locator('a').count()) === 0, 'there is no <a> element in it')
     ok(
-      (await dialog.locator('[data-update-notes]').evaluate((el) => [...el.querySelectorAll('*')].every((n) => ['H3', 'UL', 'LI', 'SPAN', 'P'].includes(n.tagName)))) === true,
+      (await dialog.locator('[data-update-notes]').evaluate((el) => [...el.querySelectorAll('*')].every((n) => ['SECTION', 'H3', 'UL', 'LI', 'SPAN', 'P'].includes(n.tagName)))) === true,
       'the notes are text in plain elements, nothing a body could have brought with it'
     )
-    ok(((await dialog.locator('[data-update-preview]').textContent()) ?? '').includes('preview'), 'a preview says that it is one')
+    ok(!/This is a preview/.test(text) && (await dialog.locator('[data-update-preview]').count()) === 0, 'a preview is not announced up front: the window is shown as it will be')
+    const bare = await dialog.locator('[data-update-notes]').evaluate((el) => {
+      const cs = getComputedStyle(el)
+      const alpha = Number((cs.backgroundColor.match(/[\d.]+/g) ?? [])[3] ?? 1)
+      return { alpha, border: ['Top', 'Right', 'Bottom', 'Left'].map((side) => parseFloat(cs[`border${side}Width`])).reduce((a, b) => a + b, 0) }
+    })
+    ok(bare.alpha === 0 && bare.border === 0, `the notes sit on the window's own ground: no fill, no border (alpha ${bare.alpha}, border ${bare.border}px)`)
     const look = await dialog.evaluate((el) => {
       const notes = el.querySelector('[data-update-notes]')
       const alpha = (c) => Number((c.match(/[\d.]+/g) ?? [])[3] ?? 1)
@@ -1321,51 +1385,112 @@ const scenarios = {
     ok(await closed(), 'and so does a press outside it')
     ok((await page.evaluate(() => window.prism.e2eUpdateCalls())).installs === 0, 'none of which installed anything')
 
-    // Install: sample the chip the whole way, so a width that moved for one
-    // frame is caught as surely as one that stayed moved.
+    // Install (#32): THE WINDOW STAYS, and is sampled the whole way, so a box
+    // that changed size for one frame is caught as surely as one that stayed
+    // changed.
     await chip.click()
     await opened()
-    await page.evaluate(() => {
-      window.__chip = []
-      window.__chipTimer = setInterval(() => {
-        const c = document.querySelector('[data-update-chip]')
-        if (!c) return
-        window.__chip.push({
-          w: c.getBoundingClientRect().width,
-          phase: c.dataset.phase,
-          label: c.querySelector('[data-update-label="shown"]')?.textContent ?? '',
-          left: c.getBoundingClientRect().left
-        })
-      }, 25)
-    })
+    const slot = await dialog.locator('[data-update-progress]').evaluate((el) => ({ active: el.dataset.active, opacity: getComputedStyle(el).opacity, h: el.getBoundingClientRect().height }))
+    ok(slot.active === 'false' && slot.opacity === '0' && slot.h > 10, `before Install the progress track is already in the layout, unseen (${slot.h.toFixed(1)}px at opacity ${slot.opacity})`)
+    const startSampling = () =>
+      page.evaluate(() => {
+        window.__upd = []
+        window.__updTimer = setInterval(() => {
+          const c = document.querySelector('[data-update-chip]')
+          const d = document.querySelector('[data-update-dialog]')
+          const box = d?.getBoundingClientRect()
+          const cancel = d?.querySelector('[data-update-cancel]')
+          window.__upd.push({
+            chipW: c?.getBoundingClientRect().width ?? -1,
+            chipLeft: c?.getBoundingClientRect().left ?? -1,
+            chipLabel: c?.querySelector('[data-update-label]')?.textContent ?? '',
+            up: !!d,
+            w: box?.width ?? -1,
+            h: box?.height ?? -1,
+            top: box?.top ?? -1,
+            phase: d?.dataset.phase ?? 'gone',
+            title: d?.querySelector('h2')?.textContent ?? '',
+            pct: Number(d?.querySelector('[data-update-track]')?.getAttribute('aria-valuenow') ?? -1),
+            shownPct: d?.querySelector('[data-update-pct]')?.textContent ?? '',
+            status: (d?.querySelector('[data-update-status]')?.textContent ?? '').trim(),
+            cancel: (cancel?.textContent ?? '').trim(),
+            cancelOff: !!cancel?.disabled,
+            installOff: !!d?.querySelector('[data-update-install]')?.disabled,
+            underChip: !!document.querySelector('[data-update-notice]')
+          })
+        }, 25)
+      })
+    const stopSampling = () =>
+      page.evaluate(() => {
+        clearInterval(window.__updTimer)
+        return window.__upd
+      })
+    const phaseIs = (want) => until(() => page.evaluate((p) => document.querySelector('[data-update-dialog]')?.dataset.phase === p, want), 6000, 25)
+    const pctAtLeast = (n) => until(() => page.evaluate((min) => Number(document.querySelector('[data-update-track]')?.getAttribute('aria-valuenow') ?? 0) >= min, n), 6000, 25)
+    await startSampling()
     await dialog.locator('[data-update-install]').click()
-    ok(await closed(), 'Install closes the window')
-    ok(
-      await until(() => page.evaluate(() => document.querySelector('[data-update-chip]')?.dataset.phase === 'downloading'), 4000, 25),
-      'and the progress starts in the chip'
-    )
-    await until(() => page.evaluate(() => Number(document.querySelector('[data-update-chip]')?.getAttribute('aria-valuenow') ?? 0) >= 35), 6000, 25)
+    ok(await phaseIs('downloading'), 'Install starts the download')
+    ok((await dialog.count()) === 1, 'and THE WINDOW STAYS UP: the progress is straight there')
+    // Not dismissable while it runs.
+    await page.keyboard.press('Escape')
+    await page.mouse.click(8, 300)
+    await sleep(150)
+    ok((await dialog.count()) === 1 && (await dialog.getAttribute('data-phase')) !== 'idle', 'Escape and a press outside do NOT put a running install away')
+    await pctAtLeast(35)
     await shot('update-progress-dark')
-    const notice = page.locator('[data-update-notice]')
-    ok(await until(async () => (await notice.count()) === 1, 10000, 50), 'the fake install ends with a line under the chip')
-    ok(((await notice.textContent()) ?? '').trim() === 'Preview only: nothing was installed', `which says what happened ("${((await notice.textContent()) ?? '').trim()}")`)
-    await shot('update-notice-dark')
-    const samples = await page.evaluate(() => {
-      clearInterval(window.__chipTimer)
-      return window.__chip
-    })
-    const phases = [...new Set(samples.map((s) => s.phase))]
-    ok(['idle', 'downloading', 'installing'].every((p) => phases.includes(p)), `the chip went through every phase (${phases.join(', ')}; ${samples.length} samples)`)
-    const pcts = samples.filter((s) => s.phase === 'downloading').map((s) => parseInt(s.label, 10))
-    ok(pcts.length > 5 && pcts.every((p, i) => i === 0 || p >= pcts[i - 1]), `the percentage only rises (${pcts[0]}% to ${pcts.at(-1)}%)`)
-    ok(samples.some((s) => s.phase === 'installing' && s.label === 'Installing…'), 'and ends on "Installing"')
-    const widths = [...new Set(samples.map((s) => s.w.toFixed(3)))]
-    ok(widths.length === 1 && Math.abs(Number(widths[0]) - width0) < 0.01, `THE CHIP'S WIDTH IS IDENTICAL IN EVERY PHASE (${widths.join(', ')}px; idle ${width0.toFixed(3)}px)`)
-    // It is anchored on its right, so a width that changed shows as a left edge
-    // that jumped; measured on its own because that jump is what the eye sees.
-    const lefts = [...new Set(samples.map((s) => s.left.toFixed(3)))]
-    ok(lefts.length === 1 && Math.abs(Number(lefts[0]) - left0) < 0.01, `and its left edge never moved (${lefts.join(', ')})`)
-    ok(await until(async () => (await chip.getAttribute('data-phase')) === 'idle' && (await shownLabel()) === `Update ${next}`, 4000, 50), 'the chip is back to idle, offering the same update')
+    const status = dialog.locator('[data-update-status]')
+    ok(
+      await until(async () => (await dialog.getAttribute('data-phase')) === 'idle' && ((await status.textContent()) ?? '').trim() === 'Preview only: nothing was installed', 10000, 50),
+      'the fake install ends by saying so IN the window'
+    )
+    await shot('update-ended-dark')
+    const samples = await stopSampling()
+    ok(samples.length > 40 && samples.every((x) => x.up), `the window was up in every one of ${samples.length} samples`)
+    const phases = [...new Set(samples.map((x) => x.phase))]
+    ok(['idle', 'downloading', 'installing'].every((ph) => phases.includes(ph)), `it went through every phase (${phases.join(', ')})`)
+    const running = samples.filter((x) => x.phase !== 'idle')
+    const pcts = running.map((x) => x.pct)
+    ok(pcts.length > 5 && pcts.every((v, i) => v >= 0 && (i === 0 || v >= pcts[i - 1])) && pcts.at(-1) === 100, `the bar only rises, to 100 (${pcts[0]}% to ${pcts.at(-1)}%)`)
+    ok(running.every((x) => x.shownPct === `${x.pct}%`), 'and the number beside it is the same number')
+    ok(running.every((x) => x.title === `Updating to ${next}`), 'the title says what is happening while it runs')
+    ok(samples.some((x) => x.phase === 'downloading' && x.status === 'Downloading the update'), 'the status line says it is downloading')
+    ok(samples.some((x) => x.phase === 'installing' && /^Installing/.test(x.status)), 'and then that it is installing')
+    ok(running.every((x) => x.installOff), 'Install cannot be pressed twice')
+    ok(samples.filter((x) => x.phase === 'downloading').every((x) => x.cancel === 'Cancel' && !x.cancelOff), 'Cancel can be pressed for as long as it is DOWNLOADING')
+    ok(samples.filter((x) => x.phase === 'installing').every((x) => x.cancelOff), 'and not once the installer has the file')
+    const boxes = [...new Set(samples.map((x) => `${x.w.toFixed(2)}x${x.h.toFixed(2)}@${x.top.toFixed(2)}`))]
+    ok(boxes.length === 1, `THE WINDOW NEVER CHANGED SIZE OR MOVED, from the notes to the bar to the ending (${boxes.join(', ')})`)
+    const chipWidths = [...new Set(samples.map((x) => x.chipW.toFixed(3)))]
+    const chipLefts = [...new Set(samples.map((x) => x.chipLeft.toFixed(3)))]
+    ok(chipWidths.length === 1 && Math.abs(Number(chipWidths[0]) - width0) < 0.01, `the chip's width is identical throughout (${chipWidths.join(', ')}px; idle ${width0.toFixed(3)}px)`)
+    ok(chipLefts.length === 1 && Math.abs(Number(chipLefts[0]) - left0) < 0.01, `and its left edge never moved (${chipLefts.join(', ')})`)
+    ok(samples.every((x) => x.chipLabel.trim() === `Update ${next}`), 'its label never changes: the bar is the window\'s, not the chip\'s')
+    ok(samples.every((x) => !x.underChip), 'and nothing is hung under the chip while the window is there to say it')
+    const ended = await dialog.evaluate((el) => ({
+      buttons: [...el.querySelectorAll('button')].map((b) => `${(b.textContent ?? '').trim()}${b.disabled ? ' (off)' : ''}`).join('|'),
+      track: getComputedStyle(el.querySelector('[data-update-track]')).visibility
+    }))
+    ok(ended.buttons === 'Close|Install', `afterwards the choices are Close and Install again (${ended.buttons})`)
+    ok(ended.track === 'hidden', 'with the bar gone: it does not drain back to nothing')
+    await page.keyboard.press('Escape')
+    ok(await closed(), 'it can be closed again now, with Escape')
+    await sleep(300)
+    ok((await page.locator('[data-update-notice]').count()) === 0, 'and having been read there, the line is not repeated under the chip')
+    ok((await chip.getAttribute('data-phase')) === 'idle' && (await shownLabel()) === `Update ${next}`, 'the chip offers the same update')
+
+    // CANCEL, mid-download. It is not a failure and is not reported as one.
+    await chip.click()
+    await opened()
+    await startSampling()
+    await dialog.locator('[data-update-install]').click()
+    await pctAtLeast(20)
+    await dialog.locator('[data-update-cancel]').click()
+    ok(await closed(), 'Cancel during the download stops it and the window goes')
+    await sleep(1200)
+    const cancelled = await stopSampling()
+    ok(!cancelled.some((x) => x.phase === 'installing') && Math.max(...cancelled.map((x) => x.pct)) < 100, `it never reached the installer (stopped at ${Math.max(...cancelled.map((x) => x.pct))}%)`)
+    ok((await page.locator('[data-update-notice]').count()) === 0 && (await dialog.count()) === 0, 'nothing is said about it: the user knows what they pressed')
+    ok((await chip.getAttribute('data-phase')) === 'idle', 'and the chip offers the update again')
 
     // What a preview must not have done.
     const calls = await page.evaluate(() => window.prism.e2eUpdateCalls())
@@ -1373,10 +1498,8 @@ const scenarios = {
     ok(calls.installs === 0, `no download was started (${calls.installs} installs)`)
     ok(updateDirs() === dirsBefore, 'no installer was downloaded: no update folder appeared in temp')
     ok(installers() === installersBefore, `no installer process was spawned (${installersBefore} before, ${installers()} after)`)
-    // The line leaves by itself after 8 seconds. A real install quits the app
-    // 400ms after the download, so an app that is still answering once the line
-    // has gone is an app the preview did not quit.
-    ok(await until(async () => (await notice.count()) === 0, 12000, 100), 'the line goes away by itself')
+    // A real install quits the app 400ms after the download, so an app that is
+    // still answering now is an app the preview did not quit.
     ok((await app.windows()).length === 1 && (await page.evaluate(() => 1 + 1)) === 2, 'and the app never quit')
     ok((await tabLabels(page)).length === 1 && /PS [^>]*>/.test(await termText(page)), 'with its shell still running')
 
@@ -1397,44 +1520,41 @@ const scenarios = {
         return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
       }
       const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
-      const ground = lum(getComputedStyle(el.querySelector('[data-update-notes]')).backgroundColor)
+      // The notes have no ground of their own: they are on the dialog's.
+      const ground = lum(getComputedStyle(el).backgroundColor)
       const entry = lum(getComputedStyle(el.querySelector('[data-update-entry]')).color)
       return { box: lum(getComputedStyle(el).backgroundColor), contrast: ratio(ground, entry) }
     })
     ok(lightLook.box > 0.4, `its surface is light (luminance ${lightLook.box.toFixed(2)})`)
     ok(lightLook.contrast >= 4.5, `and the notes read on it (${lightLook.contrast.toFixed(1)}:1)`)
     await shot('update-dialog-light')
+    const inkLight = await chipInk()
+    ok(inkLight.bg === inkLight.selBg && inkLight.contrast >= 4.5, `the chip's label reads on a light theme's accent too (${inkLight.contrast.toFixed(1)}:1 on ${inkLight.bg})`)
     await dialog.locator('[data-update-install]').click()
-    await until(() => page.evaluate(() => Number(document.querySelector('[data-update-chip]')?.getAttribute('aria-valuenow') ?? 0) >= 35), 6000, 25)
+    await pctAtLeast(35)
     await shot('update-progress-light')
-    // The label's ink, mid-install on a LIGHT theme: the first build set one ink
-    // for the whole label (the accent's), which is white here, over a pale
-    // remainder. Seen in the screenshot, so now it is measured: the copy over
-    // the unfilled part wears the theme's text, the clipped copy the accent's.
-    const ink = await page.evaluate(() => {
-      const resolve = (token) => {
-        const probe = document.createElement('span')
-        probe.style.color = `var(${token})`
-        document.body.appendChild(probe)
-        const c = getComputedStyle(probe).color
-        probe.remove()
-        return c
+    const bar = await dialog.evaluate((el) => {
+      const lum = (c) => {
+        const [r, g, b] = (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
+        const lin = (v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4)
+        return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
       }
-      const chipEl = document.querySelector('[data-update-chip]')
+      const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+      const track = el.querySelector('[data-update-track]').getBoundingClientRect()
+      const fill = el.querySelector('[data-update-fill]').getBoundingClientRect()
       return {
-        phase: chipEl.dataset.phase,
-        base: getComputedStyle(chipEl.querySelector('[data-update-label="shown"]')).color,
-        fill: getComputedStyle(chipEl.querySelector('[data-update-fill]')).color,
-        clip: getComputedStyle(chipEl.querySelector('[data-update-fill]')).clipPath,
-        text: resolve('--p-text'),
-        onAccent: resolve('--p-on-accent')
+        share: fill.width / track.width,
+        status: ratio(lum(getComputedStyle(el.querySelector('[data-update-status]')).color), lum(getComputedStyle(el).backgroundColor))
       }
     })
-    ok(ink.phase !== 'idle' && ink.base === ink.text, `mid-install the label over the unfilled part is in the theme's text (${ink.base})`)
-    ok(ink.fill === ink.onAccent && /^inset\(/.test(ink.clip), `and the copy over the fill is in the accent's ink, clipped to the percentage (${ink.clip})`)
-    ok(await until(async () => (await notice.count()) === 1, 10000, 50), 'a second preview install runs to its end as well')
-    await notice.click()
-    ok(await until(async () => (await notice.count()) === 0, 3000, 50), 'and a click puts the line away')
+    ok(bar.share > 0.2 && bar.share <= 1, `on the light theme the bar is drawn, and filled to the percentage (${Math.round(bar.share * 100)}%)`)
+    ok(bar.status >= 4.5, `and the status line reads (${bar.status.toFixed(1)}:1)`)
+    ok(
+      await until(async () => (await dialog.getAttribute('data-phase')) === 'idle' && /Preview only/.test((await status.textContent()) ?? ''), 10000, 50),
+      'a second preview install runs to its end as well'
+    )
+    await dialog.locator('[data-update-cancel]').click()
+    ok(await closed(), 'and Close closes it')
     await app.close().catch(() => {})
   },
 
@@ -1507,10 +1627,16 @@ const scenarios = {
     await until(async () => (await question.count()) === 1, 4000, 50)
     await question.locator('[data-primary="true"]').click()
     ok(await until(async () => (await installs()) === 1, 6000, 50), 'the go-ahead starts the install')
-    const notice = page.locator('[data-update-notice]')
-    ok(await until(async () => (await notice.count()) === 1, 8000, 50), 'an install that fails says so under the chip')
-    ok(/could not be downloaded/.test((await notice.textContent()) ?? ''), `in words ("${((await notice.textContent()) ?? '').trim()}")`)
-    ok(await until(async () => (await chip.getAttribute('data-phase')) === 'idle', 4000, 50), 'and the chip offers the update again')
+    // The window had stepped aside for the question; after a yes it is back, as
+    // the progress window, and that is where a failure is said (#32).
+    const failed = updateDialog.locator('[data-update-status]')
+    ok(await until(async () => (await updateDialog.count()) === 1 && /could not be downloaded/.test((await failed.textContent()) ?? ''), 8000, 50), 'an install that fails says so IN the update window, which came back after the question')
+    ok((await page.locator('[data-update-notice]').count()) === 0, 'and not a second time under the chip')
+    ok(await until(async () => (await chip.getAttribute('data-phase')) === 'idle', 4000, 50), 'the chip offers the update again')
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/update-failed.png') }).catch(() => {})
+    ok(((await updateDialog.locator('[data-update-cancel]').textContent()) ?? '').trim() === 'Close', 'the way out is called Close')
+    await updateDialog.locator('[data-update-cancel]').click()
+    ok(await until(async () => (await updateDialog.count()) === 0, 4000, 50), 'and closes it')
     // A failed install must not leave the close question pre-answered: the
     // agent is still working, so closing the window still asks.
     await page.locator('[data-window-close]').click()
@@ -1571,7 +1697,7 @@ const scenarios = {
     ok(dom.forbidden === 0, `nothing the body asked for is an element (${dom.forbidden} anchors, images, scripts or frames)`)
     ok(dom.pwned === null, 'and its handler never ran')
     ok(!/evil\.example|https?:|by @/.test(dom.text), 'no url or author is printed either')
-    ok(/an image tag \(#1\)/.test(dom.text) && /a link and an anchor \(#2\)/.test(dom.text), 'what is left of each line is its words')
+    ok(/An image tag/.test(dom.text) && /A link and an anchor/.test(dom.text), 'what is left of each line is its words')
     ok(dom.entries === 20 && dom.more === '+ 10 more', `the list is capped and counts the rest (${dom.entries} shown, "${dom.more}")`)
     ok(dom.scrolls, 'the list scrolls inside the window')
     ok(dom.installOnScreen, 'and Cancel and Install stay on screen under it')

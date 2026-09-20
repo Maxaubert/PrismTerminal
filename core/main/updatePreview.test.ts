@@ -90,6 +90,18 @@ describe('runPreviewInstall', () => {
     expect(clock.waits.at(-1)).toBeGreaterThanOrEqual(500)
   })
 
+  it('stops where it is when cancelled, and still answers false (#32)', async () => {
+    const seen: number[] = []
+    const clock = fakeClock()
+    const ok = await runPreviewInstall((p) => seen.push(p), {
+      wait: clock.wait,
+      cancelled: () => seen.length >= 5
+    })
+    expect(ok).toBe(false)
+    expect(seen).toHaveLength(5)
+    expect(seen.at(-1)).toBeLessThan(100)
+  })
+
   it('resolves false: nothing was installed, which is what the caller reports', async () => {
     expect(await runPreviewInstall(() => {}, { wait: fakeClock().wait })).toBe(false)
   })

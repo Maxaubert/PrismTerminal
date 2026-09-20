@@ -107,6 +107,8 @@ const api = {
   /** Download the named installer and hand off to it; the app quits under it.
    *  False when nothing was installed, which is always the case for a preview. */
   installUpdate: (url: string): Promise<boolean> => ipcRenderer.invoke('update:install', url),
+  /** Stop the download `installUpdate` is running; it then resolves false. */
+  cancelUpdate: (): void => ipcRenderer.send('update:cancel'),
 
   /** The e2e's verbGuard: registry writes attempted this session. Must be 0. */
   e2eRegWrites: (): Promise<number> => ipcRenderer.invoke('e2e:reg-writes'),

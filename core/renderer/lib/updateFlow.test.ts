@@ -15,7 +15,14 @@ const offered = (info: UpdateInfo = REAL): UpdateFlow => run(NO_UPDATE, { type: 
 
 describe('updateFlow: the offer and its window', () => {
   it('starts with nothing: no chip, no window', () => {
-    expect(NO_UPDATE).toEqual({ info: null, phase: 'idle', pct: 0, open: false, notice: null })
+    expect(NO_UPDATE).toEqual({
+      info: null,
+      phase: 'idle',
+      pct: 0,
+      open: false,
+      notice: null,
+      aborting: false
+    })
   })
 
   it('an offer shows the chip and does NOT open the window by itself', () => {
@@ -43,12 +50,31 @@ describe('updateFlow: the offer and its window', () => {
 })
 
 describe('updateFlow: installing', () => {
-  it('Install closes the window and the chip starts from 0', () => {
+  it('Install KEEPS the window up and the bar starts from 0 (#32)', () => {
     const s = run(offered(), { type: 'open' }, { type: 'install' })
-    expect(s).toMatchObject({ open: false, phase: 'downloading', pct: 0, notice: null })
+    expect(s).toMatchObject({ open: true, phase: 'downloading', pct: 0, notice: null })
   })
 
-  it('progress fills the chip, and 100 is "installing"', () => {
+  it('brings the window up for an install started with it hidden (the host asked first)', () => {
+    const s = run(offered(), { type: 'open' }, { type: 'hide' }, { type: 'install' })
+    expect(s).toMatchObject({ open: true, phase: 'downloading' })
+  })
+
+  it('cannot be put away by the USER while it runs: Cancel, Escape, a press outside', () => {
+    const s = run(offered(), { type: 'open' }, { type: 'install' }, { type: 'progress', pct: 10 })
+    expect(run(s, { type: 'cancel' })).toEqual(s)
+    const installing = run(s, { type: 'progress', pct: 100 })
+    expect(run(installing, { type: 'cancel' })).toEqual(installing)
+  })
+
+  it('the HOST can hide it while it runs; the install carries on and it comes back', () => {
+    const s = run(offered(), { type: 'install' }, { type: 'progress', pct: 10 }, { type: 'hide' })
+    expect(s).toMatchObject({ open: false, phase: 'downloading', pct: 10 })
+    const back = run(s, { type: 'progress', pct: 40 }, { type: 'open' })
+    expect(back).toMatchObject({ open: true, phase: 'downloading', pct: 40 })
+  })
+
+  it('progress fills the bar, and 100 is "installing"', () => {
     const s = run(offered(), { type: 'install' }, { type: 'progress', pct: 42 })
     expect(s).toMatchObject({ phase: 'downloading', pct: 42 })
     expect(run(s, { type: 'progress', pct: 100 })).toMatchObject({ phase: 'installing', pct: 100 })
@@ -76,7 +102,7 @@ describe('updateFlow: installing', () => {
     expect(run(offered(), { type: 'progress', pct: 50 })).toEqual(offered())
   })
 
-  it('cannot be opened, or started twice, while it runs', () => {
+  it('cannot be started twice, and opening a window that is up changes nothing', () => {
     const s = run(offered(), { type: 'install' }, { type: 'progress', pct: 10 })
     expect(run(s, { type: 'open' })).toEqual(s)
     expect(run(s, { type: 'install' })).toEqual(s)
@@ -102,7 +128,7 @@ describe('updateFlow: how an install ends', () => {
     expect(run(s, { type: 'settled', ok: true })).toEqual(s)
   })
 
-  it('a failure goes back to idle and says so', () => {
+  it('a failure goes back to idle and says so IN the window, which is still up', () => {
     const s = run(
       offered(),
       { type: 'install' },
@@ -112,10 +138,20 @@ describe('updateFlow: how an install ends', () => {
     expect(s).toMatchObject({
       phase: 'idle',
       pct: 0,
-      open: false,
+      open: true,
       notice: INSTALL_FAILED,
       info: REAL
     })
+  })
+
+  it('a failure with the window hidden is said under the chip instead', () => {
+    const s = run(offered(), { type: 'install' }, { type: 'hide' }, { type: 'settled', ok: false })
+    expect(s).toMatchObject({ phase: 'idle', open: false, notice: INSTALL_FAILED })
+  })
+
+  it('closing the window that said how it ended clears the line: it was read', () => {
+    const s = run(offered(), { type: 'install' }, { type: 'settled', ok: false }, { type: 'cancel' })
+    expect(s).toEqual(offered())
   })
 
   it('a preview goes back to idle and says it was one', () => {
@@ -130,23 +166,64 @@ describe('updateFlow: how an install ends', () => {
   })
 
   it('the line goes when dismissed, and when the window is opened again', () => {
-    const s = run(offered(MOCK), { type: 'install' }, { type: 'settled', ok: false })
+    const s = run(
+      offered(MOCK),
+      { type: 'install' },
+      { type: 'hide' },
+      { type: 'settled', ok: false }
+    )
     expect(run(s, { type: 'dismiss' }).notice).toBeNull()
     expect(run(s, { type: 'open' })).toMatchObject({ notice: null, open: true })
   })
 
-  it('can be run again afterwards, which is what a preview is for', () => {
+  it('can be run again straight from the window that said it ended', () => {
     const s = run(
       offered(MOCK),
       { type: 'install' },
       { type: 'settled', ok: false },
-      { type: 'open' },
       { type: 'install' }
     )
-    expect(s).toMatchObject({ phase: 'downloading', pct: 0, notice: null })
+    expect(s).toMatchObject({ phase: 'downloading', pct: 0, notice: null, open: true })
   })
 
   it('ignores an ending with nothing running', () => {
     expect(run(offered(), { type: 'settled', ok: false })).toEqual(offered())
+  })
+})
+
+describe('updateFlow: cancelling a download (#32)', () => {
+  it('a cancel is not a failure: the window goes, nothing is said, the offer stands', () => {
+    const s = run(
+      offered(),
+      { type: 'open' },
+      { type: 'install' },
+      { type: 'progress', pct: 30 },
+      { type: 'abort' }
+    )
+    expect(s).toMatchObject({ aborting: true, phase: 'downloading', open: true })
+    expect(run(s, { type: 'settled', ok: false })).toEqual(offered())
+  })
+
+  it('only a DOWNLOAD can be cancelled: not idle, not once the installer has the file', () => {
+    expect(run(offered(), { type: 'abort' })).toEqual(offered())
+    const installing = run(offered(), { type: 'install' }, { type: 'progress', pct: 100 })
+    expect(run(installing, { type: 'abort' })).toEqual(installing)
+  })
+
+  it('a cancel that lost the race changes nothing: the app is quitting', () => {
+    const s = run(offered(), { type: 'install' }, { type: 'abort' })
+    expect(run(s, { type: 'settled', ok: true })).toEqual(s)
+  })
+
+  it('the next install does not inherit the cancel', () => {
+    const s = run(
+      offered(),
+      { type: 'install' },
+      { type: 'abort' },
+      { type: 'settled', ok: false },
+      { type: 'install' },
+      { type: 'settled', ok: false }
+    )
+    expect(s).toMatchObject({ aborting: false, notice: INSTALL_FAILED })
   })
 })

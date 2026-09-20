@@ -62,21 +62,27 @@ export const previewUpdate = (current: string): UpdateInfo => ({
   mock: true
 })
 
-/** How long the fake install takes in all: long enough to watch the chip fill
+/** How long the fake install takes in all: long enough to watch the bar fill
  *  and read "Installing", short enough to run twice in a row. */
 export const PREVIEW_MS = 3000
 
 /**
  * The fake install: percentages to 100 over most of `ms`, then a hold while the
- * chip reads "Installing", then FALSE, the same answer a real install gives
- * when nothing was installed. That is the truth, and it is what sends the chip
+ * window reads "Installing", then FALSE, the same answer a real install gives
+ * when nothing was installed. That is the truth, and it is what sends the flow
  * back to idle; the page adds the line that says it was a preview.
  *
  * It does nothing else. No fetch, no file, no child process, no quit.
+ *
+ * `cancelled` (#32) is asked before every step of the DOWNLOAD and ends it
+ * there, with the same false: the window's Cancel has to be seen working in a
+ * preview, since a preview is the only place most people will ever press it.
+ * It is not asked during the hold, as a real install cannot be cancelled once
+ * the installer has the file.
  */
 export async function runPreviewInstall(
   onPct: (pct: number) => void,
-  opts: { ms?: number; wait?: (ms: number) => Promise<void> } = {}
+  opts: { ms?: number; wait?: (ms: number) => Promise<void>; cancelled?: () => boolean } = {}
 ): Promise<false> {
   const ms = opts.ms ?? PREVIEW_MS
   const wait = opts.wait ?? ((t: number) => new Promise<void>((r) => setTimeout(r, t)))
@@ -90,6 +96,7 @@ export async function runPreviewInstall(
     const upTo = Math.round(tick * i)
     await wait(upTo - waited)
     waited = upTo
+    if (opts.cancelled?.()) return false
     onPct(Math.round((100 * i) / STEPS))
   }
   await wait(hold)
