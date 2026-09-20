@@ -55,12 +55,41 @@ const COPIED_MS = 1500
 
 const CATEGORY_NAME = new Map(HELP_CATEGORIES.map((c) => [c.id, c.name]))
 
+/**
+ * ONE COMMAND IS ONE ROW (#12, owner 2026-09-20: "this has too much text, it
+ * just needs the header and the command. no sub text and no highlighted ones.
+ * just a simple, minimalist but still elegant and beautiful searchable table").
+ * An entry used to be a block: a title, a sentence of summary, its command in a
+ * bordered box, then a labelled box per variant and a list of placeholders. Two
+ * entries filled the popup. So the entry is FLATTENED here: its own row is
+ * named by its task, and each variant becomes a row of its own named by the
+ * variant's label ("Copy it to the clipboard"), which is what that label always
+ * was. Nothing is hidden from SEARCH by this: `searchHelp` still reads the
+ * summary, the keywords and the placeholders off the entry.
+ */
+export interface HelpRow {
+  entry: HelpEntry
+  /** 0 is the entry's own command, 1+ its variants. Names the copy button. */
+  n: number
+  /** The left column. */
+  name: string
+  command: string
+}
+
 /** The list in the order it is drawn, which is the order Up and Down walk. */
-function rowsFor(shell: HelpShellChoice, query: string): HelpEntry[] {
-  if (query.trim() !== '') return searchHelp(ALL_HELP, query, { shell, limit: MAX_RESULTS }).map((h) => h.entry)
-  // Browsing: by category, in the panel's own order, catalogue order within.
-  const mine = ALL_HELP.filter((e) => e.shell === shell || e.shell === 'any')
-  return HELP_CATEGORIES.flatMap((c) => mine.filter((e) => e.category === c.id))
+function rowsFor(shell: HelpShellChoice, query: string): HelpRow[] {
+  const entries =
+    query.trim() !== ''
+      ? searchHelp(ALL_HELP, query, { shell, limit: MAX_RESULTS }).map((h) => h.entry)
+      : // Browsing: by category, in the panel's own order, catalogue order within.
+        HELP_CATEGORIES.flatMap((c) => {
+          const mine = ALL_HELP.filter((e) => e.shell === shell || e.shell === 'any')
+          return mine.filter((e) => e.category === c.id)
+        })
+  return entries.flatMap((entry) => [
+    { entry, n: 0, name: entry.task, command: entry.command },
+    ...(entry.variants ?? []).map((v, i) => ({ entry, n: i + 1, name: v.label, command: v.command }))
+  ])
 }
 
 const CopyIcon = (): JSX.Element => (
@@ -75,92 +104,133 @@ const CheckIcon = (): JSX.Element => (
   </svg>
 )
 
+const DangerIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="#e0a100" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
+    <path d="M12 3.5l9.5 16.5h-19z" />
+    <path d="M12 10v4.5M12 17.5v.01" />
+  </svg>
+)
+
+/** The row's columns, shared by the header and every row, so the two line up
+ *  with one number to change. */
+const COLUMNS = 'grid grid-cols-[minmax(9rem,1fr)_minmax(0,1.5fr)_2.25rem] items-center gap-3'
+
 /**
- * One command in its own box, with its copy button at the right edge. The
- * button is a FIXED square and its answer is laid OVER the box beside it, so
- * "Copied" arriving and leaving moves nothing: a list that twitches under the
- * pointer on every copy is a list you mis-click in.
+ * ONE ROW: what it does, the command, a copy button. Zebra-striped the way
+ * Prism's own file rows are (owner, 2026-09-20: "make the rows alternate in
+ * colour kind of like Prism Explorer"), and the stripe is mixed against the
+ * TEXT colour rather than being a fixed grey, so it holds on a light theme, on
+ * void, and on anything somebody builds later. The FIRST row is the plain
+ * ground and the second is the stripe, which is Prism's own pick.
+ *
+ * The command is ONE LINE and truncates: a table whose rows are different
+ * heights is a list, not a table. Nothing is lost by it, since the copy takes
+ * the whole text and the title shows it.
  */
-function CommandBox({
-  command,
-  copyKey,
+function Row({
+  row,
+  index,
+  active,
+  striped,
   copied,
   failed,
   mono,
-  onCopy
+  onCopy,
+  onPoint
 }: {
-  command: string
-  /** Names this box among all the boxes on screen: `<entry id>#<n>`. */
-  copyKey: string
+  row: HelpRow
+  index: number
+  active: boolean
+  striped: boolean
   copied: boolean
   failed: boolean
   mono: string
   onCopy: (key: string, command: string) => void
+  onPoint: () => void
 }): JSX.Element {
-  if (isKeyPress(command))
-    return (
-      // A key to press is drawn as key caps and has no copy button: the
-      // characters "Ctrl+C" on a clipboard help nobody.
-      <div data-help-keys className="flex items-center gap-2 py-0.5">
-        <span className="flex items-center gap-1">
-          {command.split('+').map((k, i) => (
+  const key = `${row.entry.id}#${row.n}`
+  const keys = isKeyPress(row.command)
+  return (
+    <div
+      id={`help-entry-${row.entry.id}-${row.n}`}
+      role="option"
+      aria-selected={active}
+      data-help-id={row.entry.id}
+      data-help-variant={row.n}
+      data-help-index={index}
+      data-help-active={active || undefined}
+      data-help-row
+      onMouseDown={onPoint}
+      className={`${COLUMNS} h-[34px] px-4 ${
+        active
+          ? 'bg-[color-mix(in_srgb,var(--p-accent)_20%,transparent)]'
+          : striped
+            ? 'bg-[color-mix(in_srgb,var(--p-text)_3.5%,transparent)]'
+            : ''
+      }`}
+    >
+      <span data-help-task className="flex min-w-0 items-center gap-1.5 truncate text-[12.5px] text-[var(--p-text)]" title={row.name}>
+        {row.entry.danger && (
+          // The warning is now a MARK, not a paragraph: the sentence is still
+          // here for the pointer and for a screen reader, which is what the
+          // e2e reads. A row that deletes things must not look like one that
+          // lists them.
+          <span data-help-danger title={`Careful. ${row.entry.danger}`} className="flex items-center">
+            <DangerIcon />
+            <span className="sr-only">Careful. {row.entry.danger}</span>
+          </span>
+        )}
+        <span className="truncate">{row.name}</span>
+      </span>
+      {keys ? (
+        // A key to press is drawn as key caps and has no copy button: the
+        // characters "Ctrl+C" on a clipboard help nobody.
+        <span data-help-keys className="flex min-w-0 items-center gap-1">
+          {row.command.split('+').map((k, i) => (
             <kbd
               key={i}
-              className="rounded border border-[color:var(--p-line)] bg-[var(--p-control)] px-1.5 py-0.5 text-[11.5px] font-semibold text-[var(--p-text)]"
+              className="rounded border border-[color:var(--p-line)] px-1.5 py-px text-[11px] font-semibold text-[var(--p-text-soft)]"
               style={{ fontFamily: mono }}
             >
               {k}
             </kbd>
           ))}
         </span>
-        <span className="text-[11.5px] text-[var(--p-dim)]">A key to press, not text to paste</span>
-      </div>
-    )
-  return (
-    <div
-      data-help-command-box
-      className="relative flex items-stretch rounded-md border border-[color:var(--p-line)] bg-[var(--p-control)]"
-    >
-      <code
-        data-help-command
-        className="min-w-0 flex-1 select-text whitespace-pre-wrap px-3 py-2 text-[12.5px] leading-[1.55] text-[var(--p-text)] [overflow-wrap:anywhere]"
-        style={{ fontFamily: mono }}
-      >
-        {command}
-      </code>
-      {(copied || failed) && (
-        // Over the box, not in the row: nothing is pushed aside. Opaque, so
-        // the end of a long command does not show through the word.
-        <span
-          data-help-copied
-          aria-hidden
-          className={`pointer-events-none absolute right-[38px] top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
-            failed
-              ? 'bg-[var(--p-side-flat)] text-[var(--p-text)]'
-              : 'bg-[var(--p-accent)] text-[var(--p-on-accent)]'
+      ) : (
+        <code
+          data-help-command
+          className="min-w-0 select-text truncate text-[12.5px] text-[var(--p-text-soft)]"
+          style={{ fontFamily: mono }}
+          title={row.command}
+        >
+          {row.command}
+        </code>
+      )}
+      {keys ? (
+        <span aria-hidden />
+      ) : (
+        <button
+          type="button"
+          data-help-copy={key}
+          onClick={(e) => {
+            e.stopPropagation()
+            onCopy(key, row.command)
+          }}
+          title={failed ? 'Could not copy' : copied ? 'Copied' : 'Copy'}
+          aria-label={`Copy: ${row.command}`}
+          className={`grid h-7 w-7 place-items-center justify-self-end rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)] ${
+            copied
+              ? 'text-[var(--p-accent-hi)]'
+              : failed
+                ? 'text-[#e0a100]'
+                : 'text-[var(--p-icon)] hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)]'
           }`}
         >
-          {failed ? 'Could not copy' : 'Copied'}
-        </span>
+          {/* The icon answers in place: nothing is inserted, so no row moves
+              and the list cannot twitch under the pointer mid-copy. */}
+          {copied ? <CheckIcon /> : <CopyIcon />}
+        </button>
       )}
-      <button
-        type="button"
-        data-help-copy={copyKey}
-        onClick={(e) => {
-          e.stopPropagation()
-          onCopy(copyKey, command)
-        }}
-        title="Copy"
-        aria-label={`Copy: ${command}`}
-        className={`grid w-9 shrink-0 place-items-center self-stretch rounded-r-md border-l border-[color:var(--p-line)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--p-accent-hi)] ${
-          copied
-            ? 'text-[var(--p-accent-hi)]'
-            : 'text-[var(--p-icon)] hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)]'
-        }`}
-        style={{ minHeight: 32 }}
-      >
-        {copied ? <CheckIcon /> : <CopyIcon />}
-      </button>
     </div>
   )
 }
@@ -190,6 +260,14 @@ export default function HelpPanel({
   const [query, setQuery] = useState('')
   const [chip, setChip] = useState<HelpShellChoice>(shell)
   const [active, setActive] = useState(0)
+  /**
+   * NOTHING IS MARKED UNTIL SOMEBODY POINTS AT IT or walks the list (owner,
+   * 2026-09-20: "no highlighted ones"). The first row used to open already
+   * filled, which on a table of two hundred quiet rows reads as a selection
+   * nobody made. The cursor still EXISTS from the first row, so one Down marks
+   * it and Enter copies it; it is only not drawn before then.
+   */
+  const [marked, setMarked] = useState(false)
   const [limit, setLimit] = useState(FIRST_PAGE)
   const [copied, setCopied] = useState<{ key: string; ok: boolean } | null>(null)
   /** What a screen reader is told. Its own state, since two copies of the same
@@ -206,6 +284,7 @@ export default function HelpPanel({
   if (listKey !== `${chip}|${query}`) {
     setListKey(`${chip}|${query}`)
     setActive(0)
+    setMarked(false)
     setLimit(FIRST_PAGE)
   }
   useEffect(() => {
@@ -255,9 +334,9 @@ export default function HelpPanel({
   // a ref, for the reason the update window's is (MEASURED there): keyed on
   // its callbacks, the effect is torn down and put back on every render, and
   // a keydown that lands between the two is heard by nobody.
-  const live = useRef({ rows, active, copy, onClose })
+  const live = useRef({ rows, active, marked, copy, onClose })
   useEffect(() => {
-    live.current = { rows, active, copy, onClose }
+    live.current = { rows, active, marked, copy, onClose }
   })
 
   useEffect(() => {
@@ -282,7 +361,11 @@ export default function HelpPanel({
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'PageDown' || e.key === 'PageUp') {
         if (!r.length) return
         const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : e.key === 'PageDown' ? 5 : -5
-        const next = Math.max(0, Math.min(r.length - 1, a + step))
+        // The first press MARKS where the cursor already is rather than
+        // stepping off it: with nothing drawn, "move down" from nowhere means
+        // the top of the list.
+        const next = live.current.marked ? Math.max(0, Math.min(r.length - 1, a + step)) : a
+        setMarked(true)
         e.preventDefault()
         e.stopPropagation()
         // An entry past the drawn page has to exist before it can be shown.
@@ -297,10 +380,10 @@ export default function HelpPanel({
         if ((e.target as HTMLElement | null)?.closest('button')) return
         e.preventDefault()
         e.stopPropagation()
-        const entry = r[a]
-        if (!entry) return
-        if (isKeyPress(entry.command)) setSaid(`${entry.command} is a key to press, not text to copy`)
-        else live.current.copy(`${entry.id}#0`, entry.command)
+        const row = r[a]
+        if (!row) return
+        if (isKeyPress(row.command)) setSaid(`${row.command} is a key to press, not text to copy`)
+        else live.current.copy(`${row.entry.id}#${row.n}`, row.command)
         return
       }
       // A PLAIN Tab only: Ctrl+Tab is the host's chord (the lesson of the
@@ -332,7 +415,7 @@ export default function HelpPanel({
   }, [active, limit])
 
   const drawn = rows.slice(0, limit)
-  const activeId = rows[active] ? `help-entry-${rows[active].id}` : undefined
+  const activeId = marked && rows[active] ? `help-entry-${rows[active].entry.id}-${rows[active].n}` : undefined
 
   return (
     // data-owns-escape: both apps have a capture-phase Escape of their own that
@@ -426,6 +509,18 @@ export default function HelpPanel({
           </span>
         </div>
 
+        {/* The columns, named once. A table's header is what makes two ragged
+            columns read as two columns. */}
+        <div
+          data-help-header
+          aria-hidden
+          className={`${COLUMNS} shrink-0 border-b border-[color:var(--p-line)] px-4 pb-1.5 pt-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--p-dim)]`}
+        >
+          <span>What you want</span>
+          <span>Command</span>
+          <span />
+        </div>
+
         {/* The answers. The list scrolls, the popup does not. */}
         <div
           ref={list}
@@ -441,97 +536,35 @@ export default function HelpPanel({
               shell.
             </p>
           )}
-          {drawn.map((entry, i) => {
-            const header = !searching && (i === 0 || drawn[i - 1].category !== entry.category)
-            const isActive = i === active
-            const commands = [
-              { label: '', command: entry.command },
-              ...(entry.variants ?? []).map((v) => ({ label: v.label, command: v.command }))
-            ]
+          {drawn.map((row, i) => {
+            const header = !searching && (i === 0 || drawn[i - 1].entry.category !== row.entry.category)
+            const key = `${row.entry.id}#${row.n}`
             return (
-              <div key={entry.id}>
+              <div key={key}>
                 {header && (
                   <h3
-                    data-help-category={entry.category}
-                    className="sticky top-0 z-10 border-b border-[color:var(--p-line)] bg-[var(--p-side-flat)] px-5 pb-1.5 pt-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--p-dim)]"
+                    data-help-category={row.entry.category}
+                    className="sticky top-0 z-10 border-b border-[color:var(--p-line)] bg-[var(--p-side-flat)] px-4 pb-1.5 pt-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--p-dim)]"
                   >
-                    {CATEGORY_NAME.get(entry.category) ?? entry.category}
+                    {CATEGORY_NAME.get(row.entry.category) ?? row.entry.category}
                   </h3>
                 )}
-                <div
-                  id={`help-entry-${entry.id}`}
-                  role="option"
-                  aria-selected={isActive}
-                  data-help-id={entry.id}
-                  data-help-index={i}
-                  data-help-active={isActive || undefined}
-                  onMouseDown={() => setActive(i)}
-                  className={`border-b border-l-2 border-b-[color:var(--p-line)] px-5 py-3.5 ${
-                    isActive ? 'border-l-[color:var(--p-accent-hi)] bg-[var(--p-hover)]' : 'border-l-transparent'
-                  }`}
-                >
-                  <div className="flex items-baseline gap-3">
-                    <h4 data-help-task className="min-w-0 flex-1 text-[13.5px] font-semibold leading-snug text-[var(--p-text)]">
-                      {entry.task}
-                    </h4>
-                    {searching && (
-                      <span className="shrink-0 text-[11px] text-[var(--p-dim2)]">
-                        {CATEGORY_NAME.get(entry.category) ?? entry.category}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--p-text-soft)]">{entry.summary}</p>
-                  <div className="mt-2.5 flex flex-col gap-2">
-                    {commands.map((c, n) => (
-                      <div key={n} data-help-variant={n}>
-                        {c.label && <p className="mb-1 text-[11.5px] text-[var(--p-dim)]">{c.label}</p>}
-                        <CommandBox
-                          command={c.command}
-                          copyKey={`${entry.id}#${n}`}
-                          copied={copied?.key === `${entry.id}#${n}` && copied.ok}
-                          failed={copied?.key === `${entry.id}#${n}` && !copied.ok}
-                          mono={monoFont}
-                          onCopy={copy}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  {entry.placeholders && (
-                    <dl data-help-placeholders className="mt-2.5 flex flex-col gap-1">
-                      {Object.entries(entry.placeholders).map(([name, what]) => (
-                        <div key={name} className="flex items-baseline gap-2 text-[11.5px] leading-snug">
-                          <dt
-                            className="shrink-0 rounded bg-[var(--p-hover-hi)] px-1 py-px font-semibold text-[var(--p-text)]"
-                            style={{ fontFamily: monoFont }}
-                          >
-                            {name}
-                          </dt>
-                          <dd className="min-w-0 text-[var(--p-dim)]">{what}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                  {entry.danger && (
-                    // The ink is the theme's own text and only the mark and
-                    // the rule are amber: an amber sentence is unreadable on
-                    // half the light themes, and this is the one line in the
-                    // entry that has to be read.
-                    <div
-                      data-help-danger
-                      role="note"
-                      className="mt-2.5 flex items-start gap-2 rounded-md border-l-2 border-[#e0a100] bg-[color-mix(in_srgb,#e0a100_13%,transparent)] px-2.5 py-1.5 text-[12px] leading-snug text-[var(--p-text)]"
-                    >
-                      <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="#e0a100" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-px shrink-0" aria-hidden>
-                        <path d="M12 3.5l9.5 16.5h-19z" />
-                        <path d="M12 10v4.5M12 17.5v.01" />
-                      </svg>
-                      <span>
-                        <span className="font-semibold">Careful. </span>
-                        {entry.danger}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                <Row
+                  row={row}
+                  index={i}
+                  active={marked && i === active}
+                  // The stripe follows the drawn order, so it never restarts
+                  // under a category heading: the eye reads one ruled table.
+                  striped={i % 2 === 1}
+                  copied={copied?.key === key && copied.ok}
+                  failed={copied?.key === key && !copied.ok}
+                  mono={monoFont}
+                  onCopy={copy}
+                  onPoint={() => {
+                    setActive(i)
+                    setMarked(true)
+                  }}
+                />
               </div>
             )
           })}
