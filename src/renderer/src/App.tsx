@@ -36,6 +36,8 @@ import { quotePaths } from '@core/renderer/lib/termPaste'
 import { ContextMenu } from './components/ContextMenu'
 import { rememberRoot } from '@core/renderer/lib/recentRoots'
 import { savedShellId } from '@core/renderer/lib/termPrefs'
+import { helpEnabled, helpShell, setHelpShell, useHelpEnabled } from '@core/renderer/lib/helpPrefs'
+import { shellOfShellId, type HelpShellChoice } from '@core/shared/help/shells'
 import { newTabFolder, newTabMode } from './lib/newTabPrefs'
 import {
   AGENT_NAMES,
@@ -43,12 +45,21 @@ import {
   closeQuestionTitle,
   holdsWindowClose
 } from '@core/renderer/lib/agentClose'
-import { onTermLookChange, termAcrylic, termOpacity, termThemeId } from '@core/renderer/lib/termLook'
+import {
+  onTermLookChange,
+  termAcrylic,
+  termFontStack,
+  termOpacity,
+  termThemeId
+} from '@core/renderer/lib/termLook'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { applyChrome, chromeTokens } from './lib/chromeTheme'
 import { onWindowEdgesChange, windowEdges } from './lib/edgesPrefs'
 
 const Settings = lazy(() => import('./components/Settings'))
+// Loaded when it is first opened: the popup brings the whole catalogue with it,
+// several hundred entries of text that a launch has no use for.
+const HelpPanel = lazy(() => import('@core/renderer/components/HelpPanel'))
 
 /** What a close question is about to interrupt. */
 interface Ask {
@@ -94,6 +105,16 @@ export default function App(): JSX.Element {
   const [ask, setAsk] = useState<Ask | null>(null)
   /** The terminal's own right-click menu, at the pointer. */
   const [termMenu, setTermMenu] = useState<{ x: number; y: number } | null>(null)
+  /** The command help popup (#12). The core's, the same in Prism; what is this
+   *  app's is the way in (F1, the ? in the title bar, the terminal's menu). */
+  const [helpOpen, setHelpOpen] = useState(false)
+  /** The chip it opens on, decided at the press that opens it. */
+  const [helpFor, setHelpFor] = useState<HelpShellChoice>('powershell')
+  const helpOn = useHelpEnabled()
+  /** Which shell each tab was SPAWNED with. The Shell setting only names what
+   *  the next terminal launches, so a tab opened before it was changed still
+   *  speaks its old language, and the popup preselects by what is running. */
+  const shellIds = useRef(new Map<string, string | undefined>())
   const { tabs, activeId } = state
   const active = tabs.find((t) => t.id === activeId) ?? null
   const activeShell = active && active.kind !== 'settings' ? active : null
@@ -106,10 +127,7 @@ export default function App(): JSX.Element {
   const { agentIds, workingIds, doneIds, agentKinds } = indicator
 
   // The latest of everything, for listeners registered once.
-  const live = useRef({ state, workingIds, agentIds })
-  useEffect(() => {
-    live.current = { state, workingIds, agentIds }
-  })
+  const live = useRef({ state, workingIds, agentIds, blocked: false, front: '' })
 
   useEffect(() => {
     paintChrome()
@@ -127,7 +145,9 @@ export default function App(): JSX.Element {
     // the id rides the spawn, nothing is ever visibly typed.
     if (resume) markResume(id, resume)
     rememberRoot(cwd)
-    ensureTermSession(id, cwd, savedShellId())
+    const shellId = savedShellId()
+    shellIds.current.set(id, shellId)
+    ensureTermSession(id, cwd, shellId)
     setState((s) => addTab(s, id, cwd))
     return id
   }, [])
@@ -189,6 +209,7 @@ export default function App(): JSX.Element {
         disposeTermSession(id)
         forgetSession(id)
         indicator.forget(id)
+        shellIds.current.delete(id)
       }
       setState((s) => closeTab(s, id))
     },
@@ -294,6 +315,46 @@ export default function App(): JSX.Element {
   useEffect(() => {
     if (ask) cancelUpdate()
   }, [ask, cancelUpdate])
+
+  // COMMAND HELP (#12). It is the same layer as the update window and a close
+  // question, so the same rule holds it: it never sits over either. It does not
+  // OPEN while one of them is up, and it is PUT AWAY when one appears (Ctrl+W
+  // and Alt+F4 still work over it, and a question mounted underneath would
+  // take the focus where nobody can see it). Switched off in Settings, it goes.
+  // Put away while RENDERING, not in an effect: an effect would paint one
+  // frame of the popup over the question first.
+  const helpBlocked = !!ask || update.state.open || !helpOn
+  // AND IT LEAVES WHEN WHAT IS IN FRONT CHANGES. The app's chords keep working
+  // over the popup, and three of them hand the keyboard to something BEHIND it:
+  // Ctrl+T and Ctrl+Tab mount a terminal, which takes the focus as it attaches,
+  // and Ctrl+Shift+F opens the find bar. Left up, the popup then sat over a
+  // focused shell, and a question typed "into the search field" was typed into
+  // that shell instead. So it remembers what was in front when it opened (the
+  // tab, and whether find was showing) and goes as soon as that is no longer so.
+  const inFront = `${activeId ?? ''}|${findFor ?? ''}`
+  const [helpFront, setHelpFront] = useState(inFront)
+  const helpStale = helpFront !== inFront
+  if (helpOpen && (helpBlocked || helpStale)) setHelpOpen(false)
+  const toggleHelp = useCallback(() => {
+    // The chip it opens on is the language of the shell in front; with no
+    // shell in front, the last one picked by hand, else what a new terminal
+    // would launch.
+    const { state: st } = live.current
+    const front = st.tabs.find((t) => t.id === st.activeId)
+    setHelpFor(
+      front && front.kind !== 'settings'
+        ? shellOfShellId(shellIds.current.get(front.id))
+        : (helpShell() ?? shellOfShellId(savedShellId()))
+    )
+    setHelpFront(live.current.front)
+    setHelpOpen((was) => (was ? false : helpEnabled() && !live.current.blocked))
+  }, [])
+  // The latest of everything, for listeners registered once. `blocked` is
+  // whether something that outranks the help popup is up (see above).
+  const updateOpen = update.state.open
+  useEffect(() => {
+    live.current = { state, workingIds, agentIds, blocked: !!ask || updateOpen, front: inFront }
+  })
   /** The running version, for the window's "You have" line. Asked once. */
   const [version, setVersion] = useState('')
   useEffect(() => {
@@ -324,14 +385,23 @@ export default function App(): JSX.Element {
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
   // keyboard back: clicking or dragging a tab is not "I left the shell".
   useEffect(() => {
-    if (activeShell && !ask && !findOpen && !update.state.open) focusTermSession(activeShell.id)
-  }, [activeShell, ask, findOpen, update.state.open])
+    if (activeShell && !ask && !findOpen && !update.state.open && !helpOpen) focusTermSession(activeShell.id)
+  }, [activeShell, ask, findOpen, update.state.open, helpOpen])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'F11') {
         e.preventDefault()
         window.prism.windowToggleFullscreen()
+        return
+      }
+      // F1 is command help, bare, and only while the setting is on: off, the
+      // key is the shell's (termHost's ownsKey makes the same test, so xterm
+      // yields it exactly when this takes it).
+      if (e.key === 'F1' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey && helpEnabled()) {
+        e.preventDefault()
+        e.stopPropagation()
+        toggleHelp()
         return
       }
       if (!e.ctrlKey || e.altKey) return
@@ -372,7 +442,7 @@ export default function App(): JSX.Element {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [newTab, requestClose])
+  }, [newTab, requestClose, toggleHelp])
 
   const openRecent = useCallback(
     (path: string) => {
@@ -386,6 +456,7 @@ export default function App(): JSX.Element {
     <div className="flex h-full w-full flex-col overflow-hidden text-[var(--p-text)]">
       <TitleBar
         onSettings={() => setState(openSettings)}
+        onHelp={helpOn ? toggleHelp : undefined}
         chip={
           <UpdateChip
             info={update.state.info}
@@ -490,7 +561,9 @@ export default function App(): JSX.Element {
             // Ctrl+C over one already copies.
             { label: 'Paste', hint: 'Ctrl+V', onPick: () => void pasteInto(activeShell.id) },
             { label: 'Find in scrollback', hint: 'Ctrl+Shift+F', onPick: () => setFindFor(activeShell.id) },
-            { label: 'Close tab', hint: 'Ctrl+Shift+W', onPick: () => requestClose(activeShell.id) }
+            { label: 'Close tab', hint: 'Ctrl+Shift+W', onPick: () => requestClose(activeShell.id) },
+            // Only while the setting is on: off means the app offers it nowhere.
+            ...(helpOn ? [{ label: 'Command help', hint: 'F1', onPick: toggleHelp }] : [])
           ]}
         />
       )}
@@ -544,6 +617,22 @@ export default function App(): JSX.Element {
             }
           ]}
         />
+      )}
+
+      {/* COMMAND HELP (#12), mounted once. It is handed the clipboard and
+          NOTHING ELSE: no session id, no termInput. It cannot type into a shell
+          because it has no way to reach one, which is the owner's rule (picking
+          a command does NOT insert it). */}
+      {helpOpen && !helpBlocked && !helpStale && (
+        <Suspense fallback={null}>
+          <HelpPanel
+            shell={helpFor}
+            monoFont={termFontStack()}
+            onCopy={(text) => window.prism.writeClipboard(text)}
+            onPickShell={setHelpShell}
+            onClose={() => setHelpOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* Mounted once, here: the chip lives in the title bar, the window it

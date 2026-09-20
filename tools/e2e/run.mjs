@@ -616,6 +616,350 @@ const scenarios = {
     await app.close().catch(() => {})
   },
 
+  /**
+   * COMMAND HELP (#12; owner, 2026-09-20: "a pop up with copy icons for easy
+   * copying. searchable, natural language"). The popup is the core's; the ways
+   * in (the ? in the title bar, F1, the terminal's menu) are this app's.
+   *
+   * What must never regress, and so is asserted rather than trusted:
+   *  - NOTHING IS TYPED INTO THE SHELL (owner, 2026-09-19: picking a command
+   *    does NOT insert it). The terminal's text is read before the popup is
+   *    touched and again after every search, copy and Enter in it.
+   *  - COPY IS EXACT: what lands on the clipboard is read back through
+   *    Electron's clipboard in MAIN and compared with the text on screen,
+   *    character for character. Whatever text the clipboard held is put back.
+   *  - "Copied" moves nothing: the entry's height is measured with and without.
+   *  - Escape hands the keyboard back to the shell, F1 is heard from INSIDE a
+   *    focused shell (xterm has to yield it), and with the setting off both the
+   *    button and the key are gone.
+   *  - A close question never sits underneath it.
+   * And it is LOOKED AT: the layout is measured and screenshots go to
+   * .e2e-shots/help-*.png, dark and light, browsing and with results.
+   */
+  async helpPanel(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    await until(async () => (await tabLabels(page)).length === 1)
+    const t0 = Date.now()
+    const shot = (name) => page.screenshot({ path: resolve(process.cwd(), `.e2e-shots/${name}.png`) }).catch(() => {})
+    const panel = page.locator('[data-help-panel]')
+    const opened = () => until(async () => (await panel.count()) === 1, 6000, 50)
+    const closed = () => until(async () => (await panel.count()) === 0, 4000, 50)
+    const firstId = () => page.evaluate(() => document.querySelector('[data-help-list] [data-help-id]')?.getAttribute('data-help-id') ?? null)
+    const focusIsSearch = () => page.evaluate(() => document.activeElement?.hasAttribute('data-help-search') === true)
+    const clip = () => app.evaluate(({ clipboard }) => clipboard.readText())
+    const setQuery = async (q) => {
+      await page.locator('[data-help-search]').fill(q)
+    }
+
+    // The clipboard is the owner's: what it held is put back at the end. Text
+    // (with its html and rtf forms) is what can be restored faithfully; an
+    // image is restored too, and copied FILES cannot be, so a run says so.
+    const held = await app.evaluate(({ clipboard }) => {
+      const img = clipboard.readImage()
+      return {
+        formats: clipboard.availableFormats(),
+        text: clipboard.readText(),
+        html: clipboard.readHTML(),
+        rtf: clipboard.readRTF(),
+        image: img.isEmpty() ? '' : img.toDataURL()
+      }
+    })
+
+    try {
+      await typeLine(page, 'echo help-$(40+2)-ready')
+      ok(await until(async () => (await termText(page)).includes('help-42-ready')), 'a shell is running in front')
+      // The prompt has to be back before the text is taken as the baseline.
+      await page.waitForFunction(
+        () => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()),
+        null,
+        { timeout: 20000 }
+      )
+      const termBefore = await termText(page)
+
+      /* ----- the button ----- */
+      ok((await page.locator('[data-title-help]').count()) === 1, 'the ? is in the title bar (the setting is on by default)')
+      await page.locator('[data-title-help]').click()
+      ok(await opened(), 'a click on it opens the popup')
+      ok(await until(focusIsSearch, 3000, 50), 'and the search field has the focus')
+      ok((await page.locator('[data-help-shell="powershell"]').getAttribute('aria-pressed')) === 'true', 'the chip is the shell of the tab in front (PowerShell)')
+      const browse = await page.evaluate(() => ({
+        headers: [...document.querySelectorAll('[data-help-category]')].map((h) => h.getAttribute('data-help-category')),
+        entries: document.querySelectorAll('[data-help-id]').length,
+        count: document.querySelector('[data-help-count]')?.textContent ?? '',
+        placeholder: document.querySelector('[data-help-search]')?.getAttribute('placeholder') ?? ''
+      }))
+      ok(browse.headers[0] === 'folders' && browse.headers.length >= 2, `with no question it browses by category (${JSON.stringify(browse.headers)})`)
+      ok(browse.entries >= 20 && browse.entries <= 120, `and draws a first page, not the whole catalogue (${browse.entries} entries; "${browse.count}")`)
+      ok(/find big files/.test(browse.placeholder) && /port 3000/.test(browse.placeholder), 'the placeholder teaches by example')
+      await shot('help-browse-dark')
+      // The rest of the list arrives as it is scrolled to: Git is far down.
+      await page.locator('[data-help-list]').evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
+      ok(
+        await until(() => page.evaluate((n) => document.querySelectorAll('[data-help-id]').length > n, browse.entries), 6000, 50),
+        'scrolling to the end draws more of it'
+      )
+      await page.keyboard.press('Escape')
+      ok(await closed(), 'Escape closes it')
+
+      /* ----- F1, from inside a focused shell ----- */
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.press('F1')
+      ok(await opened(), 'F1 opens it over a FOCUSED shell (xterm yields the key)')
+      ok(await until(focusIsSearch, 3000, 50), 'and the search field has the focus again')
+      await page.keyboard.type('how do I find big files')
+      ok(await until(async () => (await firstId()) === 'ps-biggest-files', 4000, 50), `a plain question finds the PowerShell answer first (${await firstId()})`)
+      await shot('help-results-dark')
+      await page.locator('[data-help-shell="bash"]').click()
+      ok(await until(async () => (await firstId()) === 'sh-biggest-files', 4000, 50), `the Bash chip changes the first answer to the bash one (${await firstId()})`)
+      await page.locator('[data-help-shell="powershell"]').click()
+      await until(async () => (await firstId()) === 'ps-biggest-files', 4000, 50)
+
+      /* ----- the layout, measured ----- */
+      const look = await page.evaluate(() => {
+        const el = document.querySelector('[data-help-panel]')
+        const entry = document.querySelector('[data-help-id="ps-biggest-files"]')
+        const copy = document.querySelector('[data-help-copy="ps-biggest-files#0"]')
+        const code = entry.querySelector('[data-help-command]')
+        const alpha = (c) => Number((c.match(/[\d.]+/g) ?? [])[3] ?? 1)
+        const box = el.getBoundingClientRect()
+        const b = copy.getBoundingClientRect()
+        const cbox = copy.closest('[data-help-command-box]').getBoundingClientRect()
+        return {
+          w: Math.round(box.width),
+          h: Math.round(box.height),
+          inside: box.top >= 0 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth,
+          alpha: alpha(getComputedStyle(el).backgroundColor),
+          padX: parseFloat(getComputedStyle(entry).paddingLeft),
+          padY: parseFloat(getComputedStyle(entry).paddingTop),
+          copyW: Math.round(b.width),
+          copyH: Math.round(b.height),
+          copyAtRightEdge: Math.abs(b.right - cbox.right) <= 2,
+          mono: getComputedStyle(code).fontFamily,
+          termFont: getComputedStyle(document.querySelector('.xterm-rows') ?? document.body).fontFamily,
+          listScrolls: getComputedStyle(document.querySelector('[data-help-list]')).overflowY,
+          ruleCut: (() => {
+            const r = document.querySelector('[data-help-rule]')
+            return r.scrollWidth - r.clientWidth
+          })()
+        }
+      })
+      ok(look.w >= 560 && look.w <= 780 && look.h >= 380, `the popup is a popup-sized box (${look.w}x${look.h})`)
+      ok(look.inside, 'wholly on screen')
+      ok(look.alpha === 1, `on the opaque surface (alpha ${look.alpha})`)
+      ok(look.padX >= 16 && look.padY >= 10, `an entry has its padding (${look.padX}px / ${look.padY}px)`)
+      ok(look.copyW >= 28 && look.copyH >= 28, `the copy button is big enough to hit (${look.copyW}x${look.copyH})`)
+      ok(look.copyAtRightEdge, "and sits at the right edge of the command's box")
+      ok(look.mono.split(',')[0].trim() === look.termFont.split(',')[0].trim(), `the command wears the terminal's face (${look.mono.split(',')[0]})`)
+      ok(look.listScrolls === 'auto', 'the list scrolls, the popup does not')
+      // Seen cut short with an ellipsis in the first screenshot, so it is measured.
+      ok(look.ruleCut <= 0, `the line saying nothing is run for you is whole (${look.ruleCut}px cut off)`)
+
+      /* ----- copy ----- */
+      const wantMain = await page.locator('[data-help-id="ps-biggest-files"] [data-help-variant="0"] [data-help-command]').textContent()
+      const heightBefore = await page.locator('[data-help-id="ps-biggest-files"]').evaluate((el) => el.getBoundingClientRect().height)
+      await page.locator('[data-help-copy="ps-biggest-files#0"]').click()
+      ok(
+        await until(async () => (await page.locator('[data-help-id="ps-biggest-files"] [data-help-copied]').count()) === 1, 3000, 25),
+        'the copy button answers in place'
+      )
+      ok(((await page.locator('[data-help-copied]').first().textContent()) ?? '').trim() === 'Copied', 'with "Copied"')
+      const heightDuring = await page.locator('[data-help-id="ps-biggest-files"]').evaluate((el) => el.getBoundingClientRect().height)
+      ok(heightDuring === heightBefore, `and the entry does not change height (${heightBefore} -> ${heightDuring})`)
+      ok(!!wantMain && /Sort-Object/.test(wantMain) && (await clip()) === wantMain, `the clipboard holds the EXACT command ("${await clip()}")`)
+      ok(/^Copied: /.test((await page.locator('[data-help-said]').textContent()) ?? ''), 'and a screen reader is told')
+      ok(
+        await until(async () => (await page.locator('[data-help-copied]').count()) === 0, 4000, 50),
+        'the answer leaves by itself'
+      )
+      const heightAfter = await page.locator('[data-help-id="ps-biggest-files"]').evaluate((el) => el.getBoundingClientRect().height)
+      ok(heightAfter === heightBefore, 'still without moving anything')
+      // Every variant has a button of its own, and copies ITS text.
+      const wantVariant = await page.locator('[data-help-id="ps-biggest-files"] [data-help-variant="1"] [data-help-command]').textContent()
+      await page.locator('[data-help-copy="ps-biggest-files#1"]').click()
+      ok(!!wantVariant && wantVariant !== wantMain && (await until(async () => (await clip()) === wantVariant, 3000, 50)), "a variant's own button copies the variant")
+
+      /* ----- the keyboard ----- */
+      await page.locator('[data-help-search]').focus()
+      await page.keyboard.press('ArrowDown')
+      const second = await until(
+        () => page.evaluate(() => {
+          const a = document.querySelector('[data-help-active]')
+          return a?.getAttribute('data-help-index') === '1' ? a.getAttribute('data-help-id') : null
+        }),
+        3000,
+        50
+      )
+      ok(!!second, `Down moves to the second result (${second})`)
+      const wantSecond = await page.locator(`[data-help-id="${second}"] [data-help-variant="0"] [data-help-command]`).textContent()
+      await page.keyboard.press('Enter')
+      ok(!!wantSecond && (await until(async () => (await clip()) === wantSecond, 3000, 50)), 'Enter copies the highlighted entry\'s main command')
+      await page.keyboard.press('ArrowUp')
+      // Tab stays inside the popup: behind it is a shell, and a Tab that got out
+      // would be typed into it.
+      let escaped = 0
+      for (let i = 0; i < 8; i += 1) {
+        await page.keyboard.press('Tab')
+        if (!(await page.evaluate(() => !!document.activeElement?.closest('[data-help-panel]')))) escaped += 1
+      }
+      ok(escaped === 0, 'Tab cycles inside the popup')
+
+      /* ----- a warning, and a key that is not a command ----- */
+      await setQuery('delete a folder')
+      ok(await until(async () => (await firstId()) === 'ps-delete-folder', 4000, 50), `"delete a folder" finds it (${await firstId()})`)
+      const danger = ((await page.locator('[data-help-id="ps-delete-folder"] [data-help-danger]').textContent()) ?? '').trim()
+      ok(danger.length > 25 && /^Careful\./.test(danger), `and it carries its warning ("${danger.slice(0, 70)}...")`)
+      await shot('help-danger-dark')
+      await setQuery('stop a running command')
+      const keys = await until(
+        () => page.evaluate(() => {
+          const e = document.querySelector('[data-help-id="ps-cancel-command"]')
+          if (!e) return null
+          const v = e.querySelector('[data-help-variant="0"]')
+          return { caps: v.querySelectorAll('kbd').length, copy: v.querySelectorAll('[data-help-copy]').length }
+        }),
+        4000,
+        50
+      )
+      ok(!!keys && keys.caps >= 2 && keys.copy === 0, `a key to press is drawn as keys and has no copy button (${JSON.stringify(keys)})`)
+      await setQuery('zzzz qqqq xxxx')
+      ok(await until(async () => (await page.locator('[data-help-empty]').count()) === 1, 3000, 50), 'a question nothing answers says so')
+
+      /* ----- nothing was typed into the shell ----- */
+      ok((await termText(page)) === termBefore, 'the terminal is EXACTLY as it was: nothing was typed or run')
+      await page.keyboard.press('Escape')
+      ok(await closed(), 'Escape closes it')
+      // No click: the keyboard has to be back in the shell by itself.
+      await page.keyboard.type('echo landed-$(1+1)')
+      await page.keyboard.press('Enter')
+      ok(await until(async () => (await termText(page)).includes('landed-2'), 10000), 'and the next keystroke lands in the shell')
+
+      /* ----- a chord that changes what is in front puts it away ----- */
+      // The app's chords work over the popup, and a new tab's terminal takes the
+      // focus as it attaches. Left up, the popup sat over a focused shell and the
+      // next "search" was typed into that shell.
+      const focusIsShell = () => page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea') === true)
+      await page.keyboard.press('F1')
+      ok(await opened(), 'the popup is up again')
+      await page.keyboard.press('Control+t')
+      ok(await until(async () => (await tabLabels(page)).length === 2), 'Ctrl+T opens a tab over the popup')
+      ok(await closed(), 'and the popup leaves with the tab it was opened over')
+      ok(await until(focusIsShell, 4000, 50), 'the new shell has the keyboard, with nothing over it')
+      await page.keyboard.press('Control+w')
+      ok(await until(async () => (await tabLabels(page)).length === 1), 'the extra tab closes again')
+      await page.keyboard.press('F1')
+      ok(await opened(), 'up once more')
+      await page.keyboard.press('Control+Shift+f')
+      ok(await until(async () => (await page.locator('[data-term-find]').count()) === 1, 4000, 50), 'Ctrl+Shift+F opens find over the popup')
+      ok(await closed(), 'and the popup leaves, so the find bar is never typed into from underneath it')
+      await page.keyboard.press('Escape')
+      ok(await until(async () => (await page.locator('[data-term-find]').count()) === 0, 4000, 50), 'Escape closes find')
+
+      /* ----- the terminal's own menu ----- */
+      await page.locator('[data-term-region]').click({ button: 'right', position: { x: 200, y: 120 } })
+      const row = page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Command help' })
+      ok(await until(async () => (await row.count()) === 1, 4000, 50), 'the right-click menu has a Command help row')
+      await row.click()
+      ok(await opened(), 'which opens it')
+      await page.locator('[data-help-close]').click()
+      ok(await closed(), 'and its own X closes it')
+
+      /* ----- a light theme, looked at ----- */
+      await page.keyboard.press('Control+,')
+      await page.locator('[data-settings-tab="appearance"]').click()
+      await page.locator('[data-term-card="github"]').first().click()
+      await until(() => page.evaluate(() => document.documentElement.dataset.mode === 'light'), 6000, 50)
+      await page.keyboard.press('F1')
+      ok(await opened(), 'F1 opens it over Settings too')
+      await shot('help-browse-light')
+      await page.keyboard.type('delete a folder')
+      await until(async () => (await firstId()) === 'ps-delete-folder', 4000, 50)
+      await page.locator('[data-help-copy="ps-delete-folder#0"]').click()
+      await until(async () => (await page.locator('[data-help-copied]').count()) === 1, 3000, 25)
+      await shot('help-results-light')
+      const lightInk = await page.evaluate(() => {
+        const lum = (c) => {
+          const [r, g, b] = (c.match(/[\d.]+/g) ?? []).slice(0, 3).map((v) => {
+            const s = Number(v) / 255
+            return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+          })
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b
+        }
+        const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+        const code = document.querySelector('[data-help-id="ps-delete-folder"] [data-help-command]')
+        const boxBg = getComputedStyle(code.closest('[data-help-command-box]')).backgroundColor
+        return { command: ratio(lum(getComputedStyle(code).color), lum(boxBg)) }
+      })
+      ok(lightInk.command >= 4.5, `on a light theme the command still reads (${lightInk.command.toFixed(1)}:1)`)
+      await page.keyboard.press('Escape')
+      await closed()
+
+      /* ----- off means off ----- */
+      await page.locator('[data-settings-tab="general"]').click()
+      const sw = page.locator('[data-pref="help-enabled"] [role="switch"]')
+      ok((await sw.getAttribute('aria-checked')) === 'true', 'Settings > General has the Command help switch, on by default')
+      await sw.click()
+      ok(await until(async () => (await page.locator('[data-title-help]').count()) === 0, 4000, 50), 'switched off, the ? leaves the title bar')
+      await page.keyboard.press('Control+1')
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.press('F1')
+      ok(!(await until(async () => (await panel.count()) === 1, 1500, 50)), 'and F1 opens nothing')
+      await page.locator('[data-term-region]').click({ button: 'right', position: { x: 200, y: 120 } })
+      await until(async () => (await page.locator('[role="menu"] [role="menuitem"]').count()) > 0, 4000, 50)
+      ok((await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Command help' }).count()) === 0, 'nor does the menu offer it')
+      await page.keyboard.press('Escape')
+      await page.keyboard.press('Control+,')
+      await page.locator('[data-settings-tab="general"]').click()
+      await sw.click()
+      ok(await until(async () => (await page.locator('[data-title-help]').count()) === 1, 4000, 50), 'switched back on, it returns')
+      await page.keyboard.press('Control+1')
+
+      /* ----- one question at a time ----- */
+      // A shell stands in for Claude through the title. The process poll's own
+      // verdict on a shell ("no agent here") is said ONCE and clears a title's
+      // claim when it lands, and nothing on the page shows that it has; by now
+      // this shell has been printing for far longer than the poll's first look
+      // takes, and the wait below only makes that certain on a fast run.
+      await until(() => Date.now() - t0 > 12000, 15000, 100)
+      await page.locator('.xterm').first().click({ force: true })
+      await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
+      ok(
+        await until(() => page.evaluate(() => !!document.querySelector('[data-agent-present]')), 8000, 50),
+        'an agent is present in the tab, so closing it would ask'
+      )
+      await page.keyboard.press('F1')
+      ok(await opened(), 'the popup is up')
+      await page.keyboard.press('Control+w')
+      const question = page.locator('[role="dialog"]:not([data-help-panel])')
+      ok(await until(async () => (await question.count()) === 1, 4000, 50), 'Ctrl+W over it raises the close question')
+      ok(await closed(), 'and the popup is put away, so the question is never underneath it')
+      ok(
+        await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]:not([data-help-panel])')),
+        'the focus is on the question, where it can be seen'
+      )
+      await page.keyboard.press('F1')
+      ok(!(await until(async () => (await panel.count()) === 1, 1200, 50)), 'and F1 does not open it over a question')
+      await page.keyboard.press('Escape')
+      ok(await until(async () => (await question.count()) === 0, 4000, 50), 'Cancel keeps the tab')
+      ok((await tabLabels(page)).some((l) => l.includes('alpha')), 'which is still there')
+    } finally {
+      // Put back what the clipboard held.
+      await app
+        .evaluate(({ clipboard, nativeImage }, was) => {
+          const data = {}
+          if (was.text) data.text = was.text
+          if (was.html) data.html = was.html
+          if (was.rtf) data.rtf = was.rtf
+          if (was.image) data.image = nativeImage.createFromDataURL(was.image)
+          if (Object.keys(data).length) clipboard.write(data)
+          else clipboard.clear()
+        }, held)
+        .catch(() => {})
+      if (held.formats.some((f) => /FileName|uri-list/i.test(f))) console.log('  (the clipboard held copied FILES, which cannot be put back; it is empty now)')
+    }
+    await app.close().catch(() => {})
+  },
+
   /** THE SETTINGS PARITY CHECK (#15): this app shows every terminal option the
    *  core lists, by id, and nothing terminal-looking of its own. Prism runs the
    *  same check against the same list, which is what keeps the two apps'
@@ -630,9 +974,11 @@ const scenarios = {
       [...readFileSync(resolve(process.cwd(), file), 'utf8').matchAll(/\{\s*id: '([a-z-]+)'[^}]*\}/g)].filter((m) => keep(m[0])).map((m) => m[1])
     const wanted = [
       ...ids('core/renderer/settings/options.ts'),
-      ...ids('core/renderer/settings/dictationOptions.ts', (row) => !row.includes('onlyWhere'))
+      ...ids('core/renderer/settings/dictationOptions.ts', (row) => !row.includes('onlyWhere')),
+      // Command help (#12) keeps a list of its own, as dictation does.
+      ...ids('core/renderer/settings/helpOptions.ts')
     ].sort()
-    ok(wanted.length >= 17, `the core lists the terminal and dictation options (${wanted.length})`)
+    ok(wanted.length >= 18 && wanted.includes('help-enabled'), `the core lists the terminal, dictation and help options (${wanted.length})`)
     await page.locator('[data-title-settings]').click()
     const shown = new Set()
     for (const tab of ['general', 'appearance', 'dictation']) {

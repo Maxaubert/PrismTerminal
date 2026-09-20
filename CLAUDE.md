@@ -120,6 +120,57 @@ so an update never silently changes what an existing user sees; the bridge to ma
     MEASURED in the e2e with the fix taken out. App now puts the update window away whenever a
     question (`ask`) appears; `updateGuard` holds it. The window's Tab trap also leaves Ctrl+Tab
     alone, which used to switch tabs AND move the focus inside the window in one press.
+- **COMMAND HELP IS A POPUP THAT SHOWS AND COPIES, AND NOTHING ELSE** (#12; owner, 2026-09-19: "an
+  easy to use panel where you can find shell commands... searchable... metadata on each command so a
+  natural-language search finds it... optional in settings", and 2026-09-20: "a pop up with copy
+  icons for easy copying"). Built ONCE in `core/` for both apps: the catalogue and its search in
+  `shared/help/`, `renderer/lib/helpPrefs.ts`, `renderer/components/HelpPanel.tsx` (props only),
+  `renderer/settings/Help.tsx` + `helpOptions.ts`, and `writeClipboard` on the bridge. This app's
+  part is the way in: `F1`, the ? in the title bar, "Command help" in the terminal's right-click
+  menu, the row in Settings > General. The rules that must not regress:
+  - **IT NEVER INSERTS AND NEVER RUNS** (owner, 2026-09-19: "picking a command in the help panel
+    does NOT insert it into the shell"). The component is handed the clipboard and nothing else: no
+    session id, no `termInput`, no bridge. It is NOT a fifth exception to "the app never types into
+    your shell", and adding Run or Insert is a fresh owner decision. The `helpPanel` e2e reads the
+    terminal's text before the popup is touched and after every search, copy and Enter in it.
+  - **COPY IS EXACT.** What goes on the clipboard is the text on screen, placeholders and all: a
+    command with FOLDER in it fails loudly when pasted unedited, and a panel that guessed would
+    fail quietly. It goes through main (`clipboard:write`, text only, refused past 4000 characters,
+    never trimmed) because `navigator.clipboard` refuses when the document has no focus. The e2e
+    reads the clipboard back in main and compares it character for character, then restores what
+    the clipboard held. A "command" that is a KEY (`Ctrl+C`, `Esc`; `isKeyPress`) is drawn as key
+    caps with no copy button.
+  - **CURATED AND OFFLINE.** A few hundred hand-written entries, task first, with keywords in the
+    words of somebody who does not know the command; the search (`shared/help/search.ts`) is pure:
+    stop words, a light stemmer, a small synonym table, prefix and one-typo matching, no model, no
+    network, no dependency. The popup and its catalogue are a LAZY chunk (about 290 kB), loaded at
+    the first open; what the app needs before then is in `shared/help/shells.ts`.
+  - **`catalogue.test.ts` IS THE GATE FOR CONTENT.** To add an entry: put it in the file of its
+    shell (`powershell.ts`, `cmd.ts`, `bash.ts`, or `git.ts` / `agents.ts` / `packages.ts` for what
+    reads the same everywhere), RUN the command first where that is safe, and run `npm test`. The
+    test holds: unique ids with the shell's prefix, a short task with no full stop, 6 to 16
+    lower-case keywords, every placeholder declared and used (UPPER_SNAKE, never angle brackets,
+    which a shell reads as redirection), no em-dash, and a `danger` line on EVERYTHING that matches
+    a destructive pattern (Remove-Item, rm, del, rmdir /s, taskkill, kill, git reset --hard, git
+    clean, a forced push, Set-Content, a single `>` over a file, a download over a file...). It
+    also asks about twenty real questions per shell of the
+    REAL catalogue and names the first answer each must get: a search can be right and the
+    catalogue still lack the keyword.
+  - **ON BY DEFAULT, AND OFF MEANS OFF.** It is a discoverability feature for exactly the people who
+    would never find a switch to turn it on; the owner asked only that it be optional. Off: no
+    button, no menu row, and `F1` is the shell's again (`ownsKey` and App's handler both read
+    `helpEnabled()`). Known cost of F1 while on, accepted: PSReadLine's own F1 (help for the command
+    under the cursor) and F1 inside a full-screen program under WSL do not arrive.
+  - **ONE LAYER, ONE THING IN IT.** The popup is the same layer as the update window and a close
+    question. It does not open over either, and App puts it away while RENDERING when one appears
+    (Ctrl+W and Alt+F4 still work over it), so a question is never underneath it. It also LEAVES
+    WHEN WHAT IS IN FRONT CHANGES (review, 2026-09-20): Ctrl+T, Ctrl+Tab and Ctrl+Shift+F work over
+    it, a terminal takes the focus as it attaches, and the popup left up sat over a focused shell
+    with the next "search" typed into it; `helpPanel` holds Ctrl+T and find. Escape returns
+    the keyboard to the shell that had it; Tab stays inside (a PLAIN Tab only, Ctrl+Tab is the
+    app's); the list draws a page at a time.
+  - Its option list is `helpOptions.ts`, NOT a row in `TERMINAL_OPTIONS`: Prism's gate reads that
+    file as text, and a row there would fail Prism's parity check until Prism wires the popup.
 - **A PAGE THAT WORKS IS NOT A PAGE THAT LOOKS RIGHT** (#20, 2026-09-19). Moving the settings into
   `core/` dropped every Tailwind class used only there (`core/` is outside the scanned root; the fix
   is the `@source` line at the top of `index.css`, do not remove it). All 14 e2e scenarios passed over
@@ -181,7 +232,7 @@ Design spec and plan: `docs/superpowers/specs/2026-09-18-prism-terminal-design.m
 In: tabs (a tab is ONE shell and its folder, nothing else), the agent indicator, themes + custom
 theme + fonts + acrylic, tab restore with agent resume, the + with ask / fixed-folder modes and its
 pinned + recent list, the start screen, find in scrollback, the paste and drop rules, close
-confirmation, Explorer verbs, the update chip and its window, single instance.
+confirmation, Explorer verbs, the update chip and its window, command help (#12), single instance.
 
 Out, each a fresh owner decision and not a natural next step: split panes, several shells per tab,
 per-shell profiles, a tray icon, multiple windows, SSH management, app styles separate from the
