@@ -32,6 +32,14 @@ and want to know, at a glance, which one has finished.
   model in Settings (Base runs well on any CPU; with an NVIDIA card one click adds the GPU engine and
   the large models answer in under a second), a language or auto-detect, and optionally pause your
   music while you talk. Off until you switch it on: nothing listens and nothing downloads before that.
+- **Command help, one key away.** Press `F1` (or the ? in the title bar) and describe what you want
+  in your own words: "find big files", "what is using port 3000", "undo last commit". A few hundred
+  everyday commands for PowerShell, Command Prompt and Bash, plus Git, Claude Code, Codex, winget,
+  npm and pip, each with a plain explanation, its variations, what the placeholders mean and a
+  warning on anything that deletes or overwrites. Every command has a copy button. It opens on the
+  shell of the tab in front, works offline (the list ships with the app, no model and no network),
+  and it never types or runs anything: you copy, you paste, you press Enter. Optional: Settings >
+  General > Command help.
 - **Tabs that come back.** Close the app and reopen it: every tab returns in the folder its shell
   was in, and a tab that hosted Claude or Codex resumes that conversation (`claude --resume <id>`,
   `codex resume --last`).
@@ -92,6 +100,7 @@ lands on a start screen with the folders you were last in, each one press from a
 | `Ctrl+,` | Settings |
 | `Ctrl+scroll` | Zoom this tab's text |
 | `F11` | Fullscreen |
+| `F1` | Command help (when switched on; off, the key is the shell's again) |
 | hold `Right Alt` | Dictate (when switched on; rebindable, or press-to-toggle) |
 
 Everything else belongs to the shell: `Escape` is still vim's, and `Ctrl+Backspace` deletes a word
