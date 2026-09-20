@@ -53,7 +53,7 @@ export interface HelpEntry {
    * WORDS SOMEONE MIGHT TYPE WHO DOES NOT KNOW THE COMMAND: synonyms, the
    * everyday phrasing, the name of the same thing in another shell ("ls",
    * "dir", "grep"), the symptom ("port already in use"). Lower case. This is
-   * what makes "how do I find big files" land, so be generous: 6 to 14.
+   * what makes "how do I find big files" land, so be generous: 6 to 16.
    */
   keywords: ReadonlyArray<string>
   /** Set on anything that deletes, overwrites, kills or cannot be undone: one

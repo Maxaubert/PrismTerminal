@@ -834,6 +834,27 @@ const scenarios = {
       await page.keyboard.press('Enter')
       ok(await until(async () => (await termText(page)).includes('landed-2'), 10000), 'and the next keystroke lands in the shell')
 
+      /* ----- a chord that changes what is in front puts it away ----- */
+      // The app's chords work over the popup, and a new tab's terminal takes the
+      // focus as it attaches. Left up, the popup sat over a focused shell and the
+      // next "search" was typed into that shell.
+      const focusIsShell = () => page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea') === true)
+      await page.keyboard.press('F1')
+      ok(await opened(), 'the popup is up again')
+      await page.keyboard.press('Control+t')
+      ok(await until(async () => (await tabLabels(page)).length === 2), 'Ctrl+T opens a tab over the popup')
+      ok(await closed(), 'and the popup leaves with the tab it was opened over')
+      ok(await until(focusIsShell, 4000, 50), 'the new shell has the keyboard, with nothing over it')
+      await page.keyboard.press('Control+w')
+      ok(await until(async () => (await tabLabels(page)).length === 1), 'the extra tab closes again')
+      await page.keyboard.press('F1')
+      ok(await opened(), 'up once more')
+      await page.keyboard.press('Control+Shift+f')
+      ok(await until(async () => (await page.locator('[data-term-find]').count()) === 1, 4000, 50), 'Ctrl+Shift+F opens find over the popup')
+      ok(await closed(), 'and the popup leaves, so the find bar is never typed into from underneath it')
+      await page.keyboard.press('Escape')
+      ok(await until(async () => (await page.locator('[data-term-find]').count()) === 0, 4000, 50), 'Escape closes find')
+
       /* ----- the terminal's own menu ----- */
       await page.locator('[data-term-region]').click({ button: 'right', position: { x: 200, y: 120 } })
       const row = page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Command help' })

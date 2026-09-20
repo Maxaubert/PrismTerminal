@@ -266,8 +266,12 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'dir',
       'list files',
       'show files',
+      'see files',
+      'files here',
+      'what files are here',
+      'whats in this folder',
       'what is in this folder',
-      'get-childitem',
+      'list everything',
       'll',
       'sort by date',
       'sort by size',
@@ -361,6 +365,8 @@ export const BASH_HELP: readonly HelpEntry[] = [
       NAME: 'The file to create, for example notes.txt',
       TEXT: 'The first line of the file'
     },
+    danger:
+      'The echo variant replaces everything in the file if it already exists. touch never does.',
     keywords: [
       'touch',
       'create file',
@@ -1022,6 +1028,7 @@ export const BASH_HELP: readonly HelpEntry[] = [
       }
     ],
     placeholders: { COMMAND: 'The command to run, for example npm run dev' },
+    danger: 'The nohup variant replaces output.log if a file of that name is already there.',
     keywords: [
       'background',
       'ampersand',
@@ -1102,6 +1109,8 @@ export const BASH_HELP: readonly HelpEntry[] = [
       URL: 'The full address, starting https://',
       FILE: 'What to call the saved file'
     },
+    danger:
+      'curl replaces a file of the same name without a question. wget keeps it and saves beside it.',
     keywords: [
       'curl',
       'wget',

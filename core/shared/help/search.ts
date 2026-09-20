@@ -147,10 +147,12 @@ const IRREGULAR: ReadonlyMap<string, string> = new Map([
  * -er and -est are folded ONLY onto these. English has far more nouns ending
  * that way than comparatives (folder, server, user, docker, test, latest), and
  * a search that turns "folder" into "fold" has broken the commonest word in
- * the catalogue.
+ * the catalogue. "new" is NOT one of them, on purpose: "newest files" asks
+ * what changed last and "new file" asks how to make one, and folded together
+ * the first question was answered with the second's command.
  */
 const COMPARABLE: ReadonlySet<string> = new Set(
-  'big large small new old fast slow long short high low early heavy great few deep wide recent'.split(
+  'big large small old fast slow long short high low early heavy great few deep wide recent'.split(
     ' '
   )
 )
@@ -293,6 +295,7 @@ const SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ['zip', 'compress', 'archive'],
   ['admin', 'administrator', 'elevated', 'sudo'],
   ['history', 'previous', 'last', 'recent'],
+  ['newest', 'newer', 'latest'],
   ['clear', 'cls', 'clean', 'wipe'],
   ['install', 'setup'],
   ['download', 'fetch'],

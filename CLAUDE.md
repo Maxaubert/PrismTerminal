@@ -148,11 +148,12 @@ so an update never silently changes what an existing user sees; the bridge to ma
   - **`catalogue.test.ts` IS THE GATE FOR CONTENT.** To add an entry: put it in the file of its
     shell (`powershell.ts`, `cmd.ts`, `bash.ts`, or `git.ts` / `agents.ts` / `packages.ts` for what
     reads the same everywhere), RUN the command first where that is safe, and run `npm test`. The
-    test holds: unique ids with the shell's prefix, a short task with no full stop, 6 to 14
+    test holds: unique ids with the shell's prefix, a short task with no full stop, 6 to 16
     lower-case keywords, every placeholder declared and used (UPPER_SNAKE, never angle brackets,
     which a shell reads as redirection), no em-dash, and a `danger` line on EVERYTHING that matches
     a destructive pattern (Remove-Item, rm, del, rmdir /s, taskkill, kill, git reset --hard, git
-    clean, a forced push, Set-Content...). It also asks a dozen real questions per shell of the
+    clean, a forced push, Set-Content, a single `>` over a file, a download over a file...). It
+    also asks about twenty real questions per shell of the
     REAL catalogue and names the first answer each must get: a search can be right and the
     catalogue still lack the keyword.
   - **ON BY DEFAULT, AND OFF MEANS OFF.** It is a discoverability feature for exactly the people who
@@ -162,7 +163,10 @@ so an update never silently changes what an existing user sees; the bridge to ma
     under the cursor) and F1 inside a full-screen program under WSL do not arrive.
   - **ONE LAYER, ONE THING IN IT.** The popup is the same layer as the update window and a close
     question. It does not open over either, and App puts it away while RENDERING when one appears
-    (Ctrl+W and Alt+F4 still work over it), so a question is never underneath it. Escape returns
+    (Ctrl+W and Alt+F4 still work over it), so a question is never underneath it. It also LEAVES
+    WHEN WHAT IS IN FRONT CHANGES (review, 2026-09-20): Ctrl+T, Ctrl+Tab and Ctrl+Shift+F work over
+    it, a terminal takes the focus as it attaches, and the popup left up sat over a focused shell
+    with the next "search" typed into it; `helpPanel` holds Ctrl+T and find. Escape returns
     the keyboard to the shell that had it; Tab stays inside (a PLAIN Tab only, Ctrl+Tab is the
     app's); the list draws a page at a time.
   - Its option list is `helpOptions.ts`, NOT a row in `TERMINAL_OPTIONS`: Prism's gate reads that

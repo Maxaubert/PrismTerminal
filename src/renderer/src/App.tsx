@@ -127,7 +127,7 @@ export default function App(): JSX.Element {
   const { agentIds, workingIds, doneIds, agentKinds } = indicator
 
   // The latest of everything, for listeners registered once.
-  const live = useRef({ state, workingIds, agentIds, blocked: false })
+  const live = useRef({ state, workingIds, agentIds, blocked: false, front: '' })
 
   useEffect(() => {
     paintChrome()
@@ -324,7 +324,17 @@ export default function App(): JSX.Element {
   // Put away while RENDERING, not in an effect: an effect would paint one
   // frame of the popup over the question first.
   const helpBlocked = !!ask || update.state.open || !helpOn
-  if (helpOpen && helpBlocked) setHelpOpen(false)
+  // AND IT LEAVES WHEN WHAT IS IN FRONT CHANGES. The app's chords keep working
+  // over the popup, and three of them hand the keyboard to something BEHIND it:
+  // Ctrl+T and Ctrl+Tab mount a terminal, which takes the focus as it attaches,
+  // and Ctrl+Shift+F opens the find bar. Left up, the popup then sat over a
+  // focused shell, and a question typed "into the search field" was typed into
+  // that shell instead. So it remembers what was in front when it opened (the
+  // tab, and whether find was showing) and goes as soon as that is no longer so.
+  const inFront = `${activeId ?? ''}|${findFor ?? ''}`
+  const [helpFront, setHelpFront] = useState(inFront)
+  const helpStale = helpFront !== inFront
+  if (helpOpen && (helpBlocked || helpStale)) setHelpOpen(false)
   const toggleHelp = useCallback(() => {
     // The chip it opens on is the language of the shell in front; with no
     // shell in front, the last one picked by hand, else what a new terminal
@@ -336,13 +346,14 @@ export default function App(): JSX.Element {
         ? shellOfShellId(shellIds.current.get(front.id))
         : (helpShell() ?? shellOfShellId(savedShellId()))
     )
+    setHelpFront(live.current.front)
     setHelpOpen((was) => (was ? false : helpEnabled() && !live.current.blocked))
   }, [])
   // The latest of everything, for listeners registered once. `blocked` is
   // whether something that outranks the help popup is up (see above).
   const updateOpen = update.state.open
   useEffect(() => {
-    live.current = { state, workingIds, agentIds, blocked: !!ask || updateOpen }
+    live.current = { state, workingIds, agentIds, blocked: !!ask || updateOpen, front: inFront }
   })
   /** The running version, for the window's "You have" line. Asked once. */
   const [version, setVersion] = useState('')
@@ -612,7 +623,7 @@ export default function App(): JSX.Element {
           NOTHING ELSE: no session id, no termInput. It cannot type into a shell
           because it has no way to reach one, which is the owner's rule (picking
           a command does NOT insert it). */}
-      {helpOpen && !helpBlocked && (
+      {helpOpen && !helpBlocked && !helpStale && (
         <Suspense fallback={null}>
           <HelpPanel
             shell={helpFor}
