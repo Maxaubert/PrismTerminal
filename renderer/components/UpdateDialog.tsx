@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, type JSX } from 'react'
+import { groupReleaseNotes } from '../../shared/releaseGroups'
 import { moreLine, parseReleaseNotes } from '../../shared/releaseNotes'
 import type { UpdateInfo, UpdatePhase } from '../../shared/updateTypes'
 
@@ -67,6 +68,10 @@ export default function UpdateDialog({
 }): JSX.Element {
   const box = useRef<HTMLDivElement>(null)
   const notes = useMemo(() => parseReleaseNotes(info.notes), [info.notes])
+  // SORTED UNDER HEADINGS, worded for a reader (owner, 2026-09-20: "headers bug
+  // fixes, new features, so on... not like a git commit"). Still the parser's
+  // plain strings, only moved and trimmed: see shared/releaseGroups.
+  const sections = useMemo(() => groupReleaseNotes(notes), [notes])
   const running = phase !== 'idle'
   const title = running ? `Updating to ${info.version}` : `Update to ${info.version}`
   const status = aborting
@@ -169,44 +174,54 @@ export default function UpdateDialog({
           data-update-notes
           tabIndex={0}
           aria-label="What is new"
-          className="p-scroll mt-4 max-h-[min(44vh,300px)] min-h-0 overflow-y-auto rounded-lg border border-[color:var(--p-line)] bg-[var(--p-control)] px-3.5 py-3 focus-visible:border-[color:var(--p-accent-hi)] focus-visible:outline-none"
+          // NO BOX ROUND THE NOTES (owner, 2026-09-20: "dont have the changelog
+          // inside a container, i just want it on the main window bg"). It was
+          // a bordered, tinted panel inside the dialog: a box in a box. The
+          // list still scrolls inside a capped height, which is what keeps
+          // Cancel and Install on screen under a long release; the right
+          // padding is only room for that scrollbar.
+          className="p-scroll mt-4 max-h-[min(44vh,300px)] min-h-0 overflow-y-auto pr-2 focus-visible:outline-none"
         >
           {notes.empty ? (
             <p className="text-[12.5px] leading-relaxed text-[var(--p-dim)]">{notes.entries[0]}</p>
           ) : (
             <>
-              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--p-dim)]">
-                What is new
-              </h3>
-              <ul className="flex flex-col gap-1.5">
-                {notes.entries.map((entry, i) => (
-                  // The index is the key: two pull requests can share a title.
-                  <li
-                    key={i}
-                    data-update-entry
-                    className="flex gap-2 text-[12.5px] leading-snug text-[var(--p-text-soft)]"
-                  >
-                    <span
-                      aria-hidden
-                      className="mt-[0.5em] h-1 w-1 shrink-0 rounded-full bg-[var(--p-accent-hi)]"
-                    />
-                    <span className="min-w-0 [overflow-wrap:anywhere]">{entry}</span>
-                  </li>
-                ))}
-              </ul>
+              {sections.map((section, n) => (
+                <section key={section.kind} data-update-section={section.kind} className={n ? 'mt-4' : ''}>
+                  <h3 className="mb-1.5 text-[12.5px] font-semibold text-[var(--p-text)]">
+                    {section.heading}
+                  </h3>
+                  <ul className="flex flex-col gap-1.5">
+                    {section.entries.map((entry, i) => (
+                      // The index is the key: two pull requests can share a title.
+                      <li
+                        key={i}
+                        data-update-entry
+                        className="flex gap-2 text-[12.5px] leading-snug text-[var(--p-text-soft)]"
+                      >
+                        <span
+                          aria-hidden
+                          className="mt-[0.5em] h-1 w-1 shrink-0 rounded-full bg-[var(--p-accent-hi)]"
+                        />
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{entry}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
               {notes.more > 0 && (
-                <p data-update-more className="mt-2 pl-3 text-[12px] text-[var(--p-dim)]">
+                <p data-update-more className="mt-3 text-[12px] text-[var(--p-dim)]">
                   {moreLine(notes.more)}
                 </p>
               )}
             </>
           )}
         </div>
-        {info.mock && (
-          <p data-update-preview className="mt-3 text-[12px] leading-relaxed text-[var(--p-dim)]">
-            This is a preview. Install shows the progress and installs nothing.
-          </p>
-        )}
+        {/* A preview is NOT announced up front (owner, 2026-09-20: "dont show
+            this text"): the point of one is to see the window as it will be.
+            What it did is still said, truthfully, where it ends: "Preview
+            only: nothing was installed" on the status line, and "(preview:
+            nothing is installed)" beside "Installing". */}
         {/* ALWAYS IN THE LAYOUT, only fading in: see the note at the top. One
             line of status with the percentage at its right, the track under
             it. The ending is said on the status line, with the track gone. */}
