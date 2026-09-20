@@ -33,7 +33,11 @@ interface ClipboardLike {
   availableFormats(): string[]
   readBuffer(format: string): Buffer
   readText(): string
+  writeText(text: string): void
 }
+
+/** The most text the page may put on the clipboard in one write. */
+export const CLIPBOARD_WRITE_MAX = 4000
 
 export interface TermIpcDeps {
   ipcMain: IpcMainLike
@@ -124,6 +128,20 @@ export function registerTermIpc(deps: TermIpcDeps): () => void {
       }
     } catch {
       e.returnValue = { image: false, text: '', files: [] }
+    }
+  })
+
+  // The help panel's copy buttons (#12). Text only, and bounded: the longest
+  // command in the catalogue is a few hundred characters, so anything near the
+  // cap is not a command, and it is REFUSED rather than trimmed, since a
+  // trimmed command is a different command.
+  ipcMain.handle(CH.clipboardWrite, (_e: unknown, text: unknown) => {
+    if (typeof text !== 'string' || text.length === 0 || text.length > CLIPBOARD_WRITE_MAX) return false
+    try {
+      deps.clipboard.writeText(text)
+      return true
+    } catch {
+      return false
     }
   })
 
