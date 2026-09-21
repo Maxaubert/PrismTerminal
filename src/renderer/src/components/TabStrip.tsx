@@ -283,7 +283,16 @@ export function TabStrip({
             // tabs when the style draws edges, and vanish (the token goes
             // transparent) when it doesn't. Right edges only: the first tab
             // sits flush against the window's left side, no line before it.
-            className={`no-drag group relative flex min-w-0 shrink items-center gap-1.5 border-r border-[color:var(--p-divider)] px-2.5 transition-colors ${
+            // EVERY TAB IS ONE WIDTH (owner, 2026-09-21: "make tabs in both
+            // apps have a fixed size, and not dynamically adjust based on the
+            // content"). A tab was as wide as its label, up to 14rem, so opening
+            // a folder with a long name shoved every tab after it sideways and
+            // the close button was never in the same place twice. Now it is
+            // TAB_W, and it SHRINKS - all of them equally - only when the strip
+            // runs out of room, which is what a browser does: the label
+            // truncates inside, the whole path is on the tooltip.
+            data-tab-fixed
+            className={`no-drag group relative flex min-w-[72px] flex-[0_1_176px] items-center gap-1.5 border-r border-[color:var(--p-divider)] px-2.5 transition-colors ${
               loud
                 ? ''
                 : on
@@ -394,7 +403,9 @@ export function TabStrip({
               role="tab"
               aria-selected={on}
               tabIndex={on ? 0 : -1}
-              className="min-w-0 max-w-[14rem] truncate py-1 text-left"
+              // Takes whatever the fixed tab leaves after its marks and the
+              // close button, and truncates there.
+              className="min-w-0 flex-1 truncate py-1 text-left"
               // The label is the folder's last segment; the whole path is here.
               title={t.kind === 'settings' ? undefined : t.cwd}
               onClick={() => {

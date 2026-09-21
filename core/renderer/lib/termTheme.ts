@@ -103,7 +103,26 @@ export const TERM_PRESETS: TermPreset[] = [
     cursor: '#f34b00',
     ansi: { black: '#191919', red: '#ff355b', green: '#b7e876', yellow: '#ffc251', blue: '#ef5350', magenta: '#ba76e7', cyan: '#6cbfb5', white: '#c2c8d7', brightBlack: '#191919', brightRed: '#ff355b', brightGreen: '#b7e876', brightYellow: '#ffc251', brightBlue: '#76d5ff', brightMagenta: '#ba76e7', brightCyan: '#6cbfb5', brightWhite: '#c2c8d7' }
   },
-  { id: 'pitch', name: 'Pitch', bg: '#000000', fg: '#e6e6e6', cursor: '#ffffff' },
+  // THE APP ICON'S TWO THEMES (owner, 2026-09-21: "two themes that match the
+  // app icon colour scheme, one with orange and black, and one with orange and
+  // dark grey"; "change a couple is better" than adding). The icon is orange
+  // #ec9448 over a charcoal and dark-grey swirl, with a cream chevron. Pitch
+  // and Cinder were the two ORIGINALS whose names already fitted - pitch black,
+  // and embers - so they carry it; the public schemes (Dracula, Nord, Gruvbox
+  // and the rest) keep their real colours, since a scheme called Dracula that
+  // is not Dracula is a lie. The ACCENT is the icon's orange too, so the
+  // chrome (the active tab, the update chip, a selection) wears it as well as
+  // the cursor. Ids unchanged: they are saved-settings keys, and somebody who
+  // chose Pitch still has Pitch, now with the app's own colour in it.
+  {
+    id: 'pitch',
+    name: 'Pitch',
+    bg: '#000000',
+    // The icon's cream, dimmed a touch: pure #fbeedd on black glares.
+    fg: '#efe7da',
+    cursor: '#ec9448',
+    accent: '#ec9448'
+  },
   {
     id: 'molokai',
     name: 'Molokai',
@@ -240,7 +259,16 @@ export const TERM_PRESETS: TermPreset[] = [
     cursor: '#3760bf',
     ansi: { black: '#e9e9ed', red: '#f52a65', green: '#587539', yellow: '#8c6c3e', blue: '#2e7de9', magenta: '#9854f1', cyan: '#007197', white: '#6172b0', brightBlack: '#a1a6c5', brightRed: '#f52a65', brightGreen: '#587539', brightYellow: '#8c6c3e', brightBlue: '#2e7de9', brightMagenta: '#9854f1', brightCyan: '#007197', brightWhite: '#3760bf' }
   },
-  { id: 'cinder', name: 'Cinder', bg: '#191214', fg: '#e8dcd8', cursor: '#e0955e' },
+  {
+    id: 'cinder',
+    name: 'Cinder',
+    // The icon's own dark grey, the swirl's body: grey, and meant to read as
+    // grey beside Pitch's black rather than as a second black.
+    bg: '#383c44',
+    fg: '#f3eadc',
+    cursor: '#ec9448',
+    accent: '#ec9448'
+  },
   {
     id: 'rose-pine-dawn',
     name: 'Rose Pine Dawn',

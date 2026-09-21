@@ -148,6 +148,18 @@ so an update never silently changes what an existing user sees; the bridge to ma
   core takes over from the browser needs the same: returning false is not cancelling. The
   `paste` e2e counts what reached the shell for Ctrl+V, Ctrl+Shift+V and the right-click Paste
   (it failed with 2 copies before the fix).
+- **EVERY TAB IS ONE WIDTH** (owner, 2026-09-21: "make tabs in both apps have a fixed size, and not
+  dynamically adjust based on the content"). A tab was as wide as its label, up to 14rem, so a
+  folder with a long name shoved every tab after it sideways and the close button was never in
+  the same place twice. Now `flex: 0 1 176px`, min 72px: one width, and all of them shrink
+  EQUALLY only when the strip runs out of room, as a browser does; the label truncates inside and
+  the whole path is on the tooltip. Prism's strip does the same. `tabWidth` measures the boxes.
+- **PITCH AND CINDER ARE THE APP ICON'S COLOURS** (owner, same day: "two themes that match the app
+  icon colour scheme, one with orange and black, and one with orange and dark grey"; "change a
+  couple is better"). Orange `#ec9448` for the cursor AND the chrome accent, on black (Pitch) and
+  on the icon's own dark grey `#383c44` (Cinder). They were the two ORIGINALS whose names already
+  fitted; the public schemes (Dracula, Nord, Gruvbox...) keep their real colours, since a scheme
+  called Dracula that is not Dracula is a lie. Ids unchanged: they are saved-settings keys.
 - **COMMAND HELP IS A POPUP THAT SHOWS AND COPIES, AND NOTHING ELSE** (#12; owner, 2026-09-19: "an
   easy to use panel where you can find shell commands... searchable... metadata on each command so a
   natural-language search finds it... optional in settings", and 2026-09-20: "a pop up with copy

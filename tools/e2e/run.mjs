@@ -448,6 +448,40 @@ const scenarios = {
     }
   },
 
+  /**
+   * EVERY TAB IS ONE WIDTH (owner, 2026-09-21: "make tabs in both apps have a
+   * fixed size, and not dynamically adjust based on the content"). Three
+   * folders with names of very different lengths open side by side; what is
+   * measured is each tab's box, not the class that sets it, because a class
+   * that loses to a longer label is exactly what this replaced.
+   */
+  async tabWidth(ok) {
+    const w = world()
+    const long = join(w.alpha, '..', 'a-folder-with-a-name-far-too-long-to-fit-on-any-tab')
+    mkdirSync(long)
+    const { app, page } = await launch(w, { args: [w.alpha, long, w.beta] })
+    ok(await until(async () => (await tabLabels(page)).length === 3), 'three tabs open, one of them with a very long name')
+    const boxes = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll('[data-tab]')].map((el) => {
+          const label = el.querySelector('[role="tab"]')
+          return { w: Math.round(el.getBoundingClientRect().width * 10) / 10, cut: label ? label.scrollWidth > label.clientWidth : false }
+        })
+      )
+    const three = await boxes()
+    const widths = [...new Set(three.map((b) => b.w))]
+    ok(widths.length === 1, `every tab is the same width, whatever its name (${three.map((b) => b.w).join(' / ')})`)
+    ok(widths[0] >= 150 && widths[0] <= 200, `a fixed width, not a content one (${widths[0]}px)`)
+    ok(three[1].cut && !three[0].cut, 'the long name is truncated inside the tab, the short one is whole')
+    // Selecting a tab must not move anything either: the active one used to be
+    // no wider, but it is the case that shows it if a mark ever takes room.
+    const before = (await boxes()).map((b) => b.w).join('|')
+    await page.locator('[data-tab]').nth(2).click()
+    await sleep(200)
+    ok((await boxes()).map((b) => b.w).join('|') === before, 'picking another tab moves no tab')
+    await app.close().catch(() => {})
+  },
+
   async restore(ok) {
     const w = world()
     let { app, page } = await launch(w, { args: [w.alpha, w.beta] })
