@@ -480,11 +480,21 @@ function createSession(id: string, root: string, shellId: string | undefined): S
       termApi().termInput(id, '\\\r')
       return false
     }
+    // ONE CTRL+V IS ONE PASTE (owner, 2026-09-22: "when I copy text and paste
+    // it pastes twice"). Returning false only tells XTERM to leave the key
+    // alone; it does not cancel the BROWSER's own action for Ctrl+V, which is
+    // a native paste event into xterm's textarea - and xterm pastes on that
+    // event too. So every paste arrived twice, once from here and once from
+    // there. preventDefault cancels the native one; this handler is the paste,
+    // since it is the one that knows about images (Claude Code reads those
+    // itself when it gets the ^V keystroke) and bracketed framing.
     if ((e.key === 'v' || e.key === 'V') && e.ctrlKey && !e.shiftKey) {
+      e.preventDefault()
       pasteHere()
       return false
     }
     if ((e.key === 'v' || e.key === 'V') && e.ctrlKey && e.shiftKey) {
+      e.preventDefault()
       // The escape hatch: plain text paste even when an image rides along.
       const clip = termApi().readClipboard()
       if (clip.text) {
