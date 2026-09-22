@@ -31,6 +31,7 @@ import { resolveTermTheme, watchTermTheme, TERM_PRESETS } from '../lib/termTheme
 import { useAgentColors } from '../lib/agentColors'
 import { luminance, normalizeColor } from '../lib/termAnsi'
 import { HexSwatch, Pref, RESET_LINK, ROWS, SaveButton, Select, Switch, ThemeHead } from './fields'
+import { AgentIndicatorSetting } from './TerminalBehaviour'
 
 // THE TERMINAL'S LOOK, as one settings section for both hosts (#15): the theme
 // wall and its editor, font, size, acrylic, and the two agent indicator
@@ -79,7 +80,7 @@ function TermThemeCard({
       }`}
     >
       <div
-        className="h-[92px] w-full px-2.5 py-2 font-mono text-[10.5px] leading-[1.5]"
+        className="h-[92px] w-full px-2.5 py-2 font-[Consolas,'Cascadia_Mono',monospace] text-[10.5px] leading-[1.5]"
         style={{ background: bg, color: fg }}
       >
         <div>
@@ -118,7 +119,7 @@ function TermThemeCard({
             tabIndex={0}
             data-edit-theme={id}
             className="grid h-5 w-5 place-items-center rounded text-[var(--p-accent-hi)] hover:bg-[var(--p-hover)]"
-            title="Edit colours (saves as Custom)"
+            title="Edit colours, saved as Custom"
             aria-label={`Edit ${name}`}
             onClick={(e) => {
               e.stopPropagation()
@@ -246,6 +247,20 @@ function TermThemeEditor({
 /** The selected theme's palette as the editor and the Custom slot hold it.
  *  Normalised: a theme may publish rgba() or #rrggbbaa, and a colour input
  *  handed either silently renders black. */
+/**
+ * A PRESET'S LOOK, worked out once (2026-09-22, owner: the Appearance page
+ * "takes a second to load"). A preset never changes, and resolving one runs
+ * the legibility floors over its sixteen colours, so the forty cards cost the
+ * same forty resolves on every change to any setting on the page. Custom and
+ * Follow style are live, and are never read through this.
+ */
+const presetLooks = new Map<string, ReturnType<typeof resolveTermTheme>>()
+function presetLook(id: string): ReturnType<typeof resolveTermTheme> {
+  let look = presetLooks.get(id)
+  if (!look) presetLooks.set(id, (look = resolveTermTheme(id)))
+  return look
+}
+
 function paletteOf(id: string): Pick<CustomTermTheme, 'bg' | 'fg' | 'cursor' | 'ansi'> {
   const t = resolveTermTheme(id)
   const ansi: Record<string, string> = {}
@@ -335,7 +350,7 @@ export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNod
     )
   }, [lightFirst, defaultPreset])
   const presetCard = (p: (typeof TERM_PRESETS)[number]): JSX.Element => {
-    const t = resolveTermTheme(p.id)
+    const t = presetLook(p.id)
     return (
       <TermThemeCard
         key={p.id}
@@ -407,14 +422,14 @@ export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNod
           // host with none (Prism Terminal) dresses its window in the theme.
           sub={
             followsHostStyle()
-              ? 'Whole palettes, ANSI colours included. Follow style wears the app style.'
-              : 'Whole palettes, ANSI colours included. The window wears the theme you pick.'
+              ? 'The colours of the terminal text and background.'
+              : 'The colours of the terminal and the window around it.'
           }
           save={
             <SaveButton
               dirty={termDirty}
               onClick={saveTermSetup}
-              title="Keep the whole look - theme, font, agent colours, acrylic - as Custom"
+              title="Saves the theme, font, agent colours and acrylic as Custom"
             />
           }
         />
@@ -491,7 +506,7 @@ export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNod
           />
         )}
       </div>
-      <Pref id="term-font-family" label="Font" hint="The terminal's typeface. A face you don't have falls back quietly.">
+      <Pref id="term-font-family" label="Font" hint="The typeface used in the terminal.">
         <Select
           id="term-font-family"
           value={fontId}
@@ -502,7 +517,7 @@ export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNod
       <Pref
         id="term-font"
         label="Font size"
-        hint="The base for every terminal. Ctrl+scroll zooms one session only."
+        hint="The text size for every terminal."
       >
         <Select
           id="term-font"
@@ -520,10 +535,10 @@ export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNod
         off={noAcrylic}
         hint={
           noAcrylic
-            ? 'Needs Windows 11'
+            ? 'Needs Windows 11.'
             : windowAcrylic
-              ? 'The desktop shows through the window, terminal and chrome alike. Works with any theme.'
-              : "Follow-style shares the window's acrylic; off gives the terminal its own solid surface. Preset themes keep their colours either way."
+              ? 'Lets the desktop show through the window and terminal.'
+              : 'Gives the terminal the same see through surface as the app. When off, the terminal has a solid background.'
         }
       >
         <Switch
@@ -538,10 +553,10 @@ export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNod
           id="term-opacity"
           label="Opacity"
           off={noAcrylic || !acrylicOn}
-          hint={noAcrylic ? 'Needs Windows 11' : 'How much of the theme\'s background is painted over the acrylic.'}
+          hint={noAcrylic ? 'Needs Windows 11.' : 'How much of the theme background covers the acrylic.'}
         >
           <div className="flex items-center gap-3">
-            <span className="w-[34px] text-right font-mono text-[11.5px] text-[var(--p-dim)]">
+            <span className="w-[34px] text-right font-[Consolas,'Cascadia_Mono',monospace] text-[11.5px] text-[var(--p-dim)]">
               {opacity}%
             </span>
             <input
@@ -559,13 +574,18 @@ export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNod
           </div>
         </Pref>
       )}
+      {/* ONE ORDER IN BOTH APPS (owner, 2026-09-22: "the terminal settings
+          pages in Prism and Prism Terminal should be the same in terms of
+          order"). The indicator sits directly above the two colours it uses,
+          here in the core, so neither app places it on its own. */}
+      <AgentIndicatorSetting />
       <Pref
         id="agent-color"
         label="Agent working indicator"
         hint={
           agentCol
-            ? "The line under a tab (minimal) or the tab's fill (full) while its agent works. Your own colour."
-            : "The line under a tab (minimal) or the tab's fill (full) while its agent works. Follows the theme's accent."
+            ? 'The colour a tab shows while its agent is working. Uses your own colour.'
+            : 'The colour a tab shows while its agent is working. Follows the theme accent.'
         }
       >
         <div className="flex items-center gap-2.5">
@@ -582,8 +602,8 @@ export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNod
         label="Agent finished indicator"
         hint={
           doneCol
-            ? 'A tab whose agent finished while you were elsewhere wears this until you visit it. Full indicator only. Your own colour.'
-            : "A tab whose agent finished while you were elsewhere wears this until you visit it. Full indicator only. Follows the theme's green."
+            ? 'The colour a tab keeps after its agent finishes, until you open it. Uses your own colour.'
+            : 'The colour a tab keeps after its agent finishes, until you open it. Follows the theme green.'
         }
       >
         <div className="flex items-center gap-2.5">

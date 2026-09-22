@@ -16,7 +16,7 @@ import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { DictationSettings } from '@core/renderer/settings/Dictation'
 import { HelpSetting } from '@core/renderer/settings/Help'
 import { TerminalAppearanceSettings } from '@core/renderer/settings/TerminalAppearance'
-import { AgentIndicatorSetting, ShellSetting } from '@core/renderer/settings/TerminalBehaviour'
+import { ShellSetting } from '@core/renderer/settings/TerminalBehaviour'
 
 // THE SETTINGS PAGE IS THIS APP'S; THE TERMINAL'S SETTINGS ARE THE CORE'S (#15).
 // Every terminal option, its name, type and behaviour, is the same code here and
@@ -81,11 +81,15 @@ function GeneralTab(): JSX.Element {
         label="New tabs"
         hint={
           tabMode === 'ask'
-            ? 'The + and Ctrl+T ask for a folder every time.'
-            : tabFolder || (home ? `Your user folder: ${home}` : 'Your user folder')
+            ? 'Asks which folder to open each time a new tab is made.'
+            : tabFolder
+              ? 'New tabs open in the folder you chose.'
+              : 'New tabs open in your user folder.'
         }
       >
-        <div className="flex items-center gap-2.5">
+        {/* The folder itself is a path, which the description no longer holds
+            (plain words only), so it rides on the controls' tooltip. */}
+        <div className="flex items-center gap-2.5" title={tabMode === 'folder' ? tabFolder || home || undefined : undefined}>
           {tabMode === 'folder' && tabFolder && (
             <button data-use-home onClick={() => setNewTabMode('folder', '')} className={ROW_BUTTON}>
               Use my user folder
@@ -107,9 +111,9 @@ function GeneralTab(): JSX.Element {
         </div>
       </Pref>
       <ShellSetting />
-      <AgentIndicatorSetting />
-      {/* The core's row (#12); the way in is this app's, so this app says it. */}
-      <HelpSetting opensWith="F1, or the ? in the title bar." />
+      {/* The agent indicator lives with its colours on Appearance now, in the
+          core, so both apps show the terminal rows in one order. */}
+      <HelpSetting />
       {/* Explorer's own menu. Windows 11 hides classic verbs behind "Show more
           options", and saying so is better than the user hunting for it. The
           hint QUOTES the entry (#27): it no longer names the app, so the row
@@ -119,8 +123,8 @@ function GeneralTab(): JSX.Element {
         label="Explorer menu"
         hint={
           verbBusy
-            ? 'Asking Windows…'
-            : '"Open terminal here" on a folder. On Windows 11 it is under Show more options.'
+            ? 'Checking with Windows.'
+            : 'Adds an entry to the folder menu in Explorer that opens a terminal there.'
         }
       >
         <Switch
@@ -130,7 +134,7 @@ function GeneralTab(): JSX.Element {
           disabled={verbBusy}
         />
       </Pref>
-      <Pref id="app-version" label="Version" hint="An update shows as a button in the title bar. Click it to see what is new.">
+      <Pref id="app-version" label="Version" hint="The installed version of Prism Terminal.">
         <span id="app-version" data-app-version className="font-mono text-[12px] text-[var(--p-text-soft)]">
           {version}
         </span>
@@ -214,7 +218,7 @@ function WindowColour({
   onPick: (hex: string | null) => void
 }): JSX.Element {
   return (
-    <Pref id={id} label={label} hint={chosen ? `${what} Your own colour.` : `${what} Follows the theme.`}>
+    <Pref id={id} label={label} hint={chosen ? `${what} Uses your own colour.` : `${what} Follows the theme.`}>
       <div className="flex items-center gap-2.5">
         {chosen && (
           <button data-follow-theme={id.replace('window-', '')} onClick={() => onPick(null)} className={RESET_LINK}>
@@ -236,7 +240,7 @@ function WindowColours(): JSX.Element {
       <WindowColour
         id="window-background"
         label="Background colour"
-        what="The window and the terminal behind the text."
+        what="The colour behind the text in the window and terminal."
         chosen={background}
         fromTheme={themeBg}
         onPick={setWindowBackground}
@@ -244,7 +248,7 @@ function WindowColours(): JSX.Element {
       <WindowColour
         id="window-accent"
         label="Accent colour"
-        what="The highlights, the selected row and the active tab."
+        what="The colour of highlights, the selected row and the active tab."
         chosen={accent}
         fromTheme={themeAccent}
         onPick={setWindowAccent}

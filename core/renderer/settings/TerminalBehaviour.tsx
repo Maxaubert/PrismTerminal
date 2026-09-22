@@ -30,7 +30,7 @@ export function ShellSetting(): JSX.Element | null {
   if (!shells.length) return null
   const value = shells.some((s) => s.id === choice) ? choice : (shells[0]?.id ?? '')
   return (
-    <Pref id="term-shell" label="Shell" hint="Applies to new terminals.">
+    <Pref id="term-shell" label="Shell" hint="The shell that new terminals start with.">
       <Select
         id="term-shell"
         value={value}
@@ -53,7 +53,7 @@ export function AgentIndicatorSetting(): JSX.Element {
     <Pref
       id="agent-indicator"
       label="Agent indicator"
-      hint="Minimal runs a line under the tab while an agent works. Full fills the tab, and keeps the finished colour until you visit it. Idle tabs stay default."
+      hint="How a tab shows that its agent is working. Minimal draws a line under the tab, full fills the tab."
     >
       <Segmented
         value={volume}
