@@ -98,8 +98,14 @@ function TermThemeCard({
         </div>
         <div style={{ color: fg }}>12 files</div>
       </div>
+      {/* ONE HEIGHT FOR EVERY LABEL ROW (owner, 2026-09-22: "when I click a
+          theme ... the ui shifts a bit"). The pencil is 20px, taller than the
+          name's line, so the selected card grew and took its row of the wall
+          with it: picking a theme in another row moved everything below. The
+          row is fixed at a height that holds the pencil, whether it is there
+          or not. */}
       <div
-        className={`flex items-center justify-between border-t px-2.5 py-1.5 text-[11.5px] font-semibold ${
+        className={`flex h-8 items-center justify-between border-t px-2.5 text-[11.5px] font-semibold ${
           on ? 'border-[color:var(--p-accent-hi)]/40 text-[var(--p-accent-hi)]' : 'border-[color:var(--p-line)] text-[var(--p-text)]'
         }`}
       >
