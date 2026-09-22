@@ -139,6 +139,15 @@ so an update never silently changes what an existing user sees; the bridge to ma
     leaves mid-install (the host's, never the user's), and a running install's window comes back
     when the question has gone; `updateGuard` holds it. The window's Tab trap also leaves Ctrl+Tab
     alone, which used to switch tabs AND move the focus inside the window in one press.
+- **ONE CTRL+V IS ONE PASTE** (owner, 2026-09-22: "found a bug in the terminals. when I copy text and
+  paste it pastes twice"). The key handler pastes and returns `false`, and returning false only
+  tells XTERM to leave the key alone: it does not cancel the BROWSER's default for Ctrl+V, which is
+  a native paste event into xterm's textarea, which xterm pastes as well. Every paste arrived
+  twice, in both apps. The handler now calls `preventDefault()` for Ctrl+V and Ctrl+Shift+V, so
+  its own paste (the one that knows images and bracketed framing) is the only one. Any key the
+  core takes over from the browser needs the same: returning false is not cancelling. The
+  `paste` e2e counts what reached the shell for Ctrl+V, Ctrl+Shift+V and the right-click Paste
+  (it failed with 2 copies before the fix).
 - **COMMAND HELP IS A POPUP THAT SHOWS AND COPIES, AND NOTHING ELSE** (#12; owner, 2026-09-19: "an
   easy to use panel where you can find shell commands... searchable... metadata on each command so a
   natural-language search finds it... optional in settings", and 2026-09-20: "a pop up with copy
