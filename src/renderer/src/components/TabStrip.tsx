@@ -288,13 +288,13 @@ export function TabStrip({
             // content"). A tab was as wide as its label, up to 14rem, so opening
             // a folder with a long name shoved every tab after it sideways and
             // the close button was never in the same place twice. Now it is
-            // 127px (owner, 2026-09-21: "way smaller... around the size the
+            // 114px (owner, 2026-09-21/22: "way smaller... around the size the
             // Explorer tab had in Prism... around 60% of what it is now"), and
             // it SHRINKS - all of them equally - only when the strip
             // runs out of room, which is what a browser does: the label
             // truncates inside, the whole path is on the tooltip.
             data-tab-fixed
-            className={`no-drag group relative flex min-w-[64px] flex-[0_1_127px] items-center gap-1.5 border-r border-[color:var(--p-divider)] px-2.5 transition-colors ${
+            className={`no-drag group relative flex min-w-[64px] flex-[0_1_114px] items-center gap-1.5 border-r border-[color:var(--p-divider)] px-2.5 transition-colors ${
               loud
                 ? ''
                 : on

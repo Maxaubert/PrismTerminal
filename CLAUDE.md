@@ -151,8 +151,8 @@ so an update never silently changes what an existing user sees; the bridge to ma
 - **EVERY TAB IS ONE WIDTH** (owner, 2026-09-21: "make tabs in both apps have a fixed size, and not
   dynamically adjust based on the content"). A tab was as wide as its label, up to 14rem, so a
   folder with a long name shoved every tab after it sideways and the close button was never in
-  the same place twice. Now `flex: 0 1 127px`, min 64px (the same day: 176px first, far too wide; then "way smaller...
-  around 60%", 106px; then "a bit wider like 20%", 127px): one width, and all of them shrink
+  the same place twice. Now `flex: 0 1 114px`, min 64px (the same day: 176px first, far too wide; then "way smaller...
+  around 60%", 106px; then "a bit wider like 20%", 127px; then "10% less wide", 114px): one width, and all of them shrink
   EQUALLY only when the strip runs out of room, as a browser does; the label truncates inside and
   the whole path is on the tooltip. Prism's strip does the same. `tabWidth` measures the boxes.
 - **PITCH AND CINDER ARE THE APP ICON'S COLOURS** (owner, same day: "two themes that match the app

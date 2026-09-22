@@ -471,7 +471,7 @@ const scenarios = {
     const three = await boxes()
     const widths = [...new Set(three.map((b) => b.w))]
     ok(widths.length === 1, `every tab is the same width, whatever its name (${three.map((b) => b.w).join(' / ')})`)
-    ok(widths[0] >= 117 && widths[0] <= 137, `a fixed width, not a content one (${widths[0]}px)`)
+    ok(widths[0] >= 104 && widths[0] <= 124, `a fixed width, not a content one (${widths[0]}px)`)
     ok(three[1].cut && !three[0].cut, 'the long name is truncated inside the tab, the short one is whole')
     // Selecting a tab must not move anything either: the active one used to be
     // no wider, but it is the case that shows it if a mark ever takes room.
