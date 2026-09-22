@@ -446,3 +446,93 @@ describe('real questions, real catalogue', () => {
     expect((performance.now() - t0) / 20).toBeLessThan(25)
   })
 })
+
+/**
+ * A ROW SAYS WHAT IT IS, IN AS FEW WORDS AS POSSIBLE (owner, 2026-09-20: "make
+ * sure the names or description headers are good. they should be ultra concise
+ * and they should not say things like copy it to the clipboard. what is it?
+ * and they should be very searchable. including a lot of meta tags that are
+ * not visible to the user but lets them search easier").
+ *
+ * The panel draws one row per command and nothing else, so a name that was
+ * written as a caption under its parent ("Copy it to the clipboard", "Another
+ * folder", "The short way") is a row that says nothing on its own. These are
+ * the rules that keep that from coming back.
+ */
+describe('a row name stands alone', () => {
+  /** Every name the panel can draw: an entry's task, and each variant's label. */
+  const NAMES: Array<{ id: string; name: string }> = ALL_HELP.flatMap((e) => [
+    { id: e.id, name: e.task },
+    ...(e.variants ?? []).map((v, i) => ({ id: `${e.id}#${i + 1}`, name: v.label }))
+  ])
+
+  it('is ultra concise: at most eight words and 54 characters', () => {
+    const bad = NAMES.filter((n) => n.name.trim().split(/\s+/).length > 8 || n.name.length > 54)
+    expect(bad.map((n) => `${n.id}: ${n.name}`)).toEqual([])
+  })
+
+  it('never opens with a word that points at another row', () => {
+    // "Copy IT", "ALSO remove...", "ANOTHER folder", "THE SAME, in bash": each
+    // of these needs the row above to mean anything, and the panel does not
+    // promise there is one - a search shows a row on its own.
+    const LEANS = /^(it|its|this|that|these|those|the same|same|also|another|other|a second|and |or |but |plus |then |or else)\b/i
+    const bad = NAMES.filter((n) => LEANS.test(n.name.trim()))
+    expect(bad.map((n) => `${n.id}: ${n.name}`)).toEqual([])
+  })
+
+  it('never says "it" or "the same" before naming the thing itself', () => {
+    // Only where the pronoun comes FIRST, with nothing in the name for it to
+    // refer to: "Copy it to the clipboard" points at the row above, while
+    // "Delete a folder and everything in it" names its own subject and is fine.
+    const EARLY = /^(?:\S+\s+){0,2}(?:it|them|the same)\b/i
+    const bad = NAMES.filter((n) => EARLY.test(n.name.trim()))
+    expect(bad.map((n) => `${n.id}: ${n.name}`)).toEqual([])
+  })
+
+  it('is written as a name, not a sentence: no full stop, no trailing comma', () => {
+    const bad = NAMES.filter((n) => /[.,;:]$/.test(n.name.trim()) || n.name !== n.name.trim())
+    expect(bad.map((n) => `${n.id}: ${n.name}`)).toEqual([])
+  })
+
+  it('is not the same as another row of the same entry', () => {
+    const bad: string[] = []
+    for (const e of ALL_HELP) {
+      const names = [e.task, ...(e.variants ?? []).map((v) => v.label)].map((n) => n.toLowerCase())
+      if (new Set(names).size !== names.length) bad.push(e.id)
+    }
+    expect(bad).toEqual([])
+  })
+})
+
+describe('the hidden words', () => {
+  it('gives every variant 3 to 12 of its own, lower case, none twice', () => {
+    // The entry's keywords already cover every row; these are what is true of
+    // THIS row only ("clipboard", "paste the path", "pwd to clipboard"). None
+    // of them is ever drawn.
+    const bad: string[] = []
+    for (const e of ALL_HELP)
+      (e.variants ?? []).forEach((v, i) => {
+        const k = v.keywords ?? []
+        if (
+          k.length < 3 ||
+          k.length > 12 ||
+          new Set(k).size !== k.length ||
+          k.some((w) => !w.trim() || w !== w.trim() || w !== w.toLowerCase())
+        )
+          bad.push(`${e.id}#${i + 1} (${k.length})`)
+      })
+    expect(bad).toEqual([])
+  })
+
+  it('is never only the row own words: a hidden word has to add something', () => {
+    // A keyword that is already in the name is spent: the name is indexed too.
+    const bad: string[] = []
+    for (const e of ALL_HELP)
+      (e.variants ?? []).forEach((v, i) => {
+        const inName = new Set(v.label.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean))
+        const fresh = (v.keywords ?? []).filter((k) => !k.split(/\s+/).every((w) => inName.has(w)))
+        if (fresh.length < 2) bad.push(`${e.id}#${i + 1}`)
+      })
+    expect(bad).toEqual([])
+  })
+})

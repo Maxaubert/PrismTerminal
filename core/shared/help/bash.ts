@@ -52,9 +52,27 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Moves into a folder. Names are case-sensitive here (Documents is not documents), and the slashes lean forward.',
     command: 'cd FOLDER',
     variants: [
-      { label: 'Your home folder', command: 'cd ~' },
-      { label: 'Back to the folder you were in just before', command: 'cd -' },
-      { label: 'A folder with spaces in its name: keep the quotes', command: 'cd "FOLDER"' }
+      {
+        label: 'Go to your home folder',
+        command: 'cd ~',
+        keywords: ['cd ~', 'tilde', 'home directory', 'user profile', 'my files', 'default folder']
+      },
+      {
+        label: 'Go back to the previous folder',
+        command: 'cd -',
+        keywords: ['cd -', 'last directory', 'toggle folder', 'where i was', 'switch back']
+      },
+      {
+        label: 'Go to a folder whose name has spaces',
+        command: 'cd "FOLDER"',
+        keywords: [
+          'spaces in path',
+          'quoting',
+          'my documents',
+          'program files',
+          'no such file or directory'
+        ]
+      }
     ],
     placeholders: { FOLDER: 'The folder to go to, for example ~/projects/site' },
     keywords: [
@@ -78,7 +96,13 @@ export const BASH_HELP: readonly HelpEntry[] = [
     summary:
       'Two dots mean "the folder that holds this one". The space after cd is required here, unlike in Command Prompt.',
     command: 'cd ..',
-    variants: [{ label: 'Up two levels', command: 'cd ../..' }],
+    variants: [
+      {
+        label: 'Go up two folders',
+        command: 'cd ../..',
+        keywords: ['cd ../..', 'two levels', 'grandparent', 'up twice', 'back two']
+      }
+    ],
     keywords: [
       'go back',
       'back a folder',
@@ -100,12 +124,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'WSL mounts each Windows drive under /mnt by its letter, so C:\\Users is /mnt/c/Users. It works, but it is slow: keep projects you build in WSL inside the Linux home folder instead.',
     command: 'cd /mnt/c/Users/NAME',
     variants: [
-      { label: 'See which drives are mounted', command: 'ls /mnt' },
       {
-        label: 'Turn a Windows path into the Linux one',
-        command: "wslpath 'C:\\Users\\NAME\\Documents'"
+        label: 'See which drives are mounted',
+        command: 'ls /mnt',
+        keywords: ['ls /mnt', 'c drive', 'd drive', 'mount points', 'available letters']
       },
-      { label: 'Turn the current folder into a Windows path', command: 'wslpath -w .' }
+      {
+        label: 'Convert a Windows path to Linux',
+        command: "wslpath 'C:\\Users\\NAME\\Documents'",
+        keywords: ['wslpath', 'translate path', 'mnt c', 'path conversion', 'backslash']
+      },
+      {
+        label: 'Show this folder as a Windows path',
+        command: 'wslpath -w .',
+        keywords: ['wslpath -w', 'unc', 'wsl.localhost', 'paste into explorer', 'windows form']
+      }
     ],
     placeholders: { NAME: 'Your Windows user name' },
     keywords: [
@@ -131,8 +164,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'WSL can start Windows programs by their .exe name. The dot means "here", so Explorer opens on the current Linux folder (under \\\\wsl.localhost).',
     command: 'explorer.exe .',
     variants: [
-      { label: 'Open this folder in VS Code', command: 'code .' },
-      { label: 'Open a file in Notepad', command: 'notepad.exe FILE' }
+      {
+        label: 'Open this folder in VS Code',
+        command: 'code .',
+        keywords: ['code .', 'vscode', 'visual studio code', 'editor', 'open project']
+      },
+      {
+        label: 'Open a file in Notepad',
+        command: 'notepad.exe FILE',
+        keywords: ['notepad.exe', 'windows program', 'interop', 'edit in windows', 'run an exe']
+      }
     ],
     placeholders: { FILE: 'A file in the current folder' },
     keywords: [
@@ -157,7 +198,13 @@ export const BASH_HELP: readonly HelpEntry[] = [
     summary:
       '-p makes any missing folders on the way, and does not complain if the folder is already there.',
     command: 'mkdir -p NAME',
-    variants: [{ label: 'Several levels at once', command: 'mkdir -p PARENT/CHILD/GRANDCHILD' }],
+    variants: [
+      {
+        label: 'Make nested folders in one go',
+        command: 'mkdir -p PARENT/CHILD/GRANDCHILD',
+        keywords: ['mkdir -p', 'parent folders', 'create a tree', 'deep path', 'several levels']
+      }
+    ],
     placeholders: {
       NAME: 'The new folder',
       PARENT: 'The outer folder',
@@ -184,8 +231,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       '-r means "and everything inside". Read the path twice before pressing Enter, and never run it on a path built from a variable that might be empty.',
     command: 'rm -r FOLDER',
     variants: [
-      { label: 'Only if it is empty (the safe form)', command: 'rmdir FOLDER' },
-      { label: 'Without any questions, write-protected files included', command: 'rm -rf FOLDER' }
+      {
+        label: 'Remove an empty folder',
+        command: 'rmdir FOLDER',
+        keywords: ['rmdir', 'directory not empty', 'safe delete', 'no recursion', 'only if empty']
+      },
+      {
+        label: 'Force delete with no questions asked',
+        command: 'rm -rf FOLDER',
+        keywords: ['rm -rf', 'write protected', 'read only files', 'ignore errors', 'no prompt']
+      }
     ],
     placeholders: { FOLDER: 'The folder to remove' },
     keywords: [
@@ -211,8 +266,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       '-s gives one total instead of a line per subfolder, and -h prints it in K, M and G rather than blocks.',
     command: 'du -sh FOLDER',
     variants: [
-      { label: 'Each thing in this folder, smallest to biggest', command: 'du -sh * | sort -h' },
-      { label: 'One level of subfolders only', command: 'du -h --max-depth=1 .' }
+      {
+        label: 'Sort everything here by size, smallest first',
+        command: 'du -sh * | sort -h',
+        keywords: ['du -sh *', 'sort -h', 'compare folders', 'rank by size', 'what is hogging space']
+      },
+      {
+        label: 'Size of each subfolder, one level deep',
+        command: 'du -h --max-depth=1 .',
+        keywords: ['max-depth', 'depth 1', 'per folder total', 'top level only', 'du -h']
+      }
     ],
     placeholders: { FOLDER: 'The folder to measure, or . for the current one' },
     keywords: [
@@ -235,7 +298,13 @@ export const BASH_HELP: readonly HelpEntry[] = [
     summary:
       'Lists the folders two levels down using find, which is always there. The prettier tree command is not installed on a stock Ubuntu: sudo apt install tree.',
     command: 'find . -maxdepth 2 -type d',
-    variants: [{ label: 'With tree, once installed', command: 'tree -L 2' }],
+    variants: [
+      {
+        label: 'Show the structure with tree',
+        command: 'tree -L 2',
+        keywords: ['tree -l 2', 'apt install tree', 'ascii tree', 'depth limit', 'tree not found']
+      }
+    ],
     keywords: [
       'tree',
       'folder structure',
@@ -257,9 +326,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
       '-l shows sizes, dates and permissions, -a includes hidden files, and -h prints sizes in K, M and G.',
     command: 'ls -lah',
     variants: [
-      { label: 'Names only', command: 'ls' },
-      { label: 'Newest first', command: 'ls -lt' },
-      { label: 'Biggest first', command: 'ls -lhS' }
+      {
+        label: 'List file names only',
+        command: 'ls',
+        keywords: ['ls', 'bare list', 'no details', 'plain listing', 'just the names']
+      },
+      {
+        label: 'List files newest first',
+        command: 'ls -lt',
+        keywords: ['ls -lt', 'sort by date', 'most recent', 'last modified', 'recently changed']
+      },
+      {
+        label: 'List files biggest first',
+        command: 'ls -lhS',
+        keywords: ['ls -lhs', 'sort by size', 'size order', 'space hogs', 'which file is huge']
+      }
     ],
     keywords: [
       'ls',
@@ -282,7 +363,7 @@ export const BASH_HELP: readonly HelpEntry[] = [
     id: 'sh-hidden-files',
     shell: 'bash',
     category: 'files',
-    task: 'See hidden files too',
+    task: 'Show hidden files and dotfiles',
     summary:
       'In Linux a file is hidden simply because its name starts with a dot (.env, .git, .bashrc). -a lists those as well.',
     command: 'ls -a',
@@ -307,9 +388,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'cat prints the whole file. For a long one use less: arrows and Page Down to move, / to search, Q to leave.',
     command: 'cat FILE',
     variants: [
-      { label: 'Scroll through a long file (Q to leave)', command: 'less FILE' },
-      { label: 'Only the first 20 lines', command: 'head -n 20 FILE' },
-      { label: 'Only the last 20 lines', command: 'tail -n 20 FILE' }
+      {
+        label: 'Scroll through a long file (Q to leave)',
+        command: 'less FILE',
+        keywords: ['less', 'pager', 'page through', 'how do i exit less', 'more', 'scroll up']
+      },
+      {
+        label: 'Show the first 20 lines',
+        command: 'head -n 20 FILE',
+        keywords: ['head', 'top of file', 'beginning', 'preview a file', 'first rows']
+      },
+      {
+        label: 'Show the last 20 lines',
+        command: 'tail -n 20 FILE',
+        keywords: ['tail', 'end of file', 'bottom', 'end of a log', 'final rows']
+      }
     ],
     placeholders: { FILE: 'The file to read' },
     keywords: [
@@ -357,8 +450,9 @@ export const BASH_HELP: readonly HelpEntry[] = [
     command: 'touch NAME',
     variants: [
       {
-        label: 'A file with one line of text in it (REPLACES the file if it exists)',
-        command: 'echo "TEXT" > NAME'
+        label: 'Create a file with one line of text',
+        command: 'echo "TEXT" > NAME',
+        keywords: ['echo to a file', 'write text', 'overwrite', 'redirect', 'make with content']
       }
     ],
     placeholders: {
@@ -388,10 +482,15 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'nano is the friendly editor: type as normal, Ctrl+O then Enter saves, Ctrl+X leaves. The shortcuts are listed along the bottom, where ^ means Ctrl.',
     command: 'nano FILE',
     variants: [
-      { label: 'In VS Code instead', command: 'code FILE' },
       {
-        label: 'Stuck in vim? Press Esc, then type this and Enter to leave without saving',
-        command: ':q!'
+        label: 'Edit the file in VS Code',
+        command: 'code FILE',
+        keywords: ['vscode', 'gui editor', 'visual studio', 'open in an editor', 'code file']
+      },
+      {
+        label: 'Quit vim without saving (Esc first)',
+        command: ':q!',
+        keywords: ['q!', 'exit vim', 'stuck in vim', 'vi', 'discard changes', 'get out of vim']
       }
     ],
     placeholders: { FILE: 'The file to edit (it is created if missing)' },
@@ -417,8 +516,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Copies a file to a new name or into a folder. A folder needs -r ("and everything inside").',
     command: 'cp SOURCE DESTINATION',
     variants: [
-      { label: 'A whole folder', command: 'cp -r SOURCE DESTINATION' },
-      { label: 'Ask before replacing anything', command: 'cp -i SOURCE DESTINATION' }
+      {
+        label: 'Copy a whole folder',
+        command: 'cp -r SOURCE DESTINATION',
+        keywords: ['cp -r', 'recursive', 'copy a directory', 'xcopy', 'omitting directory']
+      },
+      {
+        label: 'Ask before replacing anything',
+        command: 'cp -i SOURCE DESTINATION',
+        keywords: ['cp -i', 'prompt', 'confirm overwrite', 'interactive', 'do not clobber']
+      }
     ],
     placeholders: {
       SOURCE: 'What to copy',
@@ -448,7 +555,13 @@ export const BASH_HELP: readonly HelpEntry[] = [
     summary:
       'Linux has one command for both: moving a file to a new name in the same folder IS renaming it.',
     command: 'mv SOURCE DESTINATION',
-    variants: [{ label: 'Ask before replacing anything', command: 'mv -i SOURCE DESTINATION' }],
+    variants: [
+      {
+        label: 'Ask before replacing an existing file',
+        command: 'mv -i SOURCE DESTINATION',
+        keywords: ['mv -i', 'prompt', 'confirm overwrite', 'interactive', 'safe move']
+      }
+    ],
     placeholders: {
       SOURCE: 'The file or folder as it is now',
       DESTINATION: 'The new name, or the folder to move it into'
@@ -476,8 +589,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Removes the file. A wildcard removes every match, so run ls with the same pattern first to see what it will take.',
     command: 'rm FILE',
     variants: [
-      { label: 'Ask about each one first', command: 'rm -i FILE' },
-      { label: 'Every file of one type in this folder', command: 'rm *.EXT' }
+      {
+        label: 'Ask before deleting each file',
+        command: 'rm -i FILE',
+        keywords: ['rm -i', 'prompt', 'confirm', 'interactive', 'are you sure']
+      },
+      {
+        label: 'Delete every file of one type here',
+        command: 'rm *.EXT',
+        keywords: ['rm *.log', 'wildcard', 'by extension', 'glob', 'clear out logs']
+      }
     ],
     placeholders: { FILE: 'The file to delete', EXT: 'The file extension, for example log' },
     keywords: [
@@ -496,17 +617,26 @@ export const BASH_HELP: readonly HelpEntry[] = [
     id: 'sh-find-file-by-name',
     shell: 'bash',
     category: 'files',
-    task: 'Find a file by name, in this folder and below',
+    task: 'Find a file by name in subfolders',
     summary:
       'Searches every subfolder. -iname ignores upper and lower case and the stars mean "anything", so part of the name is enough. Keep the quotes, or the shell expands the stars itself.',
     command: 'find . -iname "*NAME*"',
     variants: [
       {
-        label: 'Files only, and hide the "Permission denied" noise',
-        command: 'find . -type f -iname "*NAME*" 2>/dev/null'
+        label: 'Find files only, hiding permission errors',
+        command: 'find . -type f -iname "*NAME*" 2>/dev/null',
+        keywords: ['2>/dev/null', 'hide errors', 'type f', 'quiet search', 'denied noise']
       },
-      { label: 'Changed in the last day', command: 'find . -type f -mtime -1' },
-      { label: 'Changed in the last hour', command: 'find . -type f -mmin -60' }
+      {
+        label: 'Find files changed in the last day',
+        command: 'find . -type f -mtime -1',
+        keywords: ['mtime', 'modified today', 'recent files', 'last 24 hours', 'since yesterday']
+      },
+      {
+        label: 'Find files changed in the last hour',
+        command: 'find . -type f -mmin -60',
+        keywords: ['mmin', 'just modified', 'recent edits', 'last 60 minutes', 'what i just saved']
+      }
     ],
     placeholders: { NAME: 'Any part of the file name' },
     keywords: [
@@ -551,8 +681,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'A script has to be marked executable before ./ will run it. Do that once, then start it with ./ in front: Linux does not look in the current folder for commands by itself.',
     command: 'chmod +x SCRIPT.sh',
     variants: [
-      { label: 'Then run it', command: './SCRIPT.sh' },
-      { label: 'Or run it without marking it', command: 'bash SCRIPT.sh' }
+      {
+        label: 'Run the script with ./ in front',
+        command: './SCRIPT.sh',
+        keywords: ['./script.sh', 'dot slash', 'execute', 'command not found', 'not on path']
+      },
+      {
+        label: 'Run a script without marking it executable',
+        command: 'bash SCRIPT.sh',
+        keywords: ['bash script.sh', 'sh script.sh', 'no chmod', 'one off', 'interpreter']
+      }
     ],
     placeholders: { SCRIPT: 'The name of the script file' },
     keywords: [
@@ -572,19 +710,25 @@ export const BASH_HELP: readonly HelpEntry[] = [
     id: 'sh-permissions',
     shell: 'bash',
     category: 'files',
-    task: 'See or fix who may read and write a file',
+    task: "See or fix a file's permissions",
     summary:
       'The first column of ls -l reads r (read), w (write), x (run) three times over: for the owner, the group, and everyone else. The name after it is the owner.',
     command: 'ls -l FILE',
     variants: [
-      { label: 'Give yourself read and write on a whole folder', command: 'chmod -R u+rwX FOLDER' },
       {
-        label: 'Take a folder back that sudo left owned by root',
-        command: 'sudo chown -R $USER FOLDER'
+        label: 'Give yourself read and write on a folder',
+        command: 'chmod -R u+rwX FOLDER',
+        keywords: ['chmod -r', 'u+rwx', 'recursive chmod', 'eacces', 'access denied']
       },
       {
-        label: 'What an SSH private key needs (it is refused otherwise)',
-        command: 'chmod 600 ~/.ssh/id_ed25519'
+        label: 'Take back a folder owned by root',
+        command: 'sudo chown -R $USER FOLDER',
+        keywords: ['chown', 'ownership', '$user', 'sudo left it root', 'cannot write']
+      },
+      {
+        label: 'Fix SSH key permissions',
+        command: 'chmod 600 ~/.ssh/id_ed25519',
+        keywords: ['600', 'unprotected private key file', 'id_ed25519', 'bad mode', 'key refused']
       }
     ],
     placeholders: { FILE: 'The file to look at', FOLDER: 'The folder to fix' },
@@ -611,11 +755,20 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'A file saved on Windows ends its lines with CR LF, and bash reads the CR as part of the command: "bad interpreter: /bin/bash^M" or "$\'\\r\': command not found". This strips the CR from every line.',
     command: "sed -i 's/\\r$//' FILE",
     variants: [
-      { label: 'Check first: it says "with CRLF line terminators" if so', command: 'file FILE' },
-      { label: 'The dedicated tool (sudo apt install dos2unix)', command: 'dos2unix FILE' },
+      {
+        label: 'Check a file for CRLF line endings',
+        command: 'file FILE',
+        keywords: ['file command', 'dos text', 'crlf terminators', 'detect line endings', 'is it dos']
+      },
+      {
+        label: 'Convert with dos2unix (apt install dos2unix)',
+        command: 'dos2unix FILE',
+        keywords: ['dos2unix', 'crlf to lf', 'unix2dos', 'not installed', 'strip carriage returns']
+      },
       {
         label: 'Stop git converting line endings on checkout',
-        command: 'git config --global core.autocrlf input'
+        command: 'git config --global core.autocrlf input',
+        keywords: ['core.autocrlf', 'git config', 'input', 'clone', 'every file changed']
       }
     ],
     placeholders: { FILE: 'The script or text file to fix' },
@@ -644,8 +797,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'x extracts, f names the file, and modern tar works out the compression (.gz, .bz2, .xz) by itself.',
     command: 'tar -xf FILE.tar.gz',
     variants: [
-      { label: 'Into another folder (it must exist)', command: 'tar -xf FILE.tar.gz -C FOLDER' },
-      { label: 'Just list what is inside', command: 'tar -tf FILE.tar.gz' }
+      {
+        label: 'Unpack into another folder',
+        command: 'tar -xf FILE.tar.gz -C FOLDER',
+        keywords: ['tar -c', 'destination', 'extract to', 'target directory', 'somewhere else']
+      },
+      {
+        label: 'List what is inside the archive',
+        command: 'tar -tf FILE.tar.gz',
+        keywords: ['tar -tf', 'contents', 'peek', 'without extracting', 'preview']
+      }
     ],
     placeholders: { FILE: 'The archive, without its ending', FOLDER: 'Where to unpack it' },
     keywords: [
@@ -692,8 +853,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Unpacks into the folder named after -d, making it if needed. A stock Ubuntu has neither unzip nor zip: sudo apt install unzip zip.',
     command: 'unzip FILE.zip -d FOLDER',
     variants: [
-      { label: 'Just list what is inside', command: 'unzip -l FILE.zip' },
-      { label: 'Make a zip of a folder', command: 'zip -r NAME.zip FOLDER' }
+      {
+        label: 'List what is inside the zip',
+        command: 'unzip -l FILE.zip',
+        keywords: ['unzip -l', 'contents', 'peek', 'without extracting', 'preview']
+      },
+      {
+        label: 'Make a zip from a folder',
+        command: 'zip -r NAME.zip FOLDER',
+        keywords: ['zip -r', 'compress a folder', 'create an archive', 'compress-archive', 'package']
+      }
     ],
     placeholders: {
       FILE: 'The zip, without its ending',
@@ -722,9 +891,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
       '-r searches this folder and every subfolder, -n shows the line number and -i ignores upper and lower case.',
     command: 'grep -rni "TEXT" .',
     variants: [
-      { label: 'Just the names of the files that contain it', command: 'grep -rli "TEXT" .' },
-      { label: 'Only in one type of file', command: 'grep -rni --include="*.EXT" "TEXT" .' },
-      { label: 'Skip node_modules', command: 'grep -rni --exclude-dir=node_modules "TEXT" .' }
+      {
+        label: 'List only the file names that match',
+        command: 'grep -rli "TEXT" .',
+        keywords: ['grep -l', 'which files', 'no lines', 'just the paths', 'files containing']
+      },
+      {
+        label: 'Search one type of file only',
+        command: 'grep -rni --include="*.EXT" "TEXT" .',
+        keywords: ['--include', 'by extension', 'only ts files', 'glob filter', 'limit the search']
+      },
+      {
+        label: 'Search but skip node_modules',
+        command: 'grep -rni --exclude-dir=node_modules "TEXT" .',
+        keywords: ['--exclude-dir', 'ignore a folder', 'vendor', '.git', 'too many results']
+      }
     ],
     placeholders: { TEXT: 'The words to look for', EXT: 'The file extension, for example ts' },
     keywords: [
@@ -744,10 +925,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
     id: 'sh-filter-output',
     shell: 'bash',
     category: 'text',
-    task: 'Show only the lines of output that mention something',
+    task: 'Keep only the output lines that match',
     summary: 'Pipes a command into grep so a long list is cut down to the lines you care about.',
     command: 'COMMAND | grep -i "TEXT"',
-    variants: [{ label: 'The lines that do NOT mention it', command: 'COMMAND | grep -iv "TEXT"' }],
+    variants: [
+      {
+        label: 'Hide the output lines that match',
+        command: 'COMMAND | grep -iv "TEXT"',
+        keywords: ['grep -v', 'invert', 'exclude', 'filter out', 'everything except']
+      }
+    ],
     placeholders: {
       COMMAND: 'Any command that prints a lot, for example ps aux',
       TEXT: 'The word to keep'
@@ -772,8 +959,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'wc -l counts lines, and anything can be piped into it: count the files here, the matches of a grep, and so on.',
     command: 'wc -l FILE',
     variants: [
-      { label: 'How many things are in this folder', command: 'ls | wc -l' },
-      { label: 'Words rather than lines', command: 'wc -w FILE' }
+      {
+        label: 'Count the files in this folder',
+        command: 'ls | wc -l',
+        keywords: ['ls | wc -l', 'how many files', 'file count', 'number of items', 'tally']
+      },
+      {
+        label: 'Count words instead of lines',
+        command: 'wc -w FILE',
+        keywords: ['wc -w', 'word count', 'how many words', 'wc', 'text stats']
+      }
     ],
     placeholders: { FILE: 'The file to count' },
     keywords: [
@@ -795,7 +990,13 @@ export const BASH_HELP: readonly HelpEntry[] = [
     summary:
       'Lines starting - are only in the first file, lines starting + only in the second. No output at all means they are the same.',
     command: 'diff -u FILE1 FILE2',
-    variants: [{ label: 'Two whole folders', command: 'diff -rq FOLDER1 FOLDER2' }],
+    variants: [
+      {
+        label: 'Compare two whole folders',
+        command: 'diff -rq FOLDER1 FOLDER2',
+        keywords: ['diff -rq', 'recursive diff', 'which files differ', 'directories', 'side by side']
+      }
+    ],
     placeholders: {
       FILE1: 'The first file',
       FILE2: 'The second file',
@@ -822,7 +1023,11 @@ export const BASH_HELP: readonly HelpEntry[] = [
       's/OLD/NEW/g swaps every OLD for NEW, and -i writes the result back into the file. Run the preview variant first: it only prints.',
     command: "sed -i 's/OLD/NEW/g' FILE",
     variants: [
-      { label: 'Preview: print the result, change nothing', command: "sed 's/OLD/NEW/g' FILE" }
+      {
+        label: 'Preview the replacement without changing the file',
+        command: "sed 's/OLD/NEW/g' FILE",
+        keywords: ['sed without -i', 'dry run', 'print only', 'safe check', 'try it first']
+      }
     ],
     placeholders: {
       OLD: 'The text to find (a / or a . in it needs a backslash in front)',
@@ -850,7 +1055,13 @@ export const BASH_HELP: readonly HelpEntry[] = [
     summary:
       'Sorts the lines, folds identical ones together with a count, and puts the most frequent on top.',
     command: 'sort FILE | uniq -c | sort -nr',
-    variants: [{ label: 'Just sort and drop the duplicates', command: 'sort -u FILE' }],
+    variants: [
+      {
+        label: 'Sort and remove duplicate lines',
+        command: 'sort -u FILE',
+        keywords: ['sort -u', 'dedupe', 'unique', 'distinct', 'no repeats']
+      }
+    ],
     placeholders: { FILE: 'The file to sort' },
     keywords: [
       'sort',
@@ -868,12 +1079,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
     id: 'sh-pick-column',
     shell: 'bash',
     category: 'text',
-    task: 'Keep one column of some output',
+    task: 'Pick out one column of output',
     summary:
       'awk splits each line on spaces and $2 is the second piece. For comma-separated text use cut.',
     command: "COMMAND | awk '{print $2}'",
     variants: [
-      { label: 'The second field of comma-separated lines', command: "cut -d',' -f2 FILE" }
+      {
+        label: 'Pick a column from comma-separated text',
+        command: "cut -d',' -f2 FILE",
+        keywords: ['cut -d', 'csv field', 'delimiter', 'second field', 'split on a comma']
+      }
     ],
     placeholders: {
       COMMAND: 'Any command that prints columns, for example ps aux',
@@ -902,9 +1117,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Lists every process with its owner, its PID (the number you need to stop it), and its CPU and memory share.',
     command: 'ps aux',
     variants: [
-      { label: 'Only the ones mentioning a name', command: 'ps aux | grep -i NAME' },
-      { label: 'Just PIDs and command lines for a name', command: 'pgrep -fl NAME' },
-      { label: 'A live view, busiest first (Q to leave)', command: 'top' }
+      {
+        label: 'Find a running program by name',
+        command: 'ps aux | grep -i NAME',
+        keywords: ['is node running', 'search processes', 'filter the list', 'which pid', 'ps grep']
+      },
+      {
+        label: 'Show PIDs and command lines by name',
+        command: 'pgrep -fl NAME',
+        keywords: ['pgrep', 'pgrep -fl', 'process id', 'get the pid', 'what arguments']
+      },
+      {
+        label: 'Live view of the busiest processes',
+        command: 'top',
+        keywords: ['top', 'htop', 'task manager', 'cpu usage', 'q to quit', 'monitor']
+      }
     ],
     placeholders: { NAME: 'The program, for example node' },
     keywords: [
@@ -931,9 +1158,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Plain kill asks the program to stop and lets it tidy up. Reach for -9 only when it ignores that: -9 cannot be refused and nothing gets saved.',
     command: 'kill PID',
     variants: [
-      { label: 'Force it, when asking did not work', command: 'kill -9 PID' },
-      { label: 'Every process with this name', command: 'pkill NAME' },
-      { label: 'Anything whose command line mentions a word', command: 'pkill -f TEXT' }
+      {
+        label: 'Force-stop a program that ignores kill',
+        command: 'kill -9 PID',
+        keywords: ['kill -9', 'sigkill', 'wont die', 'unresponsive', 'hard kill', 'force quit']
+      },
+      {
+        label: 'Stop every process with one name',
+        command: 'pkill NAME',
+        keywords: ['pkill', 'killall', 'kill by name', 'kill node', 'end all instances']
+      },
+      {
+        label: 'Stop processes by their command line',
+        command: 'pkill -f TEXT',
+        keywords: ['pkill -f', 'full command line', 'kill vite', 'match arguments', 'pattern']
+      }
     ],
     placeholders: {
       PID: 'The number from ps aux or lsof',
@@ -965,8 +1204,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Names the program and PID holding the port. No output means nothing of YOURS holds it: put sudo in front to see other users. The ss variant is always installed, should lsof be missing.',
     command: 'lsof -i :PORT',
     variants: [
-      { label: 'Everything that is listening, with the program names', command: 'ss -ltnp' },
-      { label: 'Just that port, with ss', command: 'ss -ltnp | grep :PORT' }
+      {
+        label: 'List every listening port and program',
+        command: 'ss -ltnp',
+        keywords: ['ss -ltnp', 'netstat -ano', 'open ports', 'what is listening', 'sockets']
+      },
+      {
+        label: 'Check one port with ss',
+        command: 'ss -ltnp | grep :PORT',
+        keywords: ['ss', 'port 3000', 'lsof missing', 'single port', 'who holds it']
+      }
     ],
     placeholders: { PORT: 'The port number, for example 3000' },
     keywords: [
@@ -992,7 +1239,11 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Not a command but a key: hold Ctrl and press C. If the program ignores it, Ctrl+Z parks it and hands the prompt back, and the variant then finishes it off.',
     command: 'Ctrl+C',
     variants: [
-      { label: 'After Ctrl+Z: force-stop the job you just parked', command: 'kill -9 %1' }
+      {
+        label: 'Force-stop a job parked with Ctrl+Z',
+        command: 'kill -9 %1',
+        keywords: ['kill -9 %1', 'job number', 'stopped jobs', 'suspended', 'background job']
+      }
     ],
     keywords: [
       'cancel',
@@ -1019,12 +1270,25 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'An & at the end starts the command and hands the prompt straight back. jobs lists what this shell has running, and fg brings one to the front again.',
     command: 'COMMAND &',
     variants: [
-      { label: 'List the background jobs of this shell', command: 'jobs' },
-      { label: 'Bring the last one back to the front', command: 'fg' },
-      { label: 'Let a job parked with Ctrl+Z carry on in the background', command: 'bg' },
       {
-        label: 'Keep it running after the terminal closes',
-        command: 'nohup COMMAND > output.log 2>&1 &'
+        label: 'List the background jobs of this shell',
+        command: 'jobs',
+        keywords: ['job numbers', 'what is running here', 'stopped', 'suspended', 'my tasks']
+      },
+      {
+        label: 'Bring a background job to the front',
+        command: 'fg',
+        keywords: ['fg', 'foreground', 'resume', 'unpause', 'come back to it']
+      },
+      {
+        label: 'Resume a parked job in the background',
+        command: 'bg',
+        keywords: ['bg', 'ctrl z', 'continue', 'suspended', 'carry on']
+      },
+      {
+        label: 'Keep a command running after the terminal closes',
+        command: 'nohup COMMAND > output.log 2>&1 &',
+        keywords: ['nohup', 'disown', 'survive logout', 'detach', 'ssh disconnect', 'long job']
       }
     ],
     placeholders: { COMMAND: 'The command to run, for example npm run dev' },
@@ -1055,8 +1319,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       "Prints this machine's addresses. Under WSL that is the Linux side's own address, which is usually not the one Windows has on your network.",
     command: 'hostname -I',
     variants: [
-      { label: 'Every network interface in full', command: 'ip addr' },
-      { label: 'The address the internet sees', command: 'curl -s https://ifconfig.me' }
+      {
+        label: 'Show every network interface',
+        command: 'ip addr',
+        keywords: ['ip addr', 'ifconfig', 'eth0', 'adapters', 'mac address', 'subnet']
+      },
+      {
+        label: 'Show the public IP the internet sees',
+        command: 'curl -s https://ifconfig.me',
+        keywords: ['public ip', 'external ip', 'ifconfig.me', 'whats my ip', 'wan']
+      }
     ],
     keywords: [
       'ip address',
@@ -1074,11 +1346,17 @@ export const BASH_HELP: readonly HelpEntry[] = [
     id: 'sh-ping',
     shell: 'bash',
     category: 'network',
-    task: 'Check whether a site or machine can be reached',
+    task: 'Check whether a site can be reached',
     summary:
       'Linux ping goes on for ever unless told otherwise, so -c 4 sends four packets and stops.',
     command: 'ping -c 4 HOST',
-    variants: [{ label: 'Look the name up (DNS and /etc/hosts)', command: 'getent hosts HOST' }],
+    variants: [
+      {
+        label: 'Look up a name in DNS',
+        command: 'getent hosts HOST',
+        keywords: ['getent hosts', 'nslookup', 'dig', 'resolve', 'etc hosts', 'dns']
+      }
+    ],
     placeholders: { HOST: 'A name or an address, for example github.com' },
     keywords: [
       'ping',
@@ -1102,8 +1380,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       '-L follows redirects (most download links have one) and -O keeps the name the file has on the server.',
     command: 'curl -L -O URL',
     variants: [
-      { label: 'Choose the name to save it under', command: 'curl -L -o FILE URL' },
-      { label: 'The same with wget', command: 'wget URL' }
+      {
+        label: 'Download and choose the saved name',
+        command: 'curl -L -o FILE URL',
+        keywords: ['curl -o', 'save as', 'output file', 'rename a download', 'my own name']
+      },
+      {
+        label: 'Download with wget instead',
+        command: 'wget URL',
+        keywords: ['wget', 'wget url', 'fetch', 'no curl', 'another downloader']
+      }
     ],
     placeholders: {
       URL: 'The full address, starting https://',
@@ -1126,15 +1412,20 @@ export const BASH_HELP: readonly HelpEntry[] = [
     id: 'sh-check-server',
     shell: 'bash',
     category: 'network',
-    task: 'Check that a website or my local server answers',
+    task: 'Check a website or local server answers',
     summary:
       '-I asks for the headers only, so the first line is the verdict: 200 is fine, 404 not found, "Connection refused" means nothing is listening there.',
     command: 'curl -I http://localhost:PORT',
     variants: [
-      { label: 'Show the reply body as well as the headers', command: 'curl -i URL' },
       {
-        label: 'Send JSON to an API',
-        command: 'curl -X POST -H "Content-Type: application/json" -d \'{"KEY":"VALUE"}\' URL'
+        label: 'Show the reply body and headers',
+        command: 'curl -i URL',
+        keywords: ['curl -i', 'response body', 'see the json', 'full response', 'http headers']
+      },
+      {
+        label: 'Send a JSON POST to an API',
+        command: 'curl -X POST -H "Content-Type: application/json" -d \'{"KEY":"VALUE"}\' URL',
+        keywords: ['curl -x post', 'post json', 'api request', 'content-type', 'test an endpoint']
       }
     ],
     placeholders: {
@@ -1164,9 +1455,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
     summary: 'Opens a shell on the remote machine. exit, or Ctrl+D, brings you back.',
     command: 'ssh USER@HOST',
     variants: [
-      { label: 'On a port other than 22', command: 'ssh -p PORT USER@HOST' },
-      { label: 'With a particular key file', command: 'ssh -i ~/.ssh/KEYFILE USER@HOST' },
-      { label: 'Copy a file to the other machine', command: 'scp FILE USER@HOST:FOLDER' }
+      {
+        label: 'Connect on a port other than 22',
+        command: 'ssh -p PORT USER@HOST',
+        keywords: ['ssh -p', 'custom port', 'port 2222', 'non standard', 'connection refused']
+      },
+      {
+        label: 'Connect with a particular key file',
+        command: 'ssh -i ~/.ssh/KEYFILE USER@HOST',
+        keywords: ['ssh -i', 'identity file', 'private key', 'pem', 'id_ed25519']
+      },
+      {
+        label: 'Copy a file to the other machine',
+        command: 'scp FILE USER@HOST:FOLDER',
+        keywords: ['scp', 'upload', 'transfer', 'remote copy', 'sftp', 'send to server']
+      }
     ],
     placeholders: {
       USER: 'Your user name on the other machine',
@@ -1192,13 +1495,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
     id: 'sh-ssh-keygen',
     shell: 'bash',
     category: 'network',
-    task: 'Make an SSH key (for GitHub or a server)',
+    task: 'Make an SSH key for GitHub',
     summary:
       'Creates a key pair in ~/.ssh and asks where to save it and for an optional passphrase. The .pub half is the one you paste into GitHub; the other half never leaves this machine.',
     command: 'ssh-keygen -t ed25519 -C "EMAIL"',
     variants: [
-      { label: 'Print the public key, ready to paste', command: 'cat ~/.ssh/id_ed25519.pub' },
-      { label: 'Test the connection to GitHub', command: 'ssh -T git@github.com' }
+      {
+        label: 'Print the public key, ready to paste',
+        command: 'cat ~/.ssh/id_ed25519.pub',
+        keywords: ['id_ed25519.pub', 'copy the key', 'pub file', 'add to github', 'deploy key']
+      },
+      {
+        label: 'Test the connection to GitHub',
+        command: 'ssh -T git@github.com',
+        keywords: ['ssh -t', 'git@github.com', 'permission denied publickey', 'does my key work']
+      }
     ],
     placeholders: { EMAIL: 'A label for the key, usually your email address' },
     keywords: [
@@ -1224,7 +1535,13 @@ export const BASH_HELP: readonly HelpEntry[] = [
     task: 'See how much disk space is free',
     summary: 'One line per disk with its size, what is used and what is left, in K, M and G.',
     command: 'df -h',
-    variants: [{ label: 'Just the Windows C: drive, from WSL', command: 'df -h /mnt/c' }],
+    variants: [
+      {
+        label: 'Free space on the Windows C: drive',
+        command: 'df -h /mnt/c',
+        keywords: ['df /mnt/c', 'host disk', 'wsl', 'c drive', 'how full is windows']
+      }
+    ],
     keywords: [
       'df',
       'df -h',
@@ -1266,8 +1583,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'printenv lists them all. A single value is read with a dollar sign in front of its name.',
     command: 'printenv',
     variants: [
-      { label: 'The value of one', command: 'echo "$NAME"' },
-      { label: 'The ones whose name or value mentions a word', command: 'printenv | grep -i TEXT' }
+      {
+        label: 'Show the value of one variable',
+        command: 'echo "$NAME"',
+        keywords: ['echo $name', 'read a variable', 'print the value', 'is it set', 'dollar sign']
+      },
+      {
+        label: 'Search the environment variables for a word',
+        command: 'printenv | grep -i TEXT',
+        keywords: ['printenv grep', 'find a variable', 'is my api key set', 'which variables']
+      }
     ],
     placeholders: {
       NAME: 'The variable, for example HOME',
@@ -1294,12 +1619,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'export sets it for this shell and everything started from it, until the window closes. No spaces around the =. The ~/.bashrc variant makes it permanent for new shells.',
     command: 'export NAME="VALUE"',
     variants: [
-      { label: 'For one command only', command: 'NAME="VALUE" COMMAND' },
       {
-        label: 'For good: add the line to ~/.bashrc',
-        command: 'echo \'export NAME="VALUE"\' >> ~/.bashrc'
+        label: 'Set a variable for one command only',
+        command: 'NAME="VALUE" COMMAND',
+        keywords: ['inline', 'prefix assignment', 'temporary', 'one off', 'just this run']
       },
-      { label: 'Then load it into this shell', command: 'source ~/.bashrc' }
+      {
+        label: 'Set a variable permanently in ~/.bashrc',
+        command: 'echo \'export NAME="VALUE"\' >> ~/.bashrc',
+        keywords: ['bashrc', 'permanent', 'every new shell', 'survives a restart', 'startup file']
+      },
+      {
+        label: 'Reload ~/.bashrc in this shell',
+        command: 'source ~/.bashrc',
+        keywords: ['source', 'dot command', 'apply now', 'without reopening', 'refresh config']
+      }
     ],
     placeholders: {
       NAME: 'The variable name, for example ANTHROPIC_API_KEY',
@@ -1329,12 +1663,14 @@ export const BASH_HELP: readonly HelpEntry[] = [
     command: 'export PATH="$PATH:FOLDER"',
     variants: [
       {
-        label: 'For good: add the line to ~/.bashrc',
-        command: 'echo \'export PATH="$PATH:FOLDER"\' >> ~/.bashrc'
+        label: 'Add to PATH permanently in ~/.bashrc',
+        command: 'echo \'export PATH="$PATH:FOLDER"\' >> ~/.bashrc',
+        keywords: ['bashrc', 'every new shell', 'survives a restart', 'startup file', 'for good']
       },
       {
-        label: 'See what is on PATH now, one folder per line',
-        command: "echo \"$PATH\" | tr ':' '\\n'"
+        label: 'List the folders on PATH, one per line',
+        command: "echo \"$PATH\" | tr ':' '\\n'",
+        keywords: ['echo $path', 'tr', 'show the path', 'entries', 'is my folder there']
       }
     ],
     placeholders: { FOLDER: 'The folder that holds the program, for example $HOME/.local/bin' },
@@ -1360,8 +1696,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Prints the full path of what would run if you typed that name. No output means it is not on PATH. type also knows about aliases and built-ins.',
     command: 'which NAME',
     variants: [
-      { label: 'Aliases and shell built-ins too', command: 'type NAME' },
-      { label: 'Every match on PATH, in order', command: 'which -a NAME' }
+      {
+        label: 'Check aliases and shell built-ins too',
+        command: 'type NAME',
+        keywords: ['type', 'builtin', 'command -v', 'what actually runs', 'shell function']
+      },
+      {
+        label: 'List every match on PATH in order',
+        command: 'which -a NAME',
+        keywords: ['which -a', 'duplicates', 'shadowed', 'multiple versions', 'wrong version']
+      }
     ],
     placeholders: { NAME: 'The command, for example node or python3' },
     keywords: [
@@ -1385,9 +1729,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Names the distribution and its release, which is what an install guide means by "Ubuntu 24.04".',
     command: 'lsb_release -a',
     variants: [
-      { label: 'The same from a file every distribution has', command: 'cat /etc/os-release' },
-      { label: 'The kernel (it mentions WSL2 when you are in WSL)', command: 'uname -a' },
-      { label: 'Which user I am', command: 'whoami' }
+      {
+        label: 'Read the version from /etc/os-release',
+        command: 'cat /etc/os-release',
+        keywords: ['os-release', 'distro name', 'version id', 'any distribution', 'debian']
+      },
+      {
+        label: 'Show the kernel, and whether this is WSL',
+        command: 'uname -a',
+        keywords: ['uname -a', 'kernel', 'am i in wsl', 'wsl2', 'microsoft', 'architecture']
+      },
+      {
+        label: 'Show which user I am',
+        command: 'whoami',
+        keywords: ['whoami', 'current user', 'username', 'my account', 'am i root']
+      }
     ],
     keywords: [
       'linux version',
@@ -1410,7 +1766,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
     summary:
       'sudo runs ONE command as root and asks for YOUR Linux password (the one chosen when Ubuntu was set up). Nothing appears while you type it; that is normal.',
     command: 'sudo COMMAND',
-    variants: [{ label: 'Run the previous command again, with sudo', command: 'sudo !!' }],
+    variants: [
+      {
+        label: 'Run the previous command again, with sudo',
+        command: 'sudo !!',
+        keywords: [
+          'sudo !!',
+          'bang bang',
+          'repeat as root',
+          'rerun as root',
+          'forgot sudo',
+          'retry elevated',
+          'try again'
+        ]
+      }
+    ],
     placeholders: { COMMAND: 'The command that was refused' },
     keywords: [
       'sudo',
@@ -1461,8 +1831,9 @@ export const BASH_HELP: readonly HelpEntry[] = [
     command: 'sudo apt update && sudo apt upgrade',
     variants: [
       {
-        label: 'Afterwards: clear out packages nothing needs any more',
-        command: 'sudo apt autoremove'
+        label: 'Remove packages nothing needs any more',
+        command: 'sudo apt autoremove',
+        keywords: ['apt autoremove', 'orphaned', 'clean up', 'free disk space', 'old dependencies']
       }
     ],
     keywords: [
@@ -1480,15 +1851,20 @@ export const BASH_HELP: readonly HelpEntry[] = [
     id: 'sh-apt-search',
     shell: 'bash',
     category: 'packages',
-    task: 'Find a package, or check whether one is installed',
+    task: 'Find a package, or check what is installed',
     summary: 'Searches the names and descriptions of everything apt can install.',
     command: 'apt search TEXT',
     variants: [
       {
-        label: 'Is it installed, and which version',
-        command: 'apt list --installed 2>/dev/null | grep -i NAME'
+        label: 'Check whether a package is installed',
+        command: 'apt list --installed 2>/dev/null | grep -i NAME',
+        keywords: ['apt list', 'dpkg -l', 'which version', 'is it there', 'already have it']
       },
-      { label: 'What a package is, before installing it', command: 'apt show NAME' }
+      {
+        label: 'Read what a package is before installing',
+        command: 'apt show NAME',
+        keywords: ['apt show', 'description', 'dependencies', 'what does it do', 'package details']
+      }
     ],
     placeholders: { TEXT: 'A word describing what you need', NAME: 'The package name' },
     keywords: [
@@ -1511,7 +1887,13 @@ export const BASH_HELP: readonly HelpEntry[] = [
     summary:
       'Removes the program and keeps its settings, in case it comes back. It lists what will go and asks first.',
     command: 'sudo apt remove NAME',
-    variants: [{ label: 'Its system-wide settings too', command: 'sudo apt purge NAME' }],
+    variants: [
+      {
+        label: 'Remove a package and its settings',
+        command: 'sudo apt purge NAME',
+        keywords: ['apt purge', 'purge', 'delete the config', 'completely', 'system-wide settings']
+      }
+    ],
     placeholders: { NAME: 'The package to remove' },
     keywords: [
       'apt remove',
@@ -1536,7 +1918,11 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Wipes what is on screen; Ctrl+L does the same from the keyboard. Neither touches your files or history.',
     command: 'clear',
     variants: [
-      { label: 'The terminal is printing garbage: reset it completely', command: 'reset' }
+      {
+        label: 'Reset a terminal printing garbage',
+        command: 'reset',
+        keywords: ['stty sane', 'garbled', 'weird characters', 'broken display', 'binary output']
+      }
     ],
     keywords: [
       'clear',
@@ -1559,9 +1945,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Lists your commands, numbered, across sessions. Ctrl+R is the keyboard way: press it, type a few letters, and it finds the last command containing them (Ctrl+R again for older, Enter to run).',
     command: 'history',
     variants: [
-      { label: 'Only the ones mentioning a word', command: 'history | grep -i TEXT' },
-      { label: 'The last twenty', command: 'history | tail -n 20' },
-      { label: 'Run number N from the list again', command: '!N' }
+      {
+        label: 'Search the history for a word',
+        command: 'history | grep -i TEXT',
+        keywords: ['history grep', 'find an old command', 'what did i type', 'recall', 'that one']
+      },
+      {
+        label: 'Show the last twenty commands',
+        command: 'history | tail -n 20',
+        keywords: ['recent commands', 'last 20', 'what i just ran', 'tail', 'lately']
+      },
+      {
+        label: 'Run a numbered command again',
+        command: '!N',
+        keywords: ['!n', 'bang number', 'rerun', 'repeat', 'from the history list']
+      }
     ],
     placeholders: {
       TEXT: 'Part of the command you are looking for',
@@ -1589,9 +1987,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'man opens the full manual (arrows to scroll, / to search, Q to leave). --help is the short version, and works for nearly everything.',
     command: 'man COMMAND',
     variants: [
-      { label: 'The short version', command: 'COMMAND --help' },
-      { label: 'For what is built into bash (cd, export, alias)', command: 'help COMMAND' },
-      { label: 'Find commands by what they do', command: 'man -k TEXT' }
+      {
+        label: "Show a command's short help",
+        command: 'COMMAND --help',
+        keywords: ['--help', '-h', 'usage', 'options', 'flags', 'quick reference']
+      },
+      {
+        label: 'Help on a bash built-in (cd, export)',
+        command: 'help COMMAND',
+        keywords: ['builtin', 'no man page', 'shell builtin', 'alias', 'nothing appropriate']
+      },
+      {
+        label: 'Find commands by what they do',
+        command: 'man -k TEXT',
+        keywords: ['man -k', 'apropos', 'search the manuals', 'which tool', 'i forget the name']
+      }
     ],
     placeholders: {
       COMMAND: 'The command to read about, for example tar',
@@ -1619,7 +2029,13 @@ export const BASH_HELP: readonly HelpEntry[] = [
     summary:
       '~/.bashrc is read by every new bash window: aliases, exports and PATH additions go at its end. After editing, source it to apply the change to the window you are in.',
     command: 'nano ~/.bashrc',
-    variants: [{ label: 'Apply the changes to this shell now', command: 'source ~/.bashrc' }],
+    variants: [
+      {
+        label: 'Apply ~/.bashrc changes to this shell',
+        command: 'source ~/.bashrc',
+        keywords: ['source', 'dot command', 'reload', 'without reopening', 'take effect now']
+      }
+    ],
     keywords: [
       'bashrc',
       '.bashrc',
@@ -1643,12 +2059,21 @@ export const BASH_HELP: readonly HelpEntry[] = [
       'Lasts until this shell closes; the second variant saves it for every new one. No spaces around the =.',
     command: "alias SHORT='COMMAND'",
     variants: [
-      { label: 'List the aliases that exist', command: 'alias' },
       {
-        label: 'For good: add the line to ~/.bashrc',
-        command: 'echo "alias SHORT=\'COMMAND\'" >> ~/.bashrc'
+        label: 'List the aliases already set',
+        command: 'alias',
+        keywords: ['alias', 'show my shortcuts', 'what is defined', 'existing', 'll']
       },
-      { label: 'Remove one', command: 'unalias SHORT' }
+      {
+        label: 'Save an alias in ~/.bashrc',
+        command: 'echo "alias SHORT=\'COMMAND\'" >> ~/.bashrc',
+        keywords: ['bashrc', 'permanent', 'every new shell', 'survives a restart', 'for good']
+      },
+      {
+        label: 'Remove an alias',
+        command: 'unalias SHORT',
+        keywords: ['unalias', 'delete a shortcut', 'undo', 'get rid of it', 'stop overriding']
+      }
     ],
     placeholders: {
       SHORT: 'The name to type, for example gs',
@@ -1670,15 +2095,31 @@ export const BASH_HELP: readonly HelpEntry[] = [
     id: 'sh-redirect',
     shell: 'bash',
     category: 'shell',
-    task: 'Save the output of a command to a file',
+    task: "Save a command's output to a file",
     summary:
       'A single > writes a fresh file each time; a double >> adds to the end of what is there.',
     command: 'COMMAND > FILE',
     variants: [
-      { label: 'Add to the end of the file instead', command: 'COMMAND >> FILE' },
-      { label: 'Error messages too', command: 'COMMAND > FILE 2>&1' },
-      { label: 'Throw the error messages away', command: 'COMMAND 2>/dev/null' },
-      { label: 'See it on screen AND save it', command: 'COMMAND | tee FILE' }
+      {
+        label: 'Append to the end of a file',
+        command: 'COMMAND >> FILE',
+        keywords: ['>>', 'double arrow', 'add to it', 'do not overwrite', 'keep what is there']
+      },
+      {
+        label: 'Save error messages as well',
+        command: 'COMMAND > FILE 2>&1',
+        keywords: ['2>&1', 'stderr', 'capture errors', 'both streams', 'full log']
+      },
+      {
+        label: 'Throw error messages away',
+        command: 'COMMAND 2>/dev/null',
+        keywords: ['2>/dev/null', 'silence', 'hide stderr', 'suppress', 'quiet']
+      },
+      {
+        label: 'Show on screen and save to a file',
+        command: 'COMMAND | tee FILE',
+        keywords: ['tee', 'both at once', 'log and watch', 'split the output', 'copy to a file']
+      }
     ],
     placeholders: { COMMAND: 'Any command', FILE: 'The file to write, for example output.txt' },
     keywords: [
@@ -1708,12 +2149,14 @@ export const BASH_HELP: readonly HelpEntry[] = [
     command: 'COMMAND | less',
     variants: [
       {
-        label: 'Copy the output to the Windows clipboard (WSL and Git Bash)',
-        command: 'COMMAND | clip.exe'
+        label: 'Copy the output to the Windows clipboard',
+        command: 'COMMAND | clip.exe',
+        keywords: ['clip.exe', 'paste', 'pbcopy', 'xclip', 'ctrl v', 'send to windows']
       },
       {
-        label: 'Use each line of output as an argument to another command',
-        command: 'COMMAND | xargs OTHER'
+        label: 'Use each output line as an argument',
+        command: 'COMMAND | xargs OTHER',
+        keywords: ['xargs', 'for each', 'batch', 'apply to every one', 'feed into']
       }
     ],
     placeholders: {
@@ -1744,8 +2187,16 @@ export const BASH_HELP: readonly HelpEntry[] = [
       '&& runs the second command only if the first one worked, which is nearly always what you want.',
     command: 'FIRST && SECOND',
     variants: [
-      { label: 'Run the second whatever happens', command: 'FIRST ; SECOND' },
-      { label: 'Run the second only if the first FAILED', command: 'FIRST || SECOND' }
+      {
+        label: 'Run the second command whatever happens',
+        command: 'FIRST ; SECOND',
+        keywords: ['semicolon', 'always', 'regardless', 'separate them', 'ignore failure']
+      },
+      {
+        label: 'Run the second only if the first fails',
+        command: 'FIRST || SECOND',
+        keywords: ['||', 'or operator', 'on failure', 'fallback', 'else']
+      }
     ],
     placeholders: { FIRST: 'The first command', SECOND: 'The command to run after it' },
     keywords: [

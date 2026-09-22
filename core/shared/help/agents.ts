@@ -33,8 +33,16 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
       'Opens an interactive Claude Code session that can read and edit the folder you are in. Move to your project folder first: that folder is what it works on.',
     command: 'claude',
     variants: [
-      { label: 'Start with a first request already typed', command: 'claude "PROMPT"' },
-      { label: 'Start on a particular model (an alias such as sonnet or opus, or a full model name)', command: 'claude --model MODEL' }
+      {
+        label: 'Start Claude with a first request typed',
+        command: 'claude "PROMPT"',
+        keywords: ['initial prompt', 'prompt on launch', 'give it a task straight away', 'one liner', 'command line prompt']
+      },
+      {
+        label: 'Start Claude on a particular model',
+        command: 'claude --model MODEL',
+        keywords: ['--model', 'opus', 'sonnet', 'haiku', 'model alias', 'choose the model at launch']
+      }
     ],
     placeholders: { PROMPT: 'What you want done, in plain words', MODEL: 'A model alias or full model name' },
     keywords: [
@@ -58,7 +66,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     summary:
       'Reopens the most recent conversation that was held in THIS folder, with its whole history, as if you had never left.',
     command: 'claude -c',
-    variants: [{ label: 'The long spelling', command: 'claude --continue' }],
+    variants: [
+      {
+        label: 'Continue the last chat (long flag)',
+        command: 'claude --continue',
+        keywords: ['--continue', 'reopen the last chat', 'long form of -c', 'same as claude -c']
+      }
+    ],
     keywords: [
       'continue',
       'last conversation',
@@ -80,8 +94,16 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
       'Shows a list of past conversations for this folder to pick from, so you can go back further than the last one.',
     command: 'claude -r',
     variants: [
-      { label: 'Resume one conversation directly by its id', command: 'claude --resume SESSION_ID' },
-      { label: 'From inside a session (typed in Claude, not in the shell)', command: '/resume' }
+      {
+        label: 'Resume one conversation directly by its id',
+        command: 'claude --resume SESSION_ID',
+        keywords: ['--resume', 'session id', 'uuid', 'exact conversation', 'skip the picker', 'reopen a known chat']
+      },
+      {
+        label: 'Open the session picker inside Claude',
+        command: '/resume',
+        keywords: ['/resume', 'slash command', 'switch conversation mid-session', 'without restarting', 'list of chats']
+      }
     ],
     placeholders: { SESSION_ID: 'The session id of the conversation' },
     keywords: [
@@ -100,11 +122,17 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     id: 'claude-one-shot',
     shell: 'any',
     category: 'agents',
-    task: 'Ask Claude one question and get the answer printed',
+    task: 'Ask Claude one question, print the answer',
     summary:
       'Runs a single request without the interactive screen: the answer is printed and the command ends, which is what you want in a script or a pipe. It skips the trust question, so use it only in folders you trust.',
     command: 'claude -p "PROMPT"',
-    variants: [{ label: 'Get the result as JSON, for a script to read', command: 'claude -p "PROMPT" --output-format json' }],
+    variants: [
+      {
+        label: 'Print the answer as JSON',
+        command: 'claude -p "PROMPT" --output-format json',
+        keywords: ['--output-format', 'machine readable', 'parse the output', 'for a script', 'jq', 'structured output']
+      }
+    ],
     placeholders: { PROMPT: 'The question or instruction' },
     keywords: [
       'one shot',
@@ -128,8 +156,16 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
       'Pipes text into a one-shot request: Claude gets the file as input and your prompt as the instruction. cat works in PowerShell and bash; cmd calls it type.',
     command: 'cat FILE | claude -p "PROMPT"',
     variants: [
-      { label: 'In cmd', command: 'type FILE | claude -p "PROMPT"' },
-      { label: 'Explain the output of another command (here, the last 20 commits)', command: 'git log --oneline -n 20 | claude -p "Summarise these commits"' }
+      {
+        label: 'Pipe a file to Claude in cmd',
+        command: 'type FILE | claude -p "PROMPT"',
+        keywords: ['type command', 'cmd.exe', 'command prompt', 'no cat on windows', 'dos']
+      },
+      {
+        label: 'Summarise recent commits with Claude',
+        command: 'git log --oneline -n 20 | claude -p "Summarise these commits"',
+        keywords: ['git log', 'explain the changes', 'release notes', 'changelog', 'what happened this week', 'pipe command output']
+      }
     ],
     placeholders: { FILE: 'The file to send, such as error.log', PROMPT: 'What to do with it, such as "Explain this error"' },
     keywords: [
@@ -194,8 +230,16 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
       'Typed inside Claude Code. Replaces the conversation so far with a summary of it, freeing room to carry on with the same task when the context is nearly full.',
     command: '/compact',
     variants: [
-      { label: 'Say what the summary must keep', command: '/compact KEEP_THIS' },
-      { label: 'See how full the context is, and with what', command: '/context' }
+      {
+        label: 'Compact and keep certain details',
+        command: '/compact KEEP_THIS',
+        keywords: ['guided compact', 'focus the summary', 'do not forget the failing tests', 'instructions for the summary']
+      },
+      {
+        label: 'See how full the context is',
+        command: '/context',
+        keywords: ['/context', 'token breakdown', 'percentage used', 'how much room is left', 'context window']
+      }
     ],
     placeholders: { KEEP_THIS: 'A note such as "keep the list of failing tests"' },
     keywords: [
@@ -217,7 +261,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     task: 'Change which model Claude uses',
     summary: 'Typed inside Claude Code. Opens a picker of the models your account can use; the choice applies from the next message.',
     command: '/model',
-    variants: [{ label: 'Choose when starting instead (typed in the shell)', command: 'claude --model MODEL' }],
+    variants: [
+      {
+        label: 'Pick the model when starting Claude',
+        command: 'claude --model MODEL',
+        keywords: ['--model', 'from the shell', 'opus', 'sonnet', 'haiku', 'set it at launch']
+      }
+    ],
     placeholders: { MODEL: 'An alias such as sonnet or opus, or a full model name' },
     keywords: [
       'model',
@@ -280,7 +330,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     summary:
       'Typed inside Claude Code. Reviews the current changes for bugs and reports what it finds. This is the name in Claude Code 2.1; older versions call it /review, so check /help if it is not recognised.',
     command: '/code-review',
-    variants: [{ label: 'Look only for security problems in the pending changes', command: '/security-review' }],
+    variants: [
+      {
+        label: 'Check the changes for security problems',
+        command: '/security-review',
+        keywords: ['/security-review', 'vulnerabilities', 'secrets in the code', 'sql injection', 'audit', 'exploit']
+      }
+    ],
     keywords: [
       'review',
       'code review',
@@ -301,7 +357,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     summary:
       'Typed inside Claude Code. Shows the cost of this session and how much of your plan you have used. /cost is an older name for the same command.',
     command: '/usage',
-    variants: [{ label: 'The older name, still accepted', command: '/cost' }],
+    variants: [
+      {
+        label: 'Show cost and usage (older name for /usage)',
+        command: '/cost',
+        keywords: ['/cost', 'spend', 'how much have i spent', 'dollars', 'session total']
+      }
+    ],
     keywords: [
       'cost',
       'usage',
@@ -323,7 +385,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     summary:
       'Typed inside Claude Code. Shows and edits the allow and deny rules: which tools and commands run without a prompt (say, npm test) and which are never allowed.',
     command: '/permissions',
-    variants: [{ label: 'Cycle the permission mode for this session (a key, pressed inside Claude)', command: 'Shift+Tab' }],
+    variants: [
+      {
+        label: 'Cycle permission modes with a key',
+        command: 'Shift+Tab',
+        keywords: ['shift tab', 'accept edits', 'auto accept', 'plan mode', 'bypass', 'toggle without a slash command']
+      }
+    ],
     keywords: [
       'permissions',
       'stop asking me',
@@ -345,7 +413,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     summary:
       'Starts Claude in plan mode: it reads and investigates, then proposes a plan, and edits nothing until you approve it. Inside a session, Shift+Tab cycles through the modes, plan among them.',
     command: 'claude --permission-mode plan',
-    variants: [{ label: 'Switch mode in a running session (a key, pressed inside Claude)', command: 'Shift+Tab' }],
+    variants: [
+      {
+        label: 'Cycle into plan mode with a key',
+        command: 'Shift+Tab',
+        keywords: ['shift tab', 'switch to plan mode', 'change permission mode', 'mid-session', 'stop it editing']
+      }
+    ],
     keywords: [
       'plan mode',
       'plan first',
@@ -407,7 +481,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     summary:
       'Typed inside Claude Code. Shows the MCP servers, the plug-ins that give Claude extra tools such as a browser or a database, and whether each one connected.',
     command: '/mcp',
-    variants: [{ label: 'The same list from the shell, without starting a session', command: 'claude mcp list' }],
+    variants: [
+      {
+        label: 'List MCP servers from the shell',
+        command: 'claude mcp list',
+        keywords: ['claude mcp list', 'without starting a session', 'check connections', 'server failed', 'which tools are wired up']
+      }
+    ],
     keywords: [
       'mcp',
       'model context protocol',
@@ -488,7 +568,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     summary:
       'A key, pressed inside Claude Code. Copy an image (Win+Shift+S takes a screenshot to the clipboard), then paste: this terminal hands the keystroke to Claude, which reads the image off the clipboard itself and shows an [Image] marker. Dragging an image file onto the terminal types its path instead, which works as well.',
     command: 'Ctrl+V',
-    variants: [{ label: "If Ctrl+V does nothing: Claude Code's own default key on Windows", command: 'Alt+V' }],
+    variants: [
+      {
+        label: "Paste an image with Claude's own key",
+        command: 'Alt+V',
+        keywords: ['alt v', 'ctrl v does nothing', 'windows default', 'image paste not working', 'fallback shortcut']
+      }
+    ],
     keywords: [
       'paste image',
       'screenshot',
@@ -510,8 +596,16 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
       'A key, pressed inside Claude Code. Enter sends the message; Shift+Enter starts a new line in it instead. Ending a line with a backslash and then pressing Enter does the same in any terminal.',
     command: 'Shift+Enter',
     variants: [
-      { label: 'The same, where Shift+Enter is not passed through', command: 'Ctrl+J' },
-      { label: 'Works everywhere: type a backslash at the end of the line, then press Enter', command: '\\' }
+      {
+        label: 'New line when Shift+Enter is ignored',
+        command: 'Ctrl+J',
+        keywords: ['ctrl j', 'linefeed', 'terminal swallows the key', 'shift enter does nothing', 'multiline']
+      },
+      {
+        label: 'New line with a trailing backslash',
+        command: '\\',
+        keywords: ['line continuation', 'escape the newline', 'works in any terminal', 'multiline prompt', 'long message']
+      }
     ],
     keywords: [
       'new line',
@@ -554,9 +648,21 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
       'Typed inside Claude Code. Ends the session and returns you to the shell. The conversation is saved: claude -c brings it back.',
     command: '/exit',
     variants: [
-      { label: 'The same, under another name', command: '/quit' },
-      { label: 'By key: press it twice', command: 'Ctrl+C' },
-      { label: 'By key, on an empty prompt', command: 'Ctrl+D' }
+      {
+        label: 'Quit Claude Code (another name for /exit)',
+        command: '/quit',
+        keywords: ['/quit', 'end the session', 'leave claude code', 'shut it down']
+      },
+      {
+        label: 'Quit by pressing Ctrl+C twice',
+        command: 'Ctrl+C',
+        keywords: ['ctrl c', 'keyboard', 'force quit', 'press twice', 'break']
+      },
+      {
+        label: 'Quit with Ctrl+D at an empty prompt',
+        command: 'Ctrl+D',
+        keywords: ['ctrl d', 'eof', 'end of file', 'keyboard', 'blank line']
+      }
     ],
     keywords: [
       'exit',
@@ -578,7 +684,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     summary:
       'Typed inside Claude Code. Opens the browser sign-in; use it after an "invalid API key" or "please log in" message, or to change to another account.',
     command: '/login',
-    variants: [{ label: 'Sign out', command: '/logout' }],
+    variants: [
+      {
+        label: 'Sign out of Claude Code',
+        command: '/logout',
+        keywords: ['/logout', 'log out', 'clear credentials', 'switch account', 'remove api key']
+      }
+    ],
     keywords: [
       'login',
       'log in',
@@ -595,12 +707,20 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     id: 'claude-update',
     shell: 'any',
     category: 'agents',
-    task: 'Update Claude Code, or check it is healthy',
+    task: 'Update Claude Code to the latest version',
     summary: 'Checks for a newer Claude Code and installs it. Run it in the shell, with no session open.',
     command: 'claude update',
     variants: [
-      { label: 'Which version is installed', command: 'claude --version' },
-      { label: 'Diagnose a broken installation', command: 'claude doctor' }
+      {
+        label: 'Which Claude Code version is installed',
+        command: 'claude --version',
+        keywords: ['claude --version', 'version number', 'what build am i on', 'release', 'check for updates']
+      },
+      {
+        label: 'Diagnose a broken installation',
+        command: 'claude doctor',
+        keywords: ['claude doctor', 'not working', 'troubleshoot', 'health check', 'fix the install', 'errors on startup']
+      }
     ],
     keywords: [
       'update claude',
@@ -625,9 +745,21 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
       "Opens an interactive session of OpenAI's Codex CLI on the folder you are in. The first time in a folder it asks whether you trust it; answer before typing anything else.",
     command: 'codex',
     variants: [
-      { label: 'Start with a first request already typed', command: 'codex "PROMPT"' },
-      { label: 'Start on a particular model', command: 'codex -m MODEL' },
-      { label: 'Attach an image to the first request', command: 'codex -i IMAGE_FILE "PROMPT"' }
+      {
+        label: 'Start Codex with a first request typed',
+        command: 'codex "PROMPT"',
+        keywords: ['initial prompt', 'give it a task straight away', 'one liner', 'command line prompt']
+      },
+      {
+        label: 'Start Codex on a particular model',
+        command: 'codex -m MODEL',
+        keywords: ['-m flag', 'gpt-5', 'choose the model', 'model name', 'set it at launch']
+      },
+      {
+        label: 'Attach an image to the first request',
+        command: 'codex -i IMAGE_FILE "PROMPT"',
+        keywords: ['-i flag', 'screenshot', 'picture', 'vision', 'show it a mockup', 'png']
+      }
     ],
     placeholders: {
       PROMPT: 'What you want done, in plain words',
@@ -654,8 +786,16 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     summary: 'Reopens the most recent Codex session for this folder without showing the picker.',
     command: 'codex resume --last',
     variants: [
-      { label: 'Choose from a list of past sessions instead', command: 'codex resume' },
-      { label: 'List sessions from every folder, not only this one', command: 'codex resume --all' }
+      {
+        label: 'Pick a past Codex session from a list',
+        command: 'codex resume',
+        keywords: ['session picker', 'history', 'older conversation', 'browse chats', 'go back further']
+      },
+      {
+        label: 'List sessions from every folder',
+        command: 'codex resume --all',
+        keywords: ['--all', 'other projects', 'global history', 'wrong directory', 'find a chat elsewhere']
+      }
     ],
     keywords: [
       'resume',
@@ -732,7 +872,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     summary:
       'Typed inside Codex. Begins a new chat without leaving; the previous one stays in the history and can be resumed.',
     command: '/new',
-    variants: [{ label: 'Keep the same chat but summarise it, to free up context', command: '/compact' }],
+    variants: [
+      {
+        label: 'Summarise the chat to free up context',
+        command: '/compact',
+        keywords: ['/compact', 'context full', 'shrink the conversation', 'token limit', 'too long', 'running out of room']
+      }
+    ],
     keywords: [
       'new chat',
       'clear',
@@ -752,7 +898,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     task: 'See what Codex has changed',
     summary: 'Typed inside Codex. Shows the git diff of the folder, new untracked files included, so you can read its work before keeping it.',
     command: '/diff',
-    variants: [{ label: 'Have Codex review the changes and look for problems', command: '/review' }],
+    variants: [
+      {
+        label: 'Have Codex review its own changes',
+        command: '/review',
+        keywords: ['/review', 'code review', 'find bugs', 'second opinion', 'before i commit', 'check the work']
+      }
+    ],
     keywords: [
       'diff',
       'what did codex change',
@@ -770,7 +922,13 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     task: 'See the Codex session settings and token usage',
     summary: 'Typed inside Codex. Shows the model, the folder, the permission level and how many tokens the session has used.',
     command: '/status',
-    variants: [{ label: 'List the MCP tools that are configured', command: '/mcp' }],
+    variants: [
+      {
+        label: 'List the MCP tools Codex has',
+        command: '/mcp',
+        keywords: ['/mcp', 'model context protocol', 'connected servers', 'integrations', 'plugins', 'extra tools']
+      }
+    ],
     keywords: ['status', 'token usage', 'usage', 'which model', 'session info', 'limits', 'context left', 'mcp', 'tools']
   },
   {
@@ -795,13 +953,21 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     id: 'codex-interrupt-exit',
     shell: 'any',
     category: 'agents',
-    task: 'Stop Codex, or leave it',
+    task: 'Leave Codex and return to the shell',
     summary:
       'Esc (a key, pressed inside Codex) interrupts what it is doing and keeps the conversation. /quit ends the session and returns you to the shell; codex resume --last brings it back.',
     command: '/quit',
     variants: [
-      { label: 'Interrupt the current work but stay in the session (a key)', command: 'Esc' },
-      { label: 'The same as /quit, under another name', command: '/exit' }
+      {
+        label: 'Interrupt Codex but stay in the session',
+        command: 'Esc',
+        keywords: ['esc', 'escape key', 'stop generating', 'cancel', 'going the wrong way', 'abort']
+      },
+      {
+        label: 'Leave Codex (another spelling of /quit)',
+        command: '/exit',
+        keywords: ['/exit', 'end the codex session', 'close the session', 'back to the shell']
+      }
     ],
     keywords: [
       'exit',
@@ -820,14 +986,30 @@ export const AGENTS_HELP: readonly HelpEntry[] = [
     id: 'codex-login',
     shell: 'any',
     category: 'agents',
-    task: 'Sign in to Codex, update it, or check it is healthy',
+    task: 'Sign in to Codex, or switch account',
     summary: 'Signs in with your ChatGPT account or an API key. Run it in the shell, with no session open.',
     command: 'codex login',
     variants: [
-      { label: 'Sign out', command: 'codex logout' },
-      { label: 'Update Codex to the latest version', command: 'codex update' },
-      { label: 'Diagnose the installation, configuration and sign-in', command: 'codex doctor' },
-      { label: 'Which version is installed', command: 'codex --version' }
+      {
+        label: 'Sign out of Codex',
+        command: 'codex logout',
+        keywords: ['logout', 'log out', 'clear credentials', 'switch account', 'remove api key']
+      },
+      {
+        label: 'Update Codex to the latest version',
+        command: 'codex update',
+        keywords: ['upgrade', 'out of date', 'new release', 'npm install -g', 'newer build']
+      },
+      {
+        label: 'Diagnose the installation and sign-in',
+        command: 'codex doctor',
+        keywords: ['doctor', 'not working', 'troubleshoot', 'health check', 'errors on startup', 'broken']
+      },
+      {
+        label: 'Which Codex version is installed',
+        command: 'codex --version',
+        keywords: ['--version', 'version number', 'what build am i on', 'release']
+      }
     ],
     keywords: [
       'login',

@@ -855,10 +855,7 @@ const scenarios = {
           mono: getComputedStyle(code).fontFamily,
           termFont: getComputedStyle(document.querySelector('.xterm-rows') ?? document.body).fontFamily,
           listScrolls: getComputedStyle(document.querySelector('[data-help-list]')).overflowY,
-          ruleCut: (() => {
-            const r = document.querySelector('[data-help-rule]')
-            return r.scrollWidth - r.clientWidth
-          })()
+          rule: document.querySelectorAll('[data-help-rule]').length,
         }
       })
       ok(look.w >= 560 && look.w <= 780 && look.h >= 380, `the popup is a popup-sized box (${look.w}x${look.h})`)
@@ -875,8 +872,54 @@ const scenarios = {
       ok(look.subText === 0, `no sub text and no boxed commands: a row is a name and a command (${look.subText} found)`)
       ok(look.mono.split(',')[0].trim() === look.termFont.split(',')[0].trim(), `the command wears the terminal's face (${look.mono.split(',')[0]})`)
       ok(look.listScrolls === 'auto', 'the list scrolls, the popup does not')
-      // Seen cut short with an ellipsis in the first screenshot, so it is measured.
-      ok(look.ruleCut <= 0, `the line saying nothing is run for you is whole (${look.ruleCut}px cut off)`)
+      // The sentence under the list is GONE (owner, 2026-09-20: "remove this
+      // line"). What it said is still true and still proved, by the check
+      // below that the terminal is untouched by everything this scenario does.
+      ok(look.rule === 0, 'no sentence under the list: the keys are all the footer says')
+
+      /* ----- the width is the user's (owner, 2026-09-20) ----- */
+      // "you also need to be able to adjust the width of this since some text
+      // can be seen": a row is one line and truncates, so the width is how a
+      // long command is read in place. DRAGGED, and the drag is measured
+      // rather than the stylesheet read: the popup is centred, so a pixel of
+      // pointer has to be two of width or the edge runs away from the hand.
+      const panelBox = () => page.locator('[data-help-panel]').evaluate((el) => el.getBoundingClientRect().width)
+      const wide0 = await panelBox()
+      const gripBox = await page.locator('[data-help-grip="right"]').evaluate((el) => {
+        const b = el.getBoundingClientRect()
+        return { x: b.x + b.width / 2, y: b.y + b.height / 2 }
+      })
+      await page.mouse.move(gripBox.x, gripBox.y)
+      await page.mouse.down()
+      await page.mouse.move(gripBox.x + 100, gripBox.y, { steps: 8 })
+      await page.mouse.up()
+      const wide1 = await panelBox()
+      ok(Math.abs(wide1 - (wide0 + 200)) <= 6, `dragging the right edge 100px widens it by 200 (${wide0} -> ${wide1})`)
+      const cmdWidth = () => page.locator('[data-help-row] [data-help-command]').first().evaluate((el) => el.getBoundingClientRect().width)
+      ok((await cmdWidth()) > 0, 'and the command column grew with it')
+      // It is REMEMBERED: the popup closes, opens again, and is still that wide.
+      await page.keyboard.press('Escape')
+      await closed()
+      await page.keyboard.press('F1')
+      await opened()
+      ok(Math.abs((await panelBox()) - wide1) <= 2, `and it comes back that wide (${await panelBox()})`)
+      // The keyboard can do it too, on the grip itself.
+      await page.locator('[data-help-grip="right"]').focus()
+      await page.keyboard.press('ArrowLeft')
+      ok(await until(async () => Math.abs((await panelBox()) - (wide1 - 20)) <= 2, 3000, 50), `Left on the grip narrows it a step (${await panelBox()})`)
+      // Back to where it started, so the rest of the scenario measures what it
+      // always did and the next scenario inherits nothing.
+      await page.evaluate(() => localStorage.removeItem('prism.help.width'))
+      await page.keyboard.press('Escape')
+      await closed()
+      await page.keyboard.press('F1')
+      await opened()
+      ok(Math.abs((await panelBox()) - wide0) <= 2, `and clearing the setting is the default width again (${await panelBox()})`)
+      // Put the question back: the popup was closed and reopened above, and
+      // everything below measures the answers to this one.
+      await page.locator('[data-help-search]').focus()
+      await page.keyboard.type('how do I find big files')
+      await until(async () => (await firstId()) === 'ps-biggest-files', 4000, 50)
 
       /* ----- copy ----- */
       const mainRow = page.locator('[data-help-id="ps-biggest-files"][data-help-variant="0"]')

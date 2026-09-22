@@ -369,6 +369,12 @@ const W_KEYWORDS = 6
 const W_SUMMARY = 3
 const W_COMMAND = 2
 const W_REST = 1
+// A VARIANT IS A ROW of its own in the panel (2026-09-20), so its name and its
+// hidden words weigh a step under the entry's: enough that a row is found by
+// what IT is called, not so much that a variant outranks an entry whose whole
+// task is the question.
+const W_VARIANT_NAME = 7
+const W_VARIANT_KEY = 4.5
 /** A second field holding the same word is a little more evidence, never
  *  enough to lift a lower field over a higher one. */
 const ALSO = 0.25
@@ -437,9 +443,15 @@ function buildIndex(entries: readonly HelpEntry[]): Index {
     for (const k of keywords) read(k, W_KEYWORDS, true)
     read(entry.summary, W_SUMMARY, false)
     read(entry.command, W_COMMAND, false)
+    // A VARIANT IS A ROW (2026-09-20), so its label is a name rather than a
+    // caption and its own keywords are hidden words for that row. Both are
+    // read a step below the entry's own, which keeps an entry whose TASK is
+    // the answer ahead of one where only a variant matches - but well above
+    // the old W_REST, where a row could not be found by its own name.
     const vs = Array.isArray(entry.variants) ? entry.variants : []
     for (const v of vs) {
-      read(v?.label, W_REST, false)
+      read(v?.label, W_VARIANT_NAME, true)
+      for (const k of Array.isArray(v?.keywords) ? v.keywords : []) read(k, W_VARIANT_KEY, true)
       read(v?.command, W_REST, false)
     }
     if (entry.placeholders && typeof entry.placeholders === 'object') {
