@@ -383,6 +383,71 @@ const scenarios = {
   },
 
   /** Tabs come back in their folders; a folder that has gone is dropped. */
+  /**
+   * ONE CTRL+V IS ONE PASTE (owner, 2026-09-22: "found a bug in the terminals.
+   * when I copy text and paste it pastes twice", with a screenshot of every
+   * word arriving doubled). What is counted is what reached the SHELL, read off
+   * the terminal, for a plain Ctrl+V, for the Ctrl+Shift+V text-only escape
+   * hatch, and for the right-click Paste. The clipboard is the owner's: it is
+   * saved first and put back at the end.
+   */
+  async paste(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    await until(async () => (await tabLabels(page)).length === 1)
+    const held = await app.evaluate(({ clipboard }) => ({
+      text: clipboard.readText(),
+      html: clipboard.readHTML(),
+      rtf: clipboard.readRTF(),
+      image: clipboard.readImage().isEmpty() ? null : clipboard.readImage().toDataURL(),
+      formats: clipboard.availableFormats()
+    }))
+    try {
+      await page.waitForFunction(() => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()), null, { timeout: 45000 })
+      const count = async (word) => ((await termText(page)).match(new RegExp(word, 'g')) ?? []).length
+      const clear = async () => {
+        // Esc clears PSReadLine's line, so each paste is counted on its own.
+        await page.keyboard.press('Escape')
+        await sleep(300)
+      }
+      await page.locator('.xterm').first().click()
+
+      await app.evaluate(({ clipboard }) => clipboard.writeText('PASTEONCEA'))
+      await page.keyboard.press('Control+v')
+      await sleep(900)
+      ok((await count('PASTEONCEA')) === 1, `Ctrl+V pastes the text ONCE (${await count('PASTEONCEA')} copies arrived)`)
+      await clear()
+
+      await app.evaluate(({ clipboard }) => clipboard.writeText('PASTEONCEB'))
+      await page.keyboard.press('Control+Shift+v')
+      await sleep(900)
+      ok((await count('PASTEONCEB')) === 1, `Ctrl+Shift+V pastes the text ONCE (${await count('PASTEONCEB')} copies arrived)`)
+      await clear()
+
+      // The right-click menu's Paste reaches the same one paste, by another door.
+      await app.evaluate(({ clipboard }) => clipboard.writeText('PASTEONCEC'))
+      await page.locator('.xterm').first().click({ button: 'right' })
+      await page.locator('[role="menuitem"]:has-text("Paste")').first().click()
+      await sleep(900)
+      ok((await count('PASTEONCEC')) === 1, `the right-click Paste pastes ONCE (${await count('PASTEONCEC')} copies arrived)`)
+      await clear()
+    } finally {
+      await app
+        .evaluate(({ clipboard, nativeImage }, was) => {
+          const data = {}
+          if (was.text) data.text = was.text
+          if (was.html) data.html = was.html
+          if (was.rtf) data.rtf = was.rtf
+          if (was.image) data.image = nativeImage.createFromDataURL(was.image)
+          if (Object.keys(data).length) clipboard.write(data)
+          else clipboard.clear()
+        }, held)
+        .catch(() => {})
+      if (held.formats.some((f) => /FileName|uri-list/i.test(f))) console.log('  (the clipboard held copied FILES, which cannot be put back; it is empty now)')
+      await app.close().catch(() => {})
+    }
+  },
+
   async restore(ok) {
     const w = world()
     let { app, page } = await launch(w, { args: [w.alpha, w.beta] })
