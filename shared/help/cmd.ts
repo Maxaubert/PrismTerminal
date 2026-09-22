@@ -32,7 +32,11 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'cd on its own prints the current folder rather than changing it, which is the same thing the prompt shows before the >.',
     command: 'cd',
     variants: [
-      { label: 'The same, as a variable you can use in another command', command: 'echo %cd%' }
+      {
+        label: 'Print the current folder path',
+        command: 'echo %cd%',
+        keywords: ['%cd%', 'cd variable', 'echo path', 'pwd', 'working directory variable']
+      }
     ],
     keywords: [
       'where am i',
@@ -54,9 +58,21 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'Moves the prompt into a folder. Add /d whenever the folder may be on another drive: without it cd will not leave the drive you are on, and appears to do nothing.',
     command: 'cd /d FOLDER',
     variants: [
-      { label: 'A folder inside this one', command: 'cd NAME' },
-      { label: 'Your own user folder', command: 'cd /d "%USERPROFILE%"' },
-      { label: 'Switch drive only', command: 'D:' }
+      {
+        label: 'Go into a subfolder',
+        command: 'cd NAME',
+        keywords: ['cd name', 'child folder', 'relative path', 'enter directory', 'open subdirectory']
+      },
+      {
+        label: 'Go to your user profile folder',
+        command: 'cd /d "%USERPROFILE%"',
+        keywords: ['home directory', 'cd ~', 'userprofile', 'c:\\users', 'my documents', 'desktop folder']
+      },
+      {
+        label: 'Switch to another drive letter',
+        command: 'D:',
+        keywords: ['change drive', 'd drive', 'e drive', 'usb drive', 'cd will not change drive']
+      }
     ],
     placeholders: {
       FOLDER: 'The full path, in quotes if it has spaces: "D:\\My Projects\\site"',
@@ -83,8 +99,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
     summary: 'Two dots mean "the folder that holds this one", so this steps out one level.',
     command: 'cd ..',
     variants: [
-      { label: 'Up two levels', command: 'cd ..\\..' },
-      { label: 'All the way to the top of the drive', command: 'cd \\' }
+      {
+        label: 'Go up two folder levels',
+        command: 'cd ..\\..',
+        keywords: ['grandparent folder', 'back twice', 'two directories up', 'cd dot dot']
+      },
+      {
+        label: 'Go to the root of the drive',
+        command: 'cd \\',
+        keywords: ['top of drive', 'c:\\', 'drive root', 'cd backslash', 'all the way back']
+      }
     ],
     keywords: [
       'go back',
@@ -106,7 +130,13 @@ export const CMD_HELP: readonly HelpEntry[] = [
     summary:
       'Creates a folder, and any folders missing on the way to it, in one go. md is the same command.',
     command: 'mkdir NAME',
-    variants: [{ label: 'Several levels at once', command: 'mkdir PARENT\\CHILD\\GRANDCHILD' }],
+    variants: [
+      {
+        label: 'Make nested folders in one go',
+        command: 'mkdir PARENT\\CHILD\\GRANDCHILD',
+        keywords: ['mkdir -p', 'nested directories', 'create whole path', 'subfolders at once', 'deep folder']
+      }
+    ],
     placeholders: {
       NAME: 'The new folder, in quotes if it has spaces',
       PARENT: 'The outer folder',
@@ -132,7 +162,13 @@ export const CMD_HELP: readonly HelpEntry[] = [
     summary:
       '/s takes the contents too and /q skips the "are you sure". Without /s, rmdir only removes a folder that is already empty and otherwise says "The directory is not empty".',
     command: 'rmdir /s /q FOLDER',
-    variants: [{ label: 'Only if it is empty (the safe form)', command: 'rmdir FOLDER' }],
+    variants: [
+      {
+        label: 'Remove a folder only when empty',
+        command: 'rmdir FOLDER',
+        keywords: ['rmdir', 'rd', 'safe delete', 'empty directory', 'refuses if not empty']
+      }
+    ],
     placeholders: { FOLDER: 'The folder to remove' },
     keywords: [
       'rmdir',
@@ -156,8 +192,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
     summary: 'Draws the folders under this one as a tree. /f lists the files as well.',
     command: 'tree /f',
     variants: [
-      { label: 'Folders only', command: 'tree' },
-      { label: 'Save it as plain text you can paste anywhere', command: 'tree /f /a > tree.txt' }
+      {
+        label: 'Show folders without the files',
+        command: 'tree',
+        keywords: ['directory tree', 'structure only', 'skip files', 'folders map']
+      },
+      {
+        label: 'Save the tree to a text file',
+        command: 'tree /f /a > tree.txt',
+        keywords: ['tree.txt', 'export structure', 'plain ascii', 'paste layout', 'share project structure']
+      }
     ],
     danger:
       'The variant that saves to tree.txt replaces a file of that name if one is already there.',
@@ -200,8 +244,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'Walks this folder and everything under it and prints each file over a size you choose, in bytes, with its full path. 104857600 is 100 MB. It reads every file entry, so a big drive takes a while.',
     command: 'forfiles /s /c "cmd /c if @isdir==FALSE if @fsize GEQ BYTES echo @fsize @path"',
     variants: [
-      { label: 'Just this folder, biggest first', command: 'dir /o-s /a-d' },
-      { label: 'Everything over 1 GB', command: 'forfiles /s /c "cmd /c if @isdir==FALSE if @fsize GEQ 1073741824 echo @fsize @path"' }
+      {
+        label: 'Sort by size, files only, biggest first',
+        command: 'dir /o-s /a-d',
+        keywords: ['dir /o-s', 'largest first', 'order by size', 'ls -s', 'no subfolders']
+      },
+      {
+        label: 'Find every file over 1 GB',
+        command: 'forfiles /s /c "cmd /c if @isdir==FALSE if @fsize GEQ 1073741824 echo @fsize @path"',
+        keywords: ['huge files', 'gigabyte', '1073741824', 'space hogs', 'forfiles']
+      }
     ],
     placeholders: { BYTES: 'The smallest size to report, in bytes: 104857600 is 100 MB' },
     keywords: [
@@ -226,9 +278,27 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'Windows 10 and 11 ship tar, which reads and writes zip files as well as tar ones. Extracting puts the contents in the current folder and writes over files of the same name.',
     command: 'tar -xf ARCHIVE.zip',
     variants: [
-      { label: 'Into another folder, which must already exist', command: 'tar -xf ARCHIVE.zip -C FOLDER' },
-      { label: 'See what is inside without extracting', command: 'tar -tf ARCHIVE.zip' },
-      { label: 'Make a zip of a folder', command: 'tar -a -c -f ARCHIVE.zip FOLDER' }
+      {
+        label: 'Extract into another folder that must exist',
+        command: 'tar -xf ARCHIVE.zip -C FOLDER',
+        keywords: [
+          'unzip to path',
+          'tar -c flag',
+          'destination directory',
+          'extract elsewhere',
+          'could not chdir'
+        ]
+      },
+      {
+        label: 'See what is inside without extracting',
+        command: 'tar -tf ARCHIVE.zip',
+        keywords: ['list zip contents', 'peek in archive', 'tar -tf', 'preview files', 'unzip -l']
+      },
+      {
+        label: 'Make a zip of a folder',
+        command: 'tar -a -c -f ARCHIVE.zip FOLDER',
+        keywords: ['create archive', 'compress', 'compress-archive', 'pack files', 'zip up']
+      }
     ],
     placeholders: {
       ARCHIVE: 'The zip file name without its .zip ending',
@@ -257,8 +327,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'The dot means "here", so this opens an Explorer window on the folder the prompt is in.',
     command: 'start .',
     variants: [
-      { label: 'The same, by another name', command: 'explorer .' },
-      { label: 'Some other folder', command: 'start "" "FOLDER"' }
+      {
+        label: 'Open this folder with the explorer command',
+        command: 'explorer .',
+        keywords: ['explorer .', 'ii .', 'invoke-item', 'file browser', 'show current directory']
+      },
+      {
+        label: 'Open another folder in File Explorer',
+        command: 'start "" "FOLDER"',
+        keywords: ['browse a path', 'open directory window', 'show folder', 'gui', 'reveal in explorer']
+      }
     ],
     placeholders: { FOLDER: 'The folder to open' },
     keywords: [
@@ -284,10 +362,26 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'Shows what is in the current folder, with sizes and dates. Give it a folder to list that one instead.',
     command: 'dir',
     variants: [
-      { label: 'Names only, one per line', command: 'dir /b' },
-      { label: 'Newest first', command: 'dir /o-d' },
-      { label: 'Biggest first', command: 'dir /o-s' },
-      { label: 'Only one type of file', command: 'dir *.EXT' }
+      {
+        label: 'List file names only, one per line',
+        command: 'dir /b',
+        keywords: ['dir /b', 'bare listing', 'ls -1', 'no details', 'just the names', 'plain list']
+      },
+      {
+        label: 'Sort files by date, newest first',
+        command: 'dir /o-d',
+        keywords: ['dir /o-d', 'recently modified', 'latest files', 'ls -t', 'most recent', 'last changed']
+      },
+      {
+        label: 'Sort files by size, biggest first',
+        command: 'dir /o-s',
+        keywords: ['dir /o-s', 'largest first', 'ls -s', 'order by size', 'show file sizes']
+      },
+      {
+        label: 'List only one type of file',
+        command: 'dir *.EXT',
+        keywords: ['dir *.txt', 'by extension', 'wildcard listing', 'filter by type', '*.log']
+      }
     ],
     placeholders: { EXT: 'The file extension, for example txt' },
     keywords: [
@@ -311,13 +405,21 @@ export const CMD_HELP: readonly HelpEntry[] = [
     id: 'cmd-hidden-files',
     shell: 'cmd',
     category: 'files',
-    task: 'See hidden files too',
+    task: 'See hidden and system files',
     summary:
       'Plain dir leaves hidden and system files out. /a lists everything, which is how you find .git, .env and the like when Windows has marked them hidden.',
     command: 'dir /a',
     variants: [
-      { label: 'ONLY the hidden ones', command: 'dir /ah' },
-      { label: 'Show each file with its hidden (H) and read-only (R) marks', command: 'attrib' }
+      {
+        label: 'List only the hidden files',
+        command: 'dir /ah',
+        keywords: ['dir /ah', 'hidden attribute', 'dotfiles', 'what is being hidden']
+      },
+      {
+        label: 'Show file attributes (hidden, read-only)',
+        command: 'attrib',
+        keywords: ['attrib', 'h r a s flags', 'is it read only', 'file marks', 'permissions']
+      }
     ],
     keywords: [
       'hidden files',
@@ -335,11 +437,17 @@ export const CMD_HELP: readonly HelpEntry[] = [
     id: 'cmd-find-file-by-name',
     shell: 'cmd',
     category: 'files',
-    task: 'Find a file by name, in this folder and below',
+    task: 'Find a file by name in subfolders',
     summary:
       '/s searches every subfolder and /b prints just the full path of each match. The stars mean "anything", so part of the name is enough.',
     command: 'dir /s /b *NAME*',
-    variants: [{ label: 'Hidden files as well', command: 'dir /s /b /a *NAME*' }],
+    variants: [
+      {
+        label: 'Find hidden files by name too',
+        command: 'dir /s /b /a *NAME*',
+        keywords: ['dir /s /b /a', 'search hidden', 'include system files', 'dotfiles', 'nothing found']
+      }
+    ],
     placeholders: { NAME: 'Any part of the file name' },
     keywords: [
       'find file',
@@ -361,7 +469,13 @@ export const CMD_HELP: readonly HelpEntry[] = [
     summary:
       'Prints the whole file. For a long one use more, which shows a screen at a time: Space for the next, Q to stop.',
     command: 'type FILE',
-    variants: [{ label: 'A screen at a time', command: 'more FILE' }],
+    variants: [
+      {
+        label: 'Read a long file page by page',
+        command: 'more FILE',
+        keywords: ['more', 'pager', 'less', 'scroll through output', 'space for next screen']
+      }
+    ],
     placeholders: { FILE: 'The file to read' },
     keywords: [
       'type',
@@ -386,8 +500,9 @@ export const CMD_HELP: readonly HelpEntry[] = [
     command: 'type nul >> NAME',
     variants: [
       {
-        label: 'A file with one line of text in it (REPLACES the file if it exists)',
-        command: 'echo TEXT> NAME'
+        label: 'Make a file with one line of text',
+        command: 'echo TEXT> NAME',
+        keywords: ['echo to file', 'write text', 'create with content', 'redirect into file', 'overwrites']
       }
     ],
     placeholders: {
@@ -437,7 +552,13 @@ export const CMD_HELP: readonly HelpEntry[] = [
     summary:
       'copy does not do folders; robocopy does. /e brings every subfolder, empty ones included. It prints a summary table, and an exit code of 1 means "files were copied", not an error.',
     command: 'robocopy SOURCE DESTINATION /e',
-    variants: [{ label: 'The older tool, same job', command: 'xcopy SOURCE DESTINATION /e /i' }],
+    variants: [
+      {
+        label: 'Copy a folder with xcopy',
+        command: 'xcopy SOURCE DESTINATION /e /i',
+        keywords: ['xcopy /e /i', 'older copy tool', 'copy tree', 'recursive copy', 'legacy']
+      }
+    ],
     placeholders: {
       SOURCE: 'The folder to copy',
       DESTINATION: 'Where the copy goes (it is created if missing)'
@@ -486,7 +607,11 @@ export const CMD_HELP: readonly HelpEntry[] = [
     summary: 'The new name is a name only, not a path: ren renames in place and never moves.',
     command: 'ren OLDNAME NEWNAME',
     variants: [
-      { label: 'Change the extension of many files at once', command: 'ren *.OLDEXT *.NEWEXT' }
+      {
+        label: 'Change the extension of many files at once',
+        command: 'ren *.OLDEXT *.NEWEXT',
+        keywords: ['bulk rename', 'mass rename', 'wildcard rename', 'txt to md', 'rename every file']
+      }
     ],
     placeholders: {
       OLDNAME: 'The file or folder as it is now',
@@ -513,8 +638,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'Removes the file. A wildcard removes every match, so list them with dir first when you use one.',
     command: 'del FILE',
     variants: [
-      { label: 'Every file of one type here, without asking', command: 'del /q *.EXT' },
-      { label: 'That type in every subfolder too', command: 'del /s /q *.EXT' }
+      {
+        label: 'Delete every file of one type',
+        command: 'del /q *.EXT',
+        keywords: ['del /q', 'wildcard delete', 'remove all tmp', 'no confirmation', 'clear logs']
+      },
+      {
+        label: 'Delete one file type in every subfolder',
+        command: 'del /s /q *.EXT',
+        keywords: ['del /s', 'recursive delete', 'rm -r', 'clean whole tree', 'remove everywhere']
+      }
     ],
     placeholders: { FILE: 'The file to delete', EXT: 'The file extension, for example tmp' },
     keywords: [
@@ -537,7 +670,13 @@ export const CMD_HELP: readonly HelpEntry[] = [
     summary:
       'Does what a double-click does. The empty "" is not a mistake: start takes its first quoted word as a window title, so without it a quoted path opens nothing.',
     command: 'start "" "FILE"',
-    variants: [{ label: 'Open a web page in the browser', command: 'start "" "https://URL"' }],
+    variants: [
+      {
+        label: 'Open a web page in the browser',
+        command: 'start "" "https://URL"',
+        keywords: ['open url', 'launch site', 'https', 'default browser', 'xdg-open']
+      }
+    ],
     placeholders: { FILE: 'The file to open', URL: 'The address, without the https:// in front' },
     keywords: [
       'open file',
@@ -563,11 +702,20 @@ export const CMD_HELP: readonly HelpEntry[] = [
     command: 'findstr /s /i /n /c:"TEXT" *.*',
     variants: [
       {
-        label: 'Just the names of the files that contain it',
-        command: 'findstr /s /i /m /c:"TEXT" *.*'
+        label: 'List only the file names that match',
+        command: 'findstr /s /i /m /c:"TEXT" *.*',
+        keywords: ['findstr /m', 'grep -l', 'which file contains', 'names not lines', 'paths only']
       },
-      { label: 'Only in one type of file', command: 'findstr /s /i /n /c:"TEXT" *.EXT' },
-      { label: 'In a single file', command: 'findstr /i /n /c:"TEXT" FILE' }
+      {
+        label: 'Search only one type of file',
+        command: 'findstr /s /i /n /c:"TEXT" *.EXT',
+        keywords: ['findstr *.js', 'by extension', 'grep --include', 'limit to file type', 'code search']
+      },
+      {
+        label: 'Search inside one file',
+        command: 'findstr /i /n /c:"TEXT" FILE',
+        keywords: ['findstr', 'grep a file', 'look in a log', 'line numbers', 'select-string']
+      }
     ],
     placeholders: {
       TEXT: 'The words to look for',
@@ -591,11 +739,15 @@ export const CMD_HELP: readonly HelpEntry[] = [
     id: 'cmd-filter-output',
     shell: 'cmd',
     category: 'text',
-    task: 'Show only the lines of output that mention something',
+    task: 'Keep only the output lines that match',
     summary: 'Pipes a command into findstr so a long list is cut down to the lines you care about.',
     command: 'COMMAND | findstr /i "TEXT"',
     variants: [
-      { label: 'The lines that do NOT mention it', command: 'COMMAND | findstr /i /v "TEXT"' }
+      {
+        label: 'Hide the output lines that match',
+        command: 'COMMAND | findstr /i /v "TEXT"',
+        keywords: ['findstr /v', 'grep -v', 'exclude', 'invert', 'leave out noise']
+      }
     ],
     placeholders: {
       COMMAND: 'Any command that prints a lot, for example tasklist',
@@ -621,7 +773,11 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'Prints the lines that differ, or "no differences encountered" when the two are the same.',
     command: 'fc FILE1 FILE2',
     variants: [
-      { label: 'Byte by byte, for files that are not text', command: 'fc /b FILE1 FILE2' }
+      {
+        label: 'Compare two files byte by byte',
+        command: 'fc /b FILE1 FILE2',
+        keywords: ['fc /b', 'binary diff', 'not text', 'are they identical', 'exe compare']
+      }
     ],
     placeholders: { FILE1: 'The first file', FILE2: 'The second file' },
     keywords: [
@@ -640,13 +796,21 @@ export const CMD_HELP: readonly HelpEntry[] = [
     id: 'cmd-list-processes',
     shell: 'cmd',
     category: 'processes',
-    task: 'See what is running',
+    task: 'See which programs are running',
     summary:
       'Lists every running program with its PID (the number you need to stop it) and its memory use.',
     command: 'tasklist',
     variants: [
-      { label: 'Only one program', command: 'tasklist /fi "imagename eq NAME.exe"' },
-      { label: 'Anything whose name contains a word', command: 'tasklist | findstr /i "NAME"' }
+      {
+        label: 'Check whether one program is running',
+        command: 'tasklist /fi "imagename eq NAME.exe"',
+        keywords: ['tasklist /fi', 'is node running', 'imagename', 'filter by exe', 'process exists']
+      },
+      {
+        label: 'Find a process by part of its name',
+        command: 'tasklist | findstr /i "NAME"',
+        keywords: ['tasklist findstr', 'search processes', 'ps aux grep', 'partial match', 'which pid']
+      }
     ],
     placeholders: { NAME: 'The program, for example node' },
     keywords: [
@@ -670,8 +834,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
       '/f forces it and /im picks it by name, which stops EVERY copy of that program. Use the PID form to stop just one.',
     command: 'taskkill /im NAME.exe /f',
     variants: [
-      { label: 'Just one, by its PID', command: 'taskkill /pid PID /f' },
-      { label: 'It and everything it started', command: 'taskkill /pid PID /t /f' }
+      {
+        label: 'Stop one process by its PID',
+        command: 'taskkill /pid PID /f',
+        keywords: ['taskkill /pid', 'kill by id', 'process id', 'one copy only', 'single instance']
+      },
+      {
+        label: 'Stop a process and its child processes',
+        command: 'taskkill /pid PID /t /f',
+        keywords: ['taskkill /t', 'kill tree', 'children', 'whole tree', 'node and npm']
+      }
     ],
     placeholders: {
       NAME: 'The program, for example node',
@@ -701,8 +873,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'The LAST column of the matching line is the PID of the program holding the port. It also matches longer numbers that start the same (3000 finds 30001), so read the line.',
     command: 'netstat -ano | findstr :PORT',
     variants: [
-      { label: 'Then: which program has that PID', command: 'tasklist /fi "pid eq PID"' },
-      { label: 'Every port something is listening on', command: 'netstat -ano | findstr LISTENING' }
+      {
+        label: 'Name the program behind a PID',
+        command: 'tasklist /fi "pid eq PID"',
+        keywords: ['pid to name', 'which process is this', 'tasklist /fi', 'lookup process id']
+      },
+      {
+        label: 'List every port something is listening on',
+        command: 'netstat -ano | findstr LISTENING',
+        keywords: ['netstat -ano', 'open ports', 'servers running', 'lsof -i', 'what ports are used']
+      }
     ],
     placeholders: {
       PORT: 'The port number, for example 3000',
@@ -731,8 +911,9 @@ export const CMD_HELP: readonly HelpEntry[] = [
     command: 'Ctrl+C',
     variants: [
       {
-        label: 'If it ignores the key: stop the program from another window',
-        command: 'taskkill /im NAME.exe /f'
+        label: 'Kill a command that ignores Ctrl+C',
+        command: 'taskkill /im NAME.exe /f',
+        keywords: ['taskkill /f', 'wont stop', 'force quit', 'stuck process', 'from another window']
       }
     ],
     placeholders: { NAME: 'The program that will not stop, for example node' },
@@ -763,8 +944,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
       "Shows this computer's address on your own network (the IPv4 line), not the one the internet sees.",
     command: 'ipconfig',
     variants: [
-      { label: 'Just the address lines', command: 'ipconfig | findstr IPv4' },
-      { label: 'Everything: DNS servers, MAC address, DHCP', command: 'ipconfig /all' }
+      {
+        label: 'Show only the IPv4 address lines',
+        command: 'ipconfig | findstr IPv4',
+        keywords: ['my local ip', 'ipconfig findstr', 'lan address', '192.168', 'short answer']
+      },
+      {
+        label: 'Show DNS, MAC address and DHCP details',
+        command: 'ipconfig /all',
+        keywords: ['ipconfig /all', 'physical address', 'adapter details', 'lease', 'full network info']
+      }
     ],
     keywords: [
       'ipconfig',
@@ -783,13 +972,21 @@ export const CMD_HELP: readonly HelpEntry[] = [
     id: 'cmd-ping',
     shell: 'cmd',
     category: 'network',
-    task: 'Check whether a site or machine can be reached',
+    task: 'Check whether a site can be reached',
     summary:
       'Sends four small packets and reports whether they came back and how fast. "Request timed out" means no answer.',
     command: 'ping HOST',
     variants: [
-      { label: 'Look the name up in DNS', command: 'nslookup HOST' },
-      { label: 'Show each hop on the way there (slow)', command: 'tracert HOST' }
+      {
+        label: 'Look up a DNS name or address',
+        command: 'nslookup HOST',
+        keywords: ['nslookup', 'dig', 'resolve hostname', 'ip of a domain', 'reverse lookup']
+      },
+      {
+        label: 'Trace the route to a host',
+        command: 'tracert HOST',
+        keywords: ['tracert', 'traceroute', 'network hops', 'where it is slow', 'latency']
+      }
     ],
     placeholders: { HOST: 'A name or an address, for example github.com' },
     keywords: [
@@ -814,7 +1011,11 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'curl ships with Windows. -L follows redirects (most download links have one) and -o names the file to save.',
     command: 'curl -L -o FILE URL',
     variants: [
-      { label: 'Only check that a site answers (headers, no download)', command: 'curl -I URL' }
+      {
+        label: 'Check that a site answers, headers only',
+        command: 'curl -I URL',
+        keywords: ['curl -i', 'http status code', 'head request', 'is the site up', 'no body']
+      }
     ],
     placeholders: {
       FILE: 'What to call the saved file',
@@ -843,8 +1044,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'set on its own lists them all. Followed by a few letters it lists the ones whose names start that way.',
     command: 'set',
     variants: [
-      { label: 'The ones starting with some letters', command: 'set NAME' },
-      { label: 'The value of one', command: 'echo %NAME%' }
+      {
+        label: 'List variables starting with some letters',
+        command: 'set NAME',
+        keywords: ['set path', 'prefix', 'partial name', 'find a variable', 'narrow the list']
+      },
+      {
+        label: 'Print the value of one variable',
+        command: 'echo %NAME%',
+        keywords: ['echo %path%', 'percent signs', '$env:', 'read a variable', 'is my api key set']
+      }
     ],
     placeholders: { NAME: 'The variable, for example PATH or ANTHROPIC' },
     keywords: [
@@ -867,7 +1076,13 @@ export const CMD_HELP: readonly HelpEntry[] = [
     summary:
       'set lasts for this window only and works at once. setx saves it for good, but only windows opened AFTERWARDS see it: this window does not.',
     command: 'set NAME=VALUE',
-    variants: [{ label: 'Permanently, for new windows', command: 'setx NAME "VALUE"' }],
+    variants: [
+      {
+        label: 'Set a variable permanently with setx',
+        command: 'setx NAME "VALUE"',
+        keywords: ['persist a variable', 'survives a restart', 'new windows only', 'api key', 'export']
+      }
+    ],
     placeholders: {
       NAME: 'The variable name',
       VALUE: 'Its value; no spaces around the = and no quotes with set'
@@ -896,10 +1111,15 @@ export const CMD_HELP: readonly HelpEntry[] = [
     command: 'set PATH=%PATH%;FOLDER',
     variants: [
       {
-        label: 'Open the Environment Variables dialog to add it permanently',
-        command: 'rundll32 sysdm.cpl,EditEnvironmentVariables'
+        label: 'Open the Environment Variables dialog',
+        command: 'rundll32 sysdm.cpl,EditEnvironmentVariables',
+        keywords: ['sysdm.cpl', 'edit path for good', 'system properties', 'gui', 'permanent']
       },
-      { label: 'See what is on PATH now', command: 'path' }
+      {
+        label: 'See what is on PATH now',
+        command: 'path',
+        keywords: ['echo %path%', 'list path entries', 'current search path', '$env:path']
+      }
     ],
     placeholders: { FOLDER: 'The folder that holds the program, without quotes' },
     keywords: [
@@ -943,9 +1163,21 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'A full page on the machine: Windows edition and build, memory, uptime. It takes a few seconds.',
     command: 'systeminfo',
     variants: [
-      { label: 'Just the Windows version', command: 'ver' },
-      { label: "This computer's name", command: 'hostname' },
-      { label: 'Which user I am signed in as', command: 'whoami' }
+      {
+        label: 'Show the Windows version only',
+        command: 'ver',
+        keywords: ['ver', 'build number', 'winver', 'which windows is this', 'os release']
+      },
+      {
+        label: "Show this computer's name",
+        command: 'hostname',
+        keywords: ['hostname', 'machine name', 'pc name', 'device name', 'network name']
+      },
+      {
+        label: 'Which user I am signed in as',
+        command: 'whoami',
+        keywords: ['whoami', 'current account', 'username', 'domain user', 'logged in as']
+      }
     ],
     keywords: [
       'systeminfo',
@@ -990,9 +1222,10 @@ export const CMD_HELP: readonly HelpEntry[] = [
     command: 'powershell -Command "Start-Process cmd -Verb RunAs"',
     variants: [
       {
-        label: 'Check whether THIS window is already elevated',
+        label: 'Check whether this window is elevated',
         command:
-          'whoami /groups | findstr /c:"S-1-16-12288" >nul && echo elevated || echo not elevated'
+          'whoami /groups | findstr /c:"S-1-16-12288" >nul && echo elevated || echo not elevated',
+        keywords: ['am i admin', 'whoami /groups', 'uac status', 'administrator rights', 'integrity level']
       }
     ],
     keywords: [
@@ -1037,7 +1270,11 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'Lists what was typed in THIS window. Command Prompt keeps no history between windows. The Up arrow walks back through the same list, and F7 shows it as a menu.',
     command: 'doskey /history',
     variants: [
-      { label: 'Save it to a file before closing', command: 'doskey /history > history.txt' }
+      {
+        label: 'Save the command history to a file',
+        command: 'doskey /history > history.txt',
+        keywords: ['history.txt', 'export what i typed', 'keep a log', 'before closing the window']
+      }
     ],
     danger:
       'The variant that saves to history.txt replaces a file of that name if one is already there.',
@@ -1062,8 +1299,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'Nearly every Command Prompt command explains itself when given /?. help on its own lists the built-in ones.',
     command: 'COMMAND /?',
     variants: [
-      { label: 'The list of built-in commands', command: 'help' },
-      { label: 'A long help page, a screen at a time', command: 'COMMAND /? | more' }
+      {
+        label: 'List every built-in command',
+        command: 'help',
+        keywords: ['help', 'what commands exist', 'cmd reference', 'available commands']
+      },
+      {
+        label: 'Page through a long help page',
+        command: 'COMMAND /? | more',
+        keywords: ['/? | more', 'pager', 'scrolled past', 'too much output', 'read the switches']
+      }
     ],
     placeholders: { COMMAND: 'The command to read about, for example robocopy' },
     keywords: [
@@ -1083,13 +1328,21 @@ export const CMD_HELP: readonly HelpEntry[] = [
     id: 'cmd-echo',
     shell: 'cmd',
     category: 'shell',
-    task: 'Print some text or the value of a variable',
+    task: 'Print text or a variable value',
     summary:
       'echo repeats what follows it, with any %VARIABLE% filled in. Handy for checking a value before using it.',
     command: 'echo TEXT',
     variants: [
-      { label: 'An empty line', command: 'echo.' },
-      { label: "Today's date and the time", command: 'echo %DATE% %TIME%' }
+      {
+        label: 'Print an empty line',
+        command: 'echo.',
+        keywords: ['echo.', 'blank line', 'spacing', 'newline', 'separator']
+      },
+      {
+        label: "Print today's date and the time",
+        command: 'echo %DATE% %TIME%',
+        keywords: ['%date%', '%time%', 'what time is it', 'clock', 'timestamp']
+      }
     ],
     placeholders: { TEXT: 'What to print' },
     keywords: [
@@ -1108,14 +1361,26 @@ export const CMD_HELP: readonly HelpEntry[] = [
     id: 'cmd-redirect',
     shell: 'cmd',
     category: 'shell',
-    task: 'Save the output of a command to a file',
+    task: 'Save command output to a file',
     summary:
       'A single > writes a fresh file each time; a double >> adds to the end of what is there.',
     command: 'COMMAND > FILE',
     variants: [
-      { label: 'Add to the end of the file instead', command: 'COMMAND >> FILE' },
-      { label: 'Error messages too', command: 'COMMAND > FILE 2>&1' },
-      { label: 'Throw the error messages away', command: 'COMMAND 2>nul' }
+      {
+        label: 'Append to the end of a file',
+        command: 'COMMAND >> FILE',
+        keywords: ['>>', 'append output', 'add to a log', 'do not overwrite', 'keep what is there']
+      },
+      {
+        label: 'Save error messages to the file too',
+        command: 'COMMAND > FILE 2>&1',
+        keywords: ['2>&1', 'stderr', 'capture errors', 'both streams', 'full log']
+      },
+      {
+        label: 'Throw the error messages away',
+        command: 'COMMAND 2>nul',
+        keywords: ['2>nul', '/dev/null', 'hide errors', 'silence stderr', 'suppress warnings']
+      }
     ],
     placeholders: { COMMAND: 'Any command', FILE: 'The file to write, for example output.txt' },
     keywords: [
@@ -1142,8 +1407,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
       'The bar hands what the first command prints to the second. more pages it, sort orders it, clip puts it on the clipboard.',
     command: 'COMMAND | more',
     variants: [
-      { label: 'Copy the output to the clipboard', command: 'COMMAND | clip' },
-      { label: 'Sort the lines', command: 'COMMAND | sort' }
+      {
+        label: 'Copy the output to the clipboard',
+        command: 'COMMAND | clip',
+        keywords: ['clip', 'pbcopy', 'set-clipboard', 'paste it elsewhere', 'ctrl v']
+      },
+      {
+        label: 'Sort the output lines',
+        command: 'COMMAND | sort',
+        keywords: ['sort', 'alphabetical', 'a to z', 'order results']
+      }
     ],
     placeholders: { COMMAND: 'Any command' },
     keywords: [
@@ -1169,8 +1442,16 @@ export const CMD_HELP: readonly HelpEntry[] = [
       '&& runs the second command only if the first one worked, which is nearly always what you want.',
     command: 'FIRST && SECOND',
     variants: [
-      { label: 'Run the second whatever happens', command: 'FIRST & SECOND' },
-      { label: 'Run the second only if the first FAILED', command: 'FIRST || SECOND' }
+      {
+        label: 'Run the second command whatever happens',
+        command: 'FIRST & SECOND',
+        keywords: ['single ampersand', '&', 'always runs', 'semicolon in bash', 'ignore failure']
+      },
+      {
+        label: 'Run the second only if the first failed',
+        command: 'FIRST || SECOND',
+        keywords: ['||', 'or operator', 'on failure', 'fallback', 'error handling']
+      }
     ],
     placeholders: { FIRST: 'The first command', SECOND: 'The command to run after it' },
     keywords: [
@@ -1193,7 +1474,13 @@ export const CMD_HELP: readonly HelpEntry[] = [
     summary:
       'A doskey macro. $* passes along whatever you type after the short name. It lasts until this window closes.',
     command: 'doskey SHORT=COMMAND $*',
-    variants: [{ label: 'List the macros I have made', command: 'doskey /macros' }],
+    variants: [
+      {
+        label: 'List the macros I have made',
+        command: 'doskey /macros',
+        keywords: ['doskey /macros', 'show aliases', 'get-alias', 'my shortcuts', 'what did i define']
+      }
+    ],
     placeholders: {
       SHORT: 'The name to type, for example ll',
       COMMAND: 'What it should run, for example dir /a'

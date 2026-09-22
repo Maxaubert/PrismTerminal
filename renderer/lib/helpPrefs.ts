@@ -15,7 +15,8 @@ import type { HelpShellChoice } from '../../shared/help/shells'
  */
 const K = {
   enabled: 'prism.help.enabled',
-  shell: 'prism.help.shell'
+  shell: 'prism.help.shell',
+  width: 'prism.help.width'
 } as const
 
 export const HELP_KEYS = K
@@ -62,3 +63,31 @@ export const setHelpShell = (shell: HelpShellChoice): void => write(K.shell, she
 
 export const useHelpEnabled = (): boolean => useSyncExternalStore(sub, helpEnabled)
 export const onHelpPrefs = sub
+
+/**
+ * HOW WIDE THE POPUP IS (owner, 2026-09-20: "you also need to be able to
+ * adjust the width of this since some text can be seen" - a row is one line
+ * and truncates, so a name or a command that does not fit is read by making
+ * the window wider). Stored in CSS pixels, clamped on the way in AND on the
+ * way out: a number saved on a 4K screen must not leave the popup wider than
+ * a laptop's window when it is read back there.
+ */
+export const HELP_WIDTH = { min: 560, max: 1400, default: 760 } as const
+
+export const clampHelpWidth = (n: number): number =>
+  Number.isFinite(n) && n > 0
+    ? Math.round(Math.min(HELP_WIDTH.max, Math.max(HELP_WIDTH.min, n)))
+    : HELP_WIDTH.default
+
+/** NEVER SET IS NOT ZERO. `Number(null)` and `Number('')` are both 0, and a
+ *  naive clamp reads that as the narrowest popup there is rather than the one
+ *  nobody has resized - which the e2e caught as a footer line cut short. */
+export const helpWidth = (): number => {
+  const raw = read(K.width)
+  return raw === null || raw === '' ? HELP_WIDTH.default : clampHelpWidth(Number(raw))
+}
+export const setHelpWidth = (px: number): void => write(K.width, String(clampHelpWidth(px)))
+
+export function useHelpWidth(): number {
+  return useSyncExternalStore(sub, helpWidth, () => HELP_WIDTH.default)
+}

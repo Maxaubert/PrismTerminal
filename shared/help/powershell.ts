@@ -45,12 +45,36 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Shows what is in the current folder, with sizes and dates. ls and dir are built-in short names for the same command.',
     command: 'Get-ChildItem',
     variants: [
-      { label: 'Another folder', command: 'Get-ChildItem FOLDER' },
-      { label: 'Newest first', command: 'Get-ChildItem | Sort-Object LastWriteTime -Descending' },
-      { label: 'Biggest first', command: 'Get-ChildItem -File | Sort-Object Length -Descending' },
-      { label: 'Names only', command: 'Get-ChildItem -Name' },
-      { label: 'Folders only', command: 'Get-ChildItem -Directory' },
-      { label: 'Only one kind of file', command: "Get-ChildItem -Filter '*.EXTENSION'" }
+      {
+        label: 'List a different folder',
+        command: 'Get-ChildItem FOLDER',
+        keywords: ['ls path', 'dir another directory', 'contents of', 'browse a folder']
+      },
+      {
+        label: 'Sort the listing by date, newest first',
+        command: 'Get-ChildItem | Sort-Object LastWriteTime -Descending',
+        keywords: ['ls -t', 'most recently changed', 'lastwritetime', 'what changed last']
+      },
+      {
+        label: 'Sort the listing by size, biggest first',
+        command: 'Get-ChildItem -File | Sort-Object Length -Descending',
+        keywords: ['ls -s', 'largest in this folder', 'length descending', 'what is big here']
+      },
+      {
+        label: 'List file names and nothing else',
+        command: 'Get-ChildItem -Name',
+        keywords: ['bare list', 'ls -1', 'no columns', 'just the names', 'paste a list']
+      },
+      {
+        label: 'List the folders, not the files',
+        command: 'Get-ChildItem -Directory',
+        keywords: ['ls -d', 'subdirectories', 'what folders are in here', 'directories only']
+      },
+      {
+        label: 'List only files of one extension',
+        command: "Get-ChildItem -Filter '*.EXTENSION'",
+        keywords: ['ls *.json', 'dir *.txt', 'by extension', 'filter file type', 'wildcard']
+      }
     ],
     placeholders: {
       FOLDER: 'The folder to look in',
@@ -83,7 +107,18 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary:
       'Adds hidden and system items to the listing, such as .git and AppData, which a plain listing leaves out.',
     command: 'Get-ChildItem -Force',
-    variants: [{ label: 'Only the hidden ones', command: 'Get-ChildItem -Hidden' }],
+    variants: [
+      {
+        label: 'Show hidden items and nothing else',
+        command: 'Get-ChildItem -Hidden',
+        keywords: [
+          'only dotfiles',
+          'hidden attribute',
+          'exclude normal files',
+          'just the invisible'
+        ]
+      }
+    ],
     keywords: [
       'ls -a',
       'dir /a',
@@ -107,10 +142,15 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Get-Content FILE',
     variants: [
       {
-        label: 'A page at a time (Space for more, Q to stop)',
-        command: 'Get-Content FILE | Out-Host -Paging'
+        label: 'Read a file a page at a time',
+        command: 'Get-Content FILE | Out-Host -Paging',
+        keywords: ['less', 'more', 'pager', 'space for the next screen', 'scroll through slowly']
       },
-      { label: 'Open it in Notepad instead', command: 'notepad FILE' }
+      {
+        label: 'Open a file in Notepad',
+        command: 'notepad FILE',
+        keywords: ['text editor', 'edit txt', 'gui editor', 'open in a window']
+      }
     ],
     placeholders: { FILE: 'The file to read' },
     keywords: [
@@ -135,8 +175,16 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary: 'Prints only the top of a file, which is what you want for a big log or a CSV header.',
     command: 'Get-Content FILE -TotalCount 20',
     variants: [
-      { label: 'Lines 11 to 15', command: 'Get-Content FILE | Select-Object -Skip 10 -First 5' },
-      { label: 'The first rows of any command', command: 'COMMAND | Select-Object -First 10' }
+      {
+        label: 'Read a range of lines from a file',
+        command: 'Get-Content FILE | Select-Object -Skip 10 -First 5',
+        keywords: ['sed -n', 'lines 11 to 15', 'skip then take', 'middle of the file', 'line range']
+      },
+      {
+        label: 'Keep the first rows of any output',
+        command: 'COMMAND | Select-Object -First 10',
+        keywords: ['| head', 'limit results', 'first 10 results', 'shorten a long list']
+      }
     ],
     placeholders: { FILE: 'The file to read', COMMAND: 'Any command that prints a list' },
     keywords: [
@@ -158,7 +206,11 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary: 'Prints only the end of a file, where a log keeps its newest entries.',
     command: 'Get-Content FILE -Tail 20',
     variants: [
-      { label: 'The last rows of any command', command: 'COMMAND | Select-Object -Last 10' }
+      {
+        label: 'Keep the last rows of any output',
+        command: 'COMMAND | Select-Object -Last 10',
+        keywords: ['| tail', 'end of a long list', 'final results', 'bottom of the output']
+      }
     ],
     placeholders: { FILE: 'The file to read', COMMAND: 'Any command that prints a list' },
     keywords: [
@@ -181,8 +233,9 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Get-Content FILE -Tail 20 -Wait',
     variants: [
       {
-        label: 'Only the new lines that mention something',
-        command: "Get-Content FILE -Tail 20 -Wait | Select-String 'TEXT'"
+        label: 'Follow a log, filtered to one word',
+        command: "Get-Content FILE -Tail 20 -Wait | Select-String 'TEXT'",
+        keywords: ['tail -f | grep', 'live errors only', 'watch for a word', 'filter a live log']
       }
     ],
     placeholders: { FILE: 'The log file to follow', TEXT: 'The word to look for, such as error' },
@@ -207,8 +260,9 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'New-Item FILE -ItemType File',
     variants: [
       {
-        label: "Set an existing file's modified time to now (the other thing touch does)",
-        command: '(Get-Item FILE).LastWriteTime = Get-Date'
+        label: 'Update a file timestamp to now',
+        command: '(Get-Item FILE).LastWriteTime = Get-Date',
+        keywords: ['touch', 'lastwritetime', 'modified date', 'bump mtime', 'mark as changed']
       }
     ],
     placeholders: { FILE: 'The name of the new file, such as notes.txt' },
@@ -232,7 +286,13 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary:
       'Writes the text as the whole content of the file, creating it if needed. Use the Add-Content variant to keep what is there.',
     command: "Set-Content FILE 'TEXT'",
-    variants: [{ label: 'Add a line to the end instead', command: "Add-Content FILE 'TEXT'" }],
+    variants: [
+      {
+        label: 'Append a line to a file',
+        command: "Add-Content FILE 'TEXT'",
+        keywords: ['echo >>', 'add-content', 'without wiping it', 'add to the end', 'log a line']
+      }
+    ],
     placeholders: { FILE: 'The file to write', TEXT: 'The text to put in it' },
     keywords: [
       'echo to file',
@@ -257,7 +317,11 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Copies a file to a new name or into another folder. cp and copy are short names for it.',
     command: 'Copy-Item SOURCE DESTINATION',
     variants: [
-      { label: 'Every file of one kind into a folder', command: "Copy-Item '*.EXTENSION' FOLDER" }
+      {
+        label: 'Copy every file of one extension',
+        command: "Copy-Item '*.EXTENSION' FOLDER",
+        keywords: ['cp *.txt', 'wildcard', 'bulk copy', 'all the jpgs', 'many files at once']
+      }
     ],
     placeholders: {
       SOURCE: 'The file to copy',
@@ -309,13 +373,22 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Removes the file straight away. It does NOT go to the Recycle Bin, so use the Recycle Bin variant when you might want it back.',
     command: 'Remove-Item FILE',
     variants: [
-      { label: 'See what would be deleted, without deleting', command: 'Remove-Item FILE -WhatIf' },
       {
-        label: 'Send it to the Recycle Bin instead',
-        command:
-          "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile((Resolve-Path FILE), 'OnlyErrorDialogs', 'SendToRecycleBin')"
+        label: 'Preview a delete without deleting',
+        command: 'Remove-Item FILE -WhatIf',
+        keywords: ['-whatif', 'dry run', 'simulate', 'rm -i', 'is it safe', 'what would go']
       },
-      { label: 'Every file of one kind in this folder', command: "Remove-Item '*.EXTENSION'" }
+      {
+        label: 'Delete a file to the Recycle Bin',
+        command:
+          "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile((Resolve-Path FILE), 'OnlyErrorDialogs', 'SendToRecycleBin')",
+        keywords: ['trash', 'recoverable', 'get it back later', 'undo a delete', 'safe removal']
+      },
+      {
+        label: 'Delete every file of one extension',
+        command: "Remove-Item '*.EXTENSION'",
+        keywords: ['del *.log', 'wildcard', 'clear out the logs', 'bulk removal', 'many at once']
+      }
     ],
     placeholders: { FILE: 'The file to delete', EXTENSION: 'A file ending, such as log' },
     keywords: [
@@ -342,20 +415,24 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: "Get-ChildItem -Recurse -Filter '*NAME*' -ErrorAction SilentlyContinue",
     variants: [
       {
-        label: 'Just the full paths',
-        command: "(Get-ChildItem -Recurse -Filter '*NAME*' -ErrorAction SilentlyContinue).FullName"
+        label: 'Find files by name, as full paths',
+        command: "(Get-ChildItem -Recurse -Filter '*NAME*' -ErrorAction SilentlyContinue).FullName",
+        keywords: ['fullname', 'absolute path results', 'paths only', 'copyable list', 'no table']
       },
       {
-        label: 'Every file of one kind',
-        command: "Get-ChildItem -Recurse -File -Filter '*.EXTENSION' -ErrorAction SilentlyContinue"
+        label: 'Find every file of one extension',
+        command: "Get-ChildItem -Recurse -File -Filter '*.EXTENSION' -ErrorAction SilentlyContinue",
+        keywords: ['find . -name "*.pdf"', 'all the pdfs', 'by file type', 'where are my mp4s']
       },
       {
-        label: 'Folders only',
-        command: "Get-ChildItem -Recurse -Directory -Filter '*NAME*' -ErrorAction SilentlyContinue"
+        label: 'Find a folder by its name',
+        command: "Get-ChildItem -Recurse -Directory -Filter '*NAME*' -ErrorAction SilentlyContinue",
+        keywords: ['find -type d', 'locate a directory', 'which folder is it in', 'dirs only']
       },
       {
-        label: 'Start from another folder',
-        command: "Get-ChildItem FOLDER -Recurse -Filter '*NAME*' -ErrorAction SilentlyContinue"
+        label: 'Search from a different folder',
+        command: "Get-ChildItem FOLDER -Recurse -Filter '*NAME*' -ErrorAction SilentlyContinue",
+        keywords: ['find /path -name', 'look somewhere else', 'start point', 'search c drive']
       }
     ],
     placeholders: {
@@ -387,9 +464,10 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       "Get-ChildItem -Recurse -File -ErrorAction SilentlyContinue | Sort-Object Length -Descending | Select-Object -First 20 FullName, @{n='MB';e={[math]::Round($_.Length/1MB,1)}}",
     variants: [
       {
-        label: 'Only files over 100 MB',
+        label: 'List files over 100 MB',
         command:
-          'Get-ChildItem -Recurse -File -ErrorAction SilentlyContinue | Where-Object Length -gt 100MB | Sort-Object Length -Descending | Select-Object FullName, Length'
+          'Get-ChildItem -Recurse -File -ErrorAction SilentlyContinue | Where-Object Length -gt 100MB | Sort-Object Length -Descending | Select-Object FullName, Length',
+        keywords: ['find -size +100m', 'huge files', 'above a threshold', 'gigabyte files']
       }
     ],
     keywords: [
@@ -417,9 +495,10 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Get-ChildItem -Recurse -File | Where-Object LastWriteTime -gt (Get-Date).AddDays(-1) | Sort-Object LastWriteTime -Descending | Select-Object LastWriteTime, FullName',
     variants: [
       {
-        label: 'In the last hour',
+        label: 'Files changed in the last hour',
         command:
-          'Get-ChildItem -Recurse -File | Where-Object LastWriteTime -gt (Get-Date).AddHours(-1) | Sort-Object LastWriteTime -Descending | Select-Object LastWriteTime, FullName'
+          'Get-ChildItem -Recurse -File | Where-Object LastWriteTime -gt (Get-Date).AddHours(-1) | Sort-Object LastWriteTime -Descending | Select-Object LastWriteTime, FullName',
+        keywords: ['find -mmin -60', 'just touched', 'last 60 minutes', 'what did it write']
       }
     ],
     keywords: [
@@ -445,22 +524,32 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: "Get-ChildItem -Recurse -File | Select-String 'TEXT'",
     variants: [
       {
-        label: 'Only in some kinds of file',
-        command: "Get-ChildItem -Recurse -File -Include *.ts, *.js | Select-String 'TEXT'"
+        label: 'Search inside one kind of file only',
+        command: "Get-ChildItem -Recurse -File -Include *.ts, *.js | Select-String 'TEXT'",
+        keywords: ['--include', 'only ts and js', 'by extension', 'source files', 'narrow it down']
       },
       {
-        label: 'Skip node_modules',
+        label: 'Search the code but skip node_modules',
         command:
-          "Get-ChildItem -Recurse -File | Where-Object FullName -notlike '*\\node_modules\\*' | Select-String 'TEXT'"
+          "Get-ChildItem -Recurse -File | Where-Object FullName -notlike '*\\node_modules\\*' | Select-String 'TEXT'",
+        keywords: ['--exclude-dir', 'ignore vendor folders', 'too many results', 'without deps']
       },
       {
-        label: 'Only the names of the files that match',
+        label: 'List the files that contain the text',
         command:
-          "Get-ChildItem -Recurse -File | Select-String 'TEXT' -List | Select-Object -ExpandProperty Path"
+          "Get-ChildItem -Recurse -File | Select-String 'TEXT' -List | Select-Object -ExpandProperty Path",
+        keywords: ['grep -l', 'which file holds it', 'names only', 'one hit per file', 'paths']
       },
       {
-        label: 'Exact text, not a regular expression',
-        command: "Get-ChildItem -Recurse -File | Select-String 'TEXT' -SimpleMatch"
+        label: 'Search for exact text, not a pattern',
+        command: "Get-ChildItem -Recurse -File | Select-String 'TEXT' -SimpleMatch",
+        keywords: [
+          '-simplematch',
+          'literal string',
+          'no regex',
+          'brackets and dots',
+          'fixed string'
+        ]
       }
     ],
     placeholders: { TEXT: 'The text to look for' },
@@ -491,12 +580,14 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Compress-Archive -Path FOLDER -DestinationPath NAME.zip',
     variants: [
       {
-        label: 'Add to, or refresh, a zip that already exists',
-        command: 'Compress-Archive -Path FOLDER -DestinationPath NAME.zip -Update'
+        label: 'Update a zip that already exists',
+        command: 'Compress-Archive -Path FOLDER -DestinationPath NAME.zip -Update',
+        keywords: ['-update', 'add to an archive', 'refresh the contents', 'already exists error']
       },
       {
-        label: 'A .tar.gz instead (tar ships with Windows)',
-        command: 'tar -czf NAME.tar.gz FOLDER'
+        label: 'Make a .tar.gz archive',
+        command: 'tar -czf NAME.tar.gz FOLDER',
+        keywords: ['tar -czf', 'tarball', 'gzip', 'tgz', 'linux friendly archive']
       }
     ],
     placeholders: { FOLDER: 'The folder or file to pack', NAME: 'The name of the archive to make' },
@@ -522,8 +613,16 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Unpacks a .zip into a folder, making the folder if needed. It stops if a file is already there, unless you add -Force.',
     command: 'Expand-Archive NAME.zip -DestinationPath FOLDER',
     variants: [
-      { label: 'See what is inside without unpacking', command: 'tar -tf NAME.zip' },
-      { label: 'Unpack a .tar.gz or .tgz into this folder', command: 'tar -xzf NAME.tar.gz' }
+      {
+        label: 'List what is inside an archive',
+        command: 'tar -tf NAME.zip',
+        keywords: ['tar -tf', 'peek in a zip', 'contents without extracting', 'what is in it']
+      },
+      {
+        label: 'Unpack a .tar.gz or .tgz here',
+        command: 'tar -xzf NAME.tar.gz',
+        keywords: ['tar -xzf', 'untar', 'gunzip', 'open a tarball', 'linux archive']
+      }
     ],
     placeholders: { NAME: 'The archive to unpack', FOLDER: 'Where the contents should go' },
     keywords: [
@@ -548,8 +647,16 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Prints the SHA-256 hash of a file, to compare with the one a download page publishes. If they differ, the file is damaged or not the real one.',
     command: 'Get-FileHash FILE',
     variants: [
-      { label: 'MD5 instead', command: 'Get-FileHash FILE -Algorithm MD5' },
-      { label: 'SHA-1 instead', command: 'Get-FileHash FILE -Algorithm SHA1' }
+      {
+        label: 'Get the MD5 hash of a file',
+        command: 'Get-FileHash FILE -Algorithm MD5',
+        keywords: ['md5sum', 'certutil md5', 'compare checksums', 'older download pages']
+      },
+      {
+        label: 'Get the SHA-1 hash of a file',
+        command: 'Get-FileHash FILE -Algorithm SHA1',
+        keywords: ['sha1sum', 'shasum -a 1', 'git style hash', 'verify a signature']
+      }
     ],
     placeholders: { FILE: 'The file to check' },
     keywords: [
@@ -574,8 +681,16 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Opens the file the way a double-click in Explorer would: a PDF in the PDF reader, a picture in the photo viewer.',
     command: 'Invoke-Item FILE',
     variants: [
-      { label: 'In Notepad', command: 'notepad FILE' },
-      { label: 'In VS Code, if it is installed', command: 'code FILE' }
+      {
+        label: 'Open a file in Notepad',
+        command: 'notepad FILE',
+        keywords: ['text editor', 'edit a txt', 'quick edit', 'gui editor']
+      },
+      {
+        label: 'Open a file in VS Code',
+        command: 'code FILE',
+        keywords: ['vscode', 'code .', 'editor', 'ide', 'open the project']
+      }
     ],
     placeholders: { FILE: 'The file to open' },
     keywords: [
@@ -599,7 +714,11 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary: 'Shows how big a file is in bytes, when it was made and when it last changed.',
     command: 'Get-Item FILE | Select-Object Name, Length, CreationTime, LastWriteTime, Attributes',
     variants: [
-      { label: 'Everything PowerShell knows about it', command: 'Get-Item FILE | Format-List *' }
+      {
+        label: 'Show every property of a file',
+        command: 'Get-Item FILE | Format-List *',
+        keywords: ['format-list', 'all the metadata', 'full details', 'every field', 'stat -x']
+      }
     ],
     placeholders: { FILE: 'The file to look at' },
     keywords: [
@@ -625,10 +744,15 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: '(Resolve-Path FILE).Path',
     variants: [
       {
-        label: 'Copy it straight to the clipboard',
-        command: '(Resolve-Path FILE).Path | Set-Clipboard'
+        label: 'Copy the full path to the clipboard',
+        command: '(Resolve-Path FILE).Path | Set-Clipboard',
+        keywords: ['pbcopy', 'set-clipboard', 'paste into chat', 'give a path to an agent']
       },
-      { label: 'Check whether a path exists at all (True or False)', command: 'Test-Path FILE' }
+      {
+        label: 'Check whether a file or folder exists',
+        command: 'Test-Path FILE',
+        keywords: ['test -f', 'if exist', 'true or false', 'is it there', 'missing file']
+      }
     ],
     placeholders: { FILE: 'The file or folder' },
     keywords: [
@@ -648,14 +772,15 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     id: 'ps-make-link',
     shell: 'powershell',
     category: 'files',
-    task: 'Make a folder appear in a second place (a link)',
+    task: 'Link a folder into a second place',
     summary:
       'Creates a junction: a folder that is really another folder. It needs no administrator rights, and the target must be written as a full path.',
     command: 'New-Item -ItemType Junction -Path LINK -Target FULL_PATH',
     variants: [
       {
-        label: 'A symbolic link, which also works for files (needs an administrator shell)',
-        command: 'New-Item -ItemType SymbolicLink -Path LINK -Target FULL_PATH'
+        label: 'Make a symbolic link (needs admin)',
+        command: 'New-Item -ItemType SymbolicLink -Path LINK -Target FULL_PATH',
+        keywords: ['ln -s', 'mklink', 'symlink a file', 'elevated shell', 'shortcut to a file']
       }
     ],
     placeholders: {
@@ -685,7 +810,11 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Prints the current folder, the one every command without a path acts on. pwd is a short name for it.',
     command: 'Get-Location',
     variants: [
-      { label: 'Copy it to the clipboard', command: '(Get-Location).Path | Set-Clipboard' }
+      {
+        label: 'Copy the current path to the clipboard',
+        command: '(Get-Location).Path | Set-Clipboard',
+        keywords: ['pwd | pbcopy', 'set-clipboard', 'paste where i am', 'send a path to someone']
+      }
     ],
     keywords: [
       'pwd',
@@ -709,15 +838,29 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Set-Location FOLDER',
     variants: [
       {
-        label: 'A path with spaces needs quotes (an example)',
-        command: "Set-Location 'C:\\Program Files'"
+        label: 'Go to a path that has spaces',
+        command: "Set-Location 'C:\\Program Files'",
+        keywords: ['quotes', 'program files', 'space in the name', 'quoting a path']
       },
-      { label: 'Your home folder', command: 'Set-Location ~' },
-      { label: 'Your Downloads folder', command: 'Set-Location ~\\Downloads' },
-      { label: 'Another drive', command: 'Set-Location D:' },
       {
-        label: 'Back to the folder you were in before (PowerShell 7 only)',
-        command: 'Set-Location -'
+        label: 'Go to your home folder',
+        command: 'Set-Location ~',
+        keywords: ['cd ~', 'userprofile', 'c:\\users', 'my user directory']
+      },
+      {
+        label: 'Go to your Downloads folder',
+        command: 'Set-Location ~\\Downloads',
+        keywords: ['cd ~/downloads', 'where a browser saves', 'the installer i just got']
+      },
+      {
+        label: 'Switch to another drive',
+        command: 'Set-Location D:',
+        keywords: ['d:', 'drive letter', 'usb stick', 'second disk', 'external drive']
+      },
+      {
+        label: 'Return to the previous folder (pwsh 7)',
+        command: 'Set-Location -',
+        keywords: ['cd -', 'toggle', 'where i just was', 'jump straight back', 'powershell 7']
       }
     ],
     placeholders: { FOLDER: 'The folder to go to' },
@@ -744,8 +887,16 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary: 'Two dots mean "the folder that holds this one", so this steps out one level.',
     command: 'Set-Location ..',
     variants: [
-      { label: 'Two levels up', command: 'Set-Location ..\\..' },
-      { label: 'Straight to the top of the drive', command: 'Set-Location \\' }
+      {
+        label: 'Go up two folder levels',
+        command: 'Set-Location ..\\..',
+        keywords: ['cd ../..', 'grandparent', 'out twice', 'two levels']
+      },
+      {
+        label: 'Go straight to the top of the drive',
+        command: 'Set-Location \\',
+        keywords: ['cd /', 'root of c', 'drive root', 'top level']
+      }
     ],
     keywords: [
       'cd ..',
@@ -767,7 +918,13 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary:
       'Creates a folder, and any missing folders on the way to it, so A\\B\\C works in one go. mkdir is a short name for it.',
     command: 'New-Item -ItemType Directory FOLDER',
-    variants: [{ label: 'The short way', command: 'mkdir FOLDER' }],
+    variants: [
+      {
+        label: 'Make a folder with mkdir',
+        command: 'mkdir FOLDER',
+        keywords: ['mkdir', 'md', 'mkdir -p', 'md newfolder', 'the linux name for it']
+      }
+    ],
     placeholders: { FOLDER: 'The name of the new folder' },
     keywords: [
       'mkdir',
@@ -791,12 +948,14 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Remove-Item FOLDER -Recurse',
     variants: [
       {
-        label: 'See what would be deleted, without deleting',
-        command: 'Remove-Item FOLDER -Recurse -WhatIf'
+        label: 'Preview a folder delete, without deleting',
+        command: 'Remove-Item FOLDER -Recurse -WhatIf',
+        keywords: ['-whatif', 'dry run', 'simulate rm -rf', 'what would go', 'is it safe']
       },
       {
-        label: 'Also remove read-only and hidden files (node_modules, .git)',
-        command: 'Remove-Item FOLDER -Recurse -Force'
+        label: 'Delete a folder including read-only files',
+        command: 'Remove-Item FOLDER -Recurse -Force',
+        keywords: ['rm -rf', '-force', 'node_modules', '.git', 'access denied', 'it will not go']
       }
     ],
     placeholders: { FOLDER: 'The folder to delete' },
@@ -823,8 +982,9 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Copy-Item FOLDER DESTINATION -Recurse',
     variants: [
       {
-        label: 'A big folder, with progress and retries (robocopy ships with Windows)',
-        command: 'robocopy FOLDER DESTINATION /E'
+        label: 'Copy a big folder with robocopy',
+        command: 'robocopy FOLDER DESTINATION /E',
+        keywords: ['robocopy /e', 'xcopy', 'rsync', 'progress and retries', 'huge transfer']
       }
     ],
     placeholders: { FOLDER: 'The folder to copy', DESTINATION: 'Where the copy goes' },
@@ -852,9 +1012,10 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       "'{0:N1} MB' -f ((Get-ChildItem FOLDER -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1MB)",
     variants: [
       {
-        label: 'The size of each subfolder here, biggest first',
+        label: 'Size of each subfolder, biggest first',
         command:
-          'Get-ChildItem -Directory | ForEach-Object { [pscustomobject]@{ Folder = $_.Name; MB = [math]::Round((Get-ChildItem $_.FullName -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1MB, 1) } } | Sort-Object MB -Descending'
+          'Get-ChildItem -Directory | ForEach-Object { [pscustomobject]@{ Folder = $_.Name; MB = [math]::Round((Get-ChildItem $_.FullName -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1MB, 1) } } | Sort-Object MB -Descending',
+        keywords: ['du -sh *', 'ncdu', 'which one is huge', 'disk usage per directory', 'breakdown']
       }
     ],
     placeholders: { FOLDER: 'The folder to measure, or . for this one' },
@@ -879,14 +1040,20 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Draws the folders and files under this one as an indented tree. Avoid running it on a folder holding node_modules: the output runs for minutes.',
     command: 'tree /F',
     variants: [
-      { label: 'Folders only', command: 'tree' },
       {
-        label: 'Another folder, in plain characters that paste well',
-        command: 'tree FOLDER /F /A'
+        label: 'Draw the tree of folders, without files',
+        command: 'tree',
+        keywords: ['tree', 'structure only', 'no files', 'shape of the project']
       },
       {
-        label: 'Only two levels deep, as a plain list',
-        command: 'Get-ChildItem -Recurse -Depth 1 -Name'
+        label: 'Tree of another folder, in plain ASCII',
+        command: 'tree FOLDER /F /A',
+        keywords: ['tree /a', 'paste friendly', 'no box characters', 'share the layout']
+      },
+      {
+        label: 'List two levels deep, no drawing',
+        command: 'Get-ChildItem -Recurse -Depth 1 -Name',
+        keywords: ['-depth 1', 'shallow', 'limited recursion', 'top two levels', 'plain list']
       }
     ],
     placeholders: { FOLDER: 'The folder to draw' },
@@ -910,10 +1077,15 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary: 'Opens a File Explorer window on the current folder. The dot means "here".',
     command: 'explorer .',
     variants: [
-      { label: 'Another folder', command: 'Invoke-Item FOLDER' },
       {
-        label: 'Open the folder with one file already selected',
-        command: 'explorer "/select,$(Resolve-Path FILE)"'
+        label: 'Open another folder in File Explorer',
+        command: 'Invoke-Item FOLDER',
+        keywords: ['invoke-item', 'browse elsewhere', 'window on a path', 'gui']
+      },
+      {
+        label: 'Open Explorer with one file selected',
+        command: 'explorer "/select,$(Resolve-Path FILE)"',
+        keywords: ['/select', 'reveal in explorer', 'highlight the file', 'show me where it is']
       }
     ],
     placeholders: { FOLDER: 'The folder to open', FILE: 'The file to highlight' },
@@ -939,13 +1111,15 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: '(Get-ChildItem -Recurse -File | Measure-Object).Count',
     variants: [
       {
-        label: 'This folder only, no subfolders',
-        command: '(Get-ChildItem -File | Measure-Object).Count'
+        label: 'Count files here, ignoring subfolders',
+        command: '(Get-ChildItem -File | Measure-Object).Count',
+        keywords: ['ls | wc -l', 'top level only', 'no recursion', 'shallow count']
       },
       {
-        label: 'How many of each kind',
+        label: 'Count the files by extension',
         command:
-          'Get-ChildItem -Recurse -File | Group-Object Extension | Sort-Object Count -Descending | Select-Object Count, Name'
+          'Get-ChildItem -Recurse -File | Group-Object Extension | Sort-Object Count -Descending | Select-Object Count, Name',
+        keywords: ['group-object', 'how many png', 'breakdown by type', 'what is in here']
       }
     ],
     keywords: [
@@ -965,18 +1139,20 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     id: 'ps-filter-output',
     shell: 'powershell',
     category: 'text',
-    task: 'Keep only the lines of output that mention something',
+    task: "Filter a command's output down to matching lines",
     summary:
       'Filters what a command prints down to the lines containing the text. Out-String -Stream is what makes it work for PowerShell commands as well as for programs such as npm or git.',
     command: "COMMAND | Out-String -Stream | Select-String 'TEXT'",
     variants: [
       {
-        label: 'Lines that do NOT mention it',
-        command: "COMMAND | Out-String -Stream | Select-String 'TEXT' -NotMatch"
+        label: 'Hide the lines that mention a word',
+        command: "COMMAND | Out-String -Stream | Select-String 'TEXT' -NotMatch",
+        keywords: ['grep -v', 'exclude', 'notmatch', 'remove noise', 'everything except']
       },
       {
-        label: 'Match upper and lower case exactly',
-        command: "COMMAND | Out-String -Stream | Select-String 'TEXT' -CaseSensitive"
+        label: 'Filter output, upper and lower case exactly',
+        command: "COMMAND | Out-String -Stream | Select-String 'TEXT' -CaseSensitive",
+        keywords: ['case sensitive', '-casesensitive', 'match capitals', 'exact letters']
       }
     ],
     placeholders: {
@@ -1006,18 +1182,25 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: "Select-String -Path FILE -Pattern 'TEXT'",
     variants: [
       {
-        label: 'With two lines of context either side',
-        command: "Select-String -Path FILE -Pattern 'TEXT' -Context 2"
+        label: 'Show two lines of context either side',
+        command: "Select-String -Path FILE -Pattern 'TEXT' -Context 2",
+        keywords: ['-c 2', 'context lines', 'lines around a match', 'what came before']
       },
       {
-        label: 'Exact text, not a regular expression',
-        command: "Select-String -Path FILE -Pattern 'TEXT' -SimpleMatch"
+        label: 'Match exact text, not a pattern',
+        command: "Select-String -Path FILE -Pattern 'TEXT' -SimpleMatch",
+        keywords: ['-simplematch', 'literal', 'no regex', 'dots and brackets', 'fixed string']
       },
       {
-        label: 'Every log file in this folder',
-        command: "Select-String -Path *.log -Pattern 'TEXT'"
+        label: 'Check every log file in this folder',
+        command: "Select-String -Path *.log -Pattern 'TEXT'",
+        keywords: ['*.log', 'wildcard path', 'many logs at once', 'which log has the error']
       },
-      { label: 'Count the matches', command: "(Select-String -Path FILE -Pattern 'TEXT').Count" }
+      {
+        label: 'Count how many lines match',
+        command: "(Select-String -Path FILE -Pattern 'TEXT').Count",
+        keywords: ['-c', 'number of hits', 'how often', 'occurrences', 'tally']
+      }
     ],
     placeholders: { FILE: 'The file to search', TEXT: 'The text to look for' },
     keywords: [
@@ -1042,10 +1225,15 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: '(Get-Content FILE | Measure-Object -Line).Lines',
     variants: [
       {
-        label: 'Lines, words and characters together',
-        command: 'Get-Content FILE | Measure-Object -Line -Word -Character'
+        label: 'Count lines, words and characters',
+        command: 'Get-Content FILE | Measure-Object -Line -Word -Character',
+        keywords: ['wc', 'wc -w', 'how long is this document', 'essay length', 'measure-object']
       },
-      { label: 'Count the rows any command prints', command: '(COMMAND | Measure-Object).Count' }
+      {
+        label: 'Count the rows any command prints',
+        command: '(COMMAND | Measure-Object).Count',
+        keywords: ['| wc -l', 'how many results', 'number of items', 'size of a list']
+      }
     ],
     placeholders: { FILE: 'The file to count', COMMAND: 'Any command that prints a list' },
     keywords: [
@@ -1070,8 +1258,9 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: "(Get-Content FILE -Raw) -replace 'OLD', 'NEW' | Set-Content FILE -NoNewline",
     variants: [
       {
-        label: 'Show the result without changing the file',
-        command: "(Get-Content FILE -Raw) -replace 'OLD', 'NEW'"
+        label: 'Preview a replacement, changing nothing',
+        command: "(Get-Content FILE -Raw) -replace 'OLD', 'NEW'",
+        keywords: ['dry run', 'check before writing', 'print the result', 'sed without -i']
       }
     ],
     placeholders: {
@@ -1102,12 +1291,14 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Compare-Object (Get-Content FILE_A) (Get-Content FILE_B)',
     variants: [
       {
-        label: 'The classic Windows comparison (plain fc means something else in PowerShell)',
-        command: 'fc.exe FILE_A FILE_B'
+        label: 'Compare two files with fc.exe',
+        command: 'fc.exe FILE_A FILE_B',
+        keywords: ['fc', 'classic windows tool', 'plain comparison', 'line by line']
       },
       {
-        label: 'With git installed, a proper coloured diff',
-        command: 'git diff --no-index FILE_A FILE_B'
+        label: 'Coloured diff of two files, using git',
+        command: 'git diff --no-index FILE_A FILE_B',
+        keywords: ['git diff --no-index', 'proper diff', 'red and green', 'readable comparison']
       }
     ],
     placeholders: { FILE_A: 'The first file', FILE_B: 'The second file' },
@@ -1132,9 +1323,10 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Get-Content FILE | Sort-Object -Unique',
     variants: [
       {
-        label: 'How often each line appears, most common first',
+        label: 'How often each line appears, most first',
         command:
-          'Get-Content FILE | Group-Object | Sort-Object Count -Descending | Select-Object Count, Name'
+          'Get-Content FILE | Group-Object | Sort-Object Count -Descending | Select-Object Count, Name',
+        keywords: ['uniq -c', 'sort | uniq -c | sort -rn', 'frequency', 'top offenders', 'tally']
       }
     ],
     placeholders: { FILE: 'The file to read' },
@@ -1161,16 +1353,19 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'COMMAND | Select-Object PROPERTY_ONE, PROPERTY_TWO',
     variants: [
       {
-        label: 'An example: the name and ID of every process',
-        command: 'Get-Process | Select-Object Name, Id'
+        label: 'Show the name and ID of each process',
+        command: 'Get-Process | Select-Object Name, Id',
+        keywords: ['process name and pid', 'pid column', 'two columns', 'trim a wide table']
       },
       {
         label: 'Find out which properties a result has',
-        command: 'COMMAND | Get-Member -MemberType Property'
+        command: 'COMMAND | Get-Member -MemberType Property',
+        keywords: ['get-member', 'what fields exist', 'column names', 'inspect an object']
       },
       {
-        label: 'Just the bare values of one column',
-        command: 'COMMAND | Select-Object -ExpandProperty PROPERTY_ONE'
+        label: 'Take the bare values of one column',
+        command: 'COMMAND | Select-Object -ExpandProperty PROPERTY_ONE',
+        keywords: ['expandproperty', 'awk print $1', 'strings not objects', 'plain values']
       }
     ],
     placeholders: {
@@ -1224,13 +1419,20 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: "COMMAND | Where-Object PROPERTY -like '*TEXT*'",
     variants: [
       {
-        label: 'An example: files over 10 MB here',
-        command: 'Get-ChildItem -File | Where-Object Length -gt 10MB'
+        label: 'Keep only the rows over 10 MB',
+        command: 'Get-ChildItem -File | Where-Object Length -gt 10MB',
+        keywords: [
+          'where-object length',
+          'greater than',
+          'files bigger than 10mb',
+          'numeric condition'
+        ]
       },
       {
-        label: 'Two conditions at once',
+        label: 'Filter on two conditions at once',
         command:
-          "COMMAND | Where-Object { $_.PROPERTY -like '*TEXT*' -and $_.OTHER_PROPERTY -gt NUMBER }"
+          "COMMAND | Where-Object { $_.PROPERTY -like '*TEXT*' -and $_.OTHER_PROPERTY -gt NUMBER }",
+        keywords: ['-and', '-or', 'compound test', 'name and size together', 'both must be true']
       }
     ],
     placeholders: {
@@ -1262,10 +1464,15 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'A table that does not fit is shortened with three dots. Showing each row as a list gives every value its full width.',
     command: 'COMMAND | Format-List',
     variants: [
-      { label: 'Every property, not just the usual ones', command: 'COMMAND | Format-List *' },
+      {
+        label: 'Show every property, not the usual few',
+        command: 'COMMAND | Format-List *',
+        keywords: ['format-list *', 'all the fields', 'hidden columns', 'full object']
+      },
       {
         label: 'Keep the table but wrap long values',
-        command: 'COMMAND | Format-Table -AutoSize -Wrap'
+        command: 'COMMAND | Format-Table -AutoSize -Wrap',
+        keywords: ['format-table -wrap', 'autosize', 'columns too narrow', 'squeezed text']
       }
     ],
     placeholders: { COMMAND: 'The command whose output is being shortened' },
@@ -1292,7 +1499,11 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Pauses after each screenful: Space shows the next page, Enter the next line, Q stops.',
     command: 'COMMAND | Out-Host -Paging',
     variants: [
-      { label: 'The classic way, which also works for programs', command: 'COMMAND | more' }
+      {
+        label: 'Page any program output with more',
+        command: 'COMMAND | more',
+        keywords: ['| more', 'pipe to a pager', 'works for exe output', 'classic way']
+      }
     ],
     placeholders: { COMMAND: 'The command with a lot of output' },
     keywords: [
@@ -1316,11 +1527,20 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: '(Get-Content FILE.json -Raw | ConvertFrom-Json).KEY',
     variants: [
       {
-        label: 'Show the whole file as an object',
-        command: 'Get-Content FILE.json -Raw | ConvertFrom-Json'
+        label: 'Show a whole JSON file as an object',
+        command: 'Get-Content FILE.json -Raw | ConvertFrom-Json',
+        keywords: ['convertfrom-json', 'pretty print', 'jq .', 'parse a config', 'readable json']
       },
-      { label: 'Turn any result INTO JSON', command: 'COMMAND | ConvertTo-Json -Depth 5' },
-      { label: 'Read a CSV file as a table', command: 'Import-Csv FILE.csv | Format-Table' }
+      {
+        label: 'Turn any result into JSON',
+        command: 'COMMAND | ConvertTo-Json -Depth 5',
+        keywords: ['convertto-json', 'serialise', 'export for another tool', 'machine readable']
+      },
+      {
+        label: 'Read a CSV file as a table',
+        command: 'Import-Csv FILE.csv | Format-Table',
+        keywords: ['import-csv', 'spreadsheet', 'columns', 'excel export', 'parse csv']
+      }
     ],
     placeholders: {
       FILE: 'The file name without its ending',
@@ -1351,15 +1571,27 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Get-Process',
     variants: [
       {
-        label: 'The ten using the most memory',
+        label: 'Top ten programs by memory',
         command:
-          "Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 10 Name, Id, @{n='MB';e={[math]::Round($_.WorkingSet64/1MB)}}"
+          "Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 10 Name, Id, @{n='MB';e={[math]::Round($_.WorkingSet64/1MB)}}",
+        keywords: ['ram hogs', 'what is eating memory', 'working set', 'out of memory', 'top']
       },
       {
-        label: 'The ten that have used the most CPU time',
-        command: 'Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 Name, Id, CPU'
+        label: 'Top ten programs by CPU time',
+        command:
+          'Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 Name, Id, CPU',
+        keywords: ['cpu hogs', 'fans spinning', 'computer is slow', 'htop', 'high usage']
       },
-      { label: 'The classic Windows list', command: 'tasklist' }
+      {
+        label: 'List running programs with tasklist',
+        command: 'tasklist',
+        keywords: [
+          'tasklist',
+          'tasklist /svc',
+          'command prompt version',
+          'task manager from the terminal'
+        ]
+      }
     ],
     keywords: [
       'ps',
@@ -1385,12 +1617,14 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: "Get-Process -Name '*NAME*'",
     variants: [
       {
-        label: 'With the path of the program file',
-        command: "Get-Process -Name '*NAME*' | Select-Object Id, Name, Path"
+        label: 'Show which program file is running',
+        command: "Get-Process -Name '*NAME*' | Select-Object Id, Name, Path",
+        keywords: ['exe location', 'which node is this', 'full path of a process', 'where from']
       },
       {
-        label: 'When it was started',
-        command: "Get-Process -Name '*NAME*' | Select-Object Id, Name, StartTime"
+        label: 'See when a process started',
+        command: "Get-Process -Name '*NAME*' | Select-Object Id, Name, StartTime",
+        keywords: ['starttime', 'how long has it been up', 'since when', 'stale process']
       }
     ],
     placeholders: { NAME: 'Part of the program name, such as node or chrome' },
@@ -1420,7 +1654,8 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       {
         label: 'Search every command line for a word',
         command:
-          "Get-CimInstance Win32_Process | Where-Object CommandLine -like '*TEXT*' | Select-Object ProcessId, Name, CommandLine | Format-List"
+          "Get-CimInstance Win32_Process | Where-Object CommandLine -like '*TEXT*' | Select-Object ProcessId, Name, CommandLine | Format-List",
+        keywords: ['ps -ef | grep', 'which script is running', 'by argument', 'find the culprit']
       }
     ],
     placeholders: {
@@ -1450,12 +1685,25 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Stop-Process -Name NAME',
     variants: [
       {
-        label: 'See what would be stopped, without stopping it',
-        command: 'Stop-Process -Name NAME -WhatIf'
+        label: 'Preview what a stop would close',
+        command: 'Stop-Process -Name NAME -WhatIf',
+        keywords: ['-whatif', 'dry run', 'which ones would go', 'check before killing']
       },
-      { label: 'One process only, by its ID', command: 'Stop-Process -Id PROCESS_ID' },
-      { label: 'It refuses to go', command: 'Stop-Process -Id PROCESS_ID -Force' },
-      { label: 'A program AND everything it started', command: 'taskkill /F /T /PID PROCESS_ID' }
+      {
+        label: 'Stop one process by its ID',
+        command: 'Stop-Process -Id PROCESS_ID',
+        keywords: ['kill pid', 'by pid', 'one instance only', 'single process']
+      },
+      {
+        label: 'Force a stubborn process to stop',
+        command: 'Stop-Process -Id PROCESS_ID -Force',
+        keywords: ['kill -9', '-force', 'will not close', 'refuses to die', 'not responding']
+      },
+      {
+        label: 'Stop a program and its child processes',
+        command: 'taskkill /F /T /PID PROCESS_ID',
+        keywords: ['taskkill /t', 'whole tree', 'children too', 'npm leaves node behind']
+      }
     ],
     placeholders: {
       NAME: 'The program name without .exe, such as node',
@@ -1488,8 +1736,9 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Get-NetTCPConnection -LocalPort PORT -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Get-Process -Id $_.OwningProcess } | Select-Object -Unique Id, ProcessName, Path',
     variants: [
       {
-        label: 'The classic way: the last column is the process ID',
-        command: 'netstat -ano | findstr :PORT'
+        label: 'Find a port owner with netstat',
+        command: 'netstat -ano | findstr :PORT',
+        keywords: ['netstat -ano', 'last column is the pid', 'classic way', 'lsof -i']
       }
     ],
     placeholders: { PORT: 'The port number, such as 3000' },
@@ -1519,9 +1768,16 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Get-NetTCPConnection -LocalPort PORT -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force }',
     variants: [
       {
-        label: 'See what would be stopped, without stopping it',
+        label: 'Preview stopping the program on a port',
         command:
-          'Get-NetTCPConnection -LocalPort PORT -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -WhatIf }'
+          'Get-NetTCPConnection -LocalPort PORT -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -WhatIf }',
+        keywords: [
+          '-whatif',
+          'dry run',
+          'check first',
+          'what holds it',
+          'which pid would be stopped'
+        ]
       }
     ],
     placeholders: { PORT: 'The port number, such as 3000' },
@@ -1572,15 +1828,30 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: "Start-Process PROGRAM -ArgumentList 'ARGUMENTS'",
     variants: [
       {
-        label: 'As a hidden background job in this shell',
-        command: '$job = Start-Job { COMMAND }'
+        label: 'Start a hidden background job',
+        command: '$job = Start-Job { COMMAND }',
+        keywords: ['start-job', 'nohup', 'no window', 'run while i carry on']
       },
-      { label: 'Read what a job has printed so far', command: 'Receive-Job $job' },
       {
-        label: 'List jobs, then stop and clear them all',
-        command: 'Get-Job; Get-Job | Remove-Job -Force'
+        label: 'Read what a job has printed so far',
+        command: 'Receive-Job $job',
+        keywords: [
+          'receive-job',
+          'job output',
+          'is it finished yet',
+          'results of a background task'
+        ]
       },
-      { label: 'The short form (PowerShell 7 only)', command: 'COMMAND &' }
+      {
+        label: 'List jobs, then stop and clear them',
+        command: 'Get-Job; Get-Job | Remove-Job -Force',
+        keywords: ['get-job', 'remove-job', 'tidy up', 'what is still running']
+      },
+      {
+        label: 'Send a command to the background with &',
+        command: 'COMMAND &',
+        keywords: ['&', 'ampersand', 'bash habit', 'powershell 7 only', 'detach']
+      }
     ],
     placeholders: {
       PROGRAM: 'The program to start, such as npm',
@@ -1612,8 +1883,16 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Sends four pings and shows how long each reply took. No replies means it is down, blocked or unreachable.',
     command: 'Test-Connection HOST -Count 4',
     variants: [
-      { label: 'Is my internet working at all?', command: 'Test-Connection 1.1.1.1 -Count 2' },
-      { label: 'The classic ping', command: 'ping HOST' }
+      {
+        label: 'Is my internet working at all?',
+        command: 'Test-Connection 1.1.1.1 -Count 2',
+        keywords: ['ping 1.1.1.1', 'am i online', 'wifi dropped', 'no connection', 'cloudflare']
+      },
+      {
+        label: 'Ping a host the classic way',
+        command: 'ping HOST',
+        keywords: ['ping', 'icmp', 'round trip time', 'four packets']
+      }
     ],
     placeholders: { HOST: 'A name or address, such as github.com' },
     keywords: [
@@ -1633,14 +1912,15 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     id: 'ps-test-port',
     shell: 'powershell',
     category: 'network',
-    task: 'Check whether a port on a server is open',
+    task: 'Check whether a port is open',
     summary:
       'Tries a real TCP connection and reports TcpTestSucceeded True or False. It answers "is the server down or is it just me" better than ping, which many servers ignore.',
     command: 'Test-NetConnection HOST -Port PORT',
     variants: [
       {
         label: 'Is my own dev server answering?',
-        command: 'Test-NetConnection localhost -Port PORT'
+        command: 'Test-NetConnection localhost -Port PORT',
+        keywords: ['localhost 3000', 'is it up yet', 'connection refused', 'local api']
       }
     ],
     placeholders: {
@@ -1670,15 +1950,21 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Lists the address of each network adapter. The one starting 192.168 or 10 is your address on the local network; 169.254 means that adapter is not connected.',
     command: 'Get-NetIPAddress -AddressFamily IPv4 | Select-Object InterfaceAlias, IPAddress',
     variants: [
-      { label: 'The classic full report', command: 'ipconfig' },
       {
-        label: 'With the router (gateway) address',
+        label: 'Full network report with ipconfig',
+        command: 'ipconfig',
+        keywords: ['ipconfig', 'ifconfig', 'adapters', 'subnet mask', 'classic report']
+      },
+      {
+        label: 'Show the IP and the router gateway',
         command:
-          "Get-NetIPConfiguration | Select-Object InterfaceAlias, @{n='IPv4';e={$_.IPv4Address.IPAddress}}, @{n='Gateway';e={$_.IPv4DefaultGateway.NextHop}}"
+          "Get-NetIPConfiguration | Select-Object InterfaceAlias, @{n='IPv4';e={$_.IPv4Address.IPAddress}}, @{n='Gateway';e={$_.IPv4DefaultGateway.NextHop}}",
+        keywords: ['default gateway', 'ip route', '192.168.1.1', 'router page', 'network config']
       },
       {
         label: 'My public address, as the internet sees it',
-        command: 'Invoke-RestMethod https://api.ipify.org'
+        command: 'Invoke-RestMethod https://api.ipify.org',
+        keywords: ['public ip', 'external address', 'wan', 'ipify', 'what the server sees']
       }
     ],
     keywords: [
@@ -1705,11 +1991,16 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Saves what is at the URL to a file. In Windows PowerShell 5.1 the words curl and wget are only aliases of this command, so for the real curl type curl.exe.',
     command: 'Invoke-WebRequest URL -OutFile FILE -UseBasicParsing',
     variants: [
-      { label: 'With the real curl, following redirects', command: 'curl.exe -L -o FILE URL' },
       {
-        label: 'Much faster in 5.1: hide the progress bar first',
+        label: 'Download with curl, following redirects',
+        command: 'curl.exe -L -o FILE URL',
+        keywords: ['curl -l -o', 'curl.exe', 'wget', 'github release link', 'real curl']
+      },
+      {
+        label: 'Speed up a download in PowerShell 5.1',
         command:
-          "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest URL -OutFile FILE -UseBasicParsing"
+          "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest URL -OutFile FILE -UseBasicParsing",
+        keywords: ['progresspreference', 'very slow download', 'hide the progress bar', 'faster']
       }
     ],
     placeholders: { URL: 'The full address, starting https://', FILE: 'The name to save it as' },
@@ -1739,14 +2030,24 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       {
         label: 'Send JSON with a POST',
         command:
-          'Invoke-RestMethod URL -Method Post -ContentType \'application/json\' -Body \'{"KEY":"VALUE"}\''
+          'Invoke-RestMethod URL -Method Post -ContentType \'application/json\' -Body \'{"KEY":"VALUE"}\'',
+        keywords: ['curl -x post', 'request body', 'content-type', 'webhook', 'push data']
       },
       {
-        label: 'With a bearer token',
-        command: "Invoke-RestMethod URL -Headers @{ Authorization = 'Bearer TOKEN' }"
+        label: 'Call an API with a bearer token',
+        command: "Invoke-RestMethod URL -Headers @{ Authorization = 'Bearer TOKEN' }",
+        keywords: ['authorization header', 'api key', 'oauth', '401 unauthorized', 'curl -h']
       },
-      { label: 'Only the status code and headers', command: 'curl.exe -sI URL' },
-      { label: 'The raw text, with the real curl', command: 'curl.exe -s URL' }
+      {
+        label: 'Fetch only the status code and headers',
+        command: 'curl.exe -sI URL',
+        keywords: ['curl -i', 'head request', '200 or 404', 'response headers']
+      },
+      {
+        label: 'Fetch the raw text of a URL',
+        command: 'curl.exe -s URL',
+        keywords: ['curl -s', 'plain body', 'no parsing', 'see what it returns']
+      }
     ],
     placeholders: {
       URL: 'The full address, starting https://',
@@ -1779,11 +2080,20 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Resolve-DnsName HOST',
     variants: [
       {
-        label: 'Another record type (MX, TXT, CNAME, NS)',
-        command: 'Resolve-DnsName HOST -Type TXT'
+        label: 'Look up an MX, TXT or CNAME record',
+        command: 'Resolve-DnsName HOST -Type TXT',
+        keywords: ['dig txt', 'spf record', 'mail server', 'domain verification', 'record type']
       },
-      { label: 'Ask a particular DNS server', command: 'Resolve-DnsName HOST -Server 1.1.1.1' },
-      { label: 'The classic tool', command: 'nslookup HOST' }
+      {
+        label: 'Ask a particular DNS server',
+        command: 'Resolve-DnsName HOST -Server 1.1.1.1',
+        keywords: ['dig @1.1.1.1', 'cloudflare resolver', 'bypass my router', 'propagation check']
+      },
+      {
+        label: 'Look up a domain with nslookup',
+        command: 'nslookup HOST',
+        keywords: ['nslookup', 'classic tool', 'dig', 'quick lookup']
+      }
     ],
     placeholders: { HOST: 'The domain name, such as github.com' },
     keywords: [
@@ -1808,7 +2118,13 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary: 'Shows each open port with the program that owns it, lowest port first.',
     command:
       "Get-NetTCPConnection -State Listen | Sort-Object LocalPort | Select-Object LocalPort, OwningProcess, @{n='Process';e={(Get-Process -Id $_.OwningProcess).ProcessName}} -Unique",
-    variants: [{ label: 'The classic way, connections included', command: 'netstat -ano' }],
+    variants: [
+      {
+        label: 'List ports and connections with netstat',
+        command: 'netstat -ano',
+        keywords: ['netstat -ano', 'established connections', 'classic way', 'everything at once']
+      }
+    ],
     keywords: [
       'netstat',
       'netstat -tulpn',
@@ -1831,7 +2147,16 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Makes Windows forget the addresses it has remembered, so a site that has just moved is looked up afresh. Harmless: the cache refills by itself.',
     command: 'ipconfig /flushdns',
     variants: [
-      { label: 'The PowerShell command for the same thing', command: 'Clear-DnsClientCache' }
+      {
+        label: 'Clear the DNS cache in PowerShell',
+        command: 'Clear-DnsClientCache',
+        keywords: [
+          'clear-dnsclientcache',
+          'flush the resolver cache',
+          'stale dns entry',
+          'still going to the old server'
+        ]
+      }
     ],
     keywords: [
       'flush dns',
@@ -1853,7 +2178,13 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary:
       'Lists each router between you and the destination with its delay. Where the replies stop or slow down is where the trouble is.',
     command: 'tracert HOST',
-    variants: [{ label: 'The PowerShell way', command: 'Test-NetConnection HOST -TraceRoute' }],
+    variants: [
+      {
+        label: 'Trace a route with Test-NetConnection',
+        command: 'Test-NetConnection HOST -TraceRoute',
+        keywords: ['tnc -traceroute', 'hops', 'cmdlet version', 'network path']
+      }
+    ],
     placeholders: { HOST: 'A name or address, such as github.com' },
     keywords: [
       'traceroute',
@@ -1875,7 +2206,13 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary:
       'Opens the address in your default browser, which is handy for localhost while a dev server runs.',
     command: "Start-Process 'URL'",
-    variants: [{ label: 'A local dev server', command: "Start-Process 'http://localhost:PORT'" }],
+    variants: [
+      {
+        label: 'Open a local dev server in the browser',
+        command: "Start-Process 'http://localhost:PORT'",
+        keywords: ['localhost 3000', 'vite url', 'open the app', 'preview my site']
+      }
+    ],
     placeholders: {
       URL: 'The full address, starting https://',
       PORT: 'The port your server printed, such as 3000'
@@ -1901,7 +2238,13 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     task: 'See how much disk space is free',
     summary: 'Lists each drive with the gigabytes used and free.',
     command: 'Get-PSDrive -PSProvider FileSystem',
-    variants: [{ label: 'With the total size and health of each volume', command: 'Get-Volume' }],
+    variants: [
+      {
+        label: 'Show each volume, size and health',
+        command: 'Get-Volume',
+        keywords: ['get-volume', 'partitions', 'drive letters', 'file system', 'total capacity']
+      }
+    ],
     keywords: [
       'df',
       'df -h',
@@ -1945,7 +2288,13 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary:
       'Prints the version. 5.1 is Windows PowerShell, the one built into Windows; 7 and up is the newer PowerShell, whose program is pwsh.',
     command: '$PSVersionTable.PSVersion',
-    variants: [{ label: 'Is PowerShell 7 installed at all?', command: 'Get-Command pwsh' }],
+    variants: [
+      {
+        label: 'Is PowerShell 7 installed at all?',
+        command: 'Get-Command pwsh',
+        keywords: ['pwsh', 'get-command', 'do i have it', 'newer version', 'core']
+      }
+    ],
     keywords: [
       'version',
       'powershell version',
@@ -1968,15 +2317,21 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture',
     variants: [
       {
-        label: 'The processor and its core count',
+        label: 'Show the processor and core count',
         command:
-          'Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors'
+          'Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors',
+        keywords: ['lscpu', 'what cpu do i have', 'how many cores', 'threads', 'chip model']
       },
       {
-        label: 'The graphics card and driver',
-        command: 'Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion'
+        label: 'Show the graphics card and driver',
+        command: 'Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion',
+        keywords: ['gpu', 'nvidia', 'video card', 'driver version', 'lspci']
       },
-      { label: 'The long classic report', command: 'systeminfo' }
+      {
+        label: 'Full machine report with systeminfo',
+        command: 'systeminfo',
+        keywords: ['systeminfo', 'everything at once', 'install date', 'all the specs']
+      }
     ],
     keywords: [
       'uname',
@@ -2001,10 +2356,15 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary: 'Lists every environment variable this shell has, with its value.',
     command: 'Get-ChildItem Env:',
     variants: [
-      { label: 'Just one of them', command: '$env:NAME' },
       {
-        label: 'Those whose name contains a word',
-        command: "Get-ChildItem Env: | Where-Object Name -like '*TEXT*'"
+        label: 'Show one variable by its name',
+        command: '$env:NAME',
+        keywords: ['echo $path', 'printenv name', 'one value', 'is my api key set']
+      },
+      {
+        label: 'Find variables whose name contains a word',
+        command: "Get-ChildItem Env: | Where-Object Name -like '*TEXT*'",
+        keywords: ['env | grep', 'search for an api key', 'filter the list', 'matching names']
       }
     ],
     placeholders: {
@@ -2032,7 +2392,13 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary:
       'Sets the variable for this terminal and every program started from it. It is forgotten when the terminal closes, which suits an API key you would rather not store.',
     command: "$env:NAME = 'VALUE'",
-    variants: [{ label: 'Remove it again', command: 'Remove-Item Env:NAME' }],
+    variants: [
+      {
+        label: 'Remove an environment variable',
+        command: 'Remove-Item Env:NAME',
+        keywords: ['unset', 'clear the value', 'forget my api key', 'delete env var']
+      }
+    ],
     placeholders: {
       NAME: 'The variable name, such as ANTHROPIC_API_KEY',
       VALUE: 'The value to give it'
@@ -2060,12 +2426,14 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: "[Environment]::SetEnvironmentVariable('NAME', 'VALUE', 'User')",
     variants: [
       {
-        label: 'Read back what is stored',
-        command: "[Environment]::GetEnvironmentVariable('NAME', 'User')"
+        label: 'Read back what is stored for my user',
+        command: "[Environment]::GetEnvironmentVariable('NAME', 'User')",
+        keywords: ['did setx work', 'persisted value', 'user scope', 'check after a restart']
       },
       {
-        label: 'Delete the stored variable',
-        command: "[Environment]::SetEnvironmentVariable('NAME', $null, 'User')"
+        label: 'Delete a permanent environment variable',
+        command: "[Environment]::SetEnvironmentVariable('NAME', $null, 'User')",
+        keywords: ['unset for good', 'setx removal', 'clear it permanently', 'take it out']
       }
     ],
     placeholders: { NAME: 'The variable name', VALUE: 'The value to store' },
@@ -2132,8 +2500,15 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       "[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';FOLDER', 'User')",
     variants: [
       {
-        label: 'Look at your stored user PATH first (changes nothing)',
-        command: "[Environment]::GetEnvironmentVariable('Path', 'User') -split ';'"
+        label: 'Read the PATH stored for your user',
+        command: "[Environment]::GetEnvironmentVariable('Path', 'User') -split ';'",
+        keywords: [
+          'changes nothing',
+          'before editing',
+          'user scope',
+          'what is saved',
+          'back it up first'
+        ]
       }
     ],
     placeholders: { FOLDER: 'The full path of the folder holding the program' },
@@ -2160,9 +2535,21 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Shows whether a name is a program, an alias or a function, and the file it runs. Note that where on its own means Where-Object in PowerShell: the Windows finder is where.exe.',
     command: 'Get-Command NAME',
     variants: [
-      { label: 'Just the path of the program file', command: '(Get-Command NAME).Source' },
-      { label: 'Every copy on PATH, in the order they win', command: 'Get-Command NAME -All' },
-      { label: 'The classic Windows finder', command: 'where.exe NAME' }
+      {
+        label: 'Show only the path of a program',
+        command: '(Get-Command NAME).Source',
+        keywords: ['which', 'command -v', 'exe location', 'bare path', 'source']
+      },
+      {
+        label: 'List every copy on PATH, first one wins',
+        command: 'Get-Command NAME -All',
+        keywords: ['which -a', 'duplicate installs', 'wrong version runs', 'shadowed', 'conflict']
+      },
+      {
+        label: 'Find a program with where.exe',
+        command: 'where.exe NAME',
+        keywords: ['where.exe', 'whereis', 'classic finder', 'locate an exe']
+      }
     ],
     placeholders: { NAME: 'The command, such as node, git or python' },
     keywords: [
@@ -2188,21 +2575,27 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Opens a new elevated window after the Windows permission prompt. Use it when a command answers "Access is denied" or asks for elevation; it starts in System32, so cd back to your folder.',
     command: 'Start-Process powershell -Verb RunAs',
     variants: [
-      { label: 'PowerShell 7 instead', command: 'Start-Process pwsh -Verb RunAs' },
       {
-        label: 'PowerShell 7, already in this folder',
-        command:
-          "Start-Process pwsh -Verb RunAs -ArgumentList '-NoExit', '-Command', \"Set-Location '$PWD'\""
+        label: 'Open an administrator PowerShell 7',
+        command: 'Start-Process pwsh -Verb RunAs',
+        keywords: ['pwsh as admin', 'elevated pwsh', 'runas', 'newer shell']
       },
       {
-        label: 'Am I an administrator right now? (True or False)',
+        label: 'Open admin PowerShell 7 in this folder',
         command:
-          '([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)'
+          "Start-Process pwsh -Verb RunAs -ArgumentList '-NoExit', '-Command', \"Set-Location '$PWD'\"",
+        keywords: ['elevated here', 'keep the current directory', 'admin terminal in my project']
       },
       {
-        label:
-          'One command only (Windows 11 24H2 and later, once sudo is switched on in Settings, System, For developers)',
-        command: 'sudo COMMAND'
+        label: 'Am I running as administrator?',
+        command:
+          '([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)',
+        keywords: ['check elevation', 'true or false', 'uac state', 'is this shell elevated']
+      },
+      {
+        label: 'Run one command as admin with sudo',
+        command: 'sudo COMMAND',
+        keywords: ['windows sudo', '24h2', 'for developers setting', 'single elevated command']
       }
     ],
     placeholders: { COMMAND: 'The command that needs administrator rights' },
@@ -2229,8 +2622,16 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary: 'Prints the account this shell runs as, in the form COMPUTER\\user.',
     command: 'whoami',
     variants: [
-      { label: 'The computer name alone', command: '$env:COMPUTERNAME' },
-      { label: 'The path of my user folder', command: '$env:USERPROFILE' }
+      {
+        label: 'Show the computer name alone',
+        command: '$env:COMPUTERNAME',
+        keywords: ['hostname', 'pc name', 'machine name', 'which box am i on']
+      },
+      {
+        label: 'Show the path of my user folder',
+        command: '$env:USERPROFILE',
+        keywords: ['echo $home', 'c:\\users', 'home directory', 'where my documents live']
+      }
     ],
     keywords: [
       'whoami',
@@ -2253,10 +2654,15 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary: 'Lists the background services that are running now.',
     command: "Get-Service | Where-Object Status -eq 'Running'",
     variants: [
-      { label: 'Find one by part of its name', command: "Get-Service -DisplayName '*NAME*'" },
       {
-        label: 'Restart one (needs an administrator PowerShell)',
-        command: 'Restart-Service SERVICE_NAME'
+        label: 'Find a service by part of its name',
+        command: "Get-Service -DisplayName '*NAME*'",
+        keywords: ['sc query', 'is docker running', 'systemctl status', 'search services']
+      },
+      {
+        label: 'Restart a service (needs admin)',
+        command: 'Restart-Service SERVICE_NAME',
+        keywords: ['systemctl restart', 'bounce it', 'service is stuck', 'elevated shell']
       }
     ],
     placeholders: {
@@ -2284,7 +2690,13 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary: 'Prints the time since Windows last started, as days, hours and minutes.',
     command:
       '(Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime | Select-Object Days, Hours, Minutes',
-    variants: [{ label: 'The short form (PowerShell 7 only)', command: 'Get-Uptime' }],
+    variants: [
+      {
+        label: 'Get the uptime in PowerShell 7',
+        command: 'Get-Uptime',
+        keywords: ['get-uptime', 'short form', 'pwsh only', 'since boot']
+      }
+    ],
     keywords: [
       'uptime',
       'last boot',
@@ -2304,9 +2716,21 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary: 'Prints the current date and time, or formats it for a file name or a log line.',
     command: 'Get-Date',
     variants: [
-      { label: 'Sortable, for a log line', command: "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'" },
-      { label: 'Safe to use in a file name', command: "Get-Date -Format 'yyyyMMdd-HHmmss'" },
-      { label: 'UTC in ISO 8601', command: "(Get-Date).ToUniversalTime().ToString('o')" }
+      {
+        label: 'A sortable date for a log line',
+        command: "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'",
+        keywords: ['yyyy-mm-dd', 'timestamp', 'iso style', 'date +%y-%m-%d', 'prefix a line']
+      },
+      {
+        label: 'A date for a file name',
+        command: "Get-Date -Format 'yyyyMMdd-HHmmss'",
+        keywords: ['no colons', 'backup-20260920', 'dated copy', 'suffix', 'timestamped']
+      },
+      {
+        label: 'Get the time as UTC, ISO 8601',
+        command: "(Get-Date).ToUniversalTime().ToString('o')",
+        keywords: ['utc', 'zulu', 'universal time', 'api timestamp', 'round trip format']
+      }
     ],
     keywords: [
       'date',
@@ -2331,7 +2755,13 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary:
       'Wipes the terminal so the prompt is back at the top. clear and cls are short names for it, and Ctrl+L does the same without typing. Your history is kept.',
     command: 'Clear-Host',
-    variants: [{ label: 'The short way', command: 'cls' }],
+    variants: [
+      {
+        label: 'Clear the screen with cls',
+        command: 'cls',
+        keywords: ['cls', 'short way', 'cmd habit', 'wipe it']
+      }
+    ],
     keywords: [
       'clear',
       'cls',
@@ -2353,14 +2783,20 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Get-History',
     variants: [
       {
-        label: 'The last 50 from every session',
-        command: 'Get-Content (Get-PSReadLineOption).HistorySavePath -Tail 50'
+        label: 'Last 50 commands from every session',
+        command: 'Get-Content (Get-PSReadLineOption).HistorySavePath -Tail 50',
+        keywords: ['history file', 'psreadline', 'what i ran yesterday', 'across windows']
       },
       {
         label: 'Search everything I have ever typed',
-        command: "Get-Content (Get-PSReadLineOption).HistorySavePath | Select-String 'TEXT'"
+        command: "Get-Content (Get-PSReadLineOption).HistorySavePath | Select-String 'TEXT'",
+        keywords: ['history | grep', 'ctrl+r', 'that long command', 'find an old one']
       },
-      { label: 'Run entry number 12 of this session again', command: 'Invoke-History 12' }
+      {
+        label: 'Run entry number 12 of this session again',
+        command: 'Invoke-History 12',
+        keywords: ['invoke-history', '!12', 'repeat a numbered line', 'rerun']
+      }
     ],
     placeholders: { TEXT: 'Part of the command you are trying to remember' },
     keywords: [
@@ -2386,9 +2822,21 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Prints worked examples for a PowerShell command. Until the help files have been downloaded the local text is thin, so the -Online variant, which opens the documentation page, is often the better read.',
     command: 'Get-Help NAME -Examples',
     variants: [
-      { label: 'Open the full documentation in the browser', command: 'Get-Help NAME -Online' },
-      { label: 'Everything, in the terminal', command: 'Get-Help NAME -Full' },
-      { label: 'For an ordinary program, ask the program', command: 'PROGRAM --help' }
+      {
+        label: 'Open the documentation in a browser',
+        command: 'Get-Help NAME -Online',
+        keywords: ['-online', 'microsoft learn', 'web docs', 'proper manual']
+      },
+      {
+        label: 'Read the whole help in the terminal',
+        command: 'Get-Help NAME -Full',
+        keywords: ['man', '-full', 'every parameter', 'complete reference']
+      },
+      {
+        label: 'Ask an ordinary program for its help',
+        command: 'PROGRAM --help',
+        keywords: ['--help', '-h', '/?', 'usage', 'git help', 'npm help']
+      }
     ],
     placeholders: {
       NAME: 'A PowerShell command, such as Get-ChildItem',
@@ -2412,13 +2860,21 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     id: 'ps-find-command',
     shell: 'powershell',
     category: 'shell',
-    task: 'Find a command when I only know roughly what it does',
+    task: 'Find a command by what it does',
     summary:
       'Lists every command whose name contains the word. PowerShell names are Verb-Noun, so searching for the thing (clipboard, archive, service) usually finds it.',
     command: "Get-Command '*WORD*'",
     variants: [
-      { label: 'Everything that acts on one kind of thing', command: "Get-Command -Noun '*WORD*'" },
-      { label: 'Search the help text as well as the names', command: "Get-Help '*WORD*'" }
+      {
+        label: 'List the commands for one kind of thing',
+        command: "Get-Command -Noun '*WORD*'",
+        keywords: ['-noun', 'by topic', 'related cmdlets', 'everything about services']
+      },
+      {
+        label: 'Search the help text, not only names',
+        command: "Get-Help '*WORD*'",
+        keywords: ['apropos', 'man -k', 'full text', 'what can do this']
+      }
     ],
     placeholders: { WORD: 'A word such as clipboard, zip, service or dns' },
     keywords: [
@@ -2444,14 +2900,24 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Set-Alias SHORT_NAME COMMAND',
     variants: [
       {
-        label: 'A shortcut that carries arguments',
-        command: 'function SHORT_NAME { COMMAND ARGUMENTS @args }'
+        label: 'Make a shortcut that carries arguments',
+        command: 'function SHORT_NAME { COMMAND ARGUMENTS @args }',
+        keywords: ['function', "alias ll='ls -la'", 'wrapper', 'alias with flags']
       },
-      { label: 'An example: gs for git status', command: 'function gs { git status @args }' },
-      { label: 'What does this short name really run?', command: 'Get-Alias SHORT_NAME' },
+      {
+        label: 'Make gs a shortcut for git status',
+        command: 'function gs { git status @args }',
+        keywords: ['gs', 'alias for git status', 'git shorthand', 'save keystrokes']
+      },
+      {
+        label: 'What does a short name really run?',
+        command: 'Get-Alias SHORT_NAME',
+        keywords: ['get-alias', 'what is ls here', 'resolve', 'type command', 'behind the name']
+      },
       {
         label: 'Which short names does a command have?',
-        command: 'Get-Alias -Definition Get-ChildItem'
+        command: 'Get-Alias -Definition Get-ChildItem',
+        keywords: ['get-alias -definition', 'abbreviations', 'gci and dir', 'other spellings']
       }
     ],
     placeholders: {
@@ -2482,8 +2948,16 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command:
       'if (!(Test-Path $PROFILE)) { New-Item $PROFILE -ItemType File -Force }; notepad $PROFILE',
     variants: [
-      { label: 'Where is my profile?', command: '$PROFILE' },
-      { label: 'Load the profile again after editing it', command: '. $PROFILE' }
+      {
+        label: 'Where is my profile script?',
+        command: '$PROFILE',
+        keywords: ['$profile', 'bashrc equivalent', 'startup file path', 'which file is it']
+      },
+      {
+        label: 'Load the profile again after editing',
+        command: '. $PROFILE',
+        keywords: ['source ~/.bashrc', 'dot sourcing', 'apply without restarting', 'reload']
+      }
     ],
     keywords: [
       '.bashrc',
@@ -2509,15 +2983,25 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'Set-ExecutionPolicy RemoteSigned -Scope CurrentUser',
     variants: [
       {
-        label: 'See the policy at every level (changes nothing)',
-        command: 'Get-ExecutionPolicy -List'
+        label: 'Show the execution policy at every level',
+        command: 'Get-ExecutionPolicy -List',
+        keywords: ['get-executionpolicy', 'what is set now', 'scopes', 'changes nothing']
       },
-      { label: 'Trust one script you downloaded', command: 'Unblock-File SCRIPT.ps1' },
       {
-        label: 'Run one script once without changing the policy',
-        command: 'powershell -ExecutionPolicy Bypass -File SCRIPT.ps1'
+        label: 'Trust one script you downloaded',
+        command: 'Unblock-File SCRIPT.ps1',
+        keywords: ['unblock-file', 'mark of the web', 'downloaded and blocked', 'zone identifier']
       },
-      { label: 'Sidestep it for npm: call the .cmd version', command: 'npm.cmd install' }
+      {
+        label: 'Run one script without changing anything',
+        command: 'powershell -ExecutionPolicy Bypass -File SCRIPT.ps1',
+        keywords: ['-executionpolicy bypass', 'one off', 'run a ps1 once', 'powershell -file']
+      },
+      {
+        label: 'Run npm when scripts are blocked',
+        command: 'npm.cmd install',
+        keywords: ['npm.cmd', 'npm.ps1 cannot be loaded', 'pnpm blocked', 'workaround', 'yarn']
+      }
     ],
     placeholders: { SCRIPT: 'The script file name without its .ps1 ending' },
     keywords: [
@@ -2540,15 +3024,20 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     id: 'ps-run-local-program',
     shell: 'powershell',
     category: 'shell',
-    task: 'Run a program or script that is in this folder',
+    task: 'Run a program in the current folder',
     summary:
       'PowerShell never runs things from the current folder by bare name, which is why a file you can see is "not recognized". Put .\\ in front to say "the one right here".',
     command: '.\\PROGRAM',
     variants: [
-      { label: 'A PowerShell script', command: '.\\SCRIPT.ps1' },
       {
-        label: 'A program whose path has spaces',
-        command: "& 'C:\\Program Files\\FOLDER\\PROGRAM.exe'"
+        label: 'Run a PowerShell script here',
+        command: '.\\SCRIPT.ps1',
+        keywords: ['./script.sh', 'run a ps1', 'execute', 'local file', 'dot backslash']
+      },
+      {
+        label: 'Run a program whose path has spaces',
+        command: "& 'C:\\Program Files\\FOLDER\\PROGRAM.exe'",
+        keywords: ['call operator', '&', 'program files', 'quoted path', 'unexpected token']
       }
     ],
     placeholders: {
@@ -2580,16 +3069,19 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'COMMAND_ONE; COMMAND_TWO',
     variants: [
       {
-        label: 'Only if the first succeeded (works everywhere)',
-        command: 'COMMAND_ONE; if ($?) { COMMAND_TWO }'
+        label: 'Run the second only if the first worked',
+        command: 'COMMAND_ONE; if ($?) { COMMAND_TWO }',
+        keywords: ['&& in 5.1', 'if ($?)', 'on success', 'works in windows powershell']
       },
       {
-        label: 'Only if the first succeeded (PowerShell 7 only)',
-        command: 'COMMAND_ONE && COMMAND_TWO'
+        label: 'Chain with && (PowerShell 7 only)',
+        command: 'COMMAND_ONE && COMMAND_TWO',
+        keywords: ['&&', 'and then', 'bash style', 'npm install && npm run dev', 'on success']
       },
       {
-        label: 'Only if the first FAILED (PowerShell 7 only)',
-        command: 'COMMAND_ONE || COMMAND_TWO'
+        label: 'Chain with || (PowerShell 7 only)',
+        command: 'COMMAND_ONE || COMMAND_TWO',
+        keywords: ['||', 'on failure', 'fallback', 'or else', 'if it fails do this']
       }
     ],
     placeholders: {
@@ -2619,12 +3111,25 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     command: 'COMMAND | Out-File FILE -Encoding utf8',
     variants: [
       {
-        label: 'Add to the end of the file instead',
-        command: 'COMMAND | Out-File FILE -Encoding utf8 -Append'
+        label: 'Append output to the end of a file',
+        command: 'COMMAND | Out-File FILE -Encoding utf8 -Append',
+        keywords: ['>>', 'keep what is there', 'add to a log', 'without overwriting']
       },
-      { label: 'See it on screen AND save it', command: 'COMMAND | Tee-Object FILE' },
-      { label: 'Errors and warnings too, not only the normal output', command: 'COMMAND *> FILE' },
-      { label: 'Throw the output away (the /dev/null of PowerShell)', command: 'COMMAND *> $null' }
+      {
+        label: 'Show output on screen and save it',
+        command: 'COMMAND | Tee-Object FILE',
+        keywords: ['tee', 'both at once', 'watch and record', 'save a build log']
+      },
+      {
+        label: 'Save errors and warnings as well',
+        command: 'COMMAND *> FILE',
+        keywords: ['2>&1', 'stderr', 'every stream', 'red text missing from the file']
+      },
+      {
+        label: 'Throw the output away entirely',
+        command: 'COMMAND *> $null',
+        keywords: ['/dev/null', '$null', 'nul', 'silence it', 'no output', 'quiet']
+      }
     ],
     placeholders: {
       COMMAND: 'The command whose output you want',
@@ -2655,9 +3160,26 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Puts what the command prints on the clipboard, ready to paste into a chat, an issue or an agent.',
     command: 'COMMAND | Set-Clipboard',
     variants: [
-      { label: 'A whole file', command: 'Get-Content FILE -Raw | Set-Clipboard' },
-      { label: 'Print what is on the clipboard now', command: 'Get-Clipboard' },
-      { label: 'Save the clipboard into a file', command: 'Get-Clipboard | Set-Content FILE' }
+      {
+        label: 'Copy a whole file to the clipboard',
+        command: 'Get-Content FILE -Raw | Set-Clipboard',
+        keywords: ['clip < file', 'paste a config', 'send the contents', 'share a log']
+      },
+      {
+        label: 'Print what is on the clipboard now',
+        command: 'Get-Clipboard',
+        keywords: ['pbpaste', 'read the clipboard', 'what did i copy', 'paste into the shell']
+      },
+      {
+        label: 'Save the clipboard into a file',
+        command: 'Get-Clipboard | Set-Content FILE',
+        keywords: [
+          'pbpaste >',
+          'dump the clipboard',
+          'write what i copied',
+          'paste into a text file'
+        ]
+      }
     ],
     placeholders: {
       COMMAND: 'The command whose output you want',
@@ -2688,8 +3210,21 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
       'Runs the command and prints how long it took. The output of the command itself is hidden unless you use the variant.',
     command: 'Measure-Command { COMMAND }',
     variants: [
-      { label: 'Show the output as well', command: 'Measure-Command { COMMAND | Out-Default }' },
-      { label: 'Just the seconds', command: '(Measure-Command { COMMAND }).TotalSeconds' }
+      {
+        label: 'Time a command and show its output',
+        command: 'Measure-Command { COMMAND | Out-Default }',
+        keywords: [
+          'out-default',
+          'measure-command hides the output',
+          'where did my output go',
+          'time and print the result'
+        ]
+      },
+      {
+        label: 'Show only the seconds taken',
+        command: '(Measure-Command { COMMAND }).TotalSeconds',
+        keywords: ['totalseconds', 'one number', 'benchmark', 'elapsed', 'how slow']
+      }
     ],
     placeholders: { COMMAND: 'The command to time' },
     keywords: [
@@ -2712,7 +3247,13 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     summary:
       'Prints the exit code of the last PROGRAM that ran (git, npm, node): 0 means success and anything else is a failure. For PowerShell commands use the $? variant.',
     command: '$LASTEXITCODE',
-    variants: [{ label: 'True or False, for any kind of command', command: '$?' }],
+    variants: [
+      {
+        label: 'Did the last command succeed? True or False',
+        command: '$?',
+        keywords: ['echo $?', 'boolean result', 'any kind of command', 'success flag']
+      }
+    ],
     keywords: [
       'echo $?',
       'exit code',
@@ -2730,20 +3271,26 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     id: 'ps-run-for-each-file',
     shell: 'powershell',
     category: 'shell',
-    task: 'Run a command on every file of a kind',
+    task: 'Run a command on every matching file',
     summary:
       'Hands each matching file, one at a time, to the command. Inside the braces $_.FullName is the full path of the current file and $_.Name its name.',
     command: "Get-ChildItem -Filter '*.EXTENSION' | ForEach-Object { COMMAND $_.FullName }",
     variants: [
       {
-        label: 'Subfolders too',
+        label: 'Run a command on files in subfolders',
         command:
-          "Get-ChildItem -Recurse -File -Filter '*.EXTENSION' | ForEach-Object { COMMAND $_.FullName }"
+          "Get-ChildItem -Recurse -File -Filter '*.EXTENSION' | ForEach-Object { COMMAND $_.FullName }",
+        keywords: ['find -exec', 'xargs', 'the whole tree', 'recursive loop']
       },
-      { label: 'Repeat a command five times', command: '1..5 | ForEach-Object { COMMAND }' },
+      {
+        label: 'Repeat a command five times',
+        command: '1..5 | ForEach-Object { COMMAND }',
+        keywords: ['for loop', '1..5', 'n times', 'iterate', 'seq']
+      },
       {
         label: 'Repeat every two seconds until Ctrl+C',
-        command: 'while ($true) { COMMAND; Start-Sleep -Seconds 2 }'
+        command: 'while ($true) { COMMAND; Start-Sleep -Seconds 2 }',
+        keywords: ['watch', 'while true', 'poll', 'keep checking', 'sleep 2', 'loop forever']
       }
     ],
     placeholders: {
@@ -2768,16 +3315,21 @@ export const POWERSHELL_HELP: readonly HelpEntry[] = [
     id: 'ps-preview-whatif',
     shell: 'powershell',
     category: 'shell',
-    task: 'Preview what a command would do, without doing it',
+    task: 'Preview what a command would do',
     summary:
       'Most PowerShell commands that change something accept -WhatIf: they print what they WOULD do and touch nothing. It works on PowerShell commands only, not on programs such as git or npm.',
     command: 'COMMAND -WhatIf',
     variants: [
       {
-        label: 'An example: which log files would a delete remove?',
-        command: 'Get-ChildItem -Recurse -File -Filter *.log | Remove-Item -WhatIf'
+        label: 'Which log files would a delete remove?',
+        command: 'Get-ChildItem -Recurse -File -Filter *.log | Remove-Item -WhatIf',
+        keywords: ['delete all the log files', 'dry run a cleanup', 'before rm', 'check the list']
       },
-      { label: 'Be asked about each item instead', command: 'COMMAND -Confirm' }
+      {
+        label: 'Be asked to confirm each item',
+        command: 'COMMAND -Confirm',
+        keywords: ['-confirm', 'rm -i', 'prompt me', 'yes or no per item', 'one at a time']
+      }
     ],
     placeholders: {
       COMMAND: 'A PowerShell command that changes something, such as Remove-Item FOLDER -Recurse'
