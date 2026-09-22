@@ -1520,6 +1520,23 @@ const scenarios = {
     }, 10000)
     ok(!!picked, `a picked colour is the accent, and the tab's rule follows it (${picked?.rule})`)
     ok(picked?.stored === '#e07a2f' && picked?.follow === 1, 'it is stored, and "Follow theme" is offered')
+    // EVERY accent follows, not just the tab: the pressed segment of a
+    // control and the selected settings page wear it too.
+    const worn = await until(
+      () =>
+        page.evaluate(() => {
+          const span = document.createElement('span')
+          span.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-accent').trim()
+          document.body.appendChild(span)
+          const accent = getComputedStyle(span).color
+          span.remove()
+          const seg = document.querySelector('[data-pref="window-edges"] [aria-pressed="true"]')
+          return !!seg && getComputedStyle(seg).backgroundColor === accent
+        }),
+      5000
+    )
+    ok(worn, 'the pressed segment of a control wears the picked accent too')
+    await sleep(800)
     await row.scrollIntoViewIfNeeded()
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-picked.png') }).catch(() => {})
 
