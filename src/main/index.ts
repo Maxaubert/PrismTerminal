@@ -5,7 +5,7 @@ import { stat } from 'fs/promises'
 import { homedir } from 'os'
 import { dirname, join } from 'path'
 import type { Restored, SavedTabs, UpdateInfo } from '@shared/types'
-import { claudeSessions } from '@core/main/agentResume'
+import { claudeSessionsAsync } from '@core/main/agentResume'
 import { registerTermIpc } from '@core/main/ipc'
 import { registerDictationIpc } from '@core/main/dictationIpc'
 import { planRestore } from './planRestore'
@@ -342,7 +342,15 @@ function wireIpc(): void {
         if (await isDir(t.cwd)) present.add(t.cwd)
       })
     )
-    const plan = planRestore(saved, (p) => present.has(p), claudeSessions)
+    // Each claude tab's sessions, looked up OFF main's thread first (a folder
+    // can hold thousands), then handed to the pure planner as a lookup.
+    const sessions = new Map<string, string[]>()
+    await Promise.all(
+      [...new Set(saved.tabs.filter((t) => t.agent === 'claude' && present.has(t.cwd)).map((t) => t.cwd))].map(
+        async (cwd) => sessions.set(cwd, await claudeSessionsAsync(cwd))
+      )
+    )
+    const plan = planRestore(saved, (p) => present.has(p), (cwd) => sessions.get(cwd) ?? [])
     if (firstRestore) {
       firstRestore = false
       const launched = foldersFromArgv(process.argv)

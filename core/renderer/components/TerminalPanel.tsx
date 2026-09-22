@@ -10,7 +10,8 @@ import { parseOsc9 } from '../../shared/termCwd'
 import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
 import { followsHostStyle, paintsGround, termApi, termHost } from '../host'
 import { normalizeColor } from '../lib/termAnsi'
-import { linkColor } from '../lib/termLinks'
+import { findLinks, linkColor } from '../lib/termLinks'
+import { arrowKeys, caretClickAllowed, caretDelta, type ClickGate } from '../lib/termClickCaret'
 import { attachLinkPaint, type LinkPainter } from '../lib/termLinkPaint'
 import {
   onTermLookChange,
@@ -152,6 +153,99 @@ function fitKeepingCursorLine(term: Terminal, fit: FitAddon): void {
     }
     term.write(`\x1b[${Math.max(0, r - nb.baseY) + 1};${Math.max(0, c) + 1}H`)
   })
+}
+
+/**
+ * CLICK TO PUT THE CARET THERE (owner, 2026-09-22). A plain click on the line
+ * being edited sends the Left or Right presses that walk the shell's cursor to
+ * the cell clicked; every other click (a drag, a double click, a link, a
+ * program that owns the mouse, old output, a full-screen program) is left
+ * exactly as it was. The rules are `termClickCaret`'s, pure and tested; this
+ * only reads the event and the buffer into them. Returns the disposer.
+ */
+function attachClickCaret(term: Terminal, el: HTMLElement, id: string): () => void {
+  // DECTCEM, followed from the stream: xterm keeps whether the cursor is
+  // hidden to itself. Returning false lets xterm apply it as always.
+  let cursorHidden = false
+  const cursorMode = (hidden: boolean) => (params: (number | number[])[]): boolean => {
+    if (params.some((p) => p === 25)) cursorHidden = hidden
+    return false
+  }
+  const show = term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, cursorMode(false))
+  const hide = term.parser.registerCsiHandler({ prefix: '?', final: 'l' }, cursorMode(true))
+  let down: { x: number; y: number } | null = null
+  const onDown = (e: MouseEvent): void => {
+    down = { x: e.clientX, y: e.clientY }
+  }
+  const onUp = (e: MouseEvent): void => {
+    const from = down
+    down = null
+    if (!from) return
+    const screen = term.element?.querySelector<HTMLElement>('.xterm-screen')
+    if (!screen) return
+    const r = screen.getBoundingClientRect()
+    const cellW = r.width / term.cols
+    const cellH = r.height / term.rows
+    // Read after xterm has finished with the same mouseup: a drag's selection
+    // is only final once its own handler has run.
+    setTimeout(() => {
+      const b = term.buffer.active
+      const col = Math.max(0, Math.min(term.cols, Math.round((e.clientX - r.left) / cellW)))
+      const row = Math.floor((e.clientY - r.top) / cellH)
+      const y = b.baseY + b.cursorY
+      let first = y
+      while (first > 0 && b.getLine(first)?.isWrapped) first -= 1
+      let last = y
+      while (last + 1 < b.length && b.getLine(last + 1)?.isWrapped) last += 1
+      const clicked = b.viewportY + row
+      let textBelow = false
+      for (let i = last + 1; i < b.length && !textBelow; i += 1)
+        if ((b.getLine(i)?.translateToString(true) ?? '').length) textBelow = true
+      const widths: number[] = []
+      let textEnd = 0
+      let text = ''
+      for (let i = first; i <= last; i += 1) {
+        const line = b.getLine(i)
+        text += line?.translateToString(false) ?? ''
+        for (let x = 0; x < term.cols; x += 1) {
+          const cell = line?.getCell(x)
+          widths.push(cell?.getWidth() ?? 1)
+          if (cell && cell.getChars() !== '') textEnd = widths.length - 1 + Math.max(1, cell.getWidth())
+        }
+      }
+      const target = (clicked - first) * term.cols + col
+      const charAt = widths.slice(0, target).filter((w) => w !== 0).length
+      const gate: ClickGate = {
+        button: e.button,
+        detail: e.detail,
+        modifiers: e.shiftKey || e.altKey || e.ctrlKey || e.metaKey,
+        dragged: Math.hypot(e.clientX - from.x, e.clientY - from.y) > cellW / 2 || term.hasSelection(),
+        mouseTracking: term.modes.mouseTrackingMode,
+        alternate: b.type !== 'normal',
+        scrolledBack: b.viewportY !== b.baseY,
+        cursorHidden,
+        textBelow,
+        offLine: clicked < first || clicked > last,
+        onLink: findLinks(text).some((l) => charAt >= l.start && charAt < l.end)
+      }
+      if (!caretClickAllowed(gate)) return
+      const keys = arrowKeys(
+        caretDelta(widths, (y - first) * term.cols + b.cursorX, target, textEnd),
+        term.modes.applicationCursorKeysMode
+      )
+      if (!keys) return
+      markTouched(id)
+      termApi().termInput(id, keys)
+    }, 0)
+  }
+  el.addEventListener('mousedown', onDown, true)
+  el.addEventListener('mouseup', onUp, true)
+  return () => {
+    show.dispose()
+    hide.dispose()
+    el.removeEventListener('mousedown', onDown, true)
+    el.removeEventListener('mouseup', onUp, true)
+  }
 }
 
 /** Refit a session and tell the pty its new geometry. */
@@ -435,6 +529,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   }
 
   const unsub = [
+    attachClickCaret(term, el, id),
     termApi().onTermData((forId, data) => {
       if (forId === id) {
         stopSpin()

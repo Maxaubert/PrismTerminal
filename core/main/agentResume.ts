@@ -1,4 +1,5 @@
 import { readdirSync, statSync } from 'fs'
+import { readdir, stat } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 
@@ -36,6 +37,41 @@ export function claudeSessions(cwd: string, home: string = homedir()): string[] 
   } catch {
     return []
   }
+}
+
+/**
+ * `claudeSessions` OFF MAIN'S THREAD (2026-09-22, owner: the app "soft locks
+ * for a second on first launch"). A folder claude has worked in for months
+ * holds thousands of transcripts - 1847 in the owner's home folder - and the
+ * synchronous walk stats every one on main's only thread while the tabs
+ * restore, on a disk that is cold after boot, which is every window of the app
+ * standing still. Same answer, same order; the stats go sixteen at a time, the
+ * bound the directory listing uses, so they do not flood the pool a playing
+ * film is read through.
+ */
+export async function claudeSessionsAsync(cwd: string, home: string = homedir()): Promise<string[]> {
+  const enc = cwd.replace(/[^A-Za-z0-9]/g, '-')
+  const dir = join(home, '.claude', 'projects', enc)
+  let names: string[]
+  try {
+    names = (await readdir(dir)).filter((f) => f.endsWith('.jsonl'))
+  } catch {
+    return []
+  }
+  const found: Array<{ id: string; m: number }> = []
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < names.length) {
+      const f = names[next++]
+      try {
+        found.push({ id: f.slice(0, -'.jsonl'.length), m: (await stat(join(dir, f))).mtimeMs })
+      } catch {
+        /* removed while we looked: not a session to resume */
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(16, names.length) }, worker))
+  return found.sort((a, b) => b.m - a.m).map((s) => s.id)
 }
 
 /**

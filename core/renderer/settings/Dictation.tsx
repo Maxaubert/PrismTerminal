@@ -41,8 +41,8 @@ const ROWS = 'border-t border-[color:var(--p-line)]'
 const GPU_ID = 'gpu-pack'
 
 const FAILURES: Record<DownloadFailure, string> = {
-  network: 'The download failed. Check the connection and try again.',
-  checksum: 'The file did not match its checksum and was deleted. Try again.',
+  network: 'The download failed.',
+  checksum: 'The file did not match its checksum and was deleted.',
   disk: 'It could not be written to disk.',
   cancelled: '',
   unpack: 'It could not be unpacked.'
@@ -389,8 +389,8 @@ export function DictationSettings(): JSX.Element | null {
           label="Dictation"
           hint={
             enabled && noModel
-              ? 'Download a model below to start dictating.'
-              : 'Speak instead of typing. Runs on this PC: your voice never leaves it.'
+              ? 'Needs a speech model before it can be used.'
+              : 'Turns speech into text on this PC. Your voice is never sent anywhere.'
           }
         >
           <Switch on={enabled} onChange={setDictationEnabled} label="Dictation" />
@@ -401,8 +401,8 @@ export function DictationSettings(): JSX.Element | null {
           off={!enabled}
           hint={
             mode === 'hold'
-              ? 'Hold the key while you speak, let go to finish.'
-              : 'Press once to start, press again to finish.'
+              ? 'Dictation runs while the key is held down.'
+              : 'One press starts dictation and the next press stops it.'
           }
         >
           <Segmented
@@ -418,18 +418,18 @@ export function DictationSettings(): JSX.Element | null {
           id="dictation-hotkey"
           label="Key"
           off={!enabled}
-          hint="Escape cancels a dictation. Text is pasted at the cursor and never sent for you."
+          hint="The key that starts dictation. The text is pasted at the cursor and is not sent."
         >
           <HotkeyField value={hotkey} disabled={!enabled} />
         </Pref>
-        <Pref id="dictation-mic" label="Microphone" off={!enabled} hint="Test shows a live level: speak and the bar should move.">
+        <Pref id="dictation-mic" label="Microphone" off={!enabled} hint="The microphone used for dictation.">
           <MicField value={mic} disabled={!enabled} />
         </Pref>
         <Pref
           id="dictation-language"
           label="Language"
           off={!enabled}
-          hint="Auto-detect works for most. Pin a language if short phrases are heard as the wrong one."
+          hint="The language dictation listens for."
         >
           <Select
             id="dictation-language"
@@ -442,11 +442,11 @@ export function DictationSettings(): JSX.Element | null {
           id="dictation-pause-media"
           label="Pause media while dictating"
           off={!enabled}
-          hint="Pauses what is playing, and resumes only that."
+          hint="Pauses playing audio and video while you dictate, then resumes them."
         >
           <Switch on={pauseMedia} onChange={setDictationPauseMedia} label="Pause media while dictating" disabled={!enabled} />
         </Pref>
-        <Pref id="dictation-sounds" label="Sounds" off={!enabled} hint="A short cue when the microphone opens and closes.">
+        <Pref id="dictation-sounds" label="Sounds" off={!enabled} hint="Plays a short sound when the microphone opens and closes.">
           <Switch on={sounds} onChange={setDictationSounds} label="Sounds" disabled={!enabled} />
         </Pref>
       </div>
@@ -454,7 +454,7 @@ export function DictationSettings(): JSX.Element | null {
       <div data-pref="dictation-model" className="mt-7">
         <h3 className="text-[12.5px] font-semibold text-[var(--p-text)]">Models</h3>
         <p className="mt-0.5 text-[11.5px] text-[var(--p-dim)]">
-          Bigger hears better and needs more from the PC. Downloaded once, used by Prism and Prism Terminal alike.
+          Larger models are more accurate and need a faster PC. A downloaded model is shared by both apps.
         </p>
         <div className="mt-3 overflow-hidden rounded-xl border border-[color:var(--p-divider)]">
           {visibleModels().map((m) => {
@@ -468,7 +468,7 @@ export function DictationSettings(): JSX.Element | null {
                 failure={failures[m.id]}
                 badge={active ? 'Active' : null}
                 recommended={m.id === rec?.id}
-                warn={m.needsGpu && !gpuOn ? 'Slow without GPU acceleration: seconds per sentence on a CPU.' : null}
+                warn={m.needsGpu && !gpuOn ? 'Slow without GPU acceleration, taking seconds per sentence.' : null}
                 getLabel="Download"
                 // The same quiet button on every row (owner, 2026-09-19: "the
                 // recommended shouldn't have a different download button"). The
@@ -500,7 +500,7 @@ export function DictationSettings(): JSX.Element | null {
           <h3 className="text-[12.5px] font-semibold text-[var(--p-text)]">GPU acceleration</h3>
           <p className="mt-0.5 text-[11.5px] text-[var(--p-dim)]">
             {info.gpuFellBack
-              ? 'The GPU engine would not start on this PC, so the CPU is answering. Removing and enabling it again may help.'
+              ? 'The GPU engine could not start on this PC, so the CPU is used instead.'
               : 'An NVIDIA card was found. The GPU engine makes the large models answer in under a second.'}
           </p>
           <div className="mt-3 overflow-hidden rounded-xl border border-[color:var(--p-divider)]">
@@ -525,7 +525,7 @@ export function DictationSettings(): JSX.Element | null {
                 <button
                   data-gpu-toggle
                   className={button}
-                  title="Turns GPU acceleration off and frees 675 MB. Enable downloads it again."
+                  title="Turns GPU acceleration off and frees 675 MB of disk space."
                   onClick={() => remove(GPU_ID)}
                 >
                   Disable
