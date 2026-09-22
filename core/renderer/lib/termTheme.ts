@@ -433,7 +433,7 @@ export function resolveTermTheme(themeId: string): TermTheme {
         ...legiblePalette(c.ansi, c.bg)
       }
   }
-  // TERM_PRESETS[0] is 'prism'; the find cannot miss, the fallback is for the type.
+  // DEFAULT_TERM_THEME is in the list; that find cannot miss, the last fallback is for the type.
   const p =
     TERM_PRESETS.find((x) => x.id === themeId) ??
     // An id nothing answers to: the host's own default, where that is a preset.
