@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react'
 import { followsHostStyle, termHost } from '../host'
 import {
   FONT_PCTS,
@@ -273,7 +273,14 @@ function pickPreset(id: string): void {
   if (volume !== termExtraDefaults().indicator) setAgentIndicator(volume)
 }
 
-export function TerminalAppearanceSettings(): JSX.Element {
+/**
+ * `afterFont`: an app's OWN rows, placed right under Font size (owner,
+ * 2026-09-22: "move those settings, bg and accent, to the top of the list
+ * right under font and font size"). The rows stay the app's - Prism passes
+ * nothing, since its window colours belong to its app style - and the core
+ * only lends them the place.
+ */
+export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNode } = {}): JSX.Element {
   const themeId = useTermThemeId()
   const fontPct = useTermFontPct()
   const fontId = useTermFontId()
@@ -496,6 +503,7 @@ export function TerminalAppearanceSettings(): JSX.Element {
           options={FONT_PCTS.map((p) => ({ id: String(p), name: `${p}%` }))}
         />
       </Pref>
+      {afterFont}
       {/* The material does not exist before Windows 11, so there the row says
           why instead of offering a switch that would do nothing. */}
       <Pref

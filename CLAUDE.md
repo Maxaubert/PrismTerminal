@@ -395,16 +395,27 @@ terminal theme, anything that reads or shows files.
   asserts what main HEARD, and how the border looks is on the hands-on list. The `edges` e2e
   measures real edges (a tab separator, the title bar's rule, the settings rail, a settings row),
   WAITING for each to arrive, since the strip's border colour transitions over 550ms.
-- **THE ACCENT IS A SETTING, AND UNSET IS THE THEME'S** (owner, 2026-09-22: "add an accent colour
-  option which would pick the accents you see, like the blue highlight effect and tab effect").
-  Settings > Appearance > Accent colour (`window-accent`, localStorage `prism.window.accent`, store
-  `lib/accentPrefs.ts`), a hex field and swatch showing the theme's own accent until a colour is
-  picked, then a "Follow theme" button that forgets it. This app's row, for the edges' reason (in
-  Prism the accent is the app style's). Applied ONCE, as `chromeTokens`' `chosenAccent`: every
-  accent-derived token (`--p-accent`, `--p-accent-hi`, `--p-sel-bg`, `--p-on-accent`) follows, and
-  no component knows. A chosen colour is KEPT where the ground can show it and only MOVED to the
-  3:1 floor where it cannot, never swapped for another candidate the way the theme's own are,
-  since it was somebody's pick. The `accent` e2e measures the active tab's rule, not just the token.
+- **THE ACCENT AND THE BACKGROUND ARE SETTINGS, AND UNSET IS THE THEME'S** (owner, 2026-09-22:
+  "an accent colour option which would pick the accents you see, like the blue highlight effect
+  and tab effect"; "let background colour be a setting ... move those settings, bg and accent, to
+  the top of the list right under font and font size"). Settings > Appearance > Background colour
+  and Accent colour (`window-background`, `window-accent`; localStorage `prism.window.background`
+  / `.accent`; stores `lib/backgroundPrefs.ts` / `accentPrefs.ts`, both `lib/colourPref.ts`). Each
+  shows the theme's own colour until one is picked, then a plain **Reset** word (the core's
+  `RESET_LINK`, Prism's own style) forgets it. This app's rows, for the edges' reason (in Prism the
+  window's colours are the app style's); they sit under Font size because the core lends the place
+  (`TerminalAppearanceSettings`' `afterFont`; Prism passes nothing). Applied ONCE, in `paintChrome`:
+  the background replaces the theme's before `chromeTokens` measures it, so the mode, every ink and
+  the accent's floor follow; the terminal follows too because the panel paints its ground from the
+  same token (`paintsGround`). Known gap: xterm's ANSI floor and the character under the block
+  cursor are still measured against the theme's own background, which is the core's. A chosen
+  accent is KEPT where the ground can show it and only MOVED to the 3:1 floor where it cannot. The
+  agent working indicator still follows the THEME's accent (a core change and an owner decision).
+  The `accent` e2e measures the active tab's rule, a pressed segment, the row order and the ground.
+- **EMBER IS THE DEFAULT THEME HERE** (owner, 2026-09-22, handing over the palette he had saved as
+  Custom: "let this be the default theme ... for prism terminal"): Wombat's colours on #121212, the
+  two blacks lifted, the icon's orange `#fe8f34` as the accent. A core preset like any other, and
+  this host's `defaults.theme`, so anyone who never picked a theme moves to it with the update.
 - **THE CLOSE QUESTION IS ONE RULE, NOT A SETTING** (owner, 2026-09-19, #15: "remove the setting but
   just have it on smart mode by default, so it won't ask if you're in a normal shell but if you're
   working with an agent it will ask"). `core/renderer/lib/agentClose.ts`, the same in Prism: a plain
