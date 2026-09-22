@@ -55,6 +55,7 @@ import {
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { applyChrome, chromeTokens } from './lib/chromeTheme'
 import { onWindowEdgesChange, windowEdges } from './lib/edgesPrefs'
+import { onWindowAccentChange, windowAccent } from './lib/accentPrefs'
 
 const Settings = lazy(() => import('./components/Settings'))
 // Loaded when it is first opened: the popup brings the whole catalogue with it,
@@ -90,7 +91,8 @@ function paintChrome(): void {
     resolveTermTheme(id),
     acrylic ? termOpacity() : 100,
     presetAccent(id),
-    edges
+    edges,
+    windowAccent()
   )
   applyChrome(tokens)
   window.prism.setWindowBg(tokens.vars['--p-bg-solid'])
@@ -133,9 +135,11 @@ export default function App(): JSX.Element {
     paintChrome()
     const offLook = onTermLookChange(paintChrome)
     const offEdges = onWindowEdgesChange(paintChrome)
+    const offAccent = onWindowAccentChange(paintChrome)
     return () => {
       offLook()
       offEdges()
+      offAccent()
     }
   }, [])
 

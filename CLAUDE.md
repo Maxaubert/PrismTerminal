@@ -30,7 +30,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
   same"). `core/renderer/settings`: the field primitives, `TerminalAppearanceSettings` (theme wall and
   editor, font, size, acrylic, the two indicator colours) and the rows `ShellSetting` /
   `AgentIndicatorSetting`. Each app composes its OWN page round them (`components/Settings.tsx` here
-  is only the page plus this app's rows: new tabs, Explorer menu, window edges, version). Values are per app (own
+  is only the page plus this app's rows: new tabs, Explorer menu, window edges, accent, version). Values are per app (own
   userData), never shared. `settings/options.ts` lists every terminal option by id; a unit test holds
   the list and the sections together, and each app's e2e (`options`) asserts its page shows that
   list and no terminal-looking row of its own. A row outside the list is a fork.
@@ -395,6 +395,16 @@ terminal theme, anything that reads or shows files.
   asserts what main HEARD, and how the border looks is on the hands-on list. The `edges` e2e
   measures real edges (a tab separator, the title bar's rule, the settings rail, a settings row),
   WAITING for each to arrive, since the strip's border colour transitions over 550ms.
+- **THE ACCENT IS A SETTING, AND UNSET IS THE THEME'S** (owner, 2026-09-22: "add an accent colour
+  option which would pick the accents you see, like the blue highlight effect and tab effect").
+  Settings > Appearance > Accent colour (`window-accent`, localStorage `prism.window.accent`, store
+  `lib/accentPrefs.ts`), a hex field and swatch showing the theme's own accent until a colour is
+  picked, then a "Follow theme" button that forgets it. This app's row, for the edges' reason (in
+  Prism the accent is the app style's). Applied ONCE, as `chromeTokens`' `chosenAccent`: every
+  accent-derived token (`--p-accent`, `--p-accent-hi`, `--p-sel-bg`, `--p-on-accent`) follows, and
+  no component knows. A chosen colour is KEPT where the ground can show it and only MOVED to the
+  3:1 floor where it cannot, never swapped for another candidate the way the theme's own are,
+  since it was somebody's pick. The `accent` e2e measures the active tab's rule, not just the token.
 - **THE CLOSE QUESTION IS ONE RULE, NOT A SETTING** (owner, 2026-09-19, #15: "remove the setting but
   just have it on smart mode by default, so it won't ask if you're in a normal shell but if you're
   working with an agent it will ask"). `core/renderer/lib/agentClose.ts`, the same in Prism: a plain
