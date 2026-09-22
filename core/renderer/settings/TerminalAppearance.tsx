@@ -295,7 +295,16 @@ function pickPreset(id: string): void {
  * nothing, since its window colours belong to its app style - and the core
  * only lends them the place.
  */
-export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNode } = {}): JSX.Element {
+export function TerminalAppearanceSettings({
+  afterFont,
+  withIndicator = false
+}: {
+  afterFont?: ReactNode
+  /** Draw the Agent indicator row here, above its two colours (2026-09-22).
+   *  Opt-in, so a host that still places the row itself (Prism before its
+   *  next core update) never shows it twice. */
+  withIndicator?: boolean
+} = {}): JSX.Element {
   const themeId = useTermThemeId()
   const fontPct = useTermFontPct()
   const fontId = useTermFontId()
@@ -578,7 +587,7 @@ export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNod
           pages in Prism and Prism Terminal should be the same in terms of
           order"). The indicator sits directly above the two colours it uses,
           here in the core, so neither app places it on its own. */}
-      <AgentIndicatorSetting />
+      {withIndicator && <AgentIndicatorSetting />}
       <Pref
         id="agent-color"
         label="Agent working indicator"

@@ -261,7 +261,7 @@ function AppearanceTab(): JSX.Element {
   const edges = useWindowEdges()
   return (
     <>
-      <TerminalAppearanceSettings afterFont={<WindowColours />} />
+      <TerminalAppearanceSettings afterFont={<WindowColours />} withIndicator />
       <Pref
         id="window-edges"
         label="Edges"
