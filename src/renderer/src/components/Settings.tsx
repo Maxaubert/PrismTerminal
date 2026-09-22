@@ -1,8 +1,12 @@
-import { useEffect, useState, type JSX, type ReactNode } from 'react'
+import { useEffect, useState, useSyncExternalStore, type JSX, type ReactNode } from 'react'
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../lib/newTabPrefs'
 import { setWindowEdges, useWindowEdges } from '../lib/edgesPrefs'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
-import { Pref, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
+import { HexSwatch, Pref, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
+import { setWindowAccent, useWindowAccent } from '../lib/accentPrefs'
+import { chromeTokens } from '../lib/chromeTheme'
+import { onTermLookChange, termThemeId } from '@core/renderer/lib/termLook'
+import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { DictationSettings } from '@core/renderer/settings/Dictation'
 import { HelpSetting } from '@core/renderer/settings/Help'
 import { TerminalAppearanceSettings } from '@core/renderer/settings/TerminalAppearance'
@@ -161,11 +165,52 @@ const EDGE_OPTIONS: Array<{ id: WindowEdges; name: string }> = WINDOW_EDGES.map(
  * reason. No `ROWS` wrapper: the list above ends in its own bottom rule, and a
  * second top rule under it would be a doubled line (at "solid", a visible one).
  */
+/** The accent the THEME in force would give the window, which is what the
+ *  swatch shows while nothing is chosen: computed the way the window computes
+ *  it (chromeTokens), not read back off the page, so it cannot lag a repaint. */
+const themeAccent = (): string => {
+  const id = termThemeId()
+  return chromeTokens(resolveTermTheme(id), 100, presetAccent(id)).vars['--p-accent']
+}
+
+/**
+ * The window's accent (owner, 2026-09-22: "add an accent colour option which
+ * would pick the accents you see, like the blue highlight effect and tab
+ * effect"). Follows the theme until a colour is picked; "Follow theme" puts
+ * it back. This app's own row, for the edges' reason: in Prism the accent is
+ * the app style's, which has its own picker.
+ */
+function AccentSetting(): JSX.Element {
+  const chosen = useWindowAccent()
+  const fromTheme = useSyncExternalStore(onTermLookChange, themeAccent)
+  return (
+    <Pref
+      id="window-accent"
+      label="Accent colour"
+      hint={
+        chosen
+          ? 'The highlights, the selected row and the active tab. Your own colour.'
+          : "The highlights, the selected row and the active tab. Follows the theme's accent."
+      }
+    >
+      <div className="flex items-center gap-2.5">
+        {chosen && (
+          <button data-follow-theme="accent" onClick={() => setWindowAccent(null)} className={ROW_BUTTON}>
+            Follow theme
+          </button>
+        )}
+        <HexSwatch label="Accent colour" value={chosen ?? fromTheme} onChange={setWindowAccent} />
+      </div>
+    </Pref>
+  )
+}
+
 function AppearanceTab(): JSX.Element {
   const edges = useWindowEdges()
   return (
     <>
       <TerminalAppearanceSettings />
+      <AccentSetting />
       <Pref
         id="window-edges"
         label="Edges"

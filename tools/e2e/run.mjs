@@ -1166,7 +1166,8 @@ const scenarios = {
     // row outside the core's list is a fork.
     // 'window-edges' (#27) is the window's chrome, which in Prism belongs to
     // the app style and has a row of its own there: this app's, not the core's.
-    const own = ['newtab-mode', 'explorer-verb', 'app-version', 'window-edges']
+    // 'window-accent' is the same: the accent is the app style's in Prism.
+    const own = ['newtab-mode', 'explorer-verb', 'app-version', 'window-edges', 'window-accent']
     const extra = [...shown].filter((id) => !wanted.includes(id) && !own.includes(id))
     ok(extra.length === 0, `and nothing else claims to be a setting (extra: ${JSON.stringify(extra)})`)
     ok((await page.locator('[data-pref="confirm-close"]').count()) === 0, 'the close question is not a setting any more')
@@ -1461,6 +1462,74 @@ const scenarios = {
       'and the row shows Solid pressed'
     )
     ok((await page.evaluate(() => window.prism.e2eRegWrites())) === 0, 'no registry write was attempted under --e2e')
+    await app.close().catch(() => {})
+  },
+
+  /**
+   * THE WINDOW'S ACCENT (owner, 2026-09-22: "add an accent colour option which
+   * would pick the accents you see, like the blue highlight effect and tab
+   * effect"). Measured on the ACTIVE TAB'S RULE, which is the tab effect the
+   * owner pointed at, as well as on the token: a token that moved while the
+   * rule stayed blue would be the setting lying. Then "Follow theme" must put
+   * back exactly the colour that was there before.
+   */
+  async accent(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open, so one is the active tab')
+    const probe = () =>
+      page.evaluate(() => {
+        const root = getComputedStyle(document.documentElement)
+        const colour = (css) => {
+          const span = document.createElement('span')
+          span.style.color = css
+          document.body.appendChild(span)
+          const c = getComputedStyle(span).color
+          span.remove()
+          return c
+        }
+        const rule = [...document.querySelectorAll('[data-tab] span[aria-hidden]')].find(
+          (s) => s.className.includes('top-0') && s.className.includes('h-0.5')
+        )
+        return {
+          accent: root.getPropertyValue('--p-accent').trim().toLowerCase(),
+          hi: colour(root.getPropertyValue('--p-accent-hi').trim()),
+          rule: rule ? getComputedStyle(rule).backgroundColor : null,
+          stored: localStorage.getItem('prism.window.accent'),
+          follow: document.querySelectorAll('[data-follow-theme="accent"]').length,
+          field: document.querySelector('[data-pref="window-accent"] input:not([type])')?.value?.toLowerCase() ?? null
+        }
+      })
+    const before = await probe()
+    ok(!!before.rule && before.rule === before.hi, `the active tab wears the accent rule (${before.rule})`)
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    const row = page.locator('[data-pref="window-accent"]')
+    await row.waitFor({ state: 'visible', timeout: 10000 })
+    await row.scrollIntoViewIfNeeded()
+    const idle = await probe()
+    ok(idle.stored === null && idle.follow === 0, 'nothing is chosen at first, so there is nothing to follow back to')
+    ok(idle.field === before.accent, `the swatch shows the theme's own accent (${idle.field} vs ${before.accent})`)
+
+    const field = page.locator('[data-pref="window-accent"] input:not([type])')
+    await field.fill('#E07A2F')
+    await field.press('Enter')
+    const picked = await until(async () => {
+      const p = await probe()
+      return p.accent === '#e07a2f' && p.rule === p.hi && p.rule !== before.rule ? p : null
+    }, 10000)
+    ok(!!picked, `a picked colour is the accent, and the tab's rule follows it (${picked?.rule})`)
+    ok(picked?.stored === '#e07a2f' && picked?.follow === 1, 'it is stored, and "Follow theme" is offered')
+    await row.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-picked.png') }).catch(() => {})
+
+    await page.locator('[data-follow-theme="accent"]').click()
+    const back = await until(async () => {
+      const p = await probe()
+      return p.accent === before.accent && p.rule === before.rule ? p : null
+    }, 10000)
+    ok(!!back, `"Follow theme" puts back exactly the theme's accent (${back?.accent})`)
+    ok(back?.stored === null && back?.follow === 0, 'and forgets the choice')
     await app.close().catch(() => {})
   },
 
