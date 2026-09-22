@@ -161,6 +161,9 @@ so an update never silently changes what an existing user sees; the bridge to ma
   on the icon's own dark grey `#383c44` (Cinder). They were the two ORIGINALS whose names already
   fitted; the public schemes (Dracula, Nord, Gruvbox...) keep their real colours, since a scheme
   called Dracula that is not Dracula is a lie. Ids unchanged: they are saved-settings keys.
+- **THE HELP POPUP BLURS THE WINDOW BEHIND IT AND CASTS NO SHADOW** (owner, 2026-09-22: "remove the
+  shadow behind this and make the bg blurred when it's open"): `backdrop-blur` on a lighter scrim; the
+  blur already lifts the panel off the page, and a shadow on top of it read as a dark halo.
 - **COMMAND HELP IS A POPUP THAT SHOWS AND COPIES, AND NOTHING ELSE** (#12; owner, 2026-09-19: "an
   easy to use panel where you can find shell commands... searchable... metadata on each command so a
   natural-language search finds it... optional in settings", and 2026-09-20: "a pop up with copy
@@ -412,7 +415,7 @@ terminal theme, anything that reads or shows files.
   accent is KEPT where the ground can show it and only MOVED to the 3:1 floor where it cannot. The
   agent working indicator still follows the THEME's accent (a core change and an owner decision).
   The `accent` e2e measures the active tab's rule, a pressed segment, the row order and the ground.
-- **EMBER IS THE DEFAULT THEME HERE** (owner, 2026-09-22, handing over the palette he had saved as
+- **PT DEFAULT IS THE DEFAULT THEME HERE, AND FIRST IN THE WALL** (owner, 2026-09-22, handing over the palette he had saved as
   Custom: "let this be the default theme ... for prism terminal"): Wombat's colours on #121212, the
   two blacks lifted, the icon's orange `#fe8f34` as the accent. A core preset like any other, and
   this host's `defaults.theme`, so anyone who never picked a theme moves to it with the update.

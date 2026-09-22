@@ -52,7 +52,7 @@ describe('chromeTokens', () => {
     // The background setting hands chromeTokens the theme with its ground
     // replaced; the mode is MEASURED, so a white ground on a dark theme turns
     // the window light, and every ink is floored against the new ground.
-    const theme = resolveTermTheme('ember')
+    const theme = resolveTermTheme('pt-default')
     const { vars, mode } = chromeTokens({ ...theme, background: '#f4f1ea' }, 100, '#fe8f34')
     expect(mode).toBe('light')
     expect(vars['--p-bg-solid']).toBe('#f4f1ea')

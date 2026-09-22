@@ -487,7 +487,7 @@ export default function HelpPanel({
     <div
       data-owns-escape
       data-help-scrim
-      className="no-drag fixed inset-0 z-50 grid place-items-center bg-black/55 p-6"
+      className="no-drag fixed inset-0 z-50 grid place-items-center bg-black/35 p-6 backdrop-blur-[6px]"
       role="presentation"
       onMouseDown={onClose}
     >
@@ -499,7 +499,7 @@ export default function HelpPanel({
         aria-label="Command help"
         onMouseDown={(e) => e.stopPropagation()}
         style={{ width: clampHelpWidth(width) }}
-        className="relative flex h-[min(82vh,680px)] max-w-full flex-col overflow-hidden rounded-[var(--p-radius)] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] shadow-[0_24px_70px_rgba(0,0,0,.6)]"
+        className="relative flex h-[min(82vh,680px)] max-w-full flex-col overflow-hidden rounded-[var(--p-radius)] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)]"
       >
         {grip('left')}
         {grip('right')}

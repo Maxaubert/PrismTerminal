@@ -20,7 +20,7 @@ import { themeAgentColors } from './lib/agentColors'
 configureTermCore({
   api: window.prism,
   defaults: {
-    theme: 'ember',
+    theme: 'pt-default',
     acrylic: false,
     indicator: 'minimal',
     // '' = follow the theme (lib/agentColors resolves what that is here).

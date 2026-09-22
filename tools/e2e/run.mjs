@@ -780,6 +780,16 @@ const scenarios = {
       ok((await page.locator('[data-title-help]').count()) === 1, 'the ? is in the title bar (the setting is on by default)')
       await page.locator('[data-title-help]').click()
       ok(await opened(), 'a click on it opens the popup')
+      // The window behind is BLURRED and the panel casts no shadow (owner,
+      // 2026-09-22: "remove the shadow behind this and make the bg blurred").
+      const scrimLook = await page.evaluate(() => ({
+        blur: getComputedStyle(document.querySelector('[data-help-scrim]')).backdropFilter,
+        shadow: getComputedStyle(document.querySelector('[data-help-panel]')).boxShadow
+      }))
+      ok(
+        /blur\(/.test(scrimLook.blur) && scrimLook.shadow === 'none',
+        `the window behind is blurred and the panel has no shadow (${JSON.stringify(scrimLook)})`
+      )
       ok(await until(focusIsSearch, 3000, 50), 'and the search field has the focus')
       ok((await page.locator('[data-help-shell="powershell"]').getAttribute('aria-pressed')) === 'true', 'the chip is the shell of the tab in front (PowerShell)')
       const browse = await page.evaluate(() => ({
@@ -1551,8 +1561,12 @@ const scenarios = {
     // THE DEFAULT THEME IS EMBER here (owner, 2026-09-22: "let this be the
     // default theme ... for prism terminal"): a fresh profile has it selected.
     ok(
-      (await page.locator('[data-term-card="ember"]').first().getAttribute('aria-pressed')) === 'true',
-      'a fresh profile wears Ember, the default theme'
+      (await page.locator('[data-term-card="pt-default"]').first().getAttribute('aria-pressed')) === 'true',
+      'a fresh profile wears PT Default, the default theme'
+    )
+    ok(
+      (await page.locator('[data-term-card]').first().getAttribute('data-term-card')) === 'pt-default',
+      'and it is the first card in the wall'
     )
 
     // BACKGROUND AND ACCENT SIT RIGHT UNDER FONT SIZE (owner, same day).
