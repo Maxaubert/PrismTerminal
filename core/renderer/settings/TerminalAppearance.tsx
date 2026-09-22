@@ -30,7 +30,7 @@ import {
 import { resolveTermTheme, watchTermTheme, TERM_PRESETS } from '../lib/termTheme'
 import { useAgentColors } from '../lib/agentColors'
 import { luminance, normalizeColor } from '../lib/termAnsi'
-import { HexSwatch, Pref, ROWS, ROW_BUTTON, SaveButton, Select, Switch, ThemeHead } from './fields'
+import { HexSwatch, Pref, RESET_LINK, ROWS, SaveButton, Select, Switch, ThemeHead } from './fields'
 
 // THE TERMINAL'S LOOK, as one settings section for both hosts (#15): the theme
 // wall and its editor, font, size, acrylic, and the two agent indicator
@@ -554,8 +554,8 @@ export function TerminalAppearanceSettings(): JSX.Element {
       >
         <div className="flex items-center gap-2.5">
           {agentCol && (
-            <button data-follow-theme="working" onClick={() => setAgentColor('')} className={ROW_BUTTON}>
-              Follow theme
+            <button data-follow-theme="working" onClick={() => setAgentColor('')} className={RESET_LINK}>
+              Reset
             </button>
           )}
           <HexSwatch label="Agent working indicator" value={inForce.working} onChange={setAgentColor} />
@@ -572,8 +572,8 @@ export function TerminalAppearanceSettings(): JSX.Element {
       >
         <div className="flex items-center gap-2.5">
           {doneCol && (
-            <button data-follow-theme="finished" onClick={() => setAgentDoneColor('')} className={ROW_BUTTON}>
-              Follow theme
+            <button data-follow-theme="finished" onClick={() => setAgentDoneColor('')} className={RESET_LINK}>
+              Reset
             </button>
           )}
           <HexSwatch label="Agent finished indicator" value={inForce.finished} onChange={setAgentDoneColor} />

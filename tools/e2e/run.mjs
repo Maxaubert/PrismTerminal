@@ -1274,6 +1274,29 @@ const scenarios = {
       seen[0].below === seen[1].below,
       `and nothing below the wall moves (${seen[0].below} -> ${seen[1].below})`
     )
+    // A colour put back to the theme's is a plain RESET word, as in Prism
+    // (owner, same day: "just a simple reset text you can click"), not a
+    // bordered button.
+    const well = page.locator('[data-pref="agent-color"] input:not([type])')
+    const themed = (await well.inputValue()).toLowerCase()
+    await well.fill('#e07a2f')
+    await well.press('Enter')
+    const reset = page.locator('[data-follow-theme="working"]')
+    await reset.waitFor({ timeout: 5000 })
+    const look = await reset.evaluate((el) => ({
+      text: el.textContent?.trim(),
+      border: parseFloat(getComputedStyle(el).borderTopWidth) || 0,
+      bg: getComputedStyle(el).backgroundColor
+    }))
+    ok(
+      look.text === 'Reset' && look.border === 0 && /rgba\(0, 0, 0, 0\)|transparent/.test(look.bg),
+      `a picked colour offers a plain "Reset" word (${JSON.stringify(look)})`
+    )
+    await reset.click()
+    ok(
+      await until(async () => (await well.inputValue()).toLowerCase() === themed && !(await reset.count()), 5000),
+      'and Reset puts the theme\'s colour back and goes away'
+    )
     await app.close().catch(() => {})
   },
 

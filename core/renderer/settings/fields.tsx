@@ -319,6 +319,16 @@ export function Select({
   )
 }
 
+/**
+ * RESET, as Prism's own settings draw it (owner, 2026-09-22: "don't show these
+ * buttons, use instead the same as Prism uses in style where it is just a
+ * simple reset text you can click"): a word in the accent, underlined on hover,
+ * beside the colour it puts back. For a row whose value can return to what
+ * the theme gives it.
+ */
+export const RESET_LINK =
+  'text-[11px] font-semibold text-[var(--p-accent-hi)] hover:underline focus-visible:underline focus-visible:outline-none'
+
 /** The quiet accent-outlined button a row uses for a verb of its own. */
 export const ROW_BUTTON =
   'h-8 rounded-lg border border-[color:var(--p-accent)]/45 bg-[var(--p-accent)]/10 px-3 text-[12px] font-semibold text-[var(--p-accent-hi)] transition-colors hover:border-[color:var(--p-accent)] hover:bg-[var(--p-accent)]/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent)]/45'
