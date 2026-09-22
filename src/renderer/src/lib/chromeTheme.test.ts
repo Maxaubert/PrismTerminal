@@ -48,6 +48,17 @@ describe('chromeTokens', () => {
       }
     }
   )
+  it('a picked light background makes a light window whose inks still read', () => {
+    // The background setting hands chromeTokens the theme with its ground
+    // replaced; the mode is MEASURED, so a white ground on a dark theme turns
+    // the window light, and every ink is floored against the new ground.
+    const theme = resolveTermTheme('ember')
+    const { vars, mode } = chromeTokens({ ...theme, background: '#f4f1ea' }, 100, '#fe8f34')
+    expect(mode).toBe('light')
+    expect(vars['--p-bg-solid']).toBe('#f4f1ea')
+    expect(contrastRatio(vars['--p-text'], vars['--p-bg-solid'])).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(vars['--p-accent'], vars['--p-bg-solid'])).toBeGreaterThanOrEqual(3)
+  })
   it('follows the theme when nothing is chosen', () => {
     const theme = resolveTermTheme('prism')
     expect(chromeTokens(theme, 100, undefined, 'hairline', null).vars).toEqual(chromeTokens(theme).vars)

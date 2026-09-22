@@ -95,6 +95,20 @@ export interface TermPreset {
 export const TERM_PRESETS: TermPreset[] = [
   // Prism's own dark look: what the terminal wore by default inside Prism.
   { id: 'prism', name: 'Prism', bg: '#0b0b0f', fg: '#e7e7ee', cursor: '#7c7cf0', accent: '#5b5bd6' },
+  // EMBER is the owner's own palette (2026-09-22, saved as Custom and handed
+  // over: "let this be the default theme ... for prism terminal"): Wombat's
+  // colours on a darker #121212, the two blacks lifted so they read, and the
+  // app icon's orange as the accent. Prism Terminal's default; a preset like
+  // any other everywhere else.
+  {
+    id: 'ember',
+    name: 'Ember',
+    bg: '#121212',
+    fg: '#dedacf',
+    cursor: '#bbbbbb',
+    accent: '#fe8f34',
+    ansi: { black: '#646464', red: '#ff615a', green: '#b1e969', yellow: '#ebd99c', blue: '#5da9f6', magenta: '#e86aff', cyan: '#82fff7', white: '#dedacf', brightBlack: '#6b6b6b', brightRed: '#f58c80', brightGreen: '#ddf88f', brightYellow: '#eee5b2', brightBlue: '#a5c7ff', brightMagenta: '#ddaaff', brightCyan: '#b7fff9', brightWhite: '#ffffff' }
+  },
   {
     id: 'bright-lights',
     name: 'Bright Lights',

@@ -56,6 +56,7 @@ import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { applyChrome, chromeTokens } from './lib/chromeTheme'
 import { onWindowEdgesChange, windowEdges } from './lib/edgesPrefs'
 import { onWindowAccentChange, windowAccent } from './lib/accentPrefs'
+import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPrefs'
 
 const Settings = lazy(() => import('./components/Settings'))
 // Loaded when it is first opened: the popup brings the whole catalogue with it,
@@ -87,8 +88,12 @@ function paintChrome(): void {
   const acrylic = termAcrylic()
   const id = termThemeId()
   const edges = windowEdges()
+  // A picked background replaces the theme's for the whole window; the panel
+  // paints the terminal's ground from the same token, so it follows too.
+  const theme = resolveTermTheme(id)
+  const background = windowBackground()
   const tokens = chromeTokens(
-    resolveTermTheme(id),
+    background ? { ...theme, background } : theme,
     acrylic ? termOpacity() : 100,
     presetAccent(id),
     edges,
@@ -136,7 +141,9 @@ export default function App(): JSX.Element {
     const offLook = onTermLookChange(paintChrome)
     const offEdges = onWindowEdgesChange(paintChrome)
     const offAccent = onWindowAccentChange(paintChrome)
+    const offBackground = onWindowBackgroundChange(paintChrome)
     return () => {
+      offBackground()
       offLook()
       offEdges()
       offAccent()
