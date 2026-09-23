@@ -611,6 +611,8 @@ const scenarios = {
       await page.locator('.xterm').first().click()
       await page.keyboard.press('Control+f')
       ok(!!(await until(async () => (await find()) === 1, 4000, 50)), 'Ctrl+F at the prompt opens find')
+      const shadow = await page.locator('[data-term-find]').evaluate((el) => getComputedStyle(el).boxShadow)
+      ok(shadow === 'none', `and the find box casts no shadow (${shadow})`)
       await page.keyboard.press('Escape')
       ok(!!(await until(async () => (await find()) === 0, 4000, 50)), 'and Escape closes it')
       // The alternate screen, as vim and less switch to it.
