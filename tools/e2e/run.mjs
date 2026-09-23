@@ -784,7 +784,7 @@ const scenarios = {
   },
 
   /**
-   * EVERY TAB IS ONE WIDTH (owner, 2026-09-21: "make tabs in both apps have a
+   * TAB WIDTH (owner, 2026-09-21, then a setting on 2026-09-23). Was: EVERY TAB IS ONE WIDTH ("make tabs in both apps have a
    * fixed size, and not dynamically adjust based on the content"). Three
    * folders with names of very different lengths open side by side; what is
    * measured is each tab's box, not the class that sets it, because a class
@@ -803,9 +803,29 @@ const scenarios = {
           return { w: Math.round(el.getBoundingClientRect().width * 10) / 10, cut: label ? label.scrollWidth > label.clientWidth : false }
         })
       )
-    const three = await boxes()
+    // DYNAMIC IS THE DEFAULT (owner, 2026-09-23: "call it dynamic ... have
+    // dynamic be the default"): each tab as wide as its name, the long one
+    // capped and truncated.
+    const dyn = (await boxes()).slice(0, 3)
+    ok(dyn[1].w > dyn[0].w + 40, `by default a long name makes a wider tab than a short one (${dyn.map((b) => b.w).join(' / ')})`)
+    ok(dyn[1].w <= 14 * 16 + 80 && dyn[1].cut, `and the long one stops at the cap, truncated (${dyn[1].w}px)`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tabs-dynamic.png') }).catch(() => {})
+    // FIXED, picked on the Settings page at the TOP of Appearance ("put the
+    // option closer to the top of appearance"): every tab one width.
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    const row = page.locator('[data-pref="tab-width"]')
+    await row.waitFor({ timeout: 8000 })
+    const firstRow = await page.evaluate(() => document.querySelector('[data-pref]')?.getAttribute('data-pref'))
+    ok(firstRow === 'tab-width', `Tab width is the first row of Appearance (${firstRow})`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-tab-width.png') }).catch(() => {})
+    await row.locator('[data-seg="fixed"]').click()
+    ok((await page.evaluate(() => localStorage.getItem('prism.window.tabWidth'))) === 'fixed', 'Fixed is stored')
+    await page.locator('[data-tab]').first().click()
+    await sleep(300)
+    const three = (await boxes()).slice(0, 3)
     const widths = [...new Set(three.map((b) => b.w))]
-    ok(widths.length === 1, `every tab is the same width, whatever its name (${three.map((b) => b.w).join(' / ')})`)
+    ok(widths.length === 1, `with Fixed every tab is the same width, whatever its name (${three.map((b) => b.w).join(' / ')})`)
     ok(widths[0] >= 104 && widths[0] <= 124, `a fixed width, not a content one (${widths[0]}px)`)
     ok(three[1].cut && !three[0].cut, 'the long name is truncated inside the tab, the short one is whole')
     // Selecting a tab must not move anything either: the active one used to be
@@ -815,21 +835,6 @@ const scenarios = {
     await sleep(200)
     ok((await boxes()).map((b) => b.w).join('|') === before, 'picking another tab moves no tab')
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tabs-fixed.png') }).catch(() => {})
-    // TAB WIDTH IS A SETTING (owner, 2026-09-23: "fixed size or dynamic ...
-    // the user can pick"). Fit to name, picked on the Settings page, puts back
-    // the strip from before: each tab as wide as its name, the long one capped.
-    await page.locator('[data-title-settings]').click()
-    await page.locator('[data-settings-tab="appearance"]').click()
-    const row = page.locator('[data-pref="tab-width"]')
-    await row.scrollIntoViewIfNeeded()
-    await row.locator('[data-seg="fit"]').click()
-    ok((await page.evaluate(() => localStorage.getItem('prism.window.tabWidth'))) === 'fit', 'Fit to name is stored')
-    await page.locator('[data-tab]').first().click()
-    await sleep(300)
-    const fit = (await boxes()).slice(0, 3)
-    ok(fit[1].w > fit[0].w + 40, `a long name makes a wider tab than a short one (${fit.map((b) => b.w).join(' / ')})`)
-    ok(fit[1].w <= 14 * 16 + 80 && fit[1].cut, `and the long one stops at the cap, truncated (${fit[1].w}px)`)
-    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tabs-fit.png') }).catch(() => {})
     await app.close().catch(() => {})
   },
 

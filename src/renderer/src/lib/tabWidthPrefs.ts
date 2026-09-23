@@ -2,20 +2,21 @@ import { useSyncExternalStore } from 'react'
 
 // HOW WIDE A TAB IS (owner, 2026-09-23: "add a setting for tab width, where the
 // user can pick fixed size or dynamic, so essentially what we got now and what
-// we had before"). `fixed` is every tab one width (2026-09-21, #35), the
-// default, so nobody's strip changes with the update; `fit` is the tab as wide
-// as its name, up to a cap, which is how the strip was before #35. THIS APP'S
-// OWN setting: the strip is the app's shell, not the terminal's, so its key is
-// not `prism.term.*`. Read defensively: an unknown or missing value is fixed.
+// we had before"; then "call it dynamic ... have dynamic be the default").
+// `dynamic` is the tab as wide as its name, up to a cap, the strip from before
+// #35, and the DEFAULT, by the owner's word, so a strip that was fixed since
+// #35 goes back to dynamic with this update; `fixed` is every tab one width.
+// THIS APP'S OWN setting: the strip is the app's shell, not the terminal's, so
+// its key is not `prism.term.*`. Read defensively: anything unknown is dynamic.
 
-export type TabWidth = 'fixed' | 'fit'
+export type TabWidth = 'dynamic' | 'fixed'
 
 const KEY = 'prism.window.tabWidth'
 
 let listeners: Array<() => void> = []
 
 export function validTabWidth(v: unknown): TabWidth {
-  return v === 'fit' ? 'fit' : 'fixed'
+  return v === 'fixed' ? 'fixed' : 'dynamic'
 }
 
 export function tabWidth(): TabWidth {

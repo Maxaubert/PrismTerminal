@@ -258,9 +258,11 @@ function WindowColours(): JSX.Element {
   )
 }
 
+// Dynamic first: it is the default (owner, 2026-09-23: "call it dynamic ...
+// have dynamic be the default").
 const TAB_WIDTH_OPTIONS: Array<{ id: TabWidth; name: string }> = [
-  { id: 'fixed', name: 'Fixed' },
-  { id: 'fit', name: 'Fit to name' }
+  { id: 'dynamic', name: 'Dynamic' },
+  { id: 'fixed', name: 'Fixed' }
 ]
 
 function AppearanceTab(): JSX.Element {
@@ -268,6 +270,15 @@ function AppearanceTab(): JSX.Element {
   const width = useTabWidth()
   return (
     <>
+      {/* TAB WIDTH, AT THE TOP (owner, 2026-09-23: "put the option closer to the
+          top of appearance"). It carries the list's top rule and gives up its
+          own bottom one, since the theme block under it draws a top rule of
+          its own: two rules there would be one doubled line. */}
+      <div className={`${ROWS} [&>*]:border-b-0`}>
+        <Pref id="tab-width" label="Tab width" hint="Each tab as wide as its name, or every tab the same width.">
+          <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
+        </Pref>
+      </div>
       <TerminalAppearanceSettings afterFont={<WindowColours />} withIndicator />
       <Pref
         id="window-edges"
@@ -275,10 +286,6 @@ function AppearanceTab(): JSX.Element {
         hint="The lines between the parts of the window, and the border round it."
       >
         <Segmented value={edges} onChange={setWindowEdges} options={EDGE_OPTIONS} />
-      </Pref>
-      {/* Owner, 2026-09-23: "fixed size or dynamic ... the user can pick". */}
-      <Pref id="tab-width" label="Tab width" hint="Every tab the same width, or each as wide as its name.">
-        <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
       </Pref>
     </>
   )

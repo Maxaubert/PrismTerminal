@@ -296,11 +296,12 @@ export function TabStrip({
             // runs out of room, which is what a browser does: the label
             // truncates inside, the whole path is on the tooltip.
             // AND IT IS A SETTING (owner, 2026-09-23: "fixed size or dynamic
-            // ... the user can pick"): Tab width > Fit to name puts back the
+            // ... the user can pick"; then "dynamic ... the default"): Tab
+            // width > Dynamic (the DEFAULT) puts back the
             // strip from before, each tab as wide as its name up to 14rem
             // (the cap is on the label), shrinking only when out of room.
             data-tab-fixed={width === 'fixed' || undefined}
-            data-tab-fit={width === 'fit' || undefined}
+            data-tab-dynamic={width === 'dynamic' || undefined}
             className={`no-drag group relative flex items-center gap-1.5 border-r border-[color:var(--p-divider)] px-2.5 transition-colors ${
               width === 'fixed' ? 'min-w-[64px] flex-[0_1_114px]' : 'min-w-0 shrink'
             } ${
