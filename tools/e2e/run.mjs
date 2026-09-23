@@ -577,6 +577,8 @@ const scenarios = {
       const badge = () =>
         page.evaluate(() => {
           const el = document.querySelector('[data-copied-badge]')
+          // Not in the page at all when idle (#58): that is "hidden" too.
+          if (!el) return { state: 'hidden', gone: true }
           const r = el.getBoundingClientRect()
           return { state: el.getAttribute('data-copied-badge'), cx: r.left + r.width / 2, bottom: r.bottom, w: innerWidth, h: innerHeight, text: el.textContent }
         })
@@ -1273,14 +1275,24 @@ const scenarios = {
       await page.locator('[data-help-copy="ps-biggest-files#0"]').click()
       // A copy that worked is said by the app's "Copied" badge at the bottom of
       // the window (owner, 2026-09-23), which replaced the check in the button.
-      ok(
-        await until(async () => (await page.locator('[data-copied-badge]').getAttribute('data-copied-badge')) === 'shown', 3000, 25),
-        'a copy raises the "Copied" badge'
+      const said = await until(
+        () =>
+          page.evaluate(() => {
+            const el = document.querySelector('[data-copied-badge="shown"]')
+            return el ? { role: el.getAttribute('role'), text: el.textContent } : null
+          }),
+        3000,
+        25
       )
+      ok(!!said, 'a copy raises the "Copied" badge')
+      ok(said?.role === 'status' && said?.text === 'Copied', 'and a screen reader is told, by the badge')
       const heightDuring = await mainRow.evaluate((el) => el.getBoundingClientRect().height)
       ok(heightDuring === heightBefore, `and the row does not change height (${heightBefore} -> ${heightDuring})`)
       ok(!!wantMain && /Sort-Object/.test(wantMain) && (await clip()) === wantMain, `the clipboard holds the EXACT command ("${await clip()}")`)
-      ok(/^Copied/.test((await page.locator('[role="status"]', { hasText: 'Copied' }).first().textContent()) ?? ''), 'and a screen reader is told, by the badge')
+      ok(
+        await until(async () => (await page.locator('[data-copied-badge]').count()) === 0, 3000, 50),
+        'and the badge leaves the page after it has faded'
+      )
       ok(
         await until(async () => (await page.locator('[data-help-copy="ps-biggest-files#0"]').getAttribute('title')) === 'Copy', 4000, 50),
         'the answer leaves by itself'
