@@ -3,9 +3,7 @@
 
   # Prism Terminal
 
-  Made for working with agents.
-
-  A tabbed Windows terminal built for AI CLIs.
+  Clean, customizable, made for working with agents.
 
   [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?style=flat-square)](https://github.com/Maxaubert/PrismTerminal/releases/latest)
   [![Version](https://img.shields.io/github/package-json/v/Maxaubert/PrismTerminal?style=flat-square&color=fe8f34&label=version)](https://github.com/Maxaubert/PrismTerminal/releases)
@@ -19,8 +17,8 @@
 
 https://github.com/user-attachments/assets/c8cf96ec-566f-4339-a09a-5ea298bdb50a
 
-Prism Terminal is the terminal from [Prism](https://github.com/Maxaubert/Prism) as an app of its own, for
-running Claude Code or Codex in several folders at once and seeing at a glance which one has finished.
+Running AI agents in several folders at once? Every tab shows whether its agent is still working, and every
+session comes back when you reopen the app.
 
 ## Features
 
