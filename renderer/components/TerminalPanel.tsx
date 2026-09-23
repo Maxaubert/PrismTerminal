@@ -12,6 +12,12 @@ import { followsHostStyle, paintsGround, termApi, termHost } from '../host'
 import { normalizeColor } from '../lib/termAnsi'
 import { findLinks, linkColor } from '../lib/termLinks'
 import { arrowKeys, caretClickAllowed, caretDelta, type ClickGate } from '../lib/termClickCaret'
+import {
+  linkAt,
+  selectionDeleteAllowed,
+  selectionDeleteKeys,
+  type SelectionGate
+} from '../lib/termSelectionEdit'
 import { attachLinkPaint, type LinkPainter } from '../lib/termLinkPaint'
 import {
   onTermLookChange,
@@ -168,7 +174,10 @@ function attachClickCaret(term: Terminal, el: HTMLElement, id: string): () => vo
   // hidden to itself. Returning false lets xterm apply it as always.
   let cursorHidden = false
   const cursorMode = (hidden: boolean) => (params: (number | number[])[]): boolean => {
-    if (params.some((p) => p === 25)) cursorHidden = hidden
+    if (params.some((p) => p === 25)) {
+      cursorHidden = hidden
+      hiddenCursor.set(id, hidden)
+    }
     return false
   }
   const show = term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, cursorMode(false))
@@ -246,6 +255,107 @@ function attachClickCaret(term: Terminal, el: HTMLElement, id: string): () => vo
     el.removeEventListener('mousedown', onDown, true)
     el.removeEventListener('mouseup', onUp, true)
   }
+}
+
+/** Whether each session's program has hidden the cursor (DECTCEM), followed
+ *  by `attachClickCaret` for the selection delete as well. */
+const hiddenCursor = new Map<string, boolean>()
+
+/** The LOGICAL line holding buffer row `y`: its first and last rows across
+ *  wraps, every cell's width, the joined text, and the cell just past the
+ *  last printed one. */
+function logicalLine(term: Terminal, y: number): {
+  first: number
+  last: number
+  widths: number[]
+  text: string
+  textEnd: number
+} {
+  const b = term.buffer.active
+  let first = y
+  while (first > 0 && b.getLine(first)?.isWrapped) first -= 1
+  let last = y
+  while (last + 1 < b.length && b.getLine(last + 1)?.isWrapped) last += 1
+  const widths: number[] = []
+  let textEnd = 0
+  let text = ''
+  for (let i = first; i <= last; i += 1) {
+    const line = b.getLine(i)
+    text += line?.translateToString(false) ?? ''
+    for (let x = 0; x < term.cols; x += 1) {
+      const cell = line?.getCell(x)
+      widths.push(cell?.getWidth() ?? 1)
+      if (cell && cell.getChars() !== '') textEnd = widths.length - 1 + Math.max(1, cell.getWidth())
+    }
+  }
+  return { first, last, widths, text, textEnd }
+}
+
+/**
+ * BACKSPACE (or Delete) OVER A SELECTION deletes it (owner, 2026-09-23), when
+ * the selection sits on the line being edited at a quiet prompt; the rules and
+ * the presses are `termSelectionEdit`'s. Returns whether it acted, so the key
+ * handler knows to swallow the key; anywhere else Backspace is the shell's.
+ */
+function deleteSelection(term: Terminal, id: string): boolean {
+  const range = term.getSelectionPosition()
+  if (!range) return false
+  const b = term.buffer.active
+  const y = b.baseY + b.cursorY
+  const line = logicalLine(term, y)
+  let textBelow = false
+  for (let i = line.last + 1; i < b.length && !textBelow; i += 1)
+    if ((b.getLine(i)?.translateToString(true) ?? '').length) textBelow = true
+  // xterm reports the range 0-based with the end exclusive, whatever its
+  // typings say (MEASURED in the `selectionDelete` e2e).
+  const inLine = (row: number): boolean => row >= line.first && row <= line.last
+  const gate: SelectionGate = {
+    mouseTracking: term.modes.mouseTrackingMode,
+    alternate: b.type !== 'normal',
+    scrolledBack: b.viewportY !== b.baseY,
+    cursorHidden: hiddenCursor.get(id) ?? false,
+    textBelow,
+    onLine: inLine(range.start.y) && inLine(range.end.y)
+  }
+  if (!selectionDeleteAllowed(gate)) return false
+  const at = (p: { x: number; y: number }): number => (p.y - line.first) * term.cols + p.x
+  const keys = selectionDeleteKeys(
+    line.widths,
+    (y - line.first) * term.cols + b.cursorX,
+    at(range.start),
+    at(range.end),
+    line.textEnd,
+    term.modes.applicationCursorKeysMode
+  )
+  term.clearSelection()
+  if (!keys) return true
+  markTouched(id)
+  termApi().termInput(id, keys)
+  return true
+}
+
+/**
+ * WHAT A RIGHT-CLICK LANDED ON, for the host's menu (owner, 2026-09-23: "if i
+ * click it on a link it shows copy link, if i click it with text marked it
+ * says copy"): the selection's text, and the link under the point (whole, even
+ * when it wraps). Read-only; a host that has no session by that id gets nothing.
+ */
+export function termContextAt(id: string, clientX: number, clientY: number): { selection: string; link: string | null } {
+  const s = sessions.get(id)
+  if (!s) return { selection: '', link: null }
+  const term = s.term
+  const selection = term.hasSelection() ? term.getSelection() : ''
+  const screen = term.element?.querySelector<HTMLElement>('.xterm-screen')
+  if (!screen) return { selection, link: null }
+  const r = screen.getBoundingClientRect()
+  const col = Math.floor((clientX - r.left) / (r.width / term.cols))
+  const row = Math.floor((clientY - r.top) / (r.height / term.rows))
+  if (col < 0 || col >= term.cols || row < 0 || row >= term.rows) return { selection, link: null }
+  const y = term.buffer.active.viewportY + row
+  const line = logicalLine(term, y)
+  const target = (y - line.first) * term.cols + col
+  const charAt = line.widths.slice(0, target).filter((w) => w !== 0).length
+  return { selection, link: linkAt(line.text, charAt) }
 }
 
 /** Refit a session and tell the pty its new geometry. */
@@ -340,6 +450,7 @@ export function disposeTermSession(id: string): void {
   const s = sessions.get(id)
   if (!s) return
   sessions.delete(id)
+  hiddenCursor.delete(id)
   forgetSession(id)
   s.unsub.forEach((u) => u())
   s.links.dispose()
@@ -558,6 +669,20 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     ) {
       void navigator.clipboard.writeText(term.getSelection())
       term.clearSelection()
+      return false
+    }
+    // Backspace or Delete over a selection on the line being edited deletes
+    // it (owner, 2026-09-23); anywhere else the key is the shell's as ever.
+    if (
+      (e.key === 'Backspace' || e.key === 'Delete') &&
+      !e.ctrlKey &&
+      !e.shiftKey &&
+      !e.altKey &&
+      !e.metaKey &&
+      term.hasSelection() &&
+      deleteSelection(term, id)
+    ) {
+      e.preventDefault()
       return false
     }
     // THE HOST'S CHORDS (core/renderer/host). Which keys belong to the app
