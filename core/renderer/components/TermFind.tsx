@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type JSX } from 'react'
 import { clearTermFind, findInTerm, onTermFindResults } from './TerminalPanel'
 
 /**
- * Find in the terminal's scrollback (Ctrl+Shift+F, 2026-08-31).
+ * Find in the terminal's scrollback (Ctrl+F, Ctrl+Shift+F everywhere; 2026-08-31, Ctrl+F since 2026-09-23).
  *
  * Ten thousand lines of an agent's answer, and until now the only way back
  * to something it said was to scroll. This is DocFind's bar over the

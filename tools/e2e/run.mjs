@@ -595,6 +595,43 @@ const scenarios = {
     }
   },
 
+  /**
+   * FIND IS CTRL+F (#50; owner, 2026-09-23: "can the find hotkey be ctrl f"),
+   * except in a full-screen program, whose page down it is. In a real pwsh:
+   * Ctrl+F at the prompt opens find and closes it again; switched onto the
+   * alternate screen (what vim and less do), Ctrl+F opens nothing and reaches
+   * the program; Ctrl+Shift+F still finds there.
+   */
+  async findKey(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const find = () => page.locator('[data-term-find]').count()
+    try {
+      await page.waitForFunction(() => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()), null, { timeout: 45000 })
+      await page.locator('.xterm').first().click()
+      await page.keyboard.press('Control+f')
+      ok(!!(await until(async () => (await find()) === 1, 4000, 50)), 'Ctrl+F at the prompt opens find')
+      await page.keyboard.press('Escape')
+      ok(!!(await until(async () => (await find()) === 0, 4000, 50)), 'and Escape closes it')
+      // The alternate screen, as vim and less switch to it.
+      await page.locator('.xterm').first().click()
+      await page.keyboard.type('Write-Host -NoNewline "$([char]27)[?1049h"')
+      await page.keyboard.press('Enter')
+      await sleep(800)
+      await page.keyboard.press('Control+f')
+      await sleep(600)
+      ok((await find()) === 0, 'in a full-screen program Ctrl+F opens nothing: it is the program\'s')
+      await page.keyboard.press('Control+Shift+f')
+      ok(!!(await until(async () => (await find()) === 1, 4000, 50)), 'while Ctrl+Shift+F still finds there')
+      await page.keyboard.press('Escape')
+      await page.locator('.xterm').first().click()
+      await page.keyboard.type('Write-Host -NoNewline "$([char]27)[?1049l"')
+      await page.keyboard.press('Enter')
+    } finally {
+      await app.close().catch(() => {})
+    }
+  },
+
   async paste(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })

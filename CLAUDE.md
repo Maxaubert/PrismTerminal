@@ -170,6 +170,14 @@ so an update never silently changes what an existing user sees; the bridge to ma
   private), anything printed below the line, and any row off the cursor's logical line. Wide
   characters count once; a click past the text goes to its end. Up and Down are never sent. The
   `clickCaret` e2e proves it in a real pwsh.
+- **FIND IS CTRL+F, EXCEPT IN A FULL-SCREEN PROGRAM** (#50; owner, 2026-09-23: "can the find
+  hotkey be ctrl f", then "lets do it"). This app's `ownsKey` and App's handler take Ctrl+F unless
+  the focused shell is on the alternate screen or asked for the mouse (the core's
+  `focusedTermFullScreen`): in vim and less Ctrl+F is page down and stays theirs. Ctrl+Shift+F
+  finds everywhere, as before. Known cost, accepted: bash and readline lose Ctrl+F as cursor-right
+  at a prompt (PSReadLine's Windows mode binds nothing to it, MEASURED). The `findKey` e2e proves
+  both sides in a real pwsh by switching it onto the alternate screen. Prism's own chords are
+  Prism's: this is not a change to Prism's find key.
 - **BACKSPACE DELETES A SELECTION** (#44; owner, 2026-09-23: "i should also be able to highlight
   text and use backspace to delete the selected text"). Backspace or Delete, unmodified, over a
   selection that starts and ends on the line being edited sends the presses that do it by hand:

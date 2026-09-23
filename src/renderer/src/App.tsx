@@ -4,6 +4,7 @@ import TerminalPanel, {
   disposeTermSession,
   ensureTermSession,
   focusTermSession,
+  focusedTermFullScreen,
   termContextAt
 } from '@core/renderer/components/TerminalPanel'
 import TermFind from '@core/renderer/components/TermFind'
@@ -451,7 +452,9 @@ export default function App(): JSX.Element {
         hit()
         const id = live.current.state.activeId
         if (id) requestClose(id)
-      } else if (e.shiftKey && k === 'f') {
+      } else if (k === 'f' && (e.shiftKey || !focusedTermFullScreen())) {
+        // Ctrl+F finds (owner, 2026-09-23), except over a full-screen program,
+        // whose page down it is; Ctrl+Shift+F finds everywhere (termHost).
         hit()
         const id = live.current.state.activeId
         setFindFor((was) => (was === id ? null : id))
@@ -587,7 +590,7 @@ export default function App(): JSX.Element {
             // keystroke to the agent, files become quoted paths, text is a
             // bracketed paste).
             { label: 'Paste', hint: 'Ctrl+V', onPick: () => void pasteInto(activeShell.id) },
-            { label: 'Find in scrollback', hint: 'Ctrl+Shift+F', onPick: () => setFindFor(activeShell.id) },
+            { label: 'Find in scrollback', hint: 'Ctrl+F', onPick: () => setFindFor(activeShell.id) },
             // Only while the setting is on: off means the app offers it nowhere.
             ...(helpOn ? [{ label: 'Command help', hint: 'F1', onPick: toggleHelp }] : [])
           ]}

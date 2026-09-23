@@ -1,7 +1,7 @@
 {
   "name": "prism-terminal",
   "productName": "Prism Terminal",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "A tabbed Windows terminal for AI CLIs.",
   "main": "./out/main/index.js",
   "author": "Max",

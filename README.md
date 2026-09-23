@@ -53,7 +53,7 @@ Works with PowerShell 7, Windows PowerShell, Command Prompt and any installed WS
 | `Ctrl+T` / `Ctrl+W` | New tab / close tab |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
 | `Ctrl+1` to `Ctrl+9` | Jump to a tab |
-| `Ctrl+Shift+F` | Find in the scrollback |
+| `Ctrl+F` | Find in the scrollback (`Ctrl+Shift+F` too; in vim or less, `Ctrl+F` stays page down) |
 | `Ctrl+,` | Settings |
 | `Ctrl+scroll` | Zoom the current tab |
 | `F11` | Fullscreen |
