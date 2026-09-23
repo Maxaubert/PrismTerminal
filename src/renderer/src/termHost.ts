@@ -1,3 +1,4 @@
+import { focusedTermFullScreen } from '@core/renderer/components/TerminalPanel'
 import { configureTermCore } from '@core/renderer/host'
 import { helpEnabled } from '@core/renderer/lib/helpPrefs'
 import { themeAgentColors } from './lib/agentColors'
@@ -56,7 +57,10 @@ configureTermCore({
     // readline's delete-word, for which Ctrl+Backspace remains): the owner's
     // trade, made knowingly.
     if (k === 't' || k === 'w') return true
-    // Find carries SHIFT, and the shift is tested: plain Ctrl+F is the shell's.
-    return e.shiftKey && k === 'f'
+    // FIND IS CTRL+F (owner, 2026-09-23: "can the find hotkey be ctrl f"),
+    // except in a full-screen program, where Ctrl+F is page down (vim, less)
+    // and stays the program's; Ctrl+Shift+F finds everywhere. Known cost,
+    // accepted: bash and readline lose Ctrl+F as cursor-right at a prompt.
+    return k === 'f' && (e.shiftKey || !focusedTermFullScreen())
   }
 })
