@@ -17,7 +17,11 @@
 
 ---
 
-https://github.com/user-attachments/assets/23c7ecde-a465-4d66-8b8b-8b523e2e0218
+
+
+Uploading prism-terminal-trailer-arcade-4k-github.mp4…
+
+
 
 Prism Terminal is the terminal from [Prism](https://github.com/Maxaubert/Prism), lifted out into an
 app of its own. It is for people who keep Claude Code or Codex running in several folders at once
