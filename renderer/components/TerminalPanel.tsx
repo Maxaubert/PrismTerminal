@@ -11,6 +11,7 @@ import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
 import { followsHostStyle, paintsGround, termApi, termHost } from '../host'
 import { normalizeColor } from '../lib/termAnsi'
 import { findLinks, linkColor } from '../lib/termLinks'
+import { copyText } from '../lib/copyNotice'
 import { arrowKeys, caretClickAllowed, caretDelta, type ClickGate } from '../lib/termClickCaret'
 import {
   linkAt,
@@ -700,7 +701,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
       !e.altKey &&
       term.hasSelection()
     ) {
-      void navigator.clipboard.writeText(term.getSelection())
+      void copyText(term.getSelection()) // and the "Copied" badge, once it landed
       term.clearSelection()
       return false
     }

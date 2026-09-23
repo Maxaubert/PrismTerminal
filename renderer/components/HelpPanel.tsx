@@ -99,11 +99,6 @@ const CopyIcon = (): JSX.Element => (
     <path d="M5 15V6a2 2 0 0 1 2-2h9" />
   </svg>
 )
-const CheckIcon = (): JSX.Element => (
-  <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <path d="M5 12.5l4.5 4.5L19 7.5" />
-  </svg>
-)
 
 const DangerIcon = (): JSX.Element => (
   <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="#e0a100" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
@@ -133,7 +128,6 @@ function Row({
   index,
   active,
   striped,
-  copied,
   failed,
   mono,
   onCopy,
@@ -143,7 +137,6 @@ function Row({
   index: number
   active: boolean
   striped: boolean
-  copied: boolean
   failed: boolean
   mono: string
   onCopy: (key: string, command: string) => void
@@ -217,19 +210,16 @@ function Row({
             e.stopPropagation()
             onCopy(key, row.command)
           }}
-          title={failed ? 'Could not copy' : copied ? 'Copied' : 'Copy'}
+          title={failed ? 'Could not copy' : 'Copy'}
           aria-label={`Copy: ${row.command}`}
           className={`grid h-7 w-7 place-items-center justify-self-end rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)] ${
-            copied
-              ? 'text-[var(--p-accent-hi)]'
-              : failed
-                ? 'text-[#e0a100]'
-                : 'text-[var(--p-icon)] hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)]'
+            failed ? 'text-[#e0a100]' : 'text-[var(--p-icon)] hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)]'
           }`}
         >
-          {/* The icon answers in place: nothing is inserted, so no row moves
-              and the list cannot twitch under the pointer mid-copy. */}
-          {copied ? <CheckIcon /> : <CopyIcon />}
+          {/* A copy that WORKED is said once, by the app's "Copied" badge at the
+              bottom of the window (owner, 2026-09-23), not here as well; only a
+              copy that failed is marked on its row. */}
+          <CopyIcon />
         </button>
       )}
     </div>
@@ -360,7 +350,8 @@ export default function HelpPanel({
       .catch(() => false)
       .then((ok) => {
         setCopied({ key, ok })
-        setSaid(ok ? `Copied: ${command}` : 'Could not copy to the clipboard')
+        // Success is the badge's to say (it has its own live region).
+        setSaid(ok ? '' : 'Could not copy to the clipboard')
       })
   }
   // The answer leaves by itself. Keyed on the OBJECT, so copying the same box
@@ -623,7 +614,6 @@ export default function HelpPanel({
                   // The stripe follows the drawn order, so it never restarts
                   // under a category heading: the eye reads one ruled table.
                   striped={i % 2 === 1}
-                  copied={copied?.key === key && copied.ok}
                   failed={copied?.key === key && !copied.ok}
                   mono={monoFont}
                   onCopy={copy}
