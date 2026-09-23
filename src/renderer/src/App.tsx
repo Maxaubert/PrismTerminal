@@ -3,7 +3,8 @@ import type { AgentKind, DetectedAgent } from '@shared/types'
 import TerminalPanel, {
   disposeTermSession,
   ensureTermSession,
-  focusTermSession
+  focusTermSession,
+  termContextAt
 } from '@core/renderer/components/TerminalPanel'
 import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
@@ -111,7 +112,13 @@ export default function App(): JSX.Element {
   const [findFor, setFindFor] = useState<string | null>(null)
   const [ask, setAsk] = useState<Ask | null>(null)
   /** The terminal's own right-click menu, at the pointer. */
-  const [termMenu, setTermMenu] = useState<{ x: number; y: number } | null>(null)
+  const [termMenu, setTermMenu] = useState<{
+    x: number
+    y: number
+    /** What was selected when the menu opened, and the link under the point. */
+    selection: string
+    link: string | null
+  } | null>(null)
   /** The command help popup (#12). The core's, the same in Prism; what is this
    *  app's is the way in (F1, the ? in the title bar, the terminal's menu). */
   const [helpOpen, setHelpOpen] = useState(false)
@@ -523,7 +530,7 @@ export default function App(): JSX.Element {
         onContextMenu={(e) => {
           if (!activeShell || !(e.target as HTMLElement).closest('[data-term-region]')) return
           e.preventDefault()
-          setTermMenu({ x: e.clientX, y: e.clientY })
+          setTermMenu({ x: e.clientX, y: e.clientY, ...termContextAt(activeShell.id, e.clientX, e.clientY) })
         }}
       >
         {activeShell && (
@@ -565,13 +572,22 @@ export default function App(): JSX.Element {
           y={termMenu.y}
           onClose={() => setTermMenu(null)}
           items={[
+            // THE MENU FITS WHAT WAS CLICKED (owner, 2026-09-23: "if i click it
+            // on a link it shows copy link, if i click it with text marked it
+            // says copy"). Both copy exactly, through main's clipboard, like the
+            // command help. Close tab left this menu the same day ("remove close
+            // tab from the right click menu"); the tab's own menu still has it.
+            ...(termMenu.link
+              ? [{ label: 'Copy link', onPick: () => void window.prism.writeClipboard(termMenu.link!) }]
+              : []),
+            ...(termMenu.selection
+              ? [{ label: 'Copy', hint: 'Ctrl+C', onPick: () => void window.prism.writeClipboard(termMenu.selection) }]
+              : []),
             // Paste through the terminal's own rule (an image forwards the
             // keystroke to the agent, files become quoted paths, text is a
-            // bracketed paste). No Copy row: xterm owns its selection, and
-            // Ctrl+C over one already copies.
+            // bracketed paste).
             { label: 'Paste', hint: 'Ctrl+V', onPick: () => void pasteInto(activeShell.id) },
             { label: 'Find in scrollback', hint: 'Ctrl+Shift+F', onPick: () => setFindFor(activeShell.id) },
-            { label: 'Close tab', hint: 'Ctrl+Shift+W', onPick: () => requestClose(activeShell.id) },
             // Only while the setting is on: off means the app offers it nowhere.
             ...(helpOn ? [{ label: 'Command help', hint: 'F1', onPick: toggleHelp }] : [])
           ]}

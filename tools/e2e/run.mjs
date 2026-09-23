@@ -464,6 +464,137 @@ const scenarios = {
     }
   },
 
+  /**
+   * THE RIGHT-CLICK MENU FITS, AND BACKSPACE DELETES A SELECTION (owner,
+   * 2026-09-23: "if i click it on a link it shows copy link, if i click it with
+   * text marked it says copy. i should also be able to highlight text and use
+   * backspace to delete the selected text"). In a real pwsh, with a real drag
+   * and real keys; the clipboard is read back in main and put back after.
+   */
+  async selectionEdit(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const clip = () => app.evaluate(({ clipboard }) => clipboard.readText())
+    const held = await clip()
+    const prompt = () =>
+      page.waitForFunction(() => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()), null, { timeout: 45000 })
+    // A character's own box on screen, from the LAST row holding `needle`.
+    const box = (needle, offset) =>
+      page.evaluate(
+        ([n, off]) => {
+          const rows = [...document.querySelectorAll('.xterm-rows > div')]
+          for (let i = rows.length - 1; i >= 0; i -= 1) {
+            const at = rows[i].textContent.lastIndexOf(n)
+            if (at < 0) continue
+            const walker = document.createTreeWalker(rows[i], NodeFilter.SHOW_TEXT)
+            let left = at + off
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+              if (left < node.textContent.length) {
+                const range = document.createRange()
+                range.setStart(node, left)
+                range.setEnd(node, left + 1)
+                const b = range.getBoundingClientRect()
+                return { left: b.left, right: b.right, y: b.top + b.height / 2 }
+              }
+              left -= node.textContent.length
+            }
+          }
+          return null
+        },
+        [needle, offset]
+      )
+    // Drag from the start of one character to the end of another.
+    const select = async (needle, from, to) => {
+      const a = await box(needle, from)
+      const b = await box(needle, to)
+      await page.mouse.move(a.left + 1, a.y)
+      await page.mouse.down()
+      await page.mouse.move(b.right - 1, b.y, { steps: 6 })
+      await page.mouse.up()
+      await sleep(250)
+    }
+    const menuRows = async () =>
+      until(async () => {
+        const t = await page.locator('[role="menu"] [role="menuitem"]').allTextContents()
+        return t.length ? t : null
+      }, 4000)
+    try {
+      await prompt()
+      await page.locator('.xterm').first().click()
+      // Backspace over a selection at the END of the line deletes just it.
+      await page.keyboard.type('echo hello world')
+      await sleep(400)
+      await select('hello world', 6, 10) // "world"
+      await page.keyboard.press('Backspace')
+      await page.keyboard.type('there')
+      await page.keyboard.press('Enter')
+      ok(
+        !!(await until(async () => (await termText(page)).includes('echo hello there'), 8000)),
+        'Backspace over a selected word deletes it, and typing goes on from there'
+      )
+      // And in the MIDDLE: the caret walks to the selection's end first.
+      await prompt()
+      await page.keyboard.type('echo abcdef')
+      await sleep(400)
+      await select('abcdef', 2, 3) // "cd"
+      await page.keyboard.press('Backspace')
+      await page.keyboard.press('Enter')
+      ok(
+        !!(await until(async () => (await termText(page)).includes('echo abef'), 8000)),
+        'Backspace over a selection in the middle of the line deletes exactly it'
+      )
+      // Old output is not the line being edited: Backspace there is the shell's.
+      await prompt()
+      // A fresh token, so no history prediction can dress the line up. The rows
+      // are read joined, so the command and its output run together.
+      const token = `k${Date.now() % 100000}`
+      await page.keyboard.type(`echo ${token}xy`)
+      await sleep(300)
+      await select('abef', 0, 1)
+      await page.keyboard.press('Backspace')
+      await page.keyboard.press('Enter')
+      ok(
+        !!(await until(async () => {
+          const t = await termText(page)
+          return new RegExp(`echo ${token}x\\s*${token}x`).test(t) && !t.includes(`${token}xy`)
+        }, 8000)),
+        'a selection in old output leaves Backspace to the shell: it deletes one character, as ever'
+      )
+
+      // A LINK: right-click on it offers Copy link, which copies all of it.
+      await prompt()
+      const url = 'https://example.com/some/path?q=1'
+      await page.keyboard.type(`echo ${url}`)
+      await page.keyboard.press('Enter')
+      await prompt()
+      const onLink = await box(url, 12)
+      await page.mouse.click(onLink.left + 2, onLink.y, { button: 'right' })
+      let rows = await menuRows()
+      ok(!!rows && rows[0].includes('Copy link') && !rows.some((r) => r.includes('Close tab')), `right-click on a link: Copy link first, no Close tab (${JSON.stringify(rows)})`)
+      await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Copy link' }).click()
+      ok((await until(async () => (await clip()) === url, 4000)) === true, 'and it copies the whole link')
+      // Off a link with nothing selected: neither Copy row.
+      const plain = await box('abef', 1)
+      await page.mouse.click(plain.left + 2, plain.y, { button: 'right' })
+      rows = await menuRows()
+      ok(!!rows && !rows.some((r) => r.startsWith('Copy')), `right-click on plain text offers no Copy (${JSON.stringify(rows)})`)
+      await page.keyboard.press('Escape')
+      await sleep(200)
+      // TEXT MARKED: right-click offers Copy, which copies exactly the selection.
+      await select('example.com', 0, 6) // "example"
+      const mark = await box('example.com', 2)
+      await page.mouse.click(mark.left + 2, mark.y, { button: 'right' })
+      rows = await menuRows()
+      ok(!!rows && rows.some((r) => r.startsWith('Copy') && !r.startsWith('Copy link')), `right-click with text marked offers Copy (${JSON.stringify(rows)})`)
+      await page.locator('[role="menu"] [role="menuitem"]', { hasText: /^Copy(?! link)/ }).first().click()
+      ok((await until(async () => (await clip()) === 'example', 4000)) === true, `and it copies the selection exactly (${JSON.stringify(await clip())})`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/term-menu.png') }).catch(() => {})
+    } finally {
+      await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), held).catch(() => {})
+      await app.close().catch(() => {})
+    }
+  },
+
   async paste(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
@@ -773,7 +904,8 @@ const scenarios = {
     ok(!/is not recognized|CommandNotFound|ObjectNotFound/.test(text), 'and it was NOT sent: nothing ran')
     // Clear what the drop typed, so the shell is at a clean prompt again.
     await page.keyboard.press('Escape')
-    // The right-click menu: Paste, Find, Close tab.
+    // The right-click menu: Paste and Find, and no Close tab (owner,
+    // 2026-09-23: "remove close tab from the right click menu").
     await page.locator('[data-term-region]').click({ button: 'right', position: { x: 200, y: 120 } })
     const rows = await until(
       async () => {
@@ -782,7 +914,8 @@ const scenarios = {
       },
       4000
     )
-    ok(!!rows && ['Paste', 'Find in scrollback', 'Close tab'].every((l) => rows.some((r) => r.includes(l))), `the terminal answers a right-click (${JSON.stringify(rows)})`)
+    ok(!!rows && ['Paste', 'Find in scrollback'].every((l) => rows.some((r) => r.includes(l))), `the terminal answers a right-click (${JSON.stringify(rows)})`)
+    ok(!!rows && !rows.some((r) => r.includes('Close tab')), 'and Close tab is not in it')
     await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Find in scrollback' }).click()
     ok(await until(async () => (await page.locator('[data-term-find], input[placeholder*="ind"]').count()) > 0, 4000), 'and its Find row opens the find bar')
     await app.close().catch(() => {})
