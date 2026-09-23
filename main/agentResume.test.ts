@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
-import { CODEX_RESUME, claudeSessions, validResume } from './agentResume'
+import { CODEX_RESUME, claudeSessions, claudeSessionsAsync, validResume } from './agentResume'
 
 describe('validResume', () => {
   it('accepts a session id and the codex marker, refuses a command', () => {
@@ -35,5 +35,26 @@ describe('claudeSessions', () => {
   it('answers nothing for a folder claude never recorded', () => {
     const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
     expect(claudeSessions('C:\\nowhere', home)).toEqual([])
+  })
+})
+
+describe('claudeSessionsAsync', () => {
+  it('gives exactly the answer the synchronous walk gives, across many files', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    const dir = join(home, '.claude', 'projects', 'C--Users-me-busy')
+    mkdirSync(dir, { recursive: true })
+    for (let i = 0; i < 60; i += 1) {
+      const f = join(dir, `s${i}.jsonl`)
+      writeFileSync(f, '')
+      utimesSync(f, 1_000_000 + ((i * 37) % 60) * 10, 1_000_000 + ((i * 37) % 60) * 10)
+    }
+    writeFileSync(join(dir, 'notes.txt'), '')
+    const sync = claudeSessions('C:\\Users\\me\\busy', home)
+    expect(sync).toHaveLength(60)
+    expect(await claudeSessionsAsync('C:\\Users\\me\\busy', home)).toEqual(sync)
+  })
+  it('answers nothing for a folder claude never recorded', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pt-home-'))
+    expect(await claudeSessionsAsync('C:\\nowhere', home)).toEqual([])
   })
 })

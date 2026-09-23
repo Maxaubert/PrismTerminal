@@ -18,7 +18,11 @@ export interface TerminalOption {
   onlyWhere?: 'the terminal owns the window acrylic'
 }
 
+/** In DISPLAY ORDER (owner, 2026-09-22: the two apps' terminal settings "the
+ *  same in terms of order"). Each app's e2e reads the page top to bottom and
+ *  asserts these ids appear in this order, whatever of its own sits between. */
 export const TERMINAL_OPTIONS: readonly TerminalOption[] = [
+  { id: 'term-shell', label: 'Shell', type: 'choice', key: 'prism.term.shell' },
   { id: 'term-theme', label: 'Theme', type: 'theme', key: 'prism.term.theme' },
   { id: 'term-font-family', label: 'Font', type: 'choice', key: 'prism.term.font' },
   { id: 'term-font', label: 'Font size', type: 'choice', key: 'prism.term.fontPct' },
@@ -32,10 +36,9 @@ export const TERMINAL_OPTIONS: readonly TerminalOption[] = [
     // over the same glass would fight it (owner, 2026-09-19).
     onlyWhere: 'the terminal owns the window acrylic'
   },
+  { id: 'agent-indicator', label: 'Agent indicator', type: 'choice', key: 'prism.term.agentIndicator' },
   { id: 'agent-color', label: 'Agent working indicator', type: 'colour', key: 'prism.term.agentColor' },
-  { id: 'agent-done-color', label: 'Agent finished indicator', type: 'colour', key: 'prism.term.agentDoneColor' },
-  { id: 'term-shell', label: 'Shell', type: 'choice', key: 'prism.term.shell' },
-  { id: 'agent-indicator', label: 'Agent indicator', type: 'choice', key: 'prism.term.agentIndicator' }
+  { id: 'agent-done-color', label: 'Agent finished indicator', type: 'colour', key: 'prism.term.agentDoneColor' }
 ]
 
 /** The option ids a host should be showing. */

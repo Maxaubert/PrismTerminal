@@ -112,7 +112,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   {
     id: 'small',
     label: 'Whisper Small',
-    note: 'More accurate without a GPU, slower: a pass takes about 3x Base.',
+    note: 'More accurate without a GPU, and about three times slower than Base.',
     url: model('ggml-small.bin'),
     bytes: 487601967,
     sha256: '1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b',
@@ -144,7 +144,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   {
     id: 'tiny',
     label: 'Whisper Tiny',
-    note: 'For the end-to-end test: small enough to fetch once and run anywhere.',
+    note: 'For the automated tests, small enough to fetch once and run anywhere.',
     url: model('ggml-tiny.bin'),
     bytes: 77691713,
     sha256: 'be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21',
@@ -154,7 +154,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   {
     id: 'gpu-pack',
     label: 'NVIDIA GPU acceleration',
-    note: 'The official CUDA 12.4 build. Runs the Large models in under a second.',
+    note: 'The official CUDA 12.4 build, which runs the large models in under a second.',
     // ONE pack for every NVIDIA card (measured: it runs on an RTX 5090, a card
     // newer than CUDA 12.4, after a one-time 9.1 s kernel compile), which is
     // why the 273 MB CUDA 11.8 pack of the same release is not catalogued.
