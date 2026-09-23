@@ -170,6 +170,15 @@ so an update never silently changes what an existing user sees; the bridge to ma
   private), anything printed below the line, and any row off the cursor's logical line. Wide
   characters count once; a click past the text goes to its end. Up and Down are never sent. The
   `clickCaret` e2e proves it in a real pwsh.
+- **THE TERMINAL'S SCROLLBAR IS MINIMAL AND WEARS THE THEME** (#52; owner, 2026-09-23: "make the
+  scrollbar more minimalistic and make sure it follows the theme"). xterm 6 scrolls with its OWN
+  slider (VS Code's scrollable element), which fades when idle; its sheet still gives
+  `.xterm-viewport` `overflow-y: scroll`, so Chromium drew a second, EMPTY native bar: the grey
+  gutter with steppers. `index.css` takes that away (`scrollbar-width: none`) and makes the slider
+  6px and round; the core's `currentTermTheme` colours it from the theme's foreground (40%, 65%
+  hovered or dragged), so both apps follow the theme (Prism's size and shape are its own CSS).
+  Not a stale paint: the thumb is ABSENT until a scroll because xterm fades it, which the
+  `scrollbar` e2e wakes with a wheel before it measures, on a dark and a light theme.
 - **FIND IS CTRL+F, EXCEPT IN A FULL-SCREEN PROGRAM** (#50; owner, 2026-09-23: "can the find
   hotkey be ctrl f", then "lets do it"). This app's `ownsKey` and App's handler take Ctrl+F unless
   the focused shell is on the alternate screen or asked for the mouse (the core's

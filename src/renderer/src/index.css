@@ -104,6 +104,31 @@ body {
   }
 }
 
+/* THE SCROLLBAR IS THIN AND WEARS THE THEME (owner, 2026-09-23: "make the
+   scrollbar more minimalistic and make sure it follows the theme"): Prism's own
+   rule, so the two apps match. No track, no steppers, a 6px thumb in the
+   theme's text ink, so it follows every preset and a picked background. */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--p-text) 40%, transparent);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--p-text) 65%, transparent);
+}
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* No scrollbar at all: the pane scrolls, it just doesn't advertise it. Styling
    the Windows one (::-webkit-scrollbar) was tried and left it on screen; only
    taking it away removes the grey gutter and steppers, which on a true-black
@@ -146,6 +171,22 @@ input[type='color']::-webkit-color-swatch {
   /* !important because xterm.css rides the LAZY terminal chunk and lands in
      the document after this sheet - equal specificity would lose on order. */
   background-color: transparent !important;
+  /* xterm 6 scrolls with its OWN slider (below), yet its sheet still gives the
+     viewport overflow-y: scroll, so Chromium drew a second, EMPTY native bar:
+     the grey gutter with steppers the owner pointed at (2026-09-23). */
+  scrollbar-width: none;
+}
+
+/* The terminal's scrollbar, minimal (#52): xterm's own slider, 6px and round,
+   in the theme's text ink (the colours are the core's, from the theme). It
+   fades when idle and shows on a scroll or under the pointer, as VS Code's. */
+.xterm .xterm-scrollable-element > .scrollbar.vertical {
+  width: 6px !important;
+}
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  left: 0 !important;
+  width: 6px !important;
+  border-radius: 3px;
 }
 
 /* The start screen's one authored moment: it settles in, once, when the last
