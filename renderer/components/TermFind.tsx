@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type JSX } from 'react'
 import { clearTermFind, findInTerm, onTermFindResults } from './TerminalPanel'
 
 /**
- * Find in the terminal's scrollback (Ctrl+Shift+F, 2026-08-31).
+ * Find in the terminal's scrollback (Ctrl+F, Ctrl+Shift+F everywhere; 2026-08-31, Ctrl+F since 2026-09-23).
  *
  * Ten thousand lines of an agent's answer, and until now the only way back
  * to something it said was to scroll. This is DocFind's bar over the
@@ -49,11 +49,14 @@ export default function TermFind({
         ? `${hits.count}+`
         : `${hits.index + 1} of ${hits.count}`
 
+  // NO SHADOW (owner, 2026-09-23: "remove also the shadow from behind the
+  // search box"): its border already lifts it off the terminal, and the shadow
+  // read as a dark halo over the text, as it did round the help popup.
   return (
     <div
       data-term-find
       data-owns-escape
-      className="absolute right-3 top-3 z-30 flex items-center gap-1.5 rounded-[var(--p-radius-sm)] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] px-2 py-1 shadow-[0_10px_28px_rgba(0,0,0,.45)]"
+      className="absolute right-3 top-3 z-30 flex items-center gap-1.5 rounded-[var(--p-radius-sm)] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] px-2 py-1"
     >
       <input
         ref={input}

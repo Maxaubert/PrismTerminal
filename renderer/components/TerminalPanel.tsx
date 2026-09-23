@@ -419,6 +419,22 @@ export function ensureTermSession(id: string, root: string, shellId: string | un
   if (!sessions.has(id)) createSession(id, root, shellId)
 }
 
+/**
+ * Is the shell that has the keyboard running a FULL-SCREEN program (its own
+ * screen, or it asked for the mouse: vim, less, htop, a TUI)? For a host that
+ * takes a chord from the shell only at a prompt (Prism Terminal's Ctrl+F find,
+ * owner, 2026-09-23): in vim and less Ctrl+F is page down, and stays theirs.
+ * False when no shell has the keyboard.
+ */
+export function focusedTermFullScreen(): boolean {
+  const active = document.activeElement
+  for (const s of sessions.values()) {
+    if (!active || !s.el.contains(active)) continue
+    return s.term.buffer.active.type !== 'normal' || s.term.modes.mouseTrackingMode !== 'none'
+  }
+  return false
+}
+
 /** Give a live session the keyboard back. Used after a tab interaction (a
  *  click, a reorder drag) stole focus from a shell the user never left: the
  *  next keystroke would otherwise go to the strip instead of Claude Code. */
