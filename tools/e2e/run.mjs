@@ -634,6 +634,74 @@ const scenarios = {
     }
   },
 
+  /**
+   * THE SCROLLBAR IS THIN AND WEARS THE THEME (#52; owner, 2026-09-23). With a
+   * scrollback to scroll: the terminal's bar is 6px, with no steppers, and its
+   * thumb is the theme's text ink, sampled off a screenshot. Pictures of it go
+   * to .e2e-shots/scrollbar-*.png to be looked at.
+   */
+  async scrollbar(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    try {
+      await page.waitForFunction(() => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()), null, { timeout: 45000 })
+      await page.locator('.xterm').first().click()
+      await page.keyboard.type('1..300')
+      await page.keyboard.press('Enter')
+      await sleep(1500)
+      // One pixel of the screen, read back off a screenshot.
+      const pixel = async (x, y) => {
+        const shot = await page.screenshot({ clip: { x, y, width: 1, height: 1 } })
+        return page.evaluate(async (b64) => {
+          const img = new Image()
+          img.src = `data:image/png;base64,${b64}`
+          await img.decode()
+          const c = document.createElement('canvas')
+          c.width = c.height = 1
+          const g = c.getContext('2d')
+          g.drawImage(img, 0, 0)
+          const [r, gg, b] = g.getImageData(0, 0, 1, 1).data
+          return 0.2126 * r + 0.7152 * gg + 0.0722 * b
+        }, shot.toString('base64'))
+      }
+      // xterm 6's own slider fades when idle, as VS Code's does, so it is woken
+      // with a scroll up and back. It is the text ink over the ground: lighter
+      // than the ground on a dark theme, darker on a light one. That is
+      // "follows the theme".
+      const measure = async (name) => {
+        await page.mouse.move(400, 400)
+        await page.mouse.wheel(0, -300)
+        await sleep(250)
+        await page.mouse.wheel(0, 600)
+        await sleep(400)
+        const bar = await page.evaluate(() => {
+          const v = document.querySelector('.xterm .xterm-viewport')
+          const s = document.querySelector('.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider')
+          const r = s?.getBoundingClientRect()
+          return { gutter: v.offsetWidth - v.clientWidth, slider: r ? { w: Math.round(r.width), x: r.left + r.width / 2, y: r.top + r.height / 2 } : null }
+        })
+        await page.screenshot({ path: resolve(process.cwd(), `.e2e-shots/scrollbar-${name}.png`) }).catch(() => {})
+        if (!bar.slider) return { ...bar, thumb: 0, ground: 0 }
+        return { ...bar, thumb: await pixel(Math.floor(bar.slider.x), bar.slider.y), ground: await pixel(Math.floor(bar.slider.x - 40), bar.slider.y) }
+      }
+      const dark = await measure('dark')
+      ok(dark.gutter === 0, `no native gutter or steppers beside it (${dark.gutter}px)`)
+      ok(dark.slider?.w === 6, `the slider is 6px wide (${dark.slider?.w})`)
+      ok(dark.thumb - dark.ground > 25, `on a dark theme it is lighter than the ground (${dark.thumb.toFixed(0)} over ${dark.ground.toFixed(0)})`)
+      // A light theme, picked in Settings as a user would, then back to the shell.
+      await page.locator('[data-title-settings]').click()
+      await page.locator('[data-settings-tab="appearance"]').click()
+      await page.locator('[data-term-card="solarized-light"]').first().click()
+      await page.locator('[data-tab]').first().click()
+      await sleep(900)
+      const light = await measure('light')
+      ok(light.slider?.w === 6, `still 6px on a light theme (${light.slider?.w})`)
+      ok(light.ground - light.thumb > 25, `on a light theme it is darker than the ground (${light.thumb.toFixed(0)} under ${light.ground.toFixed(0)})`)
+    } finally {
+      await app.close().catch(() => {})
+    }
+  },
+
   async paste(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })

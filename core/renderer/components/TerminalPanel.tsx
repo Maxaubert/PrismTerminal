@@ -84,8 +84,25 @@ function currentLinkColor(): string {
  * defaults to the background; on a clear background that would be a hole, so
  * it is named.
  */
-function currentTermTheme(): ReturnType<typeof resolveTermTheme> & { cursorAccent?: string } {
-  const theme = resolveTermTheme(termThemeId())
+function currentTermTheme(): ReturnType<typeof resolveTermTheme> & {
+  cursorAccent?: string
+  scrollbarSliderBackground?: string
+  scrollbarSliderHoverBackground?: string
+  scrollbarSliderActiveBackground?: string
+} {
+  const base = resolveTermTheme(termThemeId())
+  // THE SCROLLBAR WEARS THE THEME (owner, 2026-09-23: "make the scrollbar more
+  // minimalistic and make sure it follows the theme"). xterm 6 draws its own
+  // slider, coloured from these three; left unset they are a fixed grey on
+  // every theme. The text ink at 40%, 65% under the pointer or a drag, which
+  // is Prism's scrollbar rule; its size and shape are in the hosts' CSS.
+  const ink = normalizeColor(base.foreground, '#cccccc').slice(0, 7)
+  const theme = {
+    ...base,
+    scrollbarSliderBackground: `${ink}66`,
+    scrollbarSliderHoverBackground: `${ink}a6`,
+    scrollbarSliderActiveBackground: `${ink}a6`
+  }
   if (!paintsGround()) {
     // The HOST paints behind the panel (Prism's dock does), so the canvas
     // carries the ground as it always did there: clear only when the terminal
