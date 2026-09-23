@@ -433,7 +433,17 @@ terminal theme, anything that reads or shows files.
   cursor are still measured against the theme's own background, which is the core's. A chosen
   accent is KEPT where the ground can show it and only MOVED to the 3:1 floor where it cannot. The
   agent working indicator still follows the THEME's accent (a core change and an owner decision).
-  The `accent` e2e measures the active tab's rule, a pressed segment, the row order and the ground.
+  The `accent` e2e measures the active tab's rule, the row order and the ground.
+- **SETTINGS CONTROLS ARE NEUTRAL; ONLY SAVE WEARS THE ACCENT** (#42; owner, 2026-09-23: "i dont
+  want settings buttons to be affected by the accent colour... grey based on the bg colour ... same
+  colours as the drop down menus"; "the only ones to keep accented are the save buttons"; both
+  apps). This narrows the accent rule above: row buttons (`ROW_BUTTON`, the dropdown's look), the
+  pressed segment (`SEGMENT_ON`), a switch that is on (`SWITCH_ON`, track in the soft ink, knob in
+  the ground) and dictation's buttons are greys from the theme's own tokens, in `core/` so Prism
+  follows. Save changes and Save as Custom keep the accent. Still accented, since they are not
+  buttons: Reset links, the chosen theme card, the dropdown's chosen item, the rail's page, focus
+  rings, progress, the hotkey capture while it listens. `neutralControls.test.ts` holds the
+  source; the `accent` e2e asserts a picked accent moves none of the three controls.
 - **PT DEFAULT IS THE DEFAULT THEME HERE, AND FIRST IN THE WALL** (owner, 2026-09-22, handing over the palette he had saved as
   Custom: "let this be the default theme ... for prism terminal"): Wombat's colours on #121212, the
   two blacks lifted, the icon's orange `#fe8f34` as the accent. A core preset like any other, and

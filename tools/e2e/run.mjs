@@ -1599,6 +1599,27 @@ const scenarios = {
     const before = await probe()
     ok(!!before.rule && before.rule === before.hi, `the active tab wears the accent rule (${before.rule})`)
     await page.locator('[data-title-settings]').click()
+    // SETTINGS CONTROLS DO NOT WEAR THE ACCENT (owner, 2026-09-23: "i dont want
+    // settings buttons to be affected by the accent colour"; only Save is).
+    // Sampled here with the theme's accent, and again after a pick: a row
+    // button, a pressed segment and a switch that is on must not move.
+    const controls = () =>
+      page.evaluate(() => {
+        const look = (el) => {
+          if (!el) return null
+          const s = getComputedStyle(el)
+          return `${s.backgroundColor}|${s.color}|${s.borderTopColor}`
+        }
+        return {
+          button: look(document.querySelector('[data-choose-folder]')),
+          segment: look(document.querySelector('[data-pref="newtab-mode"] [aria-pressed="true"]')),
+          switch: look(document.querySelector('[role="switch"][aria-checked="true"]'))
+        }
+      })
+    await page.locator('[data-choose-folder]').waitFor({ state: 'visible', timeout: 10000 })
+    await sleep(700)
+    const plain = await controls()
+    ok(!!plain.button && !!plain.segment && !!plain.switch, 'a row button, a pressed segment and an on switch are on the General page')
     await page.locator('[data-settings-tab="appearance"]').click()
     const row = page.locator('[data-pref="window-accent"]')
     await row.waitFor({ state: 'visible', timeout: 10000 })
@@ -1616,25 +1637,31 @@ const scenarios = {
     }, 10000)
     ok(!!picked, `a picked colour is the accent, and the tab's rule follows it (${picked?.rule})`)
     ok(picked?.stored === '#e07a2f' && picked?.follow === 1, 'it is stored, and Reset is offered')
-    // EVERY accent follows, not just the tab: the pressed segment of a
-    // control and the selected settings page wear it too.
-    const worn = await until(
-      () =>
-        page.evaluate(() => {
-          const span = document.createElement('span')
-          span.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-accent').trim()
-          document.body.appendChild(span)
-          const accent = getComputedStyle(span).color
-          span.remove()
-          const seg = document.querySelector('[data-pref="window-edges"] [aria-pressed="true"]')
-          return !!seg && getComputedStyle(seg).backgroundColor === accent
-        }),
-      5000
-    )
-    ok(worn, 'the pressed segment of a control wears the picked accent too')
     await sleep(800)
     await row.scrollIntoViewIfNeeded()
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-picked.png') }).catch(() => {})
+    // The accent reached the tab (above); the settings controls stay as they
+    // were, and none of them is the accent.
+    await page.locator('[data-settings-tab="general"]').click()
+    await page.locator('[data-choose-folder]').waitFor({ state: 'visible', timeout: 10000 })
+    await sleep(700)
+    const after = await controls()
+    const accentRgb = await page.evaluate(() => {
+      const span = document.createElement('span')
+      span.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-accent').trim()
+      document.body.appendChild(span)
+      const c = getComputedStyle(span).color
+      span.remove()
+      return c
+    })
+    for (const k of ['button', 'segment', 'switch']) {
+      ok(after[k] === plain[k], `the ${k} is unchanged by the picked accent (${after[k]})`)
+      ok(!after[k].split('|').includes(accentRgb), `and the ${k} wears no accent`)
+    }
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-neutral-controls.png') }).catch(() => {})
+    await page.locator('[data-settings-tab="appearance"]').click()
+    await row.waitFor({ state: 'visible', timeout: 10000 })
+    await row.scrollIntoViewIfNeeded()
 
     await page.locator('[data-follow-theme="accent"]').click()
     const back = await until(async () => {
