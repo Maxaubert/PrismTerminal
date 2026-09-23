@@ -93,6 +93,21 @@ export interface TermPreset {
  * Prism's app styles' names.
  */
 export const TERM_PRESETS: TermPreset[] = [
+  // PT DEFAULT is the owner's own palette (2026-09-22, saved as Custom and handed
+  // over: "let this be the default theme ... for prism terminal"): Wombat's
+  // colours on a darker #121212, the two blacks lifted so they read, and the
+  // app icon's orange as the accent. Prism Terminal's default, and FIRST in
+  // the wall (owner: "it should be first in the list and be called PT
+  // default"); a preset like any other everywhere else.
+  {
+    id: 'pt-default',
+    name: 'PT Default',
+    bg: '#121212',
+    fg: '#dedacf',
+    cursor: '#bbbbbb',
+    accent: '#fe8f34',
+    ansi: { black: '#646464', red: '#ff615a', green: '#b1e969', yellow: '#ebd99c', blue: '#5da9f6', magenta: '#e86aff', cyan: '#82fff7', white: '#dedacf', brightBlack: '#6b6b6b', brightRed: '#f58c80', brightGreen: '#ddf88f', brightYellow: '#eee5b2', brightBlue: '#a5c7ff', brightMagenta: '#ddaaff', brightCyan: '#b7fff9', brightWhite: '#ffffff' }
+  },
   // Prism's own dark look: what the terminal wore by default inside Prism.
   { id: 'prism', name: 'Prism', bg: '#0b0b0f', fg: '#e7e7ee', cursor: '#7c7cf0', accent: '#5b5bd6' },
   {
@@ -418,7 +433,7 @@ export function resolveTermTheme(themeId: string): TermTheme {
         ...legiblePalette(c.ansi, c.bg)
       }
   }
-  // TERM_PRESETS[0] is 'prism'; the find cannot miss, the fallback is for the type.
+  // DEFAULT_TERM_THEME is in the list; that find cannot miss, the last fallback is for the type.
   const p =
     TERM_PRESETS.find((x) => x.id === themeId) ??
     // An id nothing answers to: the host's own default, where that is a preset.

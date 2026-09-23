@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { followsHostStyle, termHost } from '../host'
+import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react'
+import { followsHostStyle, hostDefaults, termHost } from '../host'
 import {
   FONT_PCTS,
   TERM_FONTS,
@@ -273,7 +273,14 @@ function pickPreset(id: string): void {
   if (volume !== termExtraDefaults().indicator) setAgentIndicator(volume)
 }
 
-export function TerminalAppearanceSettings(): JSX.Element {
+/**
+ * `afterFont`: an app's OWN rows, placed right under Font size (owner,
+ * 2026-09-22: "move those settings, bg and accent, to the top of the list
+ * right under font and font size"). The rows stay the app's - Prism passes
+ * nothing, since its window colours belong to its app style - and the core
+ * only lends them the place.
+ */
+export function TerminalAppearanceSettings({ afterFont }: { afterFont?: ReactNode } = {}): JSX.Element {
   const themeId = useTermThemeId()
   const fontPct = useTermFontPct()
   const fontId = useTermFontId()
@@ -317,10 +324,39 @@ export function TerminalAppearanceSettings(): JSX.Element {
   const [lightFirst] = useState(
     () => luminance(normalizeColor(resolveTermTheme(termThemeId()).background, '#000000')) > 0.4
   )
+  // THE HOST'S OWN DEFAULT LEADS THE WALL, ahead of Custom (owner, 2026-09-22:
+  // "it should be first in the list"). Prism Terminal's is a preset (PT
+  // Default); Prism's is 'style', which is no preset, so its wall is untouched.
+  const defaultPreset = TERM_PRESETS.find((p) => p.id === hostDefaults().theme)
   const sortedPresets = useMemo(() => {
     const lum = (bg: string): number => luminance(normalizeColor(bg, '#000000'))
-    return [...TERM_PRESETS].sort((a, b) => (lightFirst ? lum(b.bg) - lum(a.bg) : lum(a.bg) - lum(b.bg)))
-  }, [lightFirst])
+    return TERM_PRESETS.filter((p) => p !== defaultPreset).sort((a, b) =>
+      lightFirst ? lum(b.bg) - lum(a.bg) : lum(a.bg) - lum(b.bg)
+    )
+  }, [lightFirst, defaultPreset])
+  const presetCard = (p: (typeof TERM_PRESETS)[number]): JSX.Element => {
+    const t = resolveTermTheme(p.id)
+    return (
+      <TermThemeCard
+        key={p.id}
+        id={p.id}
+        name={p.name}
+        on={themeId === p.id}
+        bg={t.background}
+        fg={t.foreground}
+        cursor={t.cursor}
+        ansi={{
+          green: t.green ?? '',
+          yellow: t.yellow ?? '',
+          blue: t.blue ?? '',
+          cyan: t.cyan ?? '',
+          red: t.red ?? ''
+        }}
+        onPick={() => pickPreset(p.id)}
+        onEdit={() => setEditing(paletteOf(p.id))}
+      />
+    )
+  }
   // "Save changes": the WHOLE look - palette of the selected theme, font,
   // size, agent colours, acrylic and its opacity - lands in the Custom slot,
   // reselectable after any theme switch. The indicator's volume is not part
@@ -394,6 +430,7 @@ export function TerminalAppearanceSettings(): JSX.Element {
           style={{ maxHeight: wallHeight }}
         >
           <div className="flex flex-wrap gap-3">
+            {defaultPreset && presetCard(defaultPreset)}
             {followsHostStyle() && (
               <TermThemeCard
                 id="style"
@@ -425,29 +462,7 @@ export function TerminalAppearanceSettings(): JSX.Element {
                 onEdit={() => setEditing(paletteOf('custom'))}
               />
             )}
-            {sortedPresets.map((p) => {
-              const t = resolveTermTheme(p.id)
-              return (
-                <TermThemeCard
-                  key={p.id}
-                  id={p.id}
-                  name={p.name}
-                  on={themeId === p.id}
-                  bg={t.background}
-                  fg={t.foreground}
-                  cursor={t.cursor}
-                  ansi={{
-                    green: t.green ?? '',
-                    yellow: t.yellow ?? '',
-                    blue: t.blue ?? '',
-                    cyan: t.cyan ?? '',
-                    red: t.red ?? ''
-                  }}
-                  onPick={() => pickPreset(p.id)}
-                  onEdit={() => setEditing(paletteOf(p.id))}
-                />
-              )
-            })}
+            {sortedPresets.map(presetCard)}
           </div>
         </div>
         <div className="mt-2 flex justify-center">
@@ -496,6 +511,7 @@ export function TerminalAppearanceSettings(): JSX.Element {
           options={FONT_PCTS.map((p) => ({ id: String(p), name: `${p}%` }))}
         />
       </Pref>
+      {afterFont}
       {/* The material does not exist before Windows 11, so there the row says
           why instead of offering a switch that would do nothing. */}
       <Pref
