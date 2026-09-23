@@ -1231,6 +1231,75 @@ const scenarios = {
    * (550ms), so every measurement waits until the edge has arrived at the
    * token it should be wearing.
    */
+  async themeCards(ok) {
+    // PICKING A THEME MOVES NOTHING (owner, 2026-09-22: "when I click a theme
+    // ... the ui shifts a bit, it's not every theme but some"). Only the
+    // selected card wears the pencil, which used to make it - and its row of
+    // the wall - taller, so a pick in ANOTHER row shifted everything below.
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    await page.locator('[data-term-card]').first().waitFor({ timeout: 10000 })
+    const measure = () =>
+      page.evaluate(() => {
+        const cards = [...document.querySelectorAll('[data-term-card]')].map((c) => {
+          const r = c.getBoundingClientRect()
+          return { id: c.getAttribute('data-term-card'), top: Math.round(r.top), h: Math.round(r.height * 10) / 10 }
+        })
+        const below = document.querySelector('[data-pref="term-font"]')?.getBoundingClientRect().top ?? -1
+        return { cards, below: Math.round(below * 10) / 10 }
+      })
+    const first = await measure()
+    const rowTops = [...new Set(first.cards.map((c) => c.top))]
+    ok(rowTops.length >= 2, `the wall has two rows to pick across (${rowTops.length})`)
+    const inRow = (top) => first.cards.find((c) => c.top === top)?.id
+    const picks = [inRow(rowTops[0]), inRow(rowTops[1])]
+    const seen = []
+    for (const id of picks) {
+      await page.locator(`[data-term-card="${id}"]`).first().click()
+      await sleep(500)
+      seen.push(await measure())
+    }
+    const heights = new Set(seen.flatMap((m) => m.cards.map((c) => c.h)))
+    ok(heights.size === 1, `every card is one height, selected or not (${[...heights].join(' / ')})`)
+    // The shift the owner saw is the SECOND row moving: the tall card is
+    // always somewhere, so the wall's total height never changed.
+    const row2 = (m) => m.cards.find((c) => c.id === picks[1])?.top
+    ok(
+      row2(seen[0]) === row2(seen[1]),
+      `the second row stays put when the pick moves between rows (${row2(seen[0])} -> ${row2(seen[1])})`
+    )
+    ok(
+      seen[0].below === seen[1].below,
+      `and nothing below the wall moves (${seen[0].below} -> ${seen[1].below})`
+    )
+    // A colour put back to the theme's is a plain RESET word, as in Prism
+    // (owner, same day: "just a simple reset text you can click"), not a
+    // bordered button.
+    const well = page.locator('[data-pref="agent-color"] input:not([type])')
+    const themed = (await well.inputValue()).toLowerCase()
+    await well.fill('#e07a2f')
+    await well.press('Enter')
+    const reset = page.locator('[data-follow-theme="working"]')
+    await reset.waitFor({ timeout: 5000 })
+    const look = await reset.evaluate((el) => ({
+      text: el.textContent?.trim(),
+      border: parseFloat(getComputedStyle(el).borderTopWidth) || 0,
+      bg: getComputedStyle(el).backgroundColor
+    }))
+    ok(
+      look.text === 'Reset' && look.border === 0 && /rgba\(0, 0, 0, 0\)|transparent/.test(look.bg),
+      `a picked colour offers a plain "Reset" word (${JSON.stringify(look)})`
+    )
+    await reset.click()
+    ok(
+      await until(async () => (await well.inputValue()).toLowerCase() === themed && !(await reset.count()), 5000),
+      'and Reset puts the theme\'s colour back and goes away'
+    )
+    await app.close().catch(() => {})
+  },
+
   async edges(ok) {
     const w = world()
     // Two tabs, so there IS a line between tabs to measure.
