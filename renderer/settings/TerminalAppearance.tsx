@@ -30,7 +30,7 @@ import {
 import { resolveTermTheme, watchTermTheme, TERM_PRESETS } from '../lib/termTheme'
 import { useAgentColors } from '../lib/agentColors'
 import { luminance, normalizeColor } from '../lib/termAnsi'
-import { HexSwatch, Pref, ROWS, ROW_BUTTON, SaveButton, Select, Switch, ThemeHead } from './fields'
+import { HexSwatch, Pref, RESET_LINK, ROWS, SaveButton, Select, Switch, ThemeHead } from './fields'
 
 // THE TERMINAL'S LOOK, as one settings section for both hosts (#15): the theme
 // wall and its editor, font, size, acrylic, and the two agent indicator
@@ -98,8 +98,14 @@ function TermThemeCard({
         </div>
         <div style={{ color: fg }}>12 files</div>
       </div>
+      {/* ONE HEIGHT FOR EVERY LABEL ROW (owner, 2026-09-22: "when I click a
+          theme ... the ui shifts a bit"). The pencil is 20px, taller than the
+          name's line, so the selected card grew and took its row of the wall
+          with it: picking a theme in another row moved everything below. The
+          row is fixed at a height that holds the pencil, whether it is there
+          or not. */}
       <div
-        className={`flex items-center justify-between border-t px-2.5 py-1.5 text-[11.5px] font-semibold ${
+        className={`flex h-8 items-center justify-between border-t px-2.5 text-[11.5px] font-semibold ${
           on ? 'border-[color:var(--p-accent-hi)]/40 text-[var(--p-accent-hi)]' : 'border-[color:var(--p-line)] text-[var(--p-text)]'
         }`}
       >
@@ -548,8 +554,8 @@ export function TerminalAppearanceSettings(): JSX.Element {
       >
         <div className="flex items-center gap-2.5">
           {agentCol && (
-            <button data-follow-theme="working" onClick={() => setAgentColor('')} className={ROW_BUTTON}>
-              Follow theme
+            <button data-follow-theme="working" onClick={() => setAgentColor('')} className={RESET_LINK}>
+              Reset
             </button>
           )}
           <HexSwatch label="Agent working indicator" value={inForce.working} onChange={setAgentColor} />
@@ -566,8 +572,8 @@ export function TerminalAppearanceSettings(): JSX.Element {
       >
         <div className="flex items-center gap-2.5">
           {doneCol && (
-            <button data-follow-theme="finished" onClick={() => setAgentDoneColor('')} className={ROW_BUTTON}>
-              Follow theme
+            <button data-follow-theme="finished" onClick={() => setAgentDoneColor('')} className={RESET_LINK}>
+              Reset
             </button>
           )}
           <HexSwatch label="Agent finished indicator" value={inForce.finished} onChange={setAgentDoneColor} />
