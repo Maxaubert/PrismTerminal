@@ -41,6 +41,10 @@ export interface TermApi {
   onTermAgent(cb: (id: string, has: boolean, kind: DetectedAgent | null) => void): () => void
   onTermExit(cb: (id: string) => void): () => void
   readClipboard(): ClipboardRead
+  /** Text onto the clipboard through main, for when the page itself is refused
+   *  (no focus). Both hosts' bridges carry it (`createTermApi`); optional so a
+   *  host that has none still builds, and `copyText` then reports a failure. */
+  writeClipboard?(text: string): Promise<boolean>
   openExternal(url: string): void
 }
 

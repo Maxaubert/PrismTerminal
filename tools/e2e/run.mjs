@@ -573,6 +573,22 @@ const scenarios = {
       ok(!!rows && rows[0].includes('Copy link') && !rows.some((r) => r.includes('Close tab')), `right-click on a link: Copy link first, no Close tab (${JSON.stringify(rows)})`)
       await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Copy link' }).click()
       ok((await until(async () => (await clip()) === url, 4000)) === true, 'and it copies the whole link')
+      // THE "COPIED" BADGE (owner, 2026-09-23): at the bottom centre, then gone.
+      const badge = () =>
+        page.evaluate(() => {
+          const el = document.querySelector('[data-copied-badge]')
+          const r = el.getBoundingClientRect()
+          return { state: el.getAttribute('data-copied-badge'), cx: r.left + r.width / 2, bottom: r.bottom, w: innerWidth, h: innerHeight, text: el.textContent }
+        })
+      const shownBadge = await until(async () => {
+        const b = await badge()
+        return b.state === 'shown' ? b : null
+      }, 3000, 25)
+      await sleep(250) // past its 200ms fade-in, for the picture
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/copied-badge.png') }).catch(() => {})
+      ok(!!shownBadge && shownBadge.text === 'Copied', 'a copy shows the "Copied" badge')
+      ok(!!shownBadge && Math.abs(shownBadge.cx - shownBadge.w / 2) <= 2 && shownBadge.h - shownBadge.bottom < 60, `at the bottom centre of the window (${shownBadge?.cx} of ${shownBadge?.w}, ${shownBadge ? shownBadge.h - shownBadge.bottom : '?'}px up)`)
+      ok(!!(await until(async () => (await badge()).state === 'hidden', 3000, 50)), 'and it leaves by itself')
       // Off a link with nothing selected: neither Copy row.
       const plain = await box('abef', 1)
       await page.mouse.click(plain.left + 2, plain.y, { button: 'right' })
@@ -588,6 +604,12 @@ const scenarios = {
       ok(!!rows && rows.some((r) => r.startsWith('Copy') && !r.startsWith('Copy link')), `right-click with text marked offers Copy (${JSON.stringify(rows)})`)
       await page.locator('[role="menu"] [role="menuitem"]', { hasText: /^Copy(?! link)/ }).first().click()
       ok((await until(async () => (await clip()) === 'example', 4000)) === true, `and it copies the selection exactly (${JSON.stringify(await clip())})`)
+      // Ctrl+C over a selection raises the badge too.
+      await until(async () => (await badge()).state === 'hidden', 3000, 50)
+      await select('example.com', 8, 10) // "com"
+      await page.keyboard.press('Control+c')
+      ok(!!(await until(async () => (await badge()).state === 'shown', 3000, 25)), 'Ctrl+C over a selection shows the badge as well')
+      ok((await until(async () => (await clip()) === 'com', 3000)) === true, 'and copied it')
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/term-menu.png') }).catch(() => {})
     } finally {
       await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), held).catch(() => {})
@@ -1249,14 +1271,16 @@ const scenarios = {
       const wantMain = await mainRow.locator('[data-help-command]').textContent()
       const heightBefore = await mainRow.evaluate((el) => el.getBoundingClientRect().height)
       await page.locator('[data-help-copy="ps-biggest-files#0"]').click()
+      // A copy that worked is said by the app's "Copied" badge at the bottom of
+      // the window (owner, 2026-09-23), which replaced the check in the button.
       ok(
-        await until(async () => (await page.locator('[data-help-copy="ps-biggest-files#0"]').getAttribute('title')) === 'Copied', 3000, 25),
-        'the copy button answers in place, in the button itself'
+        await until(async () => (await page.locator('[data-copied-badge]').getAttribute('data-copied-badge')) === 'shown', 3000, 25),
+        'a copy raises the "Copied" badge'
       )
       const heightDuring = await mainRow.evaluate((el) => el.getBoundingClientRect().height)
       ok(heightDuring === heightBefore, `and the row does not change height (${heightBefore} -> ${heightDuring})`)
       ok(!!wantMain && /Sort-Object/.test(wantMain) && (await clip()) === wantMain, `the clipboard holds the EXACT command ("${await clip()}")`)
-      ok(/^Copied: /.test((await page.locator('[data-help-said]').textContent()) ?? ''), 'and a screen reader is told')
+      ok(/^Copied/.test((await page.locator('[role="status"]', { hasText: 'Copied' }).first().textContent()) ?? ''), 'and a screen reader is told, by the badge')
       ok(
         await until(async () => (await page.locator('[data-help-copy="ps-biggest-files#0"]').getAttribute('title')) === 'Copy', 4000, 50),
         'the answer leaves by itself'
