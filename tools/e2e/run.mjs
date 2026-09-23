@@ -266,6 +266,8 @@ const scenarios = {
     ok(!!mark.bar && mark.bar === mark.accent, `and its line is the theme's accent (${mark.bar} vs ${mark.accent})`)
     // The finished mark is Full's alone: turn it up, the way a user would.
     await page.locator('[data-title-settings]').click()
+    // On Appearance, beside its two colours (2026-09-22).
+    await page.locator('[data-settings-tab="appearance"]').click()
     await page.locator('[data-pref="agent-indicator"] [data-seg="full"]').click()
     await page.locator('[data-tab]').nth(1).click()
     ok(
@@ -391,6 +393,77 @@ const scenarios = {
    * hatch, and for the right-click Paste. The clipboard is the owner's: it is
    * saved first and put back at the end.
    */
+  /**
+   * CLICK TO PUT THE CARET THERE (owner, 2026-09-22). In a real pwsh: type a
+   * command, click between two of its letters, type a letter, run it, and the
+   * letter came out where the click was. Then the refusals that matter most:
+   * a click on old output above the prompt moves nothing.
+   */
+  async clickCaret(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    try {
+      await page.waitForFunction(() => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()), null, { timeout: 45000 })
+      await page.locator('.xterm').first().click()
+      await page.keyboard.type('echo ab1cdef')
+      await sleep(400)
+      // The cell of 'c' on the prompt row: rows are the xterm-rows children,
+      // and plain ASCII is one cell per character.
+      // Where a character sits on screen, exactly: a Range over the row's text
+      // gives that character's own box (rows are trimmed, so the row's width
+      // says nothing about a cell's). The x is a little into the character,
+      // which places the caret just before it.
+      const cell = (needle, offset) =>
+        page.evaluate(
+          ([n, off]) => {
+            const rows = [...document.querySelectorAll('.xterm-rows > div')]
+            for (let i = rows.length - 1; i >= 0; i -= 1) {
+              const at = rows[i].textContent.lastIndexOf(n)
+              if (at < 0) continue
+              const walker = document.createTreeWalker(rows[i], NodeFilter.SHOW_TEXT)
+              let left = at + off
+              for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                if (left < node.textContent.length) {
+                  const range = document.createRange()
+                  range.setStart(node, left)
+                  range.setEnd(node, left + 1)
+                  const box = range.getBoundingClientRect()
+                  return { x: box.left + box.width * 0.2, y: box.top + box.height / 2 }
+                }
+                left -= node.textContent.length
+              }
+            }
+            return null
+          },
+          [needle, offset]
+        )
+      const at = await cell('ab1cdef', 3) // the boundary before 'c'
+      ok(!!at, 'the typed line is on screen')
+      await page.mouse.click(at.x, at.y)
+      await sleep(300)
+      await page.keyboard.type('X')
+      await page.keyboard.press('Enter')
+      ok(
+        !!(await until(async () => (await termText(page)).includes('ab1Xcdef'), 8000)),
+        'a click between two letters puts the caret there: the letter typed lands at the click'
+      )
+      // Old output is not the line being edited: a click there moves nothing.
+      await page.waitForFunction(() => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()), null, { timeout: 15000 })
+      await page.keyboard.type('echo zz')
+      const old = await cell('ab1Xcdef', 1)
+      await page.mouse.click(old.x, old.y)
+      await sleep(300)
+      await page.keyboard.type('Q')
+      await page.keyboard.press('Enter')
+      ok(
+        !!(await until(async () => (await termText(page)).includes('zzQ'), 8000)),
+        'a click on old output above the prompt moves nothing'
+      )
+    } finally {
+      await app.close().catch(() => {})
+    }
+  },
+
   async paste(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
@@ -1165,13 +1238,26 @@ const scenarios = {
     ok(wanted.length >= 18 && wanted.includes('help-enabled'), `the core lists the terminal, dictation and help options (${wanted.length})`)
     await page.locator('[data-title-settings]').click()
     const shown = new Set()
+    const seenInOrder = []
     for (const tab of ['general', 'appearance', 'dictation']) {
       await page.locator(`[data-settings-tab="${tab}"]`).click()
       await sleep(400)
-      for (const id of await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))) shown.add(id)
+      for (const id of await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))) {
+        shown.add(id)
+        seenInOrder.push(id)
+      }
     }
     const missing = wanted.filter((id) => !shown.has(id))
     ok(missing.length === 0, `every terminal option is on the page (missing: ${JSON.stringify(missing)})`)
+    // ONE ORDER IN BOTH APPS (owner, 2026-09-22): read top to bottom, General
+    // then Appearance, the core's terminal rows come in the list's own order,
+    // whatever of this app's own sits between them. Prism's e2e asserts the same.
+    const termOrder = ids('core/renderer/settings/options.ts').filter((id) => shown.has(id))
+    const pageOrder = seenInOrder.filter((id) => termOrder.includes(id))
+    ok(
+      JSON.stringify(pageOrder) === JSON.stringify(termOrder),
+      `the terminal rows come in the shared order (${pageOrder.join(' > ')})`
+    )
     // What is left must be THIS APP's rows, a closed list: a terminal-looking
     // row outside the core's list is a fork.
     // 'window-edges' (#27) is the window's chrome, which in Prism belongs to

@@ -161,6 +161,25 @@ so an update never silently changes what an existing user sees; the bridge to ma
   on the icon's own dark grey `#383c44` (Cinder). They were the two ORIGINALS whose names already
   fitted; the public schemes (Dracula, Nord, Gruvbox...) keep their real colours, since a scheme
   called Dracula that is not Dracula is a lie. Ids unchanged: they are saved-settings keys.
+- **A CLICK PUTS THE CARET THERE** (owner, 2026-09-22: "click inside the text to put the caret
+  there"). A plain click on the line being edited sends the Left or Right presses that walk the
+  shell's cursor to the cell clicked (`core/renderer/lib/termClickCaret.ts`, pure and tested; wired in
+  `TerminalPanel` `attachClickCaret`). Refused, so the click does what it always did: a drag or
+  selection, a double click, a modified click, a link, a program that owns the mouse, a full-screen
+  program, a view scrolled back, a hidden cursor (tracked from DECTCEM, since xterm keeps it
+  private), anything printed below the line, and any row off the cursor's logical line. Wide
+  characters count once; a click past the text goes to its end. Up and Down are never sent. The
+  `clickCaret` e2e proves it in a real pwsh.
+- **SETTINGS DESCRIPTIONS ARE PLAIN WORDS, AND THE ROWS KEEP ONE ORDER** (owner, 2026-09-22: "no
+  symbols other than comma and dot, no mentioning of specific keys or tips"; "the terminal
+  settings pages in Prism and Prism Terminal should be the same in terms of order"). Every hint,
+  sub and note is checked by `core/shared/settingsCopy.ts` (a test in the core and one per app).
+  `TERMINAL_OPTIONS` is in display order and the `options` e2e reads the page top to bottom against
+  it; the Agent indicator lives in the core's appearance list, directly above its two colours.
+- **THE RESTORE LOOKS UP CLAUDE SESSIONS OFF MAIN'S THREAD** (2026-09-22, the "soft lock on first
+  launch"): `claudeSessionsAsync` stats sixteen at a time; a home folder holds thousands of
+  transcripts. The theme wall caches each preset's resolved look, and its previews use installed
+  monospace faces rather than Mac ones Windows must look up.
 - **THE HELP POPUP BLURS THE WINDOW BEHIND IT AND CASTS NO SHADOW** (owner, 2026-09-22: "remove the
   shadow behind this and make the bg blurred when it's open"): `backdrop-blur` on a lighter scrim; the
   blur already lifts the panel off the page, and a shadow on top of it read as a dark halo.

@@ -10,16 +10,18 @@ import { Pref, Switch } from './fields'
 // its button and gives the key back to the shell.
 
 /**
- * `opensWith` is the host's own way in ("F1, or the ? in the title bar"): the
- * key is a chord each host claims for itself, so each host says which.
+ * `opensWith` is no longer shown (owner, 2026-09-22: settings descriptions say
+ * what a setting does, and never name keys or give tips). It stays optional in
+ * the signature so a host built against an older core still compiles.
  */
-export function HelpSetting({ opensWith }: { opensWith: string }): JSX.Element {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function HelpSetting(_props: { opensWith?: string } = {}): JSX.Element {
   const on = useHelpEnabled()
   return (
     <Pref
       id="help-enabled"
       label="Command help"
-      hint={`Find a command by describing it, then copy it. Nothing is typed or run for you. ${opensWith}`}
+      hint="Finds a command from a plain description so you can copy it."
     >
       <Switch on={on} onChange={setHelpEnabled} label="Command help" />
     </Pref>
