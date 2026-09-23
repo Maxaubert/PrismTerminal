@@ -170,6 +170,22 @@ so an update never silently changes what an existing user sees; the bridge to ma
   private), anything printed below the line, and any row off the cursor's logical line. Wide
   characters count once; a click past the text goes to its end. Up and Down are never sent. The
   `clickCaret` e2e proves it in a real pwsh.
+- **BACKSPACE DELETES A SELECTION** (#44; owner, 2026-09-23: "i should also be able to highlight
+  text and use backspace to delete the selected text"). Backspace or Delete, unmodified, over a
+  selection that starts and ends on the line being edited sends the presses that do it by hand:
+  Left or Right to the selection's end, then one DEL per character (`core/renderer/lib/
+  termSelectionEdit.ts`, pure and tested; wired in `TerminalPanel` `deleteSelection`). The click
+  caret's refusals apply (a program owning the mouse, full screen, scrolled back, a hidden cursor,
+  text below); anywhere else the key is the shell's, untouched. Like the click, these are keys
+  the user pressed, translated, not the app typing. In `core/`, so Prism's terminals have it too.
+  xterm's `getSelectionPosition` is 0-based with the end exclusive, whatever its typings say
+  (MEASURED). The `selectionEdit` e2e proves it in a real pwsh.
+- **THE MENU FITS WHAT WAS CLICKED** (#44; owner, same day: "if i click it on a link it shows copy
+  link, if i click it with text marked it says copy ... remove close tab from the right click
+  menu"). `termContextAt` (core, read-only) answers what is under the point: the selection's text
+  and the link there (whole, across a wrap, by `findLinks`). App's menu leads with Copy link and
+  Copy, both copied exactly through main (`writeClipboard`); Close tab stays on the TAB's menu.
+  The `selectionEdit` e2e reads the clipboard back in main and puts the owner's back.
 - **SETTINGS DESCRIPTIONS ARE PLAIN WORDS, AND THE ROWS KEEP ONE ORDER** (owner, 2026-09-22: "no
   symbols other than comma and dot, no mentioning of specific keys or tips"; "the terminal
   settings pages in Prism and Prism Terminal should be the same in terms of order"). Every hint,
@@ -489,7 +505,8 @@ terminal theme, anything that reads or shows files.
   for a day: NOTHING IN A FEATURE LIST IS TRUE UNTIL A TEST HAS DONE IT. They are on App's terminal
   host now (`data-term-host`): the drop goes through `quotePaths` and `termInput`, never Enter, and
   only over a shell; the menu is Paste (the terminal's own paste rule, via `pasteInto`), Find in
-  scrollback and Close tab, with no Copy row because xterm owns its selection. The e2e performs a
+  scrollback and Command help, led by Copy link over a link and Copy with text marked, and with no
+  Close tab since 2026-09-23 (see THE MENU FITS). The e2e performs a
   REAL drop with Chromium's drag events (`Input.dispatchDragEvent` carrying a file path): a
   synthetic DataTransfer holds a File with no path and proves nothing about `getPathForFile`.
   When a Prism component is stripped, grep what ELSE it owned before calling a feature kept.
