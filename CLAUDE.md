@@ -179,6 +179,16 @@ so an update never silently changes what an existing user sees; the bridge to ma
   hovered or dragged), so both apps follow the theme (Prism's size and shape are its own CSS).
   Not a stale paint: the thumb is ABSENT until a scroll because xterm fades it, which the
   `scrollbar` e2e wakes with a wheel before it measures, on a dark and a light theme.
+- **EVERY COPY SAYS "COPIED" AT THE BOTTOM CENTRE** (#54; owner, 2026-09-23: "when you copy
+  something in the terminal including from the command help, i want to see a badge appear at the
+  bottom center of the screen saying copied"). Every copy goes through the core's `copyText`
+  (`lib/copyNotice.ts`): the page's clipboard first (no size cap; main's `writeClipboard`, capped
+  at 4000, only when the page is refused), and ONLY a write that landed raises the badge
+  (`components/CopiedBadge`, mounted once by each host): a neutral pill, no accent, no shadow,
+  1.2s, a second copy restarts it, its own live region for screen readers. Ctrl+C over a
+  selection, the menu's Copy and Copy link, and Command help all use it. The badge REPLACED
+  Command help's in-row check (owner's pick), so a success is said once; a failed copy still
+  marks its row. `selectionEdit` and `helpPanel` assert it; `.e2e-shots/copied-badge.png`.
 - **FIND IS CTRL+F, EXCEPT IN A FULL-SCREEN PROGRAM** (#50; owner, 2026-09-23: "can the find
   hotkey be ctrl f", then "lets do it"). This app's `ownsKey` and App's handler take Ctrl+F unless
   the focused shell is on the alternate screen or asked for the mouse (the core's

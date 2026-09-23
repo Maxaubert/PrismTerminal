@@ -28,6 +28,8 @@ import {
 import { useAgentIndicator } from '@core/renderer/lib/useAgentIndicator'
 import { useDictationArm } from '@core/renderer/lib/useDictation'
 import { DictationPill } from '@core/renderer/components/DictationPill'
+import CopiedBadge from '@core/renderer/components/CopiedBadge'
+import { copyText } from '@core/renderer/lib/copyNotice'
 import UpdateChip from '@core/renderer/components/UpdateChip'
 import UpdateDialog from '@core/renderer/components/UpdateDialog'
 import { useUpdateFlow } from '@core/renderer/lib/useUpdateFlow'
@@ -545,6 +547,8 @@ export default function App(): JSX.Element {
           />
         )}
         <DictationPill sessionId={activeShell ? activeShell.id : null} />
+        {/* "Copied", at the bottom centre, for every copy the app makes. */}
+        <CopiedBadge />
         {activeShell && findOpen && (
           <TermFind sessionId={activeShell.id} onClose={() => setFindFor(null)} />
         )}
@@ -577,14 +581,15 @@ export default function App(): JSX.Element {
           items={[
             // THE MENU FITS WHAT WAS CLICKED (owner, 2026-09-23: "if i click it
             // on a link it shows copy link, if i click it with text marked it
-            // says copy"). Both copy exactly, through main's clipboard, like the
-            // command help. Close tab left this menu the same day ("remove close
+            // says copy"). Both copy exactly through the core's `copyText`, like
+            // the command help, which also raises the "Copied" badge once the
+            // clipboard has it. Close tab left this menu the same day ("remove close
             // tab from the right click menu"); the tab's own menu still has it.
             ...(termMenu.link
-              ? [{ label: 'Copy link', onPick: () => void window.prism.writeClipboard(termMenu.link!) }]
+              ? [{ label: 'Copy link', onPick: () => void copyText(termMenu.link!) }]
               : []),
             ...(termMenu.selection
-              ? [{ label: 'Copy', hint: 'Ctrl+C', onPick: () => void window.prism.writeClipboard(termMenu.selection) }]
+              ? [{ label: 'Copy', hint: 'Ctrl+C', onPick: () => void copyText(termMenu.selection) }]
               : []),
             // Paste through the terminal's own rule (an image forwards the
             // keystroke to the agent, files become quoted paths, text is a
@@ -657,7 +662,7 @@ export default function App(): JSX.Element {
           <HelpPanel
             shell={helpFor}
             monoFont={termFontStack()}
-            onCopy={(text) => window.prism.writeClipboard(text)}
+            onCopy={copyText}
             onPickShell={setHelpShell}
             onClose={() => setHelpOpen(false)}
           />
