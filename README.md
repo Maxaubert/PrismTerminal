@@ -1,17 +1,23 @@
 <div align="center">
+  <img src="assets/prism-terminal-icon.svg" alt="Prism Terminal" width="128">
 
-# Prism Terminal
+  # Prism Terminal
 
-**A tabbed Windows terminal built for AI CLIs. Every tab tells you whether its agent is working.**
+  Made for working with agents.
 
-[![Version](https://img.shields.io/github/package-json/v/Maxaubert/PrismTerminal?color=5b5bd6&label=version)](https://github.com/Maxaubert/PrismTerminal/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/Maxaubert/PrismTerminal/ci.yml?branch=main&label=ci&color=5b5bd6)](https://github.com/Maxaubert/PrismTerminal/actions/workflows/ci.yml)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-5b5bd6)](#install)
-[![License](https://img.shields.io/github/license/Maxaubert/PrismTerminal?color=5b5bd6)](LICENSE)
+  A tabbed Windows terminal built for AI CLIs.
 
-<img src="assets/terminal-dark.png" alt="Prism Terminal with two tabs; a line in the theme's accent runs under the second one while its agent works" width="860">
+  [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?style=flat-square)](https://github.com/Maxaubert/PrismTerminal/releases/latest)
+  [![Version](https://img.shields.io/github/package-json/v/Maxaubert/PrismTerminal?style=flat-square&color=fe8f34&label=version)](https://github.com/Maxaubert/PrismTerminal/releases)
+  [![Built with](https://img.shields.io/badge/Electron%20·%20React%20·%20TypeScript-2b2e3a?style=flat-square)](#build-from-source)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-22b364?style=flat-square)](LICENSE)
 
+  [Download](https://github.com/Maxaubert/PrismTerminal/releases/latest) · [Build from source](#build-from-source)
 </div>
+
+---
+
+https://github.com/user-attachments/assets/23c7ecde-a465-4d66-8b8b-8b523e2e0218
 
 Prism Terminal is the terminal from [Prism](https://github.com/Maxaubert/Prism), lifted out into an
 app of its own. It is for people who keep Claude Code or Codex running in several folders at once
@@ -71,6 +77,7 @@ and want to know, at a glance, which one has finished.
   installer, and says so when its pretend install finishes.
 
 <div align="center">
+<img src="assets/terminal-dark.png" alt="Prism Terminal with two tabs; a line in the theme's accent runs under the second one while its agent works" width="860">
 <img src="assets/terminal-light.png" alt="The same window wearing a light theme: the whole chrome turns light with it" width="420">
 <img src="assets/settings-appearance.png" alt="The Appearance settings page with its grid of terminal themes" width="420">
 </div>
