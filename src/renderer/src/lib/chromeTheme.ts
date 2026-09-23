@@ -86,7 +86,9 @@ export function chromeTokens(
   theme: TermTheme,
   opacityPct = 100,
   wantedAccent?: string,
-  edges: WindowEdges = 'hairline'
+  edges: WindowEdges = 'hairline',
+  /** The accent the USER chose (accentPrefs), or nothing to follow the theme. */
+  chosenAccent?: string | null
 ): ChromeTokens {
   // Flattened before any maths: a theme may publish rgba() or #rrggbbaa, which
   // is fine to paint and NaN to measure, and NaN is how a hue walks to black.
@@ -115,7 +117,17 @@ export function chromeTokens(
     .map((c) => normalizeColor(c, INDIGO))
   const visible = (c: string): boolean =>
     contrastRatio(c, bg) >= QUIET_FLOOR && contrastRatio(c, flat) >= QUIET_FLOOR
-  const accent = candidates.find(visible) ?? floorOn(candidates[0], QUIET_FLOOR)
+  // A CHOSEN accent is kept (owner, 2026-09-22: "an accent colour option").
+  // The theme's own candidates above may be swapped for one another when they
+  // are hard to see, because none of them was anybody's pick; a colour picked
+  // by hand is only MOVED, as far as the floor and no further, so it stays the
+  // colour that was chosen on every ground that can show it.
+  const chosen = chosenAccent ? normalizeColor(chosenAccent, INDIGO) : null
+  const accent = chosen
+    ? visible(chosen)
+      ? chosen
+      : floorOn(chosen, QUIET_FLOOR)
+    : (candidates.find(visible) ?? floorOn(candidates[0], QUIET_FLOOR))
   // What sits on the accent is white or near-black, whichever reads better:
   // the better of two, not a midpoint test, since both can be poor at a midpoint.
   const onAccent =

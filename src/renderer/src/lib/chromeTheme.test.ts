@@ -26,6 +26,43 @@ describe('chromeTokens', () => {
       expect(contrastRatio(vars['--p-on-accent'], vars['--p-sel-bg'])).toBeGreaterThanOrEqual(4.5)
     }
   )
+  it('wears a chosen accent exactly when the ground can show it', () => {
+    const theme = resolveTermTheme('prism')
+    const { vars } = chromeTokens(theme, 100, undefined, 'hairline', '#e07a2f')
+    expect(vars['--p-accent']).toBe('#e07a2f')
+    // Everything derived from the accent follows it, and still reads.
+    expect(contrastRatio(vars['--p-on-accent'], vars['--p-accent'])).toBeGreaterThanOrEqual(3)
+    expect(contrastRatio(vars['--p-on-accent'], vars['--p-sel-bg'])).toBeGreaterThanOrEqual(4.5)
+    expect(vars['--p-accent']).not.toBe(chromeTokens(theme).vars['--p-accent'])
+  })
+  it.each(TERM_PRESETS.map((p) => p.id))(
+    '%s: a chosen accent the ground cannot show is moved to the floor, not swapped',
+    (id) => {
+      // Near-black and near-white: one of them is invisible on every theme.
+      for (const pick of ['#0a0a0a', '#f7f7f7']) {
+        const { vars } = chromeTokens(resolveTermTheme(id), 100, undefined, 'hairline', pick)
+        for (const ground of [vars['--p-bg-solid'], vars['--p-side-flat']]) {
+          expect(contrastRatio(vars['--p-accent'], ground), `${pick} on ${ground}`).toBeGreaterThanOrEqual(3)
+        }
+        expect(contrastRatio(vars['--p-on-accent'], vars['--p-sel-bg'])).toBeGreaterThanOrEqual(4.5)
+      }
+    }
+  )
+  it('a picked light background makes a light window whose inks still read', () => {
+    // The background setting hands chromeTokens the theme with its ground
+    // replaced; the mode is MEASURED, so a white ground on a dark theme turns
+    // the window light, and every ink is floored against the new ground.
+    const theme = resolveTermTheme('pt-default')
+    const { vars, mode } = chromeTokens({ ...theme, background: '#f4f1ea' }, 100, '#fe8f34')
+    expect(mode).toBe('light')
+    expect(vars['--p-bg-solid']).toBe('#f4f1ea')
+    expect(contrastRatio(vars['--p-text'], vars['--p-bg-solid'])).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(vars['--p-accent'], vars['--p-bg-solid'])).toBeGreaterThanOrEqual(3)
+  })
+  it('follows the theme when nothing is chosen', () => {
+    const theme = resolveTermTheme('prism')
+    expect(chromeTokens(theme, 100, undefined, 'hairline', null).vars).toEqual(chromeTokens(theme).vars)
+  })
   it('publishes every colour token the components read', () => {
     // The components were transplanted from Prism and read Prism's token names.
     // A name missing here is a surface painted by the stylesheet's fallback,

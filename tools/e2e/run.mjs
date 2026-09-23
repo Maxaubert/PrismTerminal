@@ -780,6 +780,16 @@ const scenarios = {
       ok((await page.locator('[data-title-help]').count()) === 1, 'the ? is in the title bar (the setting is on by default)')
       await page.locator('[data-title-help]').click()
       ok(await opened(), 'a click on it opens the popup')
+      // The window behind is BLURRED and the panel casts no shadow (owner,
+      // 2026-09-22: "remove the shadow behind this and make the bg blurred").
+      const scrimLook = await page.evaluate(() => ({
+        blur: getComputedStyle(document.querySelector('[data-help-scrim]')).backdropFilter,
+        shadow: getComputedStyle(document.querySelector('[data-help-panel]')).boxShadow
+      }))
+      ok(
+        /blur\(/.test(scrimLook.blur) && scrimLook.shadow === 'none',
+        `the window behind is blurred and the panel has no shadow (${JSON.stringify(scrimLook)})`
+      )
       ok(await until(focusIsSearch, 3000, 50), 'and the search field has the focus')
       ok((await page.locator('[data-help-shell="powershell"]').getAttribute('aria-pressed')) === 'true', 'the chip is the shell of the tab in front (PowerShell)')
       const browse = await page.evaluate(() => ({
@@ -1166,7 +1176,8 @@ const scenarios = {
     // row outside the core's list is a fork.
     // 'window-edges' (#27) is the window's chrome, which in Prism belongs to
     // the app style and has a row of its own there: this app's, not the core's.
-    const own = ['newtab-mode', 'explorer-verb', 'app-version', 'window-edges']
+    // 'window-accent' is the same: the accent is the app style's in Prism.
+    const own = ['newtab-mode', 'explorer-verb', 'app-version', 'window-edges', 'window-accent', 'window-background']
     const extra = [...shown].filter((id) => !wanted.includes(id) && !own.includes(id))
     ok(extra.length === 0, `and nothing else claims to be a setting (extra: ${JSON.stringify(extra)})`)
     ok((await page.locator('[data-pref="confirm-close"]').count()) === 0, 'the close question is not a setting any more')
@@ -1461,6 +1472,139 @@ const scenarios = {
       'and the row shows Solid pressed'
     )
     ok((await page.evaluate(() => window.prism.e2eRegWrites())) === 0, 'no registry write was attempted under --e2e')
+    await app.close().catch(() => {})
+  },
+
+  /**
+   * THE WINDOW'S ACCENT (owner, 2026-09-22: "add an accent colour option which
+   * would pick the accents you see, like the blue highlight effect and tab
+   * effect"). Measured on the ACTIVE TAB'S RULE, which is the tab effect the
+   * owner pointed at, as well as on the token: a token that moved while the
+   * rule stayed blue would be the setting lying. Then Reset must put
+   * back exactly the colour that was there before.
+   */
+  async accent(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open, so one is the active tab')
+    const probe = () =>
+      page.evaluate(() => {
+        const root = getComputedStyle(document.documentElement)
+        const colour = (css) => {
+          const span = document.createElement('span')
+          span.style.color = css
+          document.body.appendChild(span)
+          const c = getComputedStyle(span).color
+          span.remove()
+          return c
+        }
+        const rule = [...document.querySelectorAll('[data-tab] span[aria-hidden]')].find(
+          (s) => s.className.includes('top-0') && s.className.includes('h-0.5')
+        )
+        return {
+          accent: root.getPropertyValue('--p-accent').trim().toLowerCase(),
+          hi: colour(root.getPropertyValue('--p-accent-hi').trim()),
+          rule: rule ? getComputedStyle(rule).backgroundColor : null,
+          stored: localStorage.getItem('prism.window.accent'),
+          follow: document.querySelectorAll('[data-follow-theme="accent"]').length,
+          field: document.querySelector('[data-pref="window-accent"] input:not([type])')?.value?.toLowerCase() ?? null
+        }
+      })
+    const before = await probe()
+    ok(!!before.rule && before.rule === before.hi, `the active tab wears the accent rule (${before.rule})`)
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    const row = page.locator('[data-pref="window-accent"]')
+    await row.waitFor({ state: 'visible', timeout: 10000 })
+    await row.scrollIntoViewIfNeeded()
+    const idle = await probe()
+    ok(idle.stored === null && idle.follow === 0, 'nothing is chosen at first, so there is nothing to follow back to')
+    ok(idle.field === before.accent, `the swatch shows the theme's own accent (${idle.field} vs ${before.accent})`)
+
+    const field = page.locator('[data-pref="window-accent"] input:not([type])')
+    await field.fill('#E07A2F')
+    await field.press('Enter')
+    const picked = await until(async () => {
+      const p = await probe()
+      return p.accent === '#e07a2f' && p.rule === p.hi && p.rule !== before.rule ? p : null
+    }, 10000)
+    ok(!!picked, `a picked colour is the accent, and the tab's rule follows it (${picked?.rule})`)
+    ok(picked?.stored === '#e07a2f' && picked?.follow === 1, 'it is stored, and Reset is offered')
+    // EVERY accent follows, not just the tab: the pressed segment of a
+    // control and the selected settings page wear it too.
+    const worn = await until(
+      () =>
+        page.evaluate(() => {
+          const span = document.createElement('span')
+          span.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-accent').trim()
+          document.body.appendChild(span)
+          const accent = getComputedStyle(span).color
+          span.remove()
+          const seg = document.querySelector('[data-pref="window-edges"] [aria-pressed="true"]')
+          return !!seg && getComputedStyle(seg).backgroundColor === accent
+        }),
+      5000
+    )
+    ok(worn, 'the pressed segment of a control wears the picked accent too')
+    await sleep(800)
+    await row.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-picked.png') }).catch(() => {})
+
+    await page.locator('[data-follow-theme="accent"]').click()
+    const back = await until(async () => {
+      const p = await probe()
+      return p.accent === before.accent && p.rule === before.rule ? p : null
+    }, 10000)
+    ok(!!back, `Reset puts back exactly the theme's accent (${back?.accent})`)
+    ok(back?.stored === null && back?.follow === 0, 'and forgets the choice')
+
+    // THE DEFAULT THEME IS EMBER here (owner, 2026-09-22: "let this be the
+    // default theme ... for prism terminal"): a fresh profile has it selected.
+    ok(
+      (await page.locator('[data-term-card="pt-default"]').first().getAttribute('aria-pressed')) === 'true',
+      'a fresh profile wears PT Default, the default theme'
+    )
+    ok(
+      (await page.locator('[data-term-card]').first().getAttribute('data-term-card')) === 'pt-default',
+      'and it is the first card in the wall'
+    )
+
+    // BACKGROUND AND ACCENT SIT RIGHT UNDER FONT SIZE (owner, same day).
+    const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
+    const at = order.indexOf('term-font')
+    ok(
+      at >= 0 && order[at + 1] === 'window-background' && order[at + 2] === 'window-accent',
+      `Background and Accent come right after Font size (${order.slice(Math.max(0, at - 1), at + 4).join(' > ')})`
+    )
+
+    // THE BACKGROUND (owner: "let background colour be a setting"): the
+    // window's ground and the terminal's, one colour, and Reset puts it back.
+    const ground = () =>
+      page.evaluate(() => ({
+        bg: getComputedStyle(document.documentElement).getPropertyValue('--p-bg-solid').trim().toLowerCase(),
+        stored: localStorage.getItem('prism.window.background'),
+        reset: document.querySelectorAll('[data-follow-theme="background"]').length
+      }))
+    const themeGround = (await ground()).bg
+    const bgField = page.locator('[data-pref="window-background"] input:not([type])')
+    ok((await bgField.inputValue()).toLowerCase() === themeGround, `the background swatch shows the theme's own (${themeGround})`)
+    await bgField.fill('#1c2330')
+    await bgField.press('Enter')
+    const painted = await until(async () => {
+      const g = await ground()
+      return g.bg === '#1c2330' && g.stored === '#1c2330' && g.reset === 1 ? g : null
+    }, 8000)
+    ok(!!painted, 'a picked background is the window ground, stored, with Reset offered')
+    await sleep(900) // the strip's colour transitions over 550ms
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/background-picked.png') }).catch(() => {})
+    await page.locator('[data-follow-theme="background"]').click()
+    ok(
+      !!(await until(async () => {
+        const g = await ground()
+        return g.bg === themeGround && g.stored === null && g.reset === 0 ? g : null
+      }, 8000)),
+      "Reset puts the theme's background back"
+    )
     await app.close().catch(() => {})
   },
 

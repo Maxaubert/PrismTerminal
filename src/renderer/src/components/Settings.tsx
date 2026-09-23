@@ -1,8 +1,18 @@
-import { useEffect, useState, type JSX, type ReactNode } from 'react'
+import { useEffect, useState, useSyncExternalStore, type JSX, type ReactNode } from 'react'
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../lib/newTabPrefs'
 import { setWindowEdges, useWindowEdges } from '../lib/edgesPrefs'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
-import { Pref, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
+import { HexSwatch, Pref, RESET_LINK, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
+import { setWindowAccent, useWindowAccent } from '../lib/accentPrefs'
+import {
+  onWindowBackgroundChange,
+  setWindowBackground,
+  useWindowBackground,
+  windowBackground
+} from '../lib/backgroundPrefs'
+import { chromeTokens } from '../lib/chromeTheme'
+import { onTermLookChange, termThemeId } from '@core/renderer/lib/termLook'
+import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { DictationSettings } from '@core/renderer/settings/Dictation'
 import { HelpSetting } from '@core/renderer/settings/Help'
 import { TerminalAppearanceSettings } from '@core/renderer/settings/TerminalAppearance'
@@ -161,11 +171,93 @@ const EDGE_OPTIONS: Array<{ id: WindowEdges; name: string }> = WINDOW_EDGES.map(
  * reason. No `ROWS` wrapper: the list above ends in its own bottom rule, and a
  * second top rule under it would be a doubled line (at "solid", a visible one).
  */
+/** What the THEME in force would give the window, which is what a swatch
+ *  shows while nothing is chosen: computed the way the window computes it
+ *  (chromeTokens), not read back off the page, so it cannot lag a repaint.
+ *  The theme's accent is measured against the PICKED background when there is
+ *  one, since that is the ground it has to be seen on. */
+const themeColours = (): string => {
+  const id = termThemeId()
+  const theme = resolveTermTheme(id)
+  const bg = windowBackground()
+  const vars = chromeTokens(bg ? { ...theme, background: bg } : theme, 100, presetAccent(id)).vars
+  const themeBg = chromeTokens(theme, 100, presetAccent(id)).vars['--p-bg-solid']
+  return `${vars['--p-accent']}|${themeBg}`
+}
+const onColoursChange = (cb: () => void): (() => void) => {
+  const offs = [onTermLookChange(cb), onWindowBackgroundChange(cb)]
+  return () => offs.forEach((off) => off())
+}
+
+/**
+ * A window colour the user may pick over the theme's (owner, 2026-09-22): the
+ * ACCENT ("the accents you see, like the blue highlight effect and tab
+ * effect") and the BACKGROUND ("let background colour be a setting"). Each
+ * follows the theme until a colour is picked, and a plain Reset word puts it
+ * back, as in Prism. This app's own rows, for the edges' reason: in Prism the
+ * window's colours are the app style's. They sit right under Font size (the
+ * core lends the place, `afterFont`).
+ */
+function WindowColour({
+  id,
+  label,
+  what,
+  chosen,
+  fromTheme,
+  onPick
+}: {
+  id: string
+  label: string
+  what: string
+  chosen: string | null
+  fromTheme: string
+  onPick: (hex: string | null) => void
+}): JSX.Element {
+  return (
+    <Pref id={id} label={label} hint={chosen ? `${what} Your own colour.` : `${what} Follows the theme.`}>
+      <div className="flex items-center gap-2.5">
+        {chosen && (
+          <button data-follow-theme={id.replace('window-', '')} onClick={() => onPick(null)} className={RESET_LINK}>
+            Reset
+          </button>
+        )}
+        <HexSwatch label={label} value={chosen ?? fromTheme} onChange={onPick} />
+      </div>
+    </Pref>
+  )
+}
+
+function WindowColours(): JSX.Element {
+  const accent = useWindowAccent()
+  const background = useWindowBackground()
+  const [themeAccent, themeBg] = useSyncExternalStore(onColoursChange, themeColours).split('|')
+  return (
+    <>
+      <WindowColour
+        id="window-background"
+        label="Background colour"
+        what="The window and the terminal behind the text."
+        chosen={background}
+        fromTheme={themeBg}
+        onPick={setWindowBackground}
+      />
+      <WindowColour
+        id="window-accent"
+        label="Accent colour"
+        what="The highlights, the selected row and the active tab."
+        chosen={accent}
+        fromTheme={themeAccent}
+        onPick={setWindowAccent}
+      />
+    </>
+  )
+}
+
 function AppearanceTab(): JSX.Element {
   const edges = useWindowEdges()
   return (
     <>
-      <TerminalAppearanceSettings />
+      <TerminalAppearanceSettings afterFont={<WindowColours />} />
       <Pref
         id="window-edges"
         label="Edges"
