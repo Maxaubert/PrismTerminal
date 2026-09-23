@@ -36,13 +36,6 @@ running Claude Code or Codex in several folders at once and seeing at a glance w
 | **Open terminal here** | Right-click any folder in Explorer to open it in a new tab. |
 | **Updates with release notes** | See what changed, then install in one click. |
 
-<div align="center">
-  <img src="assets/terminal-dark.png" alt="Prism Terminal with two tabs; a line in the theme's accent runs under the one whose agent is working" width="860">
-  <br>
-  <img src="assets/terminal-light.png" alt="The same window in a light theme" width="424">
-  <img src="assets/settings-appearance.png" alt="The Appearance settings with the theme wall" width="424">
-</div>
-
 ## Install
 
 Download `PrismTerminal-Setup-x64-<version>.exe` from [Releases](https://github.com/Maxaubert/PrismTerminal/releases/latest)
