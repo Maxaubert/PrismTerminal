@@ -6,6 +6,7 @@ import { useAgentColors } from '@core/renderer/lib/agentColors'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
 import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from '@core/renderer/lib/recentRoots'
 import { ContextMenu } from './ContextMenu'
+import { useTabWidth } from '../lib/tabWidthPrefs'
 
 /**
  * The open shells, as a row under the title bar.
@@ -87,6 +88,7 @@ export function TabStrip({
   onOpenRecent: (path: string) => void
 }): JSX.Element | null {
   const indicator = useAgentIndicator()
+  const width = useTabWidth()
   // The user's pick where there is one, else the theme's accent and green.
   const { working: agentColor, finished: doneColor } = useAgentColors()
   // Full mode fills the tab with the colour. Text biases WHITE: strict
@@ -293,8 +295,15 @@ export function TabStrip({
             // it SHRINKS - all of them equally - only when the strip
             // runs out of room, which is what a browser does: the label
             // truncates inside, the whole path is on the tooltip.
-            data-tab-fixed
-            className={`no-drag group relative flex min-w-[64px] flex-[0_1_114px] items-center gap-1.5 border-r border-[color:var(--p-divider)] px-2.5 transition-colors ${
+            // AND IT IS A SETTING (owner, 2026-09-23: "fixed size or dynamic
+            // ... the user can pick"): Tab width > Fit to name puts back the
+            // strip from before, each tab as wide as its name up to 14rem
+            // (the cap is on the label), shrinking only when out of room.
+            data-tab-fixed={width === 'fixed' || undefined}
+            data-tab-fit={width === 'fit' || undefined}
+            className={`no-drag group relative flex items-center gap-1.5 border-r border-[color:var(--p-divider)] px-2.5 transition-colors ${
+              width === 'fixed' ? 'min-w-[64px] flex-[0_1_114px]' : 'min-w-0 shrink'
+            } ${
               loud
                 ? ''
                 : on
@@ -405,9 +414,10 @@ export function TabStrip({
               role="tab"
               aria-selected={on}
               tabIndex={on ? 0 : -1}
-              // Takes whatever the fixed tab leaves after its marks and the
-              // close button, and truncates there.
-              className="min-w-0 flex-1 truncate py-1 text-left"
+              // Fixed: takes whatever the tab leaves after its marks and the
+              // close button, and truncates there. Fit: the label sizes the
+              // tab, up to 14rem, as before #35.
+              className={`min-w-0 truncate py-1 text-left ${width === 'fixed' ? 'flex-1' : 'max-w-[14rem]'}`}
               // The label is the folder's last segment; the whole path is here.
               title={t.kind === 'settings' ? undefined : t.cwd}
               onClick={() => {

@@ -814,6 +814,22 @@ const scenarios = {
     await page.locator('[data-tab]').nth(2).click()
     await sleep(200)
     ok((await boxes()).map((b) => b.w).join('|') === before, 'picking another tab moves no tab')
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tabs-fixed.png') }).catch(() => {})
+    // TAB WIDTH IS A SETTING (owner, 2026-09-23: "fixed size or dynamic ...
+    // the user can pick"). Fit to name, picked on the Settings page, puts back
+    // the strip from before: each tab as wide as its name, the long one capped.
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    const row = page.locator('[data-pref="tab-width"]')
+    await row.scrollIntoViewIfNeeded()
+    await row.locator('[data-seg="fit"]').click()
+    ok((await page.evaluate(() => localStorage.getItem('prism.window.tabWidth'))) === 'fit', 'Fit to name is stored')
+    await page.locator('[data-tab]').first().click()
+    await sleep(300)
+    const fit = (await boxes()).slice(0, 3)
+    ok(fit[1].w > fit[0].w + 40, `a long name makes a wider tab than a short one (${fit.map((b) => b.w).join(' / ')})`)
+    ok(fit[1].w <= 14 * 16 + 80 && fit[1].cut, `and the long one stops at the cap, truncated (${fit[1].w}px)`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tabs-fit.png') }).catch(() => {})
     await app.close().catch(() => {})
   },
 
@@ -1539,7 +1555,7 @@ const scenarios = {
     // 'window-edges' (#27) is the window's chrome, which in Prism belongs to
     // the app style and has a row of its own there: this app's, not the core's.
     // 'window-accent' is the same: the accent is the app style's in Prism.
-    const own = ['newtab-mode', 'explorer-verb', 'app-version', 'window-edges', 'window-accent', 'window-background']
+    const own = ['newtab-mode', 'explorer-verb', 'app-version', 'window-edges', 'window-accent', 'window-background', 'tab-width']
     const extra = [...shown].filter((id) => !wanted.includes(id) && !own.includes(id))
     ok(extra.length === 0, `and nothing else claims to be a setting (extra: ${JSON.stringify(extra)})`)
     ok((await page.locator('[data-pref="confirm-close"]').count()) === 0, 'the close question is not a setting any more')

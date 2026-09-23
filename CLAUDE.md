@@ -155,6 +155,13 @@ so an update never silently changes what an existing user sees; the bridge to ma
   around 60%", 106px; then "a bit wider like 20%", 127px; then "10% less wide", 114px): one width, and all of them shrink
   EQUALLY only when the strip runs out of room, as a browser does; the label truncates inside and
   the whole path is on the tooltip. Prism's strip does the same. `tabWidth` measures the boxes.
+  **AND SINCE 2026-09-23 IT IS A SETTING** (#56; owner: "add a setting for tab width, where the
+  user can pick fixed size or dynamic, so essentially what we got now and what we had before").
+  Settings > Appearance > Tab width (`tab-width`, `prism.window.tabWidth`, `lib/tabWidthPrefs.ts`):
+  **Fixed** is the above and the default, so nobody's strip moved; **Fit to name** is the strip
+  from before (the label sizes the tab, capped at 14rem, shrinking only when out of room). This
+  app's row, in the `options` e2e's own list; `tabWidth` measures both. Prism gets the same row
+  in its own PR.
 - **PITCH AND CINDER ARE THE APP ICON'S COLOURS** (owner, same day: "two themes that match the app
   icon colour scheme, one with orange and black, and one with orange and dark grey"; "change a
   couple is better"). Orange `#ec9448` for the cursor AND the chrome accent, on black (Pitch) and

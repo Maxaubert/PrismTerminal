@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore, type JSX, type ReactNode } from 'react'
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../lib/newTabPrefs'
 import { setWindowEdges, useWindowEdges } from '../lib/edgesPrefs'
+import { setTabWidth, useTabWidth, type TabWidth } from '../lib/tabWidthPrefs'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
 import { HexSwatch, Pref, RESET_LINK, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
 import { setWindowAccent, useWindowAccent } from '../lib/accentPrefs'
@@ -257,8 +258,14 @@ function WindowColours(): JSX.Element {
   )
 }
 
+const TAB_WIDTH_OPTIONS: Array<{ id: TabWidth; name: string }> = [
+  { id: 'fixed', name: 'Fixed' },
+  { id: 'fit', name: 'Fit to name' }
+]
+
 function AppearanceTab(): JSX.Element {
   const edges = useWindowEdges()
+  const width = useTabWidth()
   return (
     <>
       <TerminalAppearanceSettings afterFont={<WindowColours />} withIndicator />
@@ -268,6 +275,10 @@ function AppearanceTab(): JSX.Element {
         hint="The lines between the parts of the window, and the border round it."
       >
         <Segmented value={edges} onChange={setWindowEdges} options={EDGE_OPTIONS} />
+      </Pref>
+      {/* Owner, 2026-09-23: "fixed size or dynamic ... the user can pick". */}
+      <Pref id="tab-width" label="Tab width" hint="Every tab the same width, or each as wide as its name.">
+        <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
       </Pref>
     </>
   )
