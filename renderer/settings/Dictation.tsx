@@ -61,8 +61,11 @@ function size(bytes: number): string {
 
 const button =
   'rounded-md border border-[color:var(--p-divider)] bg-[var(--p-control)] px-3 py-1 text-[11.5px] font-semibold text-[var(--p-text)] transition hover:bg-[var(--p-hover)] disabled:opacity-50'
+// The step that moves things along (a download, picking a model) is marked by
+// a stronger grey, never the accent: settings buttons are neutral, only Save
+// is accented (see ROW_BUTTON in fields).
 const primary =
-  'rounded-md bg-[var(--p-accent)] px-3 py-1 text-[11.5px] font-semibold text-[var(--p-on-accent)] transition hover:brightness-110 disabled:opacity-50'
+  'rounded-md border border-[color:var(--p-line)] bg-[color-mix(in_srgb,var(--p-text)_12%,var(--p-control))] px-3 py-1 text-[11.5px] font-semibold text-[var(--p-text)] transition hover:bg-[color-mix(in_srgb,var(--p-text)_18%,var(--p-control))] disabled:opacity-50'
 
 /** Click, then press the key or chord. A bare modifier (Right Alt, the default)
  *  is taken on its RELEASE, so that Ctrl+Shift+D is not captured as "Ctrl". */
