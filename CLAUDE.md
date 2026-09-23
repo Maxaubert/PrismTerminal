@@ -185,7 +185,12 @@ so an update never silently changes what an existing user sees; the bridge to ma
   (`lib/copyNotice.ts`): the page's clipboard first (no size cap; main's `writeClipboard`, capped
   at 4000, only when the page is refused), and ONLY a write that landed raises the badge
   (`components/CopiedBadge`, mounted once by each host): a neutral pill, no accent, no shadow,
-  1.2s, a second copy restarts it, its own live region for screen readers. Ctrl+C over a
+  1.2s, a second copy restarts it, `role="status"` so a screen reader hears it. **IT IS IN THE
+  PAGE ONLY WHILE IT SHOWS** (#58): it sat there empty at first, a permanent status line and live
+  region, and in Prism it was the FIRST of each on the page, where the player's volume readout and
+  sound notice are looked up the same way; Prism's `volume` and `dolby` scenarios read the badge
+  instead (MEASURED, before Prism mounted it for real). A core component a host mounts must not
+  leave idle ARIA landmarks behind. `helpPanel` asserts it leaves the page. Ctrl+C over a
   selection, the menu's Copy and Copy link, and Command help all use it. The badge REPLACED
   Command help's in-row check (owner's pick), so a success is said once; a failed copy still
   marks its row. `selectionEdit` and `helpPanel` assert it; `.e2e-shots/copied-badge.png`.
