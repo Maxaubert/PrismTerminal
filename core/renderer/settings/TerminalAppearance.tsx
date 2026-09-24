@@ -6,6 +6,7 @@ import {
   termExtraDefaults,
   agentIndicator,
   applyCustomExtras,
+  customTermTheme,
   resetTermExtras,
   saveCustomTermTheme,
   setAgentColor,
@@ -32,6 +33,7 @@ import { useAgentColors } from '../lib/agentColors'
 import { luminance, normalizeColor } from '../lib/termAnsi'
 import { HexSwatch, Pref, RESET_LINK, ROWS, SaveButton, Select, Switch, ThemeHead } from './fields'
 import { AgentIndicatorSetting } from './TerminalBehaviour'
+import ThemeSwitchAsk from '../components/ThemeSwitchAsk'
 
 // THE TERMINAL'S LOOK, as one settings section for both hosts (#15): the theme
 // wall and its editor, font, size, acrylic, and the two agent indicator
@@ -297,13 +299,19 @@ function pickPreset(id: string): void {
  */
 export function TerminalAppearanceSettings({
   afterFont,
-  withIndicator = false
+  withIndicator = false,
+  onThemePicked
 }: {
   afterFont?: ReactNode
   /** Draw the Agent indicator row here, above its two colours (2026-09-22).
    *  Opt-in, so a host that still places the row itself (Prism before its
    *  next core update) never shows it twice. */
   withIndicator?: boolean
+  /** A theme card was picked (Custom included), after the pick landed. For a
+   *  host whose OWN rows follow the theme (owner, 2026-09-23: switching theme
+   *  should change "the altered bg and accent colours" too): Prism Terminal
+   *  forgets its picked background and accent here. Prism passes nothing. */
+  onThemePicked?: () => void
 } = {}): JSX.Element {
   const themeId = useTermThemeId()
   const fontPct = useTermFontPct()
@@ -348,9 +356,10 @@ export function TerminalAppearanceSettings({
   const [lightFirst] = useState(
     () => luminance(normalizeColor(resolveTermTheme(termThemeId()).background, '#000000')) > 0.4
   )
-  // THE HOST'S OWN DEFAULT LEADS THE WALL, ahead of Custom (owner, 2026-09-22:
-  // "it should be first in the list"). Prism Terminal's is a preset (PT
-  // Default); Prism's is 'style', which is no preset, so its wall is untouched.
+  // CUSTOM LEADS THE WALL, then THE HOST'S OWN DEFAULT (owner, 2026-09-22: "it
+  // should be first in the list"; then 2026-09-23: "custom should come before
+  // default"). Prism Terminal's default is a preset (PT Default); Prism's is
+  // 'style', which is no preset, so there Custom leads Follow style.
   const defaultPreset = TERM_PRESETS.find((p) => p.id === hostDefaults().theme)
   const sortedPresets = useMemo(() => {
     const lum = (bg: string): number => luminance(normalizeColor(bg, '#000000'))
@@ -376,7 +385,7 @@ export function TerminalAppearanceSettings({
           cyan: t.cyan ?? '',
           red: t.red ?? ''
         }}
-        onPick={() => pickPreset(p.id)}
+        onPick={() => pick(p.id)}
         onEdit={() => setEditing(paletteOf(p.id))}
       />
     )
@@ -411,6 +420,26 @@ export function TerminalAppearanceSettings({
   const saveTermSetup = (): void => {
     saveCustomTermTheme({ ...paletteOf(termThemeId()), ...extras })
     setTermThemeId('custom')
+  }
+  // A THEME PICK, Custom included. It lands at once when nothing is unsaved;
+  // with Save changes lit it asks first (ThemeSwitchAsk), since landing puts
+  // the font, size, agent colours and acrylic back to the theme's own. Once
+  // it lands the host hears of it (`onThemePicked`), for its own rows that
+  // follow the theme.
+  const [asking, setAsking] = useState<string | null>(null)
+  const land = (id: string): void => {
+    const saved = customTermTheme()
+    if (id === 'custom' && saved) {
+      setTermThemeId('custom')
+      // The saved setup is more than the palette: font, agent colours,
+      // acrylic come back with it when the save captured them.
+      applyCustomExtras(saved)
+    } else pickPreset(id)
+    onThemePicked?.()
+  }
+  const pick = (id: string): void => {
+    if (termDirty) setAsking(id)
+    else land(id)
   }
   // The editor popup, seeded from the SELECTED theme. Presets never change -
   // editing always lands in the Custom slot.
@@ -454,6 +483,19 @@ export function TerminalAppearanceSettings({
           style={{ maxHeight: wallHeight }}
         >
           <div className="flex flex-wrap gap-3">
+            {custom && (
+              <TermThemeCard
+                id="custom"
+                name="Custom"
+                on={themeId === 'custom'}
+                bg={custom.bg}
+                fg={custom.fg}
+                cursor={custom.cursor}
+                ansi={cardAnsi(custom.ansi)}
+                onPick={() => pick('custom')}
+                onEdit={() => setEditing(paletteOf('custom'))}
+              />
+            )}
             {defaultPreset && presetCard(defaultPreset)}
             {followsHostStyle() && (
               <TermThemeCard
@@ -464,30 +506,28 @@ export function TerminalAppearanceSettings({
                 fg={styleTheme.foreground}
                 cursor={styleTheme.cursor}
                 ansi={cardAnsi(styleTheme as unknown as Record<string, string>)}
-                onPick={() => pickPreset('style')}
+                onPick={() => pick('style')}
                 onEdit={() => setEditing(paletteOf('style'))}
-              />
-            )}
-            {custom && (
-              <TermThemeCard
-                id="custom"
-                name="Custom"
-                on={themeId === 'custom'}
-                bg={custom.bg}
-                fg={custom.fg}
-                cursor={custom.cursor}
-                ansi={cardAnsi(custom.ansi)}
-                onPick={() => {
-                  setTermThemeId('custom')
-                  // The saved setup is more than the palette: font, agent
-                  // colours, acrylic come back with it when the save captured them.
-                  applyCustomExtras(custom)
-                }}
-                onEdit={() => setEditing(paletteOf('custom'))}
               />
             )}
             {sortedPresets.map(presetCard)}
           </div>
+          {asking !== null && (
+            <ThemeSwitchAsk
+              onSave={() => {
+                const to = asking
+                setAsking(null)
+                saveTermSetup()
+                land(to)
+              }}
+              onDiscard={() => {
+                const to = asking
+                setAsking(null)
+                land(to)
+              }}
+              onCancel={() => setAsking(null)}
+            />
+          )}
         </div>
         <div className="mt-2 flex justify-center">
           <button
