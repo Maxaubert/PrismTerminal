@@ -506,6 +506,18 @@ terminal theme, anything that reads or shows files.
   Custom: "let this be the default theme ... for prism terminal"): Wombat's colours on #121212, the
   two blacks lifted, the icon's orange `#fe8f34` as the accent. A core preset like any other, and
   this host's `defaults.theme`, so anyone who never picked a theme moves to it with the update.
+  **CUSTOM COMES BEFORE IT** (#60; owner, 2026-09-23: "custom should come before default"): the
+  wall is Custom, then the host's default (PT Default here, Follow style in Prism), then the rest.
+- **A THEME SWITCH TAKES THE WINDOW'S COLOURS WITH IT, AND ASKS WHEN SOMETHING IS UNSAVED** (#60;
+  owner, 2026-09-23: "when you change a colour away from the preset and then switch theme it
+  doesn't change the altered bg and accent colours, though it should. if you have altered some
+  settings like font or anything that would make it so you have to save you should get prompted on
+  theme change ... otherwise just change theme including things like accent and bg"). Every card
+  pick, Custom included, goes through the core's `pick`: with Save changes lit it shows
+  `ThemeSwitchAsk` (Save as Custom, the accent / Discard / Cancel; Escape and a press outside are
+  Cancel), else it lands at once. Landing calls the host's `onThemePicked`; this app forgets its
+  picked Background and Accent there (set to null, as Reset does). Prism passes nothing, having no
+  such rows. `themeSwitch` e2e drives all of it.
 - **THE CLOSE QUESTION IS ONE RULE, NOT A SETTING** (owner, 2026-09-19, #15: "remove the setting but
   just have it on smart mode by default, so it won't ask if you're in a normal shell but if you're
   working with an agent it will ask"). `core/renderer/lib/agentClose.ts`, the same in Prism: a plain

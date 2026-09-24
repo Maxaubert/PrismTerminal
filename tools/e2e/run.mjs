@@ -1635,6 +1635,87 @@ const scenarios = {
    * (550ms), so every measurement waits until the edge has arrived at the
    * token it should be wearing.
    */
+  /**
+   * SWITCHING THEME (owner, 2026-09-23): "custom should come before default";
+   * a switch takes the picked background and accent with it; and with unsaved
+   * changes (Save changes lit) a pick asks first: Save as Custom, Discard or
+   * Cancel, each doing what it says. Driven on the page as a user would.
+   */
+  async themeSwitch(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const store = () =>
+      page.evaluate(() => ({
+        theme: localStorage.getItem('prism.term.theme'),
+        accent: localStorage.getItem('prism.window.accent'),
+        background: localStorage.getItem('prism.window.background'),
+        pct: localStorage.getItem('prism.term.fontPct'),
+        custom: localStorage.getItem('prism.term.custom')
+      }))
+    const ask = page.locator('[data-theme-switch-ask]')
+    // Font size, through its own dropdown: the one setting here that makes
+    // Save changes light up.
+    const fontSize = async (label) => {
+      await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()
+      await page.locator('[role="listbox"] [role="option"]', { hasText: label }).first().click()
+      await sleep(200)
+    }
+    try {
+      await page.locator('[data-title-settings]').click()
+      await page.locator('[data-settings-tab="appearance"]').click()
+      await page.locator('[data-term-card]').first().waitFor({ timeout: 10000 })
+      // A Custom to lead the wall: a font size, saved.
+      await fontSize('125%')
+      await page.locator('[data-save-term]').click()
+      await until(async () => (await page.locator('[data-term-card="custom"]').count()) === 1, 4000)
+      const order = await page.evaluate(() => [...document.querySelectorAll('[data-term-card]')].slice(0, 2).map((c) => c.getAttribute('data-term-card')))
+      ok(order[0] === 'custom' && order[1] === 'pt-default', `Custom comes first, then the default (${order.join(', ')})`)
+
+      // A picked background and accent, then a plain switch: both are forgotten.
+      for (const [pref, hex] of [['window-background', '#202830'], ['window-accent', '#E07A2F']]) {
+        const f = page.locator(`[data-pref="${pref}"] input:not([type])`)
+        await f.fill(hex)
+        await f.press('Enter')
+      }
+      const picked = await until(async () => {
+        const s = await store()
+        return s.accent && s.background ? s : null
+      }, 4000)
+      ok(!!picked, 'a background and an accent are picked')
+      await page.locator('[data-term-card="pitch"]').first().click()
+      await sleep(300)
+      ok((await ask.count()) === 0, 'with nothing unsaved a theme switch asks nothing')
+      const after = await store()
+      ok(after.theme === 'pitch' && after.accent === null && after.background === null, `the switch takes the picked background and accent with it (${JSON.stringify({ ...after, custom: undefined })})`)
+
+      // Unsaved: Cancel keeps everything as it was.
+      await fontSize('90%')
+      const dirty = await store()
+      await page.locator('[data-term-card="nord"]').first().click()
+      ok(!!(await until(async () => (await ask.count()) === 1, 3000, 50)), 'with a change unsaved, picking a theme asks first')
+      await page.locator('[data-ask-cancel]').click()
+      const kept = await store()
+      ok((await ask.count()) === 0 && kept.theme === 'pitch' && kept.pct === dirty.pct, `Cancel changes nothing (${JSON.stringify({ ...kept, custom: undefined })})`)
+      // Discard: switches, and the change is gone.
+      await page.locator('[data-term-card="nord"]').first().click()
+      await ask.waitFor({ timeout: 3000 })
+      await page.locator('[data-ask-discard]').click()
+      const gone = await store()
+      ok(gone.theme === 'nord' && gone.pct !== dirty.pct, `Discard switches and drops the change (${JSON.stringify({ ...gone, custom: undefined })})`)
+      // Save as Custom: the change is kept in Custom, then the switch happens.
+      await fontSize('90%')
+      await page.locator('[data-term-card="pitch"]').first().click()
+      await ask.waitFor({ timeout: 3000 })
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/theme-switch-ask.png') }).catch(() => {})
+      await page.locator('[data-ask-save]').click()
+      const saved = await store()
+      const custom = JSON.parse(saved.custom ?? '{}')
+      ok(saved.theme === 'pitch' && custom.fontPct === Number(dirty.pct ?? custom.fontPct), `Save as Custom keeps the change in Custom, then switches (${saved.theme}, custom fontPct ${custom.fontPct})`)
+    } finally {
+      await app.close().catch(() => {})
+    }
+  },
+
   async themeCards(ok) {
     // PICKING A THEME MOVES NOTHING (owner, 2026-09-22: "when I click a theme
     // ... the ui shifts a bit, it's not every theme but some"). Only the

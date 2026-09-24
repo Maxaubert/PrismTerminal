@@ -279,7 +279,19 @@ function AppearanceTab(): JSX.Element {
           <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
         </Pref>
       </div>
-      <TerminalAppearanceSettings afterFont={<WindowColours />} withIndicator />
+      <TerminalAppearanceSettings
+        afterFont={<WindowColours />}
+        withIndicator
+        // A THEME PICK TAKES THE WINDOW'S COLOURS WITH IT (owner, 2026-09-23:
+        // "when you change a colour away from the preset and then switch theme
+        // it doesn't change the altered bg and accent colours, though it
+        // should"): the two picks are forgotten, as Reset does, so the new
+        // theme's own background and accent are what the window wears.
+        onThemePicked={() => {
+          setWindowBackground(null)
+          setWindowAccent(null)
+        }}
+      />
       <Pref
         id="window-edges"
         label="Edges"
