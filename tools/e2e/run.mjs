@@ -336,7 +336,7 @@ const scenarios = {
     ok(g.frame === g.want && g.rows === g.want, 'as are the frame round the rows and the rows themselves')
     await page.keyboard.press('Control+,')
     await page.locator('[data-settings-tab="appearance"]').click()
-    await page.locator('[data-term-card="github"]').first().click()
+    await page.locator('[data-term-card="paper"]').first().click()
     ok(await until(async () => (await mode()) === 'light'), 'picking a light preset turns the chrome light')
     const lum = await page.evaluate(() => {
       const v = getComputedStyle(document.documentElement).getPropertyValue('--p-bg-solid').trim()
@@ -725,7 +725,7 @@ const scenarios = {
       // A light theme, picked in Settings as a user would, then back to the shell.
       await page.locator('[data-title-settings]').click()
       await page.locator('[data-settings-tab="appearance"]').click()
-      await page.locator('[data-term-card="solarized-light"]').first().click()
+      await page.locator('[data-term-card="fawn"]').first().click()
       await page.locator('[data-tab]').first().click()
       await sleep(900)
       const light = await measure('light')
@@ -989,7 +989,7 @@ const scenarios = {
     await until(async () => (await inked(BLUE)).includes(url), 8000)
     await page.locator('[data-title-settings]').click()
     await page.locator('[data-settings-tab="appearance"]').click()
-    await page.locator('[data-term-card="github"]').first().click()
+    await page.locator('[data-term-card="paper"]').first().click()
     await page.locator('[data-tab]').first().click()
     // The colour of the cell the link STARTS on: xterm splits a row into runs
     // of spans as it likes, so the span is found by position, not by its text.
@@ -1428,7 +1428,7 @@ const scenarios = {
       /* ----- a light theme, looked at ----- */
       await page.keyboard.press('Control+,')
       await page.locator('[data-settings-tab="appearance"]').click()
-      await page.locator('[data-term-card="github"]').first().click()
+      await page.locator('[data-term-card="paper"]').first().click()
       await until(() => page.evaluate(() => document.documentElement.dataset.mode === 'light'), 6000, 50)
       await page.keyboard.press('F1')
       ok(await opened(), 'F1 opens it over Settings too')
@@ -1759,6 +1759,17 @@ const scenarios = {
       seen[0].below === seen[1].below,
       `and nothing below the wall moves (${seen[0].below} -> ${seen[1].below})`
     )
+    // The whole wall, opened, for a person to look at (#62: the list is taste).
+    // Forty cards are taller than the window: grow it for the picture, then
+    // put it back.
+    const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize())
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1500, 2600))
+    await page.locator('[data-theme-wall-toggle]').click()
+    await sleep(900)
+    await page.locator('[data-pref="term-theme"]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/theme-wall.png') }).catch(() => {})
+    await page.locator('[data-theme-wall-toggle]').click()
+    await app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows()[0].setSize(s[0], s[1]), size)
+    await sleep(500)
     // A colour put back to the theme's is a plain RESET word, as in Prism
     // (owner, same day: "just a simple reset text you can click"), not a
     // bordered button.
@@ -1912,7 +1923,7 @@ const scenarios = {
     }
 
     // A light theme: the same choice, in black ink at the light ground's alpha.
-    await page.locator('[data-term-card="github"]').first().click()
+    await page.locator('[data-term-card="paper"]').first().click()
     const lightSolid = await settled(page, (q) => q.ink === '0,0,0' && q.pressed === 'solid')
     ok(!!lightSolid && near(lightSolid.tab, 0.18), `on a light theme Solid is black ink at 18% (${lightSolid?.tabInk} @ ${lightSolid?.tab})`)
 
@@ -2404,7 +2415,7 @@ const scenarios = {
     // The same, on a light theme.
     await page.keyboard.press('Control+,')
     await page.locator('[data-settings-tab="appearance"]').click()
-    await page.locator('[data-term-card="github"]').first().click()
+    await page.locator('[data-term-card="paper"]').first().click()
     ok(await until(() => page.evaluate(() => document.documentElement.dataset.mode === 'light')), 'on a light theme')
     const widthLight = await chip.evaluate((el) => el.getBoundingClientRect().width)
     ok(Math.abs(widthLight - width0) < 0.01, `the chip is the same width (${widthLight.toFixed(3)}px)`)
