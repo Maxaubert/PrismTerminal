@@ -38,6 +38,24 @@ import { readWindowState, watchWindowState } from './windowState'
  */
 const E2E = process.argv.includes('--e2e')
 
+/**
+ * A WEB LINK LEAVES THE APP HERE, AND NEVER UNDER --e2e (#64; owner,
+ * 2026-09-24: "make sure that future runs don't do that in my real browser").
+ * The e2e prints and clicks https://example.com links, and every run opened
+ * them as tabs in the owner's own browser. Under --e2e the link is RECORDED on
+ * `globalThis.__e2eOpenedLinks` for the e2e to read, and nothing outside the
+ * app is started.
+ */
+const e2eOpenedLinks: string[] = []
+if (E2E) Object.assign(globalThis, { __e2eOpenedLinks: e2eOpenedLinks })
+function openLink(url: string): void {
+  if (E2E) {
+    e2eOpenedLinks.push(url)
+    return
+  }
+  void shell.openExternal(url)
+}
+
 // userData is `%APPDATA%\PrismTerminal`, whatever the product name's spacing
 // would have made it. The e2e (and anyone else) passing Chromium's own
 // --user-data-dir keeps the profile they asked for: Electron has already
@@ -288,7 +306,7 @@ function createWindow(): void {
    * Same test as the `shell:open-external` handler, and for the same reason.
    */
   win.webContents.setWindowOpenHandler((d) => {
-    if (/^https?:\/\//i.test(d.url)) void shell.openExternal(d.url)
+    if (/^https?:\/\//i.test(d.url)) openLink(d.url)
     return { action: 'deny' }
   })
   // A page cannot navigate the window away from the app either: the renderer
@@ -298,7 +316,7 @@ function createWindow(): void {
     if (dev && url.startsWith(dev)) return
     if (url.startsWith('file://')) return
     e.preventDefault()
-    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+    if (/^https?:\/\//i.test(url)) openLink(url)
   })
   // A RELOAD (dev, or a renderer that crashed and came back) is a page with no
   // tab list over shells it has never heard of: they are orphans, and the page
@@ -385,7 +403,7 @@ function wireIpc(): void {
     ipcMain,
     send,
     clipboard,
-    openExternal: (url) => void shell.openExternal(url),
+    openExternal: openLink,
     // No wall here: a folder that has gone falls back to the user's own.
     spawnDir: async (cwd) => ((await isDir(cwd)) ? cwd : homedir()),
     // Not while the strip is still being rebuilt from tabs.json.
@@ -417,7 +435,8 @@ function wireIpc(): void {
   // A tab's "Show in File Explorer": a folder that exists, and nothing else.
   ipcMain.on('shell:show-folder', (_e, p: string) => {
     void isDir(p).then((ok) => {
-      if (ok) void shell.openPath(p)
+      // Never under --e2e (#64): a test run opens no Explorer window.
+      if (ok && !E2E) void shell.openPath(p)
     })
   })
   // Something dropped on the window: a folder is itself, a file means the
