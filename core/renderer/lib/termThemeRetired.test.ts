@@ -5,9 +5,9 @@ import { termThemeId } from './termLook'
 
 const ids = new Set(TERM_PRESETS.map((p) => p.id))
 
-describe('the theme list (owner, 2026-09-23: fewer, and each its own)', () => {
-  it('is short, and every id and name is unique', () => {
-    expect(TERM_PRESETS.length).toBeLessThanOrEqual(18)
+describe('the theme list (owner, 2026-09-23: each its own; 2026-09-24: forty)', () => {
+  it('is forty, as the trailer says, and every id and name is unique', () => {
+    expect(TERM_PRESETS.length).toBe(40)
     expect(ids.size).toBe(TERM_PRESETS.length)
     expect(new Set(TERM_PRESETS.map((p) => p.name)).size).toBe(TERM_PRESETS.length)
   })
@@ -32,9 +32,9 @@ describe('retired themes', () => {
   })
 
   it('somebody who wore a retired theme wears its replacement, not the default', () => {
-    localStorage.setItem('prism.term.theme', 'gruvbox-dark')
+    localStorage.setItem('prism.term.theme', 'espresso')
     expect(termThemeId()).toBe('umber')
     const umber = TERM_PRESETS.find((p) => p.id === 'umber')!
-    expect(resolveTermTheme('gruvbox-dark').background).toBe(umber.bg)
+    expect(resolveTermTheme('espresso').background).toBe(umber.bg)
   })
 })

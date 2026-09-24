@@ -1750,10 +1750,15 @@ const scenarios = {
       `and nothing below the wall moves (${seen[0].below} -> ${seen[1].below})`
     )
     // The whole wall, opened, for a person to look at (#62: the list is taste).
+    // Forty cards are taller than the window: grow it for the picture, then
+    // put it back.
+    const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize())
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1500, 2600))
     await page.locator('[data-theme-wall-toggle]').click()
-    await sleep(700)
+    await sleep(900)
     await page.locator('[data-pref="term-theme"]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/theme-wall.png') }).catch(() => {})
     await page.locator('[data-theme-wall-toggle]').click()
+    await app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows()[0].setSize(s[0], s[1]), size)
     await sleep(500)
     // A colour put back to the theme's is a plain RESET word, as in Prism
     // (owner, same day: "just a simple reset text you can click"), not a
