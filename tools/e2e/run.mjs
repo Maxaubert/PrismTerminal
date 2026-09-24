@@ -573,6 +573,16 @@ const scenarios = {
       ok(!!rows && rows[0].includes('Copy link') && !rows.some((r) => r.includes('Close tab')), `right-click on a link: Copy link first, no Close tab (${JSON.stringify(rows)})`)
       await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Copy link' }).click()
       ok((await until(async () => (await clip()) === url, 4000)) === true, 'and it copies the whole link')
+      // A CLICKED LINK NEVER REACHES THE OWNER'S BROWSER UNDER --e2e (#64;
+      // owner, 2026-09-24: "make sure that future runs don't do that in my real
+      // browser"). Clicked for real: main records it and opens nothing.
+      await page.keyboard.press('Escape')
+      const linkAgain = await box(url, 12)
+      await page.mouse.click(linkAgain.left + 2, linkAgain.y)
+      ok(
+        !!(await until(async () => ((await app.evaluate(() => globalThis.__e2eOpenedLinks)) ?? []).includes(url), 4000)),
+        'a clicked link is recorded under --e2e, and no browser is opened'
+      )
       // THE "COPIED" BADGE (owner, 2026-09-23): at the bottom centre, then gone.
       const badge = () =>
         page.evaluate(() => {

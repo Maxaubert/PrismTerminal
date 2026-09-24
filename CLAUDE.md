@@ -587,7 +587,7 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
 - `npm run e2e` builds and drives the app through Playwright over CDP, PARKED offscreen and
   unfocusable (`--e2e`), each scenario in its own profile and reaping its processes (the app is
   single-instance, so a stray one takes every later launch's folder and exits it).
-  `npm run e2e -- <name>` runs the scenarios whose name contains `<name>`. Under `--e2e`: no verb write, no updater
+  `npm run e2e -- <name>` runs the scenarios whose name contains `<name>`. Under `--e2e`: nothing opens outside the app (a link is recorded on `globalThis.__e2eOpenedLinks`, never sent to the owner's browser, #64; no Explorer window), no verb write, no updater
   (unless `--preview-update` asks for the fake one, or `PT_E2E_UPDATE_OFFER` hands over a
   real-shaped offer that cannot download), and `PT_E2E_PICK` answers the folder chooser. An app whose stand-in agent is "working" will hold
   `app.close()` on the close question; end scenarios idle.
