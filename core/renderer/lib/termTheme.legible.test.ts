@@ -18,6 +18,24 @@ describe('every terminal theme reads (#99 follow-up, 2026-09-04)', () => {
     }
   })
 
+  // NO INVISIBLE TEXT, ANYWHERE (owner, 2026-09-24: "verify all themes look
+  // good, no invisible text"). The sixteen are held above; these are the rest
+  // of what a theme draws: its text (4.5:1, reading text), its cursor and the
+  // chrome accent it asks for (3:1, the floor for a mark that is not text).
+  it("every preset's text reads on its ground", () => {
+    for (const p of TERM_PRESETS) {
+      const r = contrastRatio(p.fg, p.bg)
+      expect(r, `${p.id} text ${p.fg} on ${p.bg}`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it("every preset's cursor and accent can be seen on its ground", () => {
+    for (const p of TERM_PRESETS) {
+      expect(contrastRatio(p.cursor, p.bg), `${p.id} cursor ${p.cursor}`).toBeGreaterThanOrEqual(3)
+      if (p.accent) expect(contrastRatio(p.accent, p.bg), `${p.id} accent ${p.accent}`).toBeGreaterThanOrEqual(3)
+    }
+  })
+
   it('legiblePalette leaves a colour that already reads exactly as it was', () => {
     const p = TERM_PRESETS.find((x) => x.id === 'dracula')!
     const out = legiblePalette(p.ansi!, p.bg)

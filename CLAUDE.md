@@ -171,13 +171,21 @@ so an update never silently changes what an existing user sees; the bridge to ma
   on the icon's own dark grey `#383c44` (Cinder). They were the two ORIGINALS whose names already
   fitted; the public schemes (Dracula, Nord) keep their real colours, since a scheme
   called Dracula that is not Dracula is a lie. Ids unchanged: they are saved-settings keys.
-- **SIXTEEN THEMES, EACH ITS OWN** (#62; owner, 2026-09-23: "clean up the themes. there's too many
+- **FORTY THEMES, EACH ITS OWN** (#62; owner, 2026-09-23: "clean up the themes. there's too many
   similar themes ... most should be normal themes grey, white, black ... but have some brown themes,
   pink, green ... i want a noctua theme, don't call it that but use that nice brown beige colour
-  scheme"). Forty became sixteen (core `TERM_PRESETS`): the neutrals (PT Default, Prism, Pitch,
-  Cinder, Graphite, Ink, Paper, Mist), a dark and a light per colour (brown: Umber and Fawn, the
-  fan's brown and beige; pink: Rosewood and Blossom; green: Moss and Sage), and Nord and Dracula.
-  New themes give base colours only; the sixteen are derived, which clears the legibility floor.
+  scheme"; then 2026-09-24: "make more themes so we have 40 themes total like the trailer says.
+  verify all themes look good, no invisible text, make some typical colour schemes like a green
+  window, blue, and more fun ones ... don't make them ugly"). THE COUNT IS FORTY, the trailer's
+  number, held by a test. Core `TERM_PRESETS`: the neutrals (PT Default, Prism, Pitch, Cinder,
+  Graphite, Ink, Paper, Mist); a dark and a light per colour (Umber and Fawn, the fan's brown and
+  beige; Rosewood and Blossom; Moss and Sage); the classic looks (Phosphor, Amber, Marine,
+  Retro, Campbell, High Contrast); more colours (Ocean, Garnet, Plum, Lavender, Sky, Peach,
+  Butter, Mint); and well-known schemes in their real colours (Nord, Dracula, Solarized Dark,
+  Gruvbox Dark, Tokyo Night, Catppuccin Mocha and Latte, Monokai, Kanagawa, Cobalt, Synthwave,
+  Horizon). NO INVISIBLE TEXT is a test (`termTheme.legible.test.ts`): text 4.5:1, cursor and
+  accent 3:1, all sixteen 3:1 against the theme's own ground. It caught Catppuccin Latte's own
+  cursor at 2.3:1, which is its mauve here. Original themes give base colours only.
   A THEME ID IS A SAVED SETTING, so a retired one maps to its nearest kept one
   (`termThemeRetired.ts`, read in `termThemeId` and `resolveTermTheme`), never to the default;
   `termThemeRetired.test.ts` holds the map to the list. The e2e picks Paper and Fawn where it
