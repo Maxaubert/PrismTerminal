@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { followsHostStyle, hostDefaults, type AgentIndicator } from '../host'
+import { liveThemeId } from './termThemeRetired'
 
 export type { AgentIndicator }
 
@@ -25,7 +26,8 @@ export function termThemeId(): string {
   // stored 'style' where the host has no style to follow reads as that
   // default too, rather than as a theme nothing can resolve.
   if (!v || (v === 'style' && !followsHostStyle())) return hostDefaults().theme
-  return v
+  // A theme since retired (#62) reads as the kept one nearest it.
+  return liveThemeId(v)
 }
 
 export function setTermThemeId(id: string): void {

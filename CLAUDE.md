@@ -169,8 +169,20 @@ so an update never silently changes what an existing user sees; the bridge to ma
   icon colour scheme, one with orange and black, and one with orange and dark grey"; "change a
   couple is better"). Orange `#ec9448` for the cursor AND the chrome accent, on black (Pitch) and
   on the icon's own dark grey `#383c44` (Cinder). They were the two ORIGINALS whose names already
-  fitted; the public schemes (Dracula, Nord, Gruvbox...) keep their real colours, since a scheme
+  fitted; the public schemes (Dracula, Nord) keep their real colours, since a scheme
   called Dracula that is not Dracula is a lie. Ids unchanged: they are saved-settings keys.
+- **SIXTEEN THEMES, EACH ITS OWN** (#62; owner, 2026-09-23: "clean up the themes. there's too many
+  similar themes ... most should be normal themes grey, white, black ... but have some brown themes,
+  pink, green ... i want a noctua theme, don't call it that but use that nice brown beige colour
+  scheme"). Forty became sixteen (core `TERM_PRESETS`): the neutrals (PT Default, Prism, Pitch,
+  Cinder, Graphite, Ink, Paper, Mist), a dark and a light per colour (brown: Umber and Fawn, the
+  fan's brown and beige; pink: Rosewood and Blossom; green: Moss and Sage), and Nord and Dracula.
+  New themes give base colours only; the sixteen are derived, which clears the legibility floor.
+  A THEME ID IS A SAVED SETTING, so a retired one maps to its nearest kept one
+  (`termThemeRetired.ts`, read in `termThemeId` and `resolveTermTheme`), never to the default;
+  `termThemeRetired.test.ts` holds the map to the list. The e2e picks Paper and Fawn where it
+  picked GitHub and Solarized Light; Prism's `termOptions` picks Pitch (Prism #221, landed first,
+  so the core bump's gate held).
 - **A CLICK PUTS THE CARET THERE** (owner, 2026-09-22: "click inside the text to put the caret
   there"). A plain click on the line being edited sends the Left or Right presses that walk the
   shell's cursor to the cell clicked (`core/renderer/lib/termClickCaret.ts`, pure and tested; wired in
