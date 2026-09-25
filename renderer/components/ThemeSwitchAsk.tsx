@@ -23,17 +23,27 @@ export default function ThemeSwitchAsk({
   onCancel: () => void
 }): JSX.Element {
   const save = useRef<HTMLButtonElement>(null)
+  // Registered ONCE (code review 2026-09-24, #22). Keyed on an inline
+  // onCancel, every render of the settings page re-ran this: the focus jumped
+  // back to Save from wherever Tab had taken it (Enter then saved instead of
+  // discarding), and the listener was torn down and put back, the race
+  // UpdateDialog measured as an Escape that did nothing. The latest onCancel
+  // is read through a ref.
+  const cancel = useRef(onCancel)
+  useEffect(() => {
+    cancel.current = onCancel
+  })
   useEffect(() => {
     save.current?.focus()
     const key = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
       e.preventDefault()
       e.stopPropagation()
-      onCancel()
+      cancel.current()
     }
     window.addEventListener('keydown', key, true)
     return () => window.removeEventListener('keydown', key, true)
-  }, [onCancel])
+  }, [])
   return (
     <div
       data-theme-switch-ask

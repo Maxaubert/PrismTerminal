@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_HOTKEY,
+  usableHotkey,
   formatHotkey,
   initialKeyState,
   isHotkeyEvent,
@@ -460,5 +461,36 @@ describe('keyEvtFromDom', () => {
       repeat: true,
       at: 42
     })
+  })
+})
+
+// Code review 2026-09-24, #27: the dictation key is swallowed in every shell,
+// so it may never be a key that types or a chord the terminal owns.
+describe('usableHotkey', () => {
+  const hk = (code: string, mods: Partial<Record<'ctrl' | 'alt' | 'shift' | 'meta', boolean>> = {}) => ({
+    code,
+    ctrl: false,
+    alt: false,
+    shift: false,
+    meta: false,
+    ...mods
+  })
+  it('takes the default, a bare modifier, a function key and a free chord', () => {
+    expect(usableHotkey(DEFAULT_HOTKEY)).toBe(true)
+    expect(usableHotkey(hk('ControlLeft'))).toBe(true)
+    expect(usableHotkey(hk('F9'))).toBe(true)
+    expect(usableHotkey(hk('Pause'))).toBe(true)
+    expect(usableHotkey(hk('KeyD', { ctrl: true, shift: true }))).toBe(true)
+    expect(usableHotkey(hk('Space', { alt: true }))).toBe(true)
+  })
+  it('refuses a key that types, with or without Shift', () => {
+    for (const code of ['KeyA', 'Enter', 'Space', 'Tab', 'Backspace', 'Digit1'])
+      expect(usableHotkey(hk(code))).toBe(false)
+    expect(usableHotkey(hk('KeyA', { shift: true }))).toBe(false)
+  })
+  it('refuses the chords the terminal owns', () => {
+    for (const code of ['KeyC', 'KeyV', 'KeyW', 'KeyT', 'KeyF', 'Tab', 'Digit2', 'Comma'])
+      expect(usableHotkey(hk(code, { ctrl: true }))).toBe(false)
+    expect(usableHotkey(hk('KeyC', { ctrl: true, shift: true }))).toBe(false)
   })
 })
