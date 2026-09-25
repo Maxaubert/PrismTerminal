@@ -365,6 +365,23 @@ export function parseHotkeyFromEvent(evt: KeyEvt | KeyChord | DomKeyLike): Hotke
   return { code: evt.code, ctrl: evt.ctrl, alt: evt.alt, shift: evt.shift, meta: evt.meta }
 }
 
+/**
+ * Whether a key may be the dictation key at all (code review 2026-09-24, #27).
+ * Dictation swallows its key in every shell, so a key that TYPES (a letter,
+ * Enter, Space, a Shift+letter) would stop the terminal from typing it until
+ * somebody found Reset, and a chord the terminal owns (Ctrl+C, Ctrl+V, the tab
+ * chords) would take that job away. Allowed: a bare modifier (the default is
+ * Right Alt), a function key or Pause / Scroll Lock alone, or a chord with Ctrl,
+ * Alt or Win that the terminal does not already use.
+ */
+export function usableHotkey(h: Hotkey): boolean {
+  if (isBareModifier(h)) return true
+  if (!h.ctrl && !h.alt && !h.meta)
+    return /^F([1-9]|1[0-9]|2[0-4])$/.test(h.code) || h.code === 'Pause' || h.code === 'ScrollLock'
+  if (h.ctrl && !h.alt && !h.meta && /^(Key[CVWTF]|Tab|Digit[1-9]|Comma)$/.test(h.code)) return false
+  return true
+}
+
 /** The fields of a DOM KeyboardEvent the reducer reads, named structurally so
  *  this file stays free of the DOM. */
 export interface DomKeyLike {

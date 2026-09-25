@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { followsHostStyle, hostDefaults, termHost } from '../host'
 import {
   FONT_PCTS,
@@ -70,78 +70,71 @@ function TermThemeCard({
   /** Rendered as a pencil on the SELECTED card only. */
   onEdit?: () => void
 }): JSX.Element {
+  // The pencil is a real button BESIDE the card's, laid over its label row
+  // (code review 2026-09-24, #28): nested inside the card's button it was
+  // flattened into the card's name, and could not be reached as a control.
   return (
-    <button
-      data-term-card={id}
-      aria-pressed={on}
-      onClick={onPick}
-      className={`group flex w-[196px] flex-col overflow-hidden rounded-md border text-left transition-colors ${
-        on
-          ? 'border-[color:var(--p-accent-hi)] ring-1 ring-[var(--p-accent)]/45'
-          : 'border-[color:var(--p-line)] hover:border-[color:var(--p-divider)]'
-      }`}
-    >
-      <div
-        className="h-[92px] w-full px-2.5 py-2 font-[Consolas,'Cascadia_Mono',monospace] text-[10.5px] leading-[1.5]"
-        style={{ background: bg, color: fg }}
-      >
-        <div>
-          <span style={{ color: ansi.green }}>you@pc</span>
-          <span style={{ color: fg }}>:</span>
-          <span style={{ color: ansi.blue }}>~/app</span>
-          <span style={{ color: ansi.red }}>$</span> ls
-          <span className="ml-[1px] inline-block h-[11px] w-[6px] translate-y-[2px]" style={{ background: cursor }} />
-        </div>
-        <div>
-          <span style={{ color: ansi.blue }}>src</span>  <span style={{ color: ansi.blue }}>docs</span>{'  '}
-          <span style={{ color: ansi.green }}>run.sh</span>
-        </div>
-        <div>
-          <span style={{ color: ansi.yellow }}>notes.md</span>  <span style={{ color: ansi.cyan }}>a.link</span>
-        </div>
-        <div style={{ color: fg }}>12 files</div>
-      </div>
-      {/* ONE HEIGHT FOR EVERY LABEL ROW (owner, 2026-09-22: "when I click a
-          theme ... the ui shifts a bit"). The pencil is 20px, taller than the
-          name's line, so the selected card grew and took its row of the wall
-          with it: picking a theme in another row moved everything below. The
-          row is fixed at a height that holds the pencil, whether it is there
-          or not. */}
-      <div
-        className={`flex h-8 items-center justify-between border-t px-2.5 text-[11.5px] font-semibold ${
-          on ? 'border-[color:var(--p-accent-hi)]/40 text-[var(--p-accent-hi)]' : 'border-[color:var(--p-line)] text-[var(--p-text)]'
+    <div className="relative w-[196px]">
+      <button
+        data-term-card={id}
+        aria-pressed={on}
+        onClick={onPick}
+        className={`group flex w-[196px] flex-col overflow-hidden rounded-md border text-left transition-colors ${
+          on
+            ? 'border-[color:var(--p-accent-hi)] ring-1 ring-[var(--p-accent)]/45'
+            : 'border-[color:var(--p-line)] hover:border-[color:var(--p-divider)]'
         }`}
       >
-        <span>{name}</span>
-        {/* Only the SELECTED theme wears the pencil: editing starts from what
-            you are using, and saving lands in the Custom slot. */}
-        {on && onEdit && (
-          <span
-            role="button"
-            tabIndex={0}
-            data-edit-theme={id}
-            className="grid h-5 w-5 place-items-center rounded text-[var(--p-accent-hi)] hover:bg-[var(--p-hover)]"
-            title="Edit colours, saved as Custom"
-            aria-label={`Edit ${name}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit()
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                e.stopPropagation()
-                onEdit()
-              }
-            }}
-          >
-            <svg viewBox="0 0 24 24" width={11} height={11} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M15 5l4 4L8 20H4v-4z" />
-            </svg>
-          </span>
-        )}
-      </div>
-    </button>
+        <div
+          className="h-[92px] w-full px-2.5 py-2 font-[Consolas,'Cascadia_Mono',monospace] text-[10.5px] leading-[1.5]"
+          style={{ background: bg, color: fg }}
+        >
+          <div>
+            <span style={{ color: ansi.green }}>you@pc</span>
+            <span style={{ color: fg }}>:</span>
+            <span style={{ color: ansi.blue }}>~/app</span>
+            <span style={{ color: ansi.red }}>$</span> ls
+            <span className="ml-[1px] inline-block h-[11px] w-[6px] translate-y-[2px]" style={{ background: cursor }} />
+          </div>
+          <div>
+            <span style={{ color: ansi.blue }}>src</span>  <span style={{ color: ansi.blue }}>docs</span>{'  '}
+            <span style={{ color: ansi.green }}>run.sh</span>
+          </div>
+          <div>
+            <span style={{ color: ansi.yellow }}>notes.md</span>  <span style={{ color: ansi.cyan }}>a.link</span>
+          </div>
+          <div style={{ color: fg }}>12 files</div>
+        </div>
+        {/* ONE HEIGHT FOR EVERY LABEL ROW (owner, 2026-09-22: "when I click a
+            theme ... the ui shifts a bit"). The pencil is 20px, taller than the
+            name's line, so the selected card grew and took its row of the wall
+            with it: picking a theme in another row moved everything below. The
+            row is fixed at a height that holds the pencil, whether it is there
+            or not. */}
+        <div
+          className={`flex h-8 items-center justify-between border-t px-2.5 text-[11.5px] font-semibold ${
+            on ? 'border-[color:var(--p-accent-hi)]/40 text-[var(--p-accent-hi)]' : 'border-[color:var(--p-line)] text-[var(--p-text)]'
+          }`}
+        >
+          <span>{name}</span>
+        </div>
+      </button>
+      {/* Only the SELECTED theme wears the pencil: editing starts from what
+          you are using, and saving lands in the Custom slot. */}
+      {on && onEdit && (
+        <button
+          data-edit-theme={id}
+          className="absolute bottom-1.5 right-2.5 grid h-5 w-5 place-items-center rounded text-[var(--p-accent-hi)] hover:bg-[var(--p-hover)]"
+          title="Edit colours, saved as Custom"
+          aria-label={`Edit ${name}`}
+          onClick={onEdit}
+        >
+          <svg viewBox="0 0 24 24" width={11} height={11} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M15 5l4 4L8 20H4v-4z" />
+          </svg>
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -174,6 +167,43 @@ function TermThemeEditor({
   onCancel: () => void
 }): JSX.Element {
   const [draft, setDraft] = useState<CustomTermTheme>(seed)
+  // A MODAL THAT HOLDS THE KEYBOARD (code review 2026-09-24, #28). Opened from
+  // the pencil by keyboard, the focus stayed behind the backdrop: Escape did
+  // nothing (it was heard only inside) and Tab walked the cards under it, where
+  // Enter picked a theme beneath the open editor. So the first field takes the
+  // focus, Escape is heard from the window as ThemeSwitchAsk hears it, Tab
+  // stays inside, and the focus goes back to where it came from on close.
+  const panel = useRef<HTMLDivElement>(null)
+  const cancel = useRef(onCancel)
+  useEffect(() => {
+    cancel.current = onCancel
+  })
+  useEffect(() => {
+    const back = document.activeElement as HTMLElement | null
+    panel.current?.querySelector<HTMLElement>('input, button')?.focus()
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      cancel.current()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      back?.focus?.()
+    }
+  }, [])
+  const trapTab = (e: ReactKeyboardEvent): void => {
+    if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey) return
+    const all = [...(panel.current?.querySelectorAll<HTMLElement>('input, button, [tabindex="0"]') ?? [])].filter(
+      (el) => !el.hasAttribute('disabled')
+    )
+    if (!all.length) return
+    const i = all.indexOf(document.activeElement as HTMLElement)
+    const next = e.shiftKey ? (i <= 0 ? all.length - 1 : i - 1) : i === -1 || i === all.length - 1 ? 0 : i + 1
+    e.preventDefault()
+    all[next].focus()
+  }
   const set = (k: string, v: string): void =>
     setDraft((d) =>
       k === 'bg' || k === 'fg' || k === 'cursor'
@@ -197,16 +227,12 @@ function TermThemeEditor({
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) onCancel()
       }}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          e.stopPropagation()
-          onCancel()
-        }
-      }}
+      onKeyDown={trapTab}
       role="dialog"
+      aria-modal="true"
       aria-label="Edit terminal colours"
     >
-      <div className="max-h-[85vh] overflow-y-auto rounded-lg border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] p-5 shadow-[0_18px_48px_rgba(0,0,0,.55)]">
+      <div ref={panel} className="max-h-[85vh] overflow-y-auto rounded-lg border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] p-5 shadow-[0_18px_48px_rgba(0,0,0,.55)]">
         <div className="mb-3 text-[13px] font-bold text-[var(--p-text)]">Edit colours</div>
         <div className="flex flex-wrap items-start gap-6">
           <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
@@ -547,9 +573,15 @@ export function TerminalAppearanceSettings({
           <TermThemeEditor
             seed={editing}
             onSave={(t) => {
-              saveCustomTermTheme(t)
+              // The Custom slot is the WHOLE setup (code review 2026-09-24,
+              // #8): saved as a bare palette, the font, size, agent colours and
+              // acrylic it held were gone for good. And it is a theme pick like
+              // a card's (#29), so the host forgets its own window colours and
+              // the edited background is the one that shows.
+              saveCustomTermTheme({ ...t, ...extras })
               setTermThemeId('custom')
               setEditing(null)
+              onThemePicked?.()
             }}
             onCancel={() => setEditing(null)}
           />

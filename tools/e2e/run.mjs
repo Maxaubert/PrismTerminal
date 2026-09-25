@@ -16,7 +16,7 @@
 import { _electron as electron } from 'playwright-core'
 import { execFileSync, spawn } from 'child_process'
 import { createHash } from 'crypto'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, truncateSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { createRequire } from 'module'
@@ -75,9 +75,24 @@ function reapStrays() {
   }
 }
 
+/** Every world made during the scenario running now, removed after it (code
+ *  review 2026-09-24, #36): each held a whole Chromium profile, and the
+ *  dictation one a 75 MB model, left in %TEMP% on every run. */
+const worlds = []
+function removeWorlds() {
+  for (const base of worlds.splice(0)) {
+    try {
+      rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    } catch {
+      /* a file still held open; the next run's reap and removal try again */
+    }
+  }
+}
+
 /** A fresh world for one scenario: a profile and a few folders. */
 function world() {
   const base = mkdtempSync(join(tmpdir(), `${PROFILE_NAME}-`))
+  worlds.push(base)
   const dirs = { profile: join(base, 'profile'), alpha: join(base, 'alpha'), beta: join(base, 'beta') }
   for (const d of Object.values(dirs)) mkdirSync(d)
   return dirs
@@ -92,7 +107,43 @@ async function launch(w, { args = [], pick, env = {} } = {}) {
   const page = await app.firstWindow()
   await app.evaluate(park)
   await page.waitForFunction(() => !!window.prism)
+  // Every verdict of the process poll, by session, for `polled` below.
+  await page.evaluate(() => {
+    window.__ptVerdicts = new Set()
+    window.prism.onTermAgent((id) => window.__ptVerdicts.add(id))
+  })
   return { app, page }
+}
+
+/**
+ * The process poll has said its first word on every open shell (code review
+ * 2026-09-24, #37). It is said ONCE ("no agent here" for a plain shell), and a
+ * Claude title set before it lands is cleared by it, so a scenario that stands
+ * a shell in for Claude waits for it. It used to sleep 6 s: wasted on a fast
+ * machine, too short on a cold one.
+ */
+async function polled(page) {
+  const want = (await tabLabels(page)).length
+  return until(() => page.evaluate((n) => (window.__ptVerdicts?.size ?? 0) >= n, want), 30000, 100)
+}
+
+/**
+ * Close the app, or kill it (#35): an app holding its window on a question
+ * never answers app.close(), and the suite hung there with no FAIL line.
+ */
+async function closeApp(app) {
+  const closed = await Promise.race([
+    app.close().then(() => true, () => true),
+    sleep(15000).then(() => false)
+  ])
+  if (!closed) {
+    console.log('  note  app.close() did not return in 15 s; the app was killed')
+    try {
+      app.process().kill()
+    } catch {
+      /* already gone */
+    }
+  }
 }
 
 const termText = (page) =>
@@ -205,7 +256,7 @@ const scenarios = {
       'in ask mode the + opens the folder the chooser answered'
     )
     ok((await page.evaluate(() => window.prism.e2eRegWrites())) === 0, 'no registry write was attempted under --e2e')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** The label follows the shell's own folder report. */
@@ -216,7 +267,7 @@ const scenarios = {
     await typeLine(page, 'mkdir sub | Out-Null; cd sub')
     ok(await until(async () => (await tabLabels(page))[0]?.includes('sub')), 'cd renames the tab')
     ok((await tabTitles(page))[0].endsWith('\\sub'), 'and the tooltip follows')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** The agent's own word, through the title: lights, clears, and leaves a
@@ -235,7 +286,7 @@ const scenarios = {
       null,
       { timeout: 45000 }
     )
-    await sleep(6000)
+    await polled(page)
     // Idle FIRST: a spinner before the agent's first rest is it starting up,
     // which is present and not working.
     await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
@@ -286,7 +337,7 @@ const scenarios = {
     await page.locator('[data-tab]').nth(1).click()
     const cleared = await until(() => page.evaluate(() => !document.querySelector('[data-agent-state="done"]')), 5000, 50)
     ok(cleared, 'visiting the tab clears it')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** A light theme makes a light window: measured, never read off a name. */
@@ -350,7 +401,7 @@ const scenarios = {
     ok(g2.underLastRow === g2.want && g2.want !== g.want, `the strip follows the theme (${g2.underLastRow})`)
     const bg = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBackgroundColor())
     ok(/^#f/i.test(bg), `main was told the window's ground (${bg})`)
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** A chosen folder replaces the user's own, and can be given back. */
@@ -381,7 +432,7 @@ const scenarios = {
       await until(() => page.evaluate(() => localStorage.getItem('prism.newtab.folder') === '')),
       'and "Use my user folder" gives the default back'
     )
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** Tabs come back in their folders; a folder that has gone is dropped. */
@@ -460,7 +511,7 @@ const scenarios = {
         'a click on old output above the prompt moves nothing'
       )
     } finally {
-      await app.close().catch(() => {})
+      await closeApp(app)
     }
   },
 
@@ -625,7 +676,7 @@ const scenarios = {
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/term-menu.png') }).catch(() => {})
     } finally {
       await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), held).catch(() => {})
-      await app.close().catch(() => {})
+      await closeApp(app)
     }
   },
 
@@ -664,7 +715,7 @@ const scenarios = {
       await page.keyboard.type('Write-Host -NoNewline "$([char]27)[?1049l"')
       await page.keyboard.press('Enter')
     } finally {
-      await app.close().catch(() => {})
+      await closeApp(app)
     }
   },
 
@@ -732,7 +783,7 @@ const scenarios = {
       ok(light.slider?.w === 6, `still 6px on a light theme (${light.slider?.w})`)
       ok(light.ground - light.thumb > 25, `on a light theme it is darker than the ground (${light.thumb.toFixed(0)} under ${light.ground.toFixed(0)})`)
     } finally {
-      await app.close().catch(() => {})
+      await closeApp(app)
     }
   },
 
@@ -795,7 +846,7 @@ const scenarios = {
         }, held)
         .catch(() => {})
       if (held.formats.some((f) => /FileName|uri-list/i.test(f))) console.log('  (the clipboard held copied FILES, which cannot be put back; it is empty now)')
-      await app.close().catch(() => {})
+      await closeApp(app)
     }
   },
 
@@ -851,7 +902,7 @@ const scenarios = {
     await sleep(200)
     ok((await boxes()).map((b) => b.w).join('|') === before, 'picking another tab moves no tab')
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tabs-fixed.png') }).catch(() => {})
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   async restore(ok) {
@@ -868,7 +919,7 @@ const scenarios = {
     ok(await until(async () => (await tabLabels(page)).length === 2), 'a relaunch brings both back')
     const titles = await tabTitles(page)
     ok(titles[0].endsWith('alpha') && titles[1].endsWith('beta'), 'in their folders, in order')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** A second launch hands its folder to the running window and exits. */
@@ -884,7 +935,7 @@ const scenarios = {
     const child2 = spawn(electronPath, [MAIN, `--user-data-dir=${w.profile}`, '--e2e', w.beta], { stdio: 'ignore' })
     await new Promise((r) => child2.on('exit', r))
     ok(await until(async () => (await tabLabels(page)).length === 3), 'a folder some tab already holds still gets its own tab')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** Closing the last tab lands on the start screen; the X is what quits, and
@@ -914,7 +965,7 @@ const scenarios = {
     ok((await Promise.race([gone.then(() => 'exit'), sleep(10000).then(() => 'timeout')])) === 'exit', 'the X ends the process')
     ;({ app, page } = await launch(w))
     ok(await until(async () => (await tabLabels(page)).length === 1), 'and the tab that was open when it quit comes back')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** Closing a tab that HOSTS an agent asks first, working or idle; a plain
@@ -927,7 +978,7 @@ const scenarios = {
     // A shell stands in for Claude, so the process poll's verdict on it is "no
     // agent here", said once; let it land before the title claims otherwise.
     await typeLine(page, 'echo ready')
-    await sleep(6000)
+    await polled(page)
     await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
     ok(
       await until(() => page.evaluate(() => !!document.querySelector('[data-agent-present]')), 8000, 50),
@@ -954,7 +1005,7 @@ const scenarios = {
       await until(async () => (await page.locator('[data-empty-state]').count()) === 1, 4000),
       'a tab with no agent closes unasked'
     )
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** A printed link is painted as one, in a colour that follows the theme. */
@@ -1041,7 +1092,7 @@ const scenarios = {
     )
     ok(!!light, 'on a light theme the link takes another colour that reads there')
     ok(!!light && light.blue, `and it is still a blue (${light ? light.rgb + ' at ' + light.ratio.toFixed(1) + ':1' : 'none'})`)
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /**
@@ -1126,7 +1177,7 @@ const scenarios = {
 
       // #10: a Claude title makes the close ask; the chords wait for it.
       await typeLine(page, 'echo ready')
-      await sleep(6000) // the process poll's first "no agent" verdict, said once
+      await polled(page) // the process poll's first "no agent" verdict, said once
       await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
       await until(() => page.evaluate(() => !!document.querySelector('[data-agent-present]')), 8000, 50)
       await page.keyboard.press('Control+w')
@@ -1143,7 +1194,7 @@ const scenarios = {
 
     } finally {
       await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), held).catch(() => {})
-      await app.close().catch(() => {})
+      await closeApp(app)
     }
   },
 
@@ -1189,7 +1240,7 @@ const scenarios = {
     ok(!!rows && !rows.some((r) => r.includes('Close tab')), 'and Close tab is not in it')
     await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Find in scrollback' }).click()
     ok(await until(async () => (await page.locator('[data-term-find], input[placeholder*="ind"]').count()) > 0, 4000), 'and its Find row opens the find bar')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /**
@@ -1630,7 +1681,7 @@ const scenarios = {
         .catch(() => {})
       if (held.formats.some((f) => /FileName|uri-list/i.test(f))) console.log('  (the clipboard held copied FILES, which cannot be put back; it is empty now)')
     }
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** THE SETTINGS PARITY CHECK (#15): this app shows every terminal option the
@@ -1726,7 +1777,7 @@ const scenarios = {
     })
     ok(overlaps === 0, `no two controls in a row overlap (${overlaps} do)`)
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-general.png') }).catch(() => {})
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /**
@@ -1821,7 +1872,84 @@ const scenarios = {
       const custom = JSON.parse(saved.custom ?? '{}')
       ok(saved.theme === 'pitch' && custom.fontPct === Number(dirty.pct ?? custom.fontPct), `Save as Custom keeps the change in Custom, then switches (${saved.theme}, custom fontPct ${custom.fontPct})`)
     } finally {
-      await app.close().catch(() => {})
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * SETTINGS ASK NOTHING NOBODY CHANGED (code review 2026-09-24, PR 3):
+   *  - #26 tabbing through a colour that follows the theme leaves it following.
+   *  - #28 the colour editor opened by keyboard takes the focus, keeps Tab
+   *    inside, closes on Escape and gives the focus back to the pencil.
+   *  - #8, #29 its Save as Custom keeps the saved font size, and forgets the
+   *    picked background so the edited one shows.
+   *  - #27 the dictation key capture refuses a letter, and a press elsewhere
+   *    ends it.
+   */
+  async reviewSettings(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const get = (k) => page.evaluate((key) => localStorage.getItem(key), k)
+    const inEditor = () => page.evaluate(() => !!document.activeElement?.closest('[data-theme-editor]'))
+    try {
+      await page.locator('[data-title-settings]').click()
+      await page.locator('[data-settings-tab="appearance"]').click()
+      await page.locator('[data-term-card]').first().waitFor({ timeout: 10000 })
+
+      // #26
+      for (const pref of ['agent-color', 'window-accent']) {
+        await page.locator(`[data-pref="${pref}"] input:not([type])`).focus()
+        await page.keyboard.press('Tab')
+      }
+      await sleep(200)
+      ok((await get('prism.term.agentColor')) === null && (await get('prism.window.accent')) === null, 'tabbing through a colour that follows the theme leaves it following')
+      ok((await page.locator('[data-follow-theme="working"]').count()) === 0, 'and offers no Reset')
+
+      // #28
+      await page.locator('[data-term-card="pitch"]').first().click()
+      const pencil = page.locator('[data-edit-theme="pitch"]')
+      await pencil.focus()
+      await page.keyboard.press('Enter')
+      ok(!!(await until(inEditor, 3000, 50)), 'the editor opened by keyboard takes the focus')
+      for (let i = 0; i < 25; i += 1) await page.keyboard.press('Tab')
+      ok(await inEditor(), 'Tab stays inside the editor')
+      await page.keyboard.press('Escape')
+      ok(!!(await until(async () => (await page.locator('[data-theme-editor]').count()) === 0, 3000, 50)), 'Escape closes it')
+      ok(await pencil.evaluate((el) => el === document.activeElement), 'and the focus is back on the pencil')
+
+      // #8, #29: a saved Custom with a font size, a picked background, then an edit.
+      await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()
+      await page.locator('[role="listbox"] [role="option"]', { hasText: '125%' }).first().click()
+      await page.locator('[data-save-term]').click()
+      await until(async () => (await page.locator('[data-term-card="custom"]').count()) === 1, 4000)
+      const bgField = page.locator('[data-pref="window-background"] input:not([type])')
+      await bgField.fill('#202830')
+      await bgField.press('Enter')
+      ok(!!(await until(async () => (await get('prism.window.background')) !== null, 3000, 50)), 'a background is picked')
+      await page.locator('[data-edit-theme="custom"]').click()
+      const editBg = page.locator('[data-theme-editor] input[aria-label="Background hex value"]')
+      await editBg.fill('#101820')
+      await editBg.press('Enter')
+      await page.locator('[data-save-custom]').click()
+      const custom = JSON.parse((await get('prism.term.custom')) ?? '{}')
+      ok(custom.bg === '#101820' && custom.fontPct === 125, `the editor's save keeps the saved font size (${JSON.stringify({ bg: custom.bg, fontPct: custom.fontPct })})`)
+      ok((await get('prism.window.background')) === null, 'and forgets the picked background, so the edited one shows')
+
+      // #27
+      await page.evaluate(() => localStorage.setItem('prism.dictation.enabled', '1'))
+      await page.locator('[data-settings-tab="dictation"]').click()
+      const capture = page.locator('[data-hotkey-capture]')
+      await capture.waitFor({ timeout: 8000 })
+      const before = await get('prism.dictation.hotkey')
+      await capture.click()
+      await page.keyboard.press('KeyA')
+      await sleep(200)
+      ok((await capture.getAttribute('data-hotkey-capture')) === 'on' && (await get('prism.dictation.hotkey')) === before, 'a letter is not taken as the dictation key')
+      await page.mouse.click(40, 300)
+      ok(!!(await until(async () => (await capture.getAttribute('data-hotkey-capture')) === 'off', 2000, 50)), 'a press elsewhere ends the capture')
+      await page.evaluate(() => localStorage.setItem('prism.dictation.enabled', '0'))
+    } finally {
+      await closeApp(app)
     }
   },
 
@@ -1902,7 +2030,7 @@ const scenarios = {
       await until(async () => (await well.inputValue()).toLowerCase() === themed && !(await reset.count()), 5000),
       'and Reset puts the theme\'s colour back and goes away'
     )
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   async edges(ok) {
@@ -2066,7 +2194,7 @@ const scenarios = {
       'and the row shows Solid pressed'
     )
     ok((await page.evaluate(() => window.prism.e2eRegWrites())) === 0, 'no registry write was attempted under --e2e')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /**
@@ -2226,7 +2354,7 @@ const scenarios = {
       }, 8000)),
       "Reset puts the theme's background back"
     )
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /**
@@ -2573,7 +2701,7 @@ const scenarios = {
     )
     await dialog.locator('[data-update-cancel]').click()
     ok(await closed(), 'and Close closes it')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /**
@@ -2609,7 +2737,7 @@ const scenarios = {
     // As closeAsk does: let the process poll say "no agent" once, then have a
     // shell stand in for Claude through the title, idle first and then working.
     await typeLine(page, 'echo ready')
-    await sleep(6000)
+    await polled(page)
     await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
     await until(() => page.evaluate(() => !!document.querySelector('[data-agent-present]')), 8000, 50)
 
@@ -2673,7 +2801,7 @@ const scenarios = {
     await page.locator('.xterm').first().click({ force: true })
     await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
     await until(() => page.evaluate(() => !document.querySelector('[data-agent-state="working"]')), 8000, 50)
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /**
@@ -2746,7 +2874,7 @@ const scenarios = {
     )
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/update-dialog-small.png') }).catch(() => {})
     await page.keyboard.press('Escape')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** Without the flag there is NO chip under --e2e, and nothing asks GitHub:
@@ -2774,7 +2902,7 @@ const scenarios = {
       const after = await page.evaluate(() => window.prism.e2eUpdateCalls())
       ok(after.checks === 0, 'still without asking GitHub')
     }
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /**
@@ -2897,7 +3025,7 @@ const scenarios = {
     await page.locator('[data-settings-tab="dictation"]').click()
     await page.locator('[data-pref="dictation-enabled"] [role="switch"]').click()
     ok(await until(() => ourSpeechServers() === 0, 8000), 'switching dictation off kills the speech server')
-    await app.close().catch(() => {})
+    await closeApp(app)
     ok(await until(() => ourSpeechServers() === 0, 8000), 'and none outlives the app')
   },
 
@@ -2976,7 +3104,7 @@ const scenarios = {
     ok((await row('gpu-pack').locator('[data-item-badge]').count()) === 0, 'the Enabled badge goes')
     ok(((await row('gpu-pack').locator('button').textContent()) ?? '').trim() === 'Enable', 'and the button offers Enable again')
     ok((await row('base').locator('text=Recommended').count()) === 1, 'with the GPU off, Base is the recommended model again')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** `exit` closes the tab it was typed in. */
@@ -2996,7 +3124,7 @@ const scenarios = {
     await typeLine(page, 'exit')
     ok(await until(async () => (await tabLabels(page)).length === 1), 'the shell ending takes its tab')
     ok((await tabTitles(page))[0].endsWith('alpha'), 'and the other tab comes to the front')
-    await app.close().catch(() => {})
+    await closeApp(app)
   },
 
   /** A prompt survives the window getting narrower and wider again
@@ -3020,30 +3148,49 @@ const scenarios = {
     ok(/^PS .*alpha>\s*$/.test(last.trimEnd()), `the prompt is whole after a narrow-then-wide resize ("${last.trim()}")`)
     await typeLine(page, 'echo after-$(1+1)')
     ok(await until(async () => (await termText(page)).includes('after-2')), 'and typing lands where the prompt is')
-    await app.close().catch(() => {})
+    await closeApp(app)
   }
 }
 
 const table = []
+/** Scenarios that honestly take longer than the default limit. */
+const SLOW = { dictation: 360000, helpPanel: 300000, updateWindow: 300000 }
 reapStrays()
 for (const [name, run] of Object.entries(scenarios)) {
   if (only.length && !only.some((o) => name.toLowerCase().includes(o.toLowerCase()))) continue
   const t0 = Date.now()
   let fails = 0
   let checks = 0
+  let over = false
   const ok = (cond, msg) => {
     checks += 1
     if (!cond) fails += 1
     console.log(`  ${cond ? 'pass' : 'FAIL'}  ${msg}`)
   }
   console.log(`\n${name}`)
+  // A TIME LIMIT (code review 2026-09-24, #35): one await that never returns
+  // (a second instance that never hands off, an app held on a question) hung
+  // the whole suite with no FAIL line. Past the limit the scenario fails, its
+  // processes are reaped, and the next one runs; `ok` goes quiet, so a
+  // scenario still running in the background cannot count against another.
+  const limit = SLOW[name] ?? 180000
+  let timer
   try {
-    await run(ok)
+    await Promise.race([
+      run((cond, msg) => (over ? undefined : ok(cond, msg))),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`scenario timed out after ${limit / 1000} s`)), limit)
+      })
+    ])
   } catch (e) {
     fails += 1
     console.log(`  FAIL  threw: ${e?.stack ?? e}`)
+  } finally {
+    clearTimeout(timer)
+    over = true
   }
   const strays = reapStrays()
+  removeWorlds()
   table.push({ name, checks, fails, secs: ((Date.now() - t0) / 1000).toFixed(1), strays })
 }
 

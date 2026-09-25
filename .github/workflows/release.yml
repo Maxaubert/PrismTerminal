@@ -90,5 +90,9 @@ jobs:
           $v = "${{ steps.ver.outputs.version }}"
           $exe = "dist/PrismTerminal-Setup-x64-$v.exe"
           if (-not (Test-Path $exe)) { throw "installer not found: $exe" }
-          gh release create "v$v" $exe --title "Prism Terminal $v" --generate-notes --latest
+          # --target pins the tag to the commit this run BUILT (code review
+          # 2026-09-24, #11). Without it GitHub tags main's head at publish
+          # time, which is a later merge whenever one landed during the build:
+          # the installer from one commit, the tag, source and notes of another.
+          gh release create "v$v" $exe --target "${{ github.sha }}" --title "Prism Terminal $v" --generate-notes --latest
           if ($LASTEXITCODE -ne 0) { throw "Release publication failed" }

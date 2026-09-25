@@ -55,6 +55,14 @@ jobs:
           fi
           version=$(node -p "require('./core/package.json').version")
           tag="core-v$version"
+          # Above the base's version too (code review 2026-09-24, #39): two PRs
+          # bumping core to the same new version each saw no tag and passed. On
+          # any re-run after the first merged, this is what catches the second.
+          basever=$(git show "$base:core/package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+          if ! node -e "const p = (v) => v.split('-')[0].split('.').map(Number); const [a, b] = [p('$version'), p('$basever')]; process.exit((a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) > 0 ? 0 : 1)"; then
+            echo "::error::core/ changed, but core/package.json says $version, which is not above ${{ github.base_ref }}'s $basever. Bump it past $basever."
+            exit 1
+          fi
           git fetch -q --tags origin
           if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
             echo "core/ changed and $tag is a new version. Good."

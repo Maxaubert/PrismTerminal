@@ -38,6 +38,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: core-release
@@ -45,6 +46,11 @@ concurrency:
 
 jobs:
   release:
+    # MAIN ONLY (code review 2026-09-24, #34). A run by hand may pick any
+    # branch, and this job force-pushes core-dist and pushes a tag that is never
+    # moved: from a feature branch it released unreviewed core to Prism, and
+    # with auto-merge on, Prism shipped it. By hand is for resuming on main.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
@@ -56,6 +62,8 @@ jobs:
 
       - name: Split core/ and tag it
         id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -72,7 +80,13 @@ jobs:
               exit 0
             fi
             # A tag is a promise to everyone who pinned it. It is never moved.
-            echo "::error::core/ changed but core/package.json still says $version, and $tag already exists with different contents. Bump the version in core/package.json (ci.yml checks this on the PR)."
+            msg="core/ changed but core/package.json still says $version, and $tag already exists with different contents. Bump the version in core/package.json (ci.yml checks this on the PR)."
+            echo "::error::$msg"
+            # Not only a red run nobody opens (code review 2026-09-24, #39): two
+            # PRs that bumped core to the same version both passed, and the
+            # second one's core never reached Prism. An issue says so.
+            gh issue create --title "Core change on main was not released: $tag already exists" \
+              --body "$msg Commit: $GITHUB_SHA. Open a PR that bumps core/package.json; its merge releases the core." || true
             exit 1
           fi
           git push -f origin core-dist-new:core-dist
@@ -199,17 +213,28 @@ jobs:
         run: |
           set -uo pipefail
           # Checks take a moment to be registered; "no checks" is not "green".
-          for i in $(seq 1 20); do
-            n=$(gh pr checks "$URL" --json name --jq 'length' 2>/dev/null || echo 0)
-            [ "$n" -ge 3 ] && break
+          # THE GATE BY NAME (code review 2026-09-24, #38): a count of three
+          # checks meant the gate only while Prism had exactly three; one more
+          # check anywhere and --watch could finish green before terminal-gate
+          # was even registered, and a bump merged without the ratchet.
+          gate() {
+            gh pr checks "$URL" --json workflow,state \
+              --jq "[.[] | select(.workflow == \"terminal-gate\"$1)] | length" 2>/dev/null || echo 0
+          }
+          for i in $(seq 1 40); do
+            [ "$(gate '')" -ge 1 ] && break
             sleep 15
           done
-          if [ "${n:-0}" -lt 3 ]; then
-            echo "::error::Prism reported fewer than three checks on $URL (expected ci's two jobs and terminal-gate). Not merging."
+          if [ "$(gate '')" -lt 1 ]; then
+            echo "::error::Prism's terminal-gate never reported on $URL. Not merging."
             exit 1
           fi
           if ! gh pr checks "$URL" --watch --interval 30 --fail-fast; then
             echo "::error::A check failed on $URL. The bump stays open; it is NOT merged."
+            exit 1
+          fi
+          if [ "$(gate ' and .state == "SUCCESS"')" -lt 1 ]; then
+            echo "::error::terminal-gate did not pass on $URL (skipped or cancelled). Not merging."
             exit 1
           fi
           if [ "${AUTO_MERGE:-}" = "true" ]; then
