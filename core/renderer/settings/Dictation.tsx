@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState, type JSX, type ReactNode } fr
 import { dictationHost } from '../host'
 import { catalogEntry, LANGUAGES, recommendedModel, visibleModels } from '../../shared/dictationCatalog'
 import type { CatalogEntry, DownloadFailure, EngineInfo, ItemStatus } from '../../shared/dictationTypes'
-import { DEFAULT_HOTKEY, formatHotkey, parseHotkeyFromEvent, type Hotkey } from '../lib/dictationKey'
+import { DEFAULT_HOTKEY, formatHotkey, parseHotkeyFromEvent, usableHotkey, type Hotkey } from '../lib/dictationKey'
 import {
+  dictationModel,
   setDictationEnabled,
   setDictationHotkey,
   setDictationLanguage,
@@ -83,7 +84,9 @@ function HotkeyField({ value, disabled }: { value: Hotkey; disabled: boolean }):
       const hk = parseHotkeyFromEvent(e)
       if (!hk) return
       if (isModifier(e.code)) bare = hk
-      else {
+      // A key that types, or a chord the terminal owns, is not taken (#27):
+      // the field keeps listening for one that can be.
+      else if (usableHotkey(hk)) {
         setDictationHotkey(hk)
         setListening(false)
       }
@@ -97,13 +100,21 @@ function HotkeyField({ value, disabled }: { value: Hotkey; disabled: boolean }):
       }
     }
     const stop = (): void => setListening(false)
+    // A press anywhere else ends the capture: left armed, the next key typed
+    // on the page became the dictation key. The button's own press is its
+    // click's to answer.
+    const away = (e: PointerEvent): void => {
+      if (!(e.target instanceof Element && e.target.closest('#dictation-hotkey'))) setListening(false)
+    }
     window.addEventListener('keydown', down, true)
     window.addEventListener('keyup', up, true)
     window.addEventListener('blur', stop)
+    window.addEventListener('pointerdown', away, true)
     return () => {
       window.removeEventListener('keydown', down, true)
       window.removeEventListener('keyup', up, true)
       window.removeEventListener('blur', stop)
+      window.removeEventListener('pointerdown', away, true)
     }
   }, [listening])
   const isDefault = JSON.stringify(value) === JSON.stringify(DEFAULT_HOTKEY)
@@ -365,11 +376,18 @@ export function DictationSettings(): JSX.Element | null {
   const download = (id: string): void => {
     setFailures((prev) => without(prev, id))
     setStatus((prev) => [...prev.filter((s) => s.id !== id), { id, state: 'downloading', received: 0 }])
-    void api.dictationDownload(id).then((res) => {
+    void api.dictationDownload(id).then(async (res) => {
       setProgress((prev) => without(prev, id))
       if (!res.ok) setFailures((prev) => ({ ...prev, [id]: res.reason }))
-      // The first model anyone downloads is the one they meant to use.
-      else if (catalogEntry(id)?.kind === 'model' && !installed(model)) setDictationModel(id)
+      else if (catalogEntry(id)?.kind === 'model') {
+        // The first model anyone downloads is the one they meant to use. Read
+        // NOW, not from the render the click came from (code review
+        // 2026-09-24, #30): a second download finishing after the first had
+        // become the model, or after a pick with Use, replaced it unasked.
+        const current = dictationModel()
+        const on = await api.dictationStatus()
+        if (!on.some((s) => s.id === current && s.state === 'installed')) setDictationModel(id)
+      }
       refresh()
     })
   }

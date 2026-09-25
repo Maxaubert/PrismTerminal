@@ -446,6 +446,13 @@ terminal theme, anything that reads or shows files.
   window the tab chords do nothing (Ctrl+W keeps its rule). A kill while a spawn is pending wins,
   and a warm shell's exit removes only itself. A stop during transcribing is not heard, so a clip is
   pasted once. The `reviewKeys` e2e holds the renderer half.
+- **SETTINGS ASK NOTHING NOBODY CHANGED** (#71, code review part 3). A hex field commits only a
+  typed draft that names another colour (`hexCommit`): tabbing through a row that follows the
+  theme must not pin it. The colour editor saves the WHOLE setup into Custom (palette plus font,
+  size, agent colours, acrylic) and is a theme pick (`onThemePicked`); it takes the focus, traps
+  Tab and hears Escape from the window. A dialog registers its listener once and reads its
+  callback through a ref. The dictation key is never a key that types or a chord the terminal
+  owns (`usableHotkey`, checked on capture AND on read).
 
 - **Bundled ConPTY.** Shells spawn with `useConptyDll: true`; the inbox conhost fast-fails the whole
   app (0xc0000409) when a pty is killed mid-read. `node-pty` stays `asarUnpack`ed and
@@ -648,7 +655,16 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
   `npm run e2e -- <name>` runs the scenarios whose name contains `<name>`. Under `--e2e`: nothing opens outside the app (a link is recorded on `globalThis.__e2eOpenedLinks`, never sent to the owner's browser, #64; no Explorer window), no verb write, no updater
   (unless `--preview-update` asks for the fake one, or `PT_E2E_UPDATE_OFFER` hands over a
   real-shaped offer that cannot download), and `PT_E2E_PICK` answers the folder chooser. An app whose stand-in agent is "working" will hold
-  `app.close()` on the close question; end scenarios idle.
+  `app.close()` on the close question; end scenarios idle. Scenarios close through `closeApp`
+  (kills after 15 s), each has a time limit (180 s, longer in `SLOW`), its profile folder is removed
+  after it, and a shell standing in for Claude waits for `polled` (the poll's first verdict), never
+  a fixed sleep (#71).
+- CI hardening (#71): `release.yml` tags the commit it BUILT (`--target`); `core-release` releases
+  from main only, merges a Prism bump only once `terminal-gate` itself is green (by name, not a
+  count), and opens an issue when a core change on main could not be released; `core-version`
+  also requires the core version to be above the base's. Two PRs bumping core to the same version
+  are still only caught on a re-run: "require branches to be up to date" would close that, and is
+  the owner's call.
 - CI (`ci.yml`): typecheck + lint + unit on PR and push to main. The e2e is the local pre-push gate.
 - Shipping follows the global rules: issue, branch, PR, squash-merge, never commit to main, never
   merge without the owner's explicit approval of that PR. Bump the version inside the PR.

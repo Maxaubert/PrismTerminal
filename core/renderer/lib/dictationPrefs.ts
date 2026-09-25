@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { DEFAULT_HOTKEY, type DictMode, type Hotkey } from './dictationKey'
+import { DEFAULT_HOTKEY, usableHotkey, type DictMode, type Hotkey } from './dictationKey'
 
 /**
  * Dictation's settings (#13). VALUES ARE PER APP: each app has its own
@@ -66,8 +66,11 @@ export function dictationHotkey(): Hotkey {
   if (raw) {
     try {
       const v = JSON.parse(raw) as Partial<Hotkey>
-      if (typeof v.code === 'string' && v.code)
-        hotkeyParsed = { code: v.code, ctrl: !!v.ctrl, alt: !!v.alt, shift: !!v.shift, meta: !!v.meta }
+      const hk = typeof v.code === 'string' && v.code
+        ? { code: v.code, ctrl: !!v.ctrl, alt: !!v.alt, shift: !!v.shift, meta: !!v.meta }
+        : null
+      // A key that types, saved before the rule existed, reads as the default.
+      if (hk && usableHotkey(hk)) hotkeyParsed = hk
     } catch {
       /* a damaged value reads as the default */
     }

@@ -61,6 +61,19 @@ export function parseHexInput(raw: string): string | null {
   return /^#[0-9a-f]{6}$/i.test(full) ? full.toLowerCase() : null
 }
 
+/**
+ * What a hex field's blur or Enter commits: only a DRAFT the user typed, and
+ * only when it names another colour (code review 2026-09-24, #26). Committing
+ * the value on every blur turned a row that follows the theme into a colour of
+ * your own just by tabbing through it: Reset appeared, Save changes lit, and
+ * the next theme pick asked about changes nobody made.
+ */
+export function hexCommit(draft: string | null, value: string): string | null {
+  if (draft === null) return null
+  const full = parseHexInput(draft)
+  return full && full !== parseHexInput(value) ? full : null
+}
+
 /** The compact colour control: a hex field and a swatch. Every place a colour
  *  is chosen carries the field - a picker without one strands anyone pasting
  *  a code from elsewhere. */
@@ -78,9 +91,9 @@ export function HexSwatch({
   // waiting to happen.
   const [draft, setDraft] = useState<string | null>(null)
   const text = draft ?? value
-  const commit = (raw: string): void => {
+  const commit = (): void => {
     setDraft(null) // either it took, or the field goes back to the colour
-    const full = parseHexInput(raw)
+    const full = hexCommit(draft, value)
     if (full) onChange(full)
   }
   return (
@@ -88,9 +101,9 @@ export function HexSwatch({
       <input
         value={text}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => commit(text)}
+        onBlur={commit}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') commit(text)
+          if (e.key === 'Enter') commit()
           else if (e.key === 'Escape') setDraft(null)
         }}
         spellCheck={false}
