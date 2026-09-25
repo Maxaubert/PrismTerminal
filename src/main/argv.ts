@@ -39,16 +39,36 @@ function ownFiles(): string[] {
   return mine
 }
 
+/**
+ * A drive root as Explorer hands it over (code review 2026-09-24, #17). The
+ * background verb's command line is `"<exe>" "%V"`, and in the empty space of
+ * a drive root %V is `C:\`: the backslash before the closing quote escapes it,
+ * so argv carries `C:"` and the root opened nothing. A trailing stray quote is
+ * that same backslash, put back.
+ */
+export function unquoteArg(a: string): string {
+  return a.endsWith('"') ? `${a.slice(0, -1)}\\` : a
+}
+
+/**
+ * EVERY argument is made ABSOLUTE against the folder the command line was
+ * typed in (code review 2026-09-24, #16): `base` is Electron's
+ * `workingDirectory` for a handed-over launch, and the launch folder for the
+ * first. Checked against the app's own current directory, `PrismTerminal .`
+ * typed while the app already ran opened the RUNNING app's folder, and a
+ * relative path was saved into tabs.json as `.`.
+ */
 export function pathsFromArgv(
   argv: string[],
-  ignore: string[] = ownFiles()
+  ignore: string[] = ownFiles(),
+  base: string = process.cwd()
 ): Array<{ path: string; dir: boolean }> {
   const out: Array<{ path: string; dir: boolean }> = []
   const seen = new Set<string>()
   const mine = new Set(ignore.filter(Boolean).map((p) => resolve(p).toLowerCase()))
   for (let i = 1; i < argv.length && out.length < ARGV_MAX; i += 1) {
-    const a = argv[i]
-    if (a.startsWith('--')) continue
+    if (argv[i].startsWith('--')) continue
+    const a = resolve(base, unquoteArg(argv[i]))
     try {
       if (!existsSync(a)) continue
       const key = resolve(a).toLowerCase()
@@ -76,10 +96,10 @@ export function pathsFromArgv(
  * folder handed over while another tab already sits in it still becomes a new
  * tab, which is the caller's rule and not this function's.
  */
-export function foldersFromArgv(argv: string[], ignore?: string[]): string[] {
+export function foldersFromArgv(argv: string[], ignore?: string[], base?: string): string[] {
   const seen = new Set<string>()
   const out: string[] = []
-  for (const a of pathsFromArgv(argv, ignore)) {
+  for (const a of pathsFromArgv(argv, ignore, base)) {
     const dir = a.dir ? a.path : dirname(a.path)
     if (!seen.has(dir.toLowerCase())) {
       seen.add(dir.toLowerCase())

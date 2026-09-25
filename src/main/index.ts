@@ -39,6 +39,21 @@ import { readWindowState, watchWindowState } from './windowState'
 const E2E = process.argv.includes('--e2e')
 
 /**
+ * The folder the app was launched in, kept for the command line's relative
+ * paths (#16), and then LEFT (code review 2026-09-24, #3): "Open terminal
+ * here" starts the app with the clicked folder as its current directory, and
+ * Windows searches the current directory before PATH for a bare program name.
+ * Every tool is named by its full path now (core/main/sysTools); leaving the
+ * folder is the second belt, and the user's own folder is always there.
+ */
+const LAUNCH_CWD = process.cwd()
+try {
+  process.chdir(homedir())
+} catch {
+  /* the launch folder stays: every tool is named by its full path anyway */
+}
+
+/**
  * A WEB LINK LEAVES THE APP HERE, AND NEVER UNDER --e2e (#64; owner,
  * 2026-09-24: "make sure that future runs don't do that in my real browser").
  * The e2e prints and clicks https://example.com links, and every run opened
@@ -371,7 +386,7 @@ function wireIpc(): void {
     const plan = planRestore(saved, (p) => present.has(p), (cwd) => sessions.get(cwd) ?? [])
     if (firstRestore) {
       firstRestore = false
-      const launched = foldersFromArgv(process.argv)
+      const launched = foldersFromArgv(process.argv, undefined, LAUNCH_CWD)
       for (const cwd of launched) plan.tabs.push({ cwd })
       if (launched.length) plan.active = plan.tabs.length - 1
     }
@@ -529,13 +544,18 @@ function wireIpc(): void {
         return await runPreviewInstall((pct) => send('update:progress', pct), {
           cancelled: () => run.signal.aborted
         })
-      if (typeof url !== 'string') return false
-      closeAgreed = true
-      const ok = await installUpdate(url, (pct) => send('update:progress', pct), run.signal)
-      // A download that FAILED, or was CANCELLED, must not leave the close
-      // question pre-answered for the rest of the session.
-      if (!ok) closeAgreed = false
-      return ok
+      // WHAT MAIN OFFERED is installed, never a url the page sent (code review
+      // 2026-09-24, #15): a page that could name any past release asset could
+      // downgrade the app silently. No offer, nothing to install. The page's
+      // argument is only checked to be the same offer it was shown.
+      const offer = pendingUpdate
+      if (!offer || typeof url !== 'string' || url !== offer.url) return false
+      // The close question is pre-answered at the QUIT, not now (#14): a
+      // download takes minutes, and an agent that starts working meanwhile
+      // must still be asked about before a close ends it.
+      return await installUpdate(offer.url, (pct) => send('update:progress', pct), run.signal, () => {
+        closeAgreed = true
+      })
     } finally {
       updateRun = null
     }
@@ -615,8 +635,9 @@ function wireIpc(): void {
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on('second-instance', (_e, argv) => {
-    const folders = foldersFromArgv(argv)
+  app.on('second-instance', (_e, argv, workingDirectory) => {
+    // Resolved against the folder the second launch was typed in (#16).
+    const folders = foldersFromArgv(argv, undefined, workingDirectory)
     // Before ready there is no window to show yet: the first restore takes them.
     if (!app.isReady()) {
       pendingFolders.push(...folders)

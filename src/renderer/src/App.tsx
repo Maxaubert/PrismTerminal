@@ -529,7 +529,8 @@ export default function App(): JSX.Element {
             .filter((path) => path.length > 0)
           if (!paths.length) return
           markTouched(activeShell.id) // input like any other: its echo is not the agent working
-          window.prism.termInput(activeShell.id, quotePaths(paths))
+          // Quoted for the shell the tab runs (#5): PowerShell expands inside "...".
+          window.prism.termInput(activeShell.id, quotePaths(paths, shellOfShellId(shellIds.current.get(activeShell.id))))
           focusTermSession(activeShell.id)
         }}
         onContextMenu={(e) => {

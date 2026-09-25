@@ -1,3 +1,4 @@
+import { SYS } from '@core/main/sysTools'
 import { execFile } from 'child_process'
 
 /**
@@ -111,7 +112,7 @@ export function pointsAt(regOutput: string, exe: string): boolean {
 
 function reg(args: string[]): Promise<{ ok: boolean; out: string }> {
   return new Promise((resolve) => {
-    execFile('reg.exe', args, { windowsHide: true, timeout: 10000 }, (err, stdout) =>
+    execFile(SYS.reg, args, { windowsHide: true, timeout: 10000 }, (err, stdout) =>
       resolve({ ok: !err, out: stdout ?? '' })
     )
   })

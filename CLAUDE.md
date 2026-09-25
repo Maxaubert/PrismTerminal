@@ -421,6 +421,22 @@ terminal theme, anything that reads or shows files.
 
 ## Rules that must not regress (all measured in Prism, not assumed)
 
+- **WHAT REACHES A SHELL IS INERT UNTIL THE USER ACTS** (code review 2026-09-24, #67; the review is
+  `docs/reviews/2026-09-24-code-review.md`). A paste is stripped of every ESC and C0 control but
+  tab, newline and CR (`sanitizePaste`), so clipboard text cannot end the bracketed paste and run
+  what follows. A path is quoted for the SHELL it goes to (`quotePath`): single quotes for
+  PowerShell and bash, which expand nothing, curly quotes doubled too; double for cmd and for a
+  caller that names no shell. `cdCommand` doubles every quote PowerShell reads as one, and writes
+  nothing to cmd for a path with `%` or `"`. Windows' own tools are started by their FULL PATH
+  (`core/main/sysTools.ts`, pwsh by `where`'s answer minus the current folder), and main leaves its
+  launch folder at startup: a bare name is searched for in the current folder first.
+- **MAIN INSTALLS ONLY WHAT MAIN OFFERED** (#67). `update:install` installs `pendingUpdate.url`
+  and refuses any other url; the close question is pre-answered at the QUIT, not when the download
+  starts; the installer handoff waits for PowerShell to start (an 'error' keeps the app running)
+  and removes its temp folder after the install. `tabs.json` and `window.json` are written
+  atomically (`atomicWrite.ts`). A command-line path is resolved against the folder it was typed
+  in (`workingDirectory` for a handoff) and saved absolute; a drive root's `C:"` is `C:\` again.
+
 - **Bundled ConPTY.** Shells spawn with `useConptyDll: true`; the inbox conhost fast-fails the whole
   app (0xc0000409) when a pty is killed mid-read. `node-pty` stays `asarUnpack`ed and
   `npmRebuild: false` (it ships N-API prebuilds; a rebuild dies in node-gyp).
