@@ -210,7 +210,12 @@ export async function prewarmShell(root: string, shellId: string | undefined): P
     })
     p.onExit(() => {
       w.exited = true
-      warm.delete(key)
+      // Only THIS warm shell's entry (code review 2026-09-24, #2). Once it is
+      // adopted as a tab, the same folder is warmed again under the same key;
+      // this handler outlives the adoption and ran when the TAB closed,
+      // deleting the NEW warm shell without killing it: a hidden shell per
+      // open-and-close, out of reach of killWarm and killAll.
+      if (warm.get(key) === w) warm.delete(key)
     })
     warm.set(key, w)
   } catch {
@@ -267,6 +272,19 @@ function withResume(def: { exe: string; args: string[]; id: string }, resume: st
   return { exe: def.exe, args: def.args }
 }
 
+/**
+ * SPAWNS IN FLIGHT (code review 2026-09-24, #12). A spawn awaits the shell
+ * list (a cold `where` and `wsl -l` at launch) and node-pty before the session
+ * exists, so a tab closed meanwhile sent a kill that found nothing, and the
+ * shell, maybe a resumed Claude, then started for a tab that was gone and ran
+ * hidden until quit. A second spawn for the same id passed the has() check
+ * too and orphaned the first. Now an id is PENDING from the first line, a
+ * second spawn for it is refused, and a kill that arrives while it is pending
+ * is remembered and carried out the moment the pty exists.
+ */
+const pending = new Set<string>()
+const killedWhilePending = new Set<string>()
+
 export async function spawnTerm(
   id: string,
   root: string,
@@ -274,9 +292,27 @@ export async function spawnTerm(
   send: Send,
   resume?: string
 ): Promise<boolean> {
-  if (sessions.has(id)) return false
+  if (sessions.has(id) || pending.has(id)) return false
+  pending.add(id)
+  try {
+    return await spawnPending(id, root, shellId, send, resume)
+  } finally {
+    pending.delete(id)
+    killedWhilePending.delete(id)
+  }
+}
+
+async function spawnPending(
+  id: string,
+  root: string,
+  shellId: string | undefined,
+  send: Send,
+  resume?: string
+): Promise<boolean> {
   const def = shellById(shellId, await detectShells())
   if (!def) return false
+  // Closed while the shell list was being read: start nothing.
+  if (killedWhilePending.has(id)) return false
   // Adopt the warm shell when it matches: replay what it printed while
   // waiting (the banner, the prompt), then wire it up like any session.
   // Never for a resume: the warm shell was spawned without the command.
@@ -313,6 +349,15 @@ export async function spawnTerm(
       cwd: root,
       env: ptyEnv(process.env, def.id)
     })
+    // Closed while node-pty loaded: the tab is gone, so is this shell.
+    if (killedWhilePending.has(id)) {
+      try {
+        p.kill()
+      } catch {
+        /* already gone */
+      }
+      return false
+    }
     const batcher = new OutputBatcher((data) => send('term:data', id, data), 8)
     const subs = [
       p.onData((d) => {
@@ -358,7 +403,11 @@ export function resizeTerm(id: string, cols: number, rows: number, attempt = 0):
 export function killTerm(id: string): void {
   desiredSize.delete(id)
   const s = sessions.get(id)
-  if (!s) return
+  if (!s) {
+    // Its shell is still starting: kill it the moment it exists (#12).
+    if (pending.has(id)) killedWhilePending.add(id)
+    return
+  }
   sessions.delete(id) // first, so the exit handler's delete is a no-op
   // Handlers off before the kill: this teardown is ours, nothing should hear
   // the pty's death throes or write into them.
