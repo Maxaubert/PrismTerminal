@@ -1,5 +1,6 @@
 import { app, screen, type BrowserWindow } from 'electron'
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync } from 'fs'
+import { writeAtomic } from './atomicWrite'
 import { join } from 'path'
 
 /**
@@ -87,7 +88,7 @@ export function watchWindowState(win: BrowserWindow): void {
     const b = win.getNormalBounds()
     const state: WindowState = { ...b, maximised: win.isMaximized() }
     try {
-      writeFileSync(WINDOW_STATE(), JSON.stringify(state))
+      writeAtomic(WINDOW_STATE(), JSON.stringify(state))
     } catch {
       /* a terminal that cannot write its window size is still a terminal */
     }

@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync } from 'fs'
+import { writeAtomic } from './atomicWrite'
 import type { SavedTab, SavedTabs } from '@shared/types'
 
 // tabs.json: the strip as it was, so a relaunch brings every shell back in its
@@ -60,7 +61,7 @@ export function createTabsStore(
     timer = null
     if (!pending) return
     try {
-      writeFileSync(file, JSON.stringify(pending))
+      writeAtomic(file, JSON.stringify(pending))
     } catch {
       /* a lost save is a tab that does not come back, not a crash */
     }

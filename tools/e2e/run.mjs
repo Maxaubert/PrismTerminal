@@ -776,6 +776,12 @@ const scenarios = {
       await sleep(900)
       ok((await count('PASTEONCEC')) === 1, `the right-click Paste pastes ONCE (${await count('PASTEONCEC')} copies arrived)`)
       await clear()
+      // The paste injection fix (code review 2026-09-24, #1) is proved in
+      // termPaste.test.ts, not here: PSReadLine never turns bracketed paste
+      // on, so a pwsh prompt runs a pasted CR either way and cannot tell a
+      // sanitised paste from an unsanitised one (MEASURED: an e2e check here
+      // passed with the sanitiser switched off). It matters in bash, WSL and
+      // an agent's input, which is where bracketed paste is on.
     } finally {
       await app
         .evaluate(({ clipboard, nativeImage }, was) => {
@@ -2489,6 +2495,14 @@ const scenarios = {
     const question = page.locator('[role="dialog"]:not([data-update-dialog])')
     const installs = async () => (await page.evaluate(() => window.prism.e2eUpdateCalls())).installs
     ok(await until(async () => (await chip.count()) === 1, 8000), 'a real-shaped offer shows the chip')
+    // WHAT MAIN OFFERED IS INSTALLED, NEVER A URL THE PAGE SENT (code review
+    // 2026-09-24, #15): a real-looking past release asset, handed to the
+    // bridge, is refused before anything is fetched.
+    const before = await installs()
+    const refused = await page.evaluate(() =>
+      window.prism.installUpdate('https://github.com/Maxaubert/PrismTerminal/releases/download/v0.1.0/PrismTerminal-Setup-x64-0.1.0.exe')
+    )
+    ok(refused === false && (await installs()) === before, 'an install for any url but the offered one is refused, and nothing is fetched')
     // As closeAsk does: let the process poll say "no agent" once, then have a
     // shell stand in for Claude through the title, idle first and then working.
     await typeLine(page, 'echo ready')

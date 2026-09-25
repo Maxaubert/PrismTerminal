@@ -4,7 +4,8 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
-import { decidePaste } from '../lib/termPaste'
+import { decidePaste, sanitizePaste, type PathShell } from '../lib/termPaste'
+import { shellOfShellId } from '../../shared/help/shells'
 import { registerPaste, reportCwd, reportTitle, setTextPaster } from '../lib/termBus'
 import { parseOsc9 } from '../../shared/termCwd'
 import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
@@ -565,6 +566,8 @@ export function onTermFindResults(
 }
 
 function createSession(id: string, root: string, shellId: string | undefined): Session {
+  // The quoting a pasted path gets (#5): the shell this session runs.
+  const pathShell: PathShell = shellOfShellId(shellId)
   watchHostStyle()
   const term = new Terminal({
     cursorBlink: true,
@@ -663,7 +666,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
    * growing a second, wrong copy of it.
    */
   const pasteHere = (): void => {
-    const decision = decidePaste(termApi().readClipboard())
+    const decision = decidePaste(termApi().readClipboard(), pathShell)
     if (decision.kind === 'key') {
       markTouched(id)
       termApi().termInput(id, '')
@@ -751,9 +754,11 @@ function createSession(id: string, root: string, shellId: string | undefined): S
       e.preventDefault()
       // The escape hatch: plain text paste even when an image rides along.
       const clip = termApi().readClipboard()
-      if (clip.text) {
+      // Sanitised like every paste (#1): no ESC can end the bracketed paste.
+      const text = sanitizePaste(clip.text)
+      if (text) {
         markTouched(id)
-        term.paste(clip.text)
+        term.paste(text)
       }
       return false
     }

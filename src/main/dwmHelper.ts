@@ -13,6 +13,7 @@
  * Attributes: 33 DWMWA_WINDOW_CORNER_PREFERENCE (0 default, 1 do not round),
  * 34 DWMWA_BORDER_COLOR (a COLORREF 0x00BBGGRR, -1 default, -2 none).
  */
+import { SYS } from '@core/main/sysTools'
 import { spawn, type ChildProcess } from 'child_process'
 
 const SCRIPT =
@@ -27,7 +28,7 @@ function helper(): ChildProcess | null {
   if (proc && proc.exitCode === null && !proc.killed) return proc
   try {
     proc = spawn(
-      'powershell.exe',
+      SYS.powershell,
       ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(SCRIPT, 'utf16le').toString('base64')],
       { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true }
     )
@@ -35,6 +36,13 @@ function helper(): ChildProcess | null {
       proc = null
     })
     proc.on('error', () => {
+      proc = null
+    })
+    // A write to a helper that has just died fails LATER, as an 'error' event
+    // on stdin that the try round write() cannot catch; unheard, it is an
+    // uncaught exception in main (code review 2026-09-24, #13). mediaPause
+    // guards the same case.
+    proc.stdin?.on('error', () => {
       proc = null
     })
     return proc

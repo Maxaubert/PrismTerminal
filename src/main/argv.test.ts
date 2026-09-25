@@ -2,7 +2,24 @@ import { mkdtempSync, writeFileSync, mkdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
-import { foldersFromArgv, pathsFromArgv } from './argv'
+import { foldersFromArgv, pathsFromArgv, unquoteArg } from './argv'
+
+describe('relative paths and drive roots (code review 2026-09-24, #16 and #17)', () => {
+  const base = mkdtempSync(join(tmpdir(), 'prism-argv-base-'))
+  mkdirSync(join(base, 'src'))
+
+  it('a relative path is resolved against the folder it was typed in, and comes back absolute', () => {
+    expect(foldersFromArgv(['exe', 'src'], [], base)).toEqual([join(base, 'src')])
+    expect(foldersFromArgv(['exe', '.'], [], base)).toEqual([base])
+  })
+
+  it('a drive root handed over as `C:"` (the escaped quote of "%V") is the root again', () => {
+    expect(unquoteArg('C:"')).toBe('C:\\')
+    expect(unquoteArg('C:\\Users')).toBe('C:\\Users')
+    const root = base.slice(0, 2) // the drive this machine's temp folder is on
+    expect(foldersFromArgv(['exe', `${root}"`], [], base)).toEqual([`${root}\\`])
+  })
+})
 
 /**
  * What the command line asked for.

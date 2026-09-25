@@ -1,3 +1,4 @@
+import { SYS } from '@core/main/sysTools'
 import { app } from 'electron'
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
@@ -131,7 +132,11 @@ export function watchForUpdates(send: (info: UpdateInfo) => void): void {
 export async function installUpdate(
   url: string,
   onPct: (pct: number) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** Called at the moment of the quit, and only then (code review 2026-09-24,
+   *  #14): the caller pre-answers its close question HERE, not while a
+   *  download that takes minutes is still running. */
+  beforeQuit: () => void = () => {}
 ): Promise<boolean> {
   calls.installs += 1
   if (!isReleaseAssetUrl(url)) return false
@@ -159,18 +164,32 @@ export async function installUpdate(
     // Single-quoted with quotes doubled, PowerShell's own escaping; both
     // paths are ours (temp dir, execPath) but interpolation stays safe anyway.
     const q = (s: string): string => `'${s.replace(/'/g, "''")}'`
-    spawn(
-      'powershell',
+    // The handoff (code review 2026-09-24, #19): the installer runs, the app
+    // starts again, and the temp folder holding the installer is REMOVED
+    // after it (it used to stay, about 100 MB per update). A PowerShell that
+    // cannot start is an 'error' event, not a throw: it is heard, the folder
+    // goes, and the app does NOT quit into nothing.
+    const child = spawn(
+      SYS.powershell,
       [
         '-NoProfile',
         '-WindowStyle',
         'Hidden',
         '-Command',
-        `Start-Process -Wait -FilePath ${q(file)} -ArgumentList '/S'; Start-Process -FilePath ${q(process.execPath)}`
+        `Start-Process -Wait -FilePath ${q(file)} -ArgumentList '/S'; ` +
+          `Start-Process -FilePath ${q(process.execPath)}; ` +
+          `Remove-Item -LiteralPath ${q(dir)} -Recurse -Force -ErrorAction SilentlyContinue`
       ],
       { detached: true, stdio: 'ignore' }
-    ).unref()
+    )
+    const started = await new Promise<boolean>((done) => {
+      child.once('spawn', () => done(true))
+      child.once('error', () => done(false))
+    })
+    if (!started) throw new Error('installer handoff did not start')
+    child.unref()
     // A beat for the progress frame to land, then get out of the installer's way.
+    beforeQuit()
     setTimeout(() => app.quit(), 400)
     return true
   } catch {

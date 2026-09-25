@@ -1,3 +1,4 @@
+import { SYS } from './sysTools'
 import { execFile } from 'child_process'
 import type { DetectedAgent } from '../shared/types'
 import { parseProcLines, treeAgentKind } from './agentDetect'
@@ -24,7 +25,7 @@ const AGENT_QUERY =
 /** Ask Windows. `null` for a query that did not answer. */
 function queryProcesses(done: (stdout: string | null) => void): void {
   execFile(
-    'powershell.exe',
+    SYS.powershell,
     ['-NoProfile', '-Command', AGENT_QUERY],
     { windowsHide: true, timeout: 30000, maxBuffer: 8 * 1024 * 1024 },
     (err, stdout) => done(err || !stdout ? null : stdout)

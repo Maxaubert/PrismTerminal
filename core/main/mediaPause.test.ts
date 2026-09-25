@@ -202,7 +202,8 @@ describe('the media pause', () => {
 describe('the real helper command', () => {
   it('is Windows PowerShell with an argv array and no profile', () => {
     const { file, args } = mediaHelperCommand()
-    expect(file).toBe('powershell.exe')
+    // By its full path under System32, never a bare name (code review 2026-09-24, #3).
+    expect(file).toMatch(/System32\\WindowsPowerShell\\v1\.0\\powershell\.exe$/i)
     expect(args.slice(0, 5)).toEqual(['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command'])
     expect(args[5]).toBe(MEDIA_HELPER_SCRIPT)
   })

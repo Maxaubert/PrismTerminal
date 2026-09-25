@@ -1,6 +1,25 @@
 import { execFile } from 'child_process'
+import { dirname, isAbsolute } from 'path'
 import type { ShellDef } from '../shared/types'
 import { PS_FILE_STYLE, PS_PROMPT_HOOK } from './termPrompt'
+import { SYS } from './sysTools'
+
+/**
+ * PowerShell 7's full path out of `where pwsh.exe` (#3). `where` lists the
+ * current directory first, so a match THERE is skipped: that is the very
+ * planted binary a full path exists to avoid. The first absolute path left, or
+ * null when there is none (no PowerShell 7 installed).
+ */
+export function pwshPath(whereOut: string, cwd: string = process.cwd()): string | null {
+  const here = cwd.toLowerCase().replace(/\\+$/, '')
+  for (const line of whereOut.split(/\r?\n/)) {
+    const p = line.trim()
+    if (!p || !isAbsolute(p)) continue
+    if (dirname(p).toLowerCase().replace(/\\+$/, '') === here) continue
+    return p
+  }
+  return null
+}
 
 // The shells this machine actually has. Prism never execs a renderer-supplied
 // path: the renderer names a shell by id, and the id is looked up in this list,
@@ -48,11 +67,13 @@ let cached: Promise<ShellDef[]> | null = null
 export function detectShells(): Promise<ShellDef[]> {
   cached ??= (async () => {
     const list: ShellDef[] = []
-    if ((await run('where', ['pwsh.exe'])).ok)
+    // PowerShell 7's own path, as `where` finds it (#3: never a bare name).
+    const pwsh = pwshPath((await run(SYS.where, ['pwsh.exe'])).stdout.toString())
+    if (pwsh)
       list.push({
         id: 'pwsh',
         name: 'PowerShell 7',
-        exe: 'pwsh.exe',
+        exe: pwsh,
         // PSReadLine's ghost suggestions from history (RightArrow accepts,
         // Up/Down recalls), switched on explicitly so no profile or version
         // default can leave them off.
@@ -79,15 +100,15 @@ export function detectShells(): Promise<ShellDef[]> {
     list.push({
       id: 'powershell',
       name: 'Windows PowerShell',
-      exe: 'powershell.exe',
+      exe: SYS.powershell,
       args: ['-NoLogo', '-NoExit', '-Command', `${PS_FILE_STYLE}; ${PS_PROMPT_HOOK}`]
     })
-    list.push({ id: 'cmd', name: 'Command Prompt', exe: 'cmd.exe', args: [] })
+    list.push({ id: 'cmd', name: 'Command Prompt', exe: SYS.cmd, args: [] })
     // wsl -l -q prints UTF-16LE. --cd . starts the distro in the pty's cwd.
-    const wsl = await run('wsl.exe', ['-l', '-q'])
+    const wsl = await run(SYS.wsl, ['-l', '-q'])
     if (wsl.ok && wsl.stdout.length) {
       for (const name of parseWslList(wsl.stdout.toString('ucs2').replace(/\0/g, ''))) {
-        list.push({ id: `wsl-${name}`, name: `WSL: ${name}`, exe: 'wsl.exe', args: ['-d', name, '--cd', '.'] })
+        list.push({ id: `wsl-${name}`, name: `WSL: ${name}`, exe: SYS.wsl, args: ['-d', name, '--cd', '.'] })
       }
     }
     return list
