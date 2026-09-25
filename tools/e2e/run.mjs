@@ -1044,6 +1044,109 @@ const scenarios = {
     await app.close().catch(() => {})
   },
 
+  /**
+   * KEYS AND FOCUS (code review 2026-09-24, PR 2), each in a real pwsh, each
+   * failing on the code before the fix:
+   *  - #21 Shift+Enter at a plain prompt is Enter: the line runs as typed, no
+   *    backslash appended.
+   *  - #6 Ctrl+C over a selection copies on a non-Latin layout, where the C
+   *    key's `key` is 'с' and only its `code` says KeyC.
+   *  - #9 a `cd` that lands while the find bar is open leaves the typing in it.
+   *  - #32 the right-click menu goes on a tab change and does not come back.
+   *  - #10 under the close question, Ctrl+T and Ctrl+Tab do nothing.
+   *  - #33 a drag that never drops gives the strip back at the next pointer move.
+   */
+  async reviewKeys(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    const clip = () => app.evaluate(({ clipboard }) => clipboard.readText())
+    const held = await clip()
+    try {
+      await until(async () => (await tabLabels(page)).length === 2)
+      const activeTab = () =>
+        page.evaluate(() => [...document.querySelectorAll('[data-tab]')].findIndex((t) => t.querySelector('[aria-selected="true"]') || t.getAttribute('aria-selected') === 'true'))
+      // #33
+      const stripDrags = () => page.locator('[data-tab-strip]').evaluate((el) => el.classList.contains('drag'))
+      await page.evaluate(() => window.dispatchEvent(new DragEvent('dragenter')))
+      ok(!!(await until(async () => !(await stripDrags()), 2000, 50)), 'a drag in flight takes the strip off window-drag')
+      await page.mouse.move(40, 200)
+      await page.mouse.move(60, 220)
+      ok(!!(await until(stripDrags, 2000, 50)), 'and the next pointer move after it gives the strip back')
+
+      await typeLine(page, 'mkdir sub | Out-Null; cls')
+      await sleep(600)
+
+      // #21
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.type('echo shift-$(40+2)')
+      await page.keyboard.press('Shift+Enter')
+      ok(!!(await until(async () => /shift-42/.test(await termText(page)), 8000)), 'Shift+Enter at a plain prompt runs the line')
+      ok(!(await termText(page)).includes('shift-42\\'), 'and appends no backslash to it')
+
+      // #6: select the first row by dragging over it, then a Russian Ctrl+C.
+      await app.evaluate(({ clipboard }) => clipboard.writeText('SENTINEL-6'))
+      const row = await page.locator('.xterm-rows > div').first().boundingBox()
+      await page.mouse.move(row.x + 2, row.y + row.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(row.x + 160, row.y + row.height / 2, { steps: 6 })
+      await page.mouse.up()
+      const cdp = await page.context().newCDPSession(page)
+      for (const type of ['rawKeyDown', 'keyUp'])
+        await cdp.send('Input.dispatchKeyEvent', { type, key: 'с', code: 'KeyC', windowsVirtualKeyCode: 67, modifiers: 2 })
+      const copied = await until(async () => {
+        const c = await clip()
+        return c !== 'SENTINEL-6' ? c : null
+      }, 3000)
+      ok(!!copied && copied.includes('PS'), `Ctrl+C by the physical key copies the selection (${JSON.stringify(copied)})`)
+
+      // #9: the find bar is open when the shell reports a new folder.
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.type('Start-Sleep 2; cd sub')
+      await page.keyboard.press('Enter')
+      await page.keyboard.press('Control+f')
+      const findInput = page.locator('[data-term-find] input')
+      ok(!!(await until(async () => (await findInput.count()) === 1, 4000, 50)), 'Ctrl+F opens find while the command runs')
+      ok(!!(await until(async () => (await tabLabels(page)).includes('sub'), 8000)), 'the cd lands with find open')
+      await sleep(400)
+      await page.keyboard.type('xyz')
+      ok((await findInput.inputValue()) === 'xyz', `the typing stays in the find bar (${await findInput.inputValue()})`)
+      await page.keyboard.press('Escape')
+
+      // #32
+      const first = await activeTab()
+      await page.locator('[data-term-region]').click({ button: 'right', position: { x: 200, y: 120 } })
+      const menu = () => page.locator('[role="menu"]').count()
+      ok(!!(await until(async () => (await menu()) === 1, 4000, 50)), 'the terminal menu opens')
+      await page.keyboard.press('Control+Tab')
+      ok(!!(await until(async () => (await menu()) === 0, 4000, 50)), 'a tab change puts it away')
+      await page.keyboard.press('Control+Tab')
+      ok(!!(await until(async () => (await activeTab()) === first, 4000, 50)), `back on the first tab (${first})`)
+      await sleep(300)
+      ok((await menu()) === 0, 'and the menu does not come back')
+
+      // #10: a Claude title makes the close ask; the chords wait for it.
+      await typeLine(page, 'echo ready')
+      await sleep(6000) // the process poll's first "no agent" verdict, said once
+      await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
+      await until(() => page.evaluate(() => !!document.querySelector('[data-agent-present]')), 8000, 50)
+      await page.keyboard.press('Control+w')
+      const dialog = () => page.locator('[role="dialog"]').count()
+      ok(!!(await until(async () => (await dialog()) === 1, 4000, 50)), 'closing an agent\'s tab asks')
+      await page.keyboard.press('Control+t')
+      await page.keyboard.press('Control+Tab')
+      await sleep(600)
+      ok((await tabLabels(page)).length === 2, 'Ctrl+T under the question opens nothing')
+      ok((await activeTab()) === first, 'and Ctrl+Tab switches nothing')
+      ok((await dialog()) === 1, 'and the question is still there')
+      await page.keyboard.press('Escape')
+      await typeLine(page, "$Host.UI.RawUI.WindowTitle = 'pwsh'")
+
+    } finally {
+      await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), held).catch(() => {})
+      await app.close().catch(() => {})
+    }
+  },
+
   /** A file dropped on the terminal types its quoted path and never sends it;
    *  the terminal answers a right-click. */
   async dropAndMenu(ok) {

@@ -116,6 +116,10 @@ export default function App(): JSX.Element {
   const [ask, setAsk] = useState<Ask | null>(null)
   /** The terminal's own right-click menu, at the pointer. */
   const [termMenu, setTermMenu] = useState<{
+    /** The session it was opened on (code review 2026-09-24, #32): the menu
+     *  shows only over that one, so a Ctrl+Tab never turns its Paste on the
+     *  next shell while its Copy still holds the last one's selection. */
+    id: string
     x: number
     y: number
     /** What was selected when the menu opened, and the link under the point. */
@@ -135,6 +139,13 @@ export default function App(): JSX.Element {
   const { tabs, activeId } = state
   const active = tabs.find((t) => t.id === activeId) ?? null
   const activeShell = active && active.kind !== 'settings' ? active : null
+  // A tab change puts the terminal's menu away for good (#32), so coming back
+  // to the tab it was opened on does not bring it back at the old spot.
+  const [menuFront, setMenuFront] = useState(activeId)
+  if (menuFront !== activeId) {
+    setMenuFront(activeId)
+    if (termMenu) setTermMenu(null)
+  }
   const indicator = useAgentIndicator(activeShell ? activeShell.id : null)
   // Dictation (#13) is the core's. It is armed here because this is where
   // "which shell is in front" is known; it renders nothing and re-renders
@@ -196,7 +207,13 @@ export default function App(): JSX.Element {
 
   /** Rebuild last session's strip. Every shell spawns NOW, in front or not:
    *  each conversation resumes at launch, not when its tab is first visited. */
+  const restored = useRef(false)
   const restore = useCallback(() => {
+    // Once per page (code review 2026-09-24, #31): StrictMode runs the mount
+    // effect twice in dev, and a second restore opened every tab again,
+    // resumed each agent twice and saved the doubled strip.
+    if (restored.current) return
+    restored.current = true
     void window.prism.restoreTabs().then((r) => {
       const ids = r.tabs.map((t) => openTab(t.cwd, t.resume))
       const front = ids[r.active]
@@ -430,6 +447,15 @@ export default function App(): JSX.Element {
         e.preventDefault()
         e.stopPropagation()
       }
+      // ONE QUESTION AT A TIME, for the tab chords too (code review
+      // 2026-09-24, #10): under a close question or the update window, Ctrl+Tab
+      // or Ctrl+T moved the keyboard into a shell behind it, and the Enter
+      // meant for the question went there. They do nothing until it is
+      // answered; Ctrl+W keeps its own rule.
+      if (live.current.blocked && k !== 'w') {
+        if (e.key === 'Tab' || /^[1-9]$/.test(e.key) || e.key === ',' || k === 't' || k === 'f') hit()
+        return
+      }
       if (e.key === 'Tab') {
         hit()
         setState((s) => stepTab(s, e.shiftKey ? -1 : 1))
@@ -536,7 +562,7 @@ export default function App(): JSX.Element {
         onContextMenu={(e) => {
           if (!activeShell || !(e.target as HTMLElement).closest('[data-term-region]')) return
           e.preventDefault()
-          setTermMenu({ x: e.clientX, y: e.clientY, ...termContextAt(activeShell.id, e.clientX, e.clientY) })
+          setTermMenu({ id: activeShell.id, x: e.clientX, y: e.clientY, ...termContextAt(activeShell.id, e.clientX, e.clientY) })
         }}
       >
         {activeShell && (
@@ -574,7 +600,7 @@ export default function App(): JSX.Element {
         )}
       </div>
 
-      {termMenu && activeShell && (
+      {termMenu && activeShell && termMenu.id === activeShell.id && (
         <ContextMenu
           x={termMenu.x}
           y={termMenu.y}

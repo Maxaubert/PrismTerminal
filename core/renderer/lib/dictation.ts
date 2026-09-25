@@ -94,7 +94,10 @@ const FAILURE_TEXT: Record<CaptureFailure, string> = {
 interface Recording {
   sessionId: string
   capture: Capture | null
-  /** Set when stop or cancel arrived before the mic finished opening. */
+  /** Set when stop or cancel arrives, before the mic has opened or after.
+   *  Once set, a second stop is not heard (code review 2026-09-24, #4): a
+   *  hold released while the last clip is still transcribing used to finish
+   *  THAT clip again, and it was pasted twice. */
   ended: 'stop' | 'cancel' | null
   partialTimer: number | null
   partialBusy: boolean
@@ -220,6 +223,9 @@ async function finishStop(r: Recording): Promise<void> {
   } catch {
     res = { ok: false as const, reason: 'engine-failed' as const }
   }
+  // Escape while it transcribed: the cancel has already put everything away,
+  // and what was heard is dropped, not pasted.
+  if (r.ended === 'cancel') return
   if (rec === r) rec = null
   resumeMedia(r)
   if (!res.ok) {
@@ -242,16 +248,17 @@ async function finishStop(r: Recording): Promise<void> {
 
 function stop(): void {
   const r = rec
-  if (!r) return
-  if (!r.capture) r.ended = 'stop'
-  else void finishStop(r)
+  if (!r || r.ended) return
+  r.ended = 'stop'
+  // Without a capture the mic is still opening, and `begin` finishes it.
+  if (r.capture) void finishStop(r)
 }
 
 function cancel(): void {
   const r = rec
-  if (!r) return
-  if (!r.capture) r.ended = 'cancel'
-  else finishCancel(r)
+  if (!r || r.ended === 'cancel') return
+  r.ended = 'cancel'
+  if (r.capture) finishCancel(r)
 }
 
 /**

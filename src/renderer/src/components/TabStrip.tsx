@@ -117,7 +117,16 @@ export function TabStrip({
     window.addEventListener('dragenter', on, true)
     window.addEventListener('dragend', off, true)
     window.addEventListener('drop', off, true)
+    // A drag that leaves the window, or ends where nothing takes a drop, sends
+    // this page neither dragend (that goes to Explorer) nor drop, and the strip
+    // stayed no window handle for good (code review 2026-09-24, #33). No
+    // pointer event arrives while a system drag is in flight, so the first
+    // one after it is proof the drag is over.
+    window.addEventListener('pointermove', off, true)
+    window.addEventListener('pointerdown', off, true)
     return () => {
+      window.removeEventListener('pointermove', off, true)
+      window.removeEventListener('pointerdown', off, true)
       window.removeEventListener('dragstart', on, true)
       window.removeEventListener('dragenter', on, true)
       window.removeEventListener('dragend', off, true)
@@ -257,6 +266,7 @@ export function TabStrip({
       // closed hand, children included: a tab is made of a label button, an
       // icon slot and an X, each with a cursor of its own, and letting them
       // answer for themselves made it flicker under the moving pointer.
+      data-tab-strip
       className={`${dragInFlight ? 'no-drag' : 'drag'} p-styled-font flex h-8 shrink-0 items-stretch gap-0 overflow-x-auto border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1 text-[12px] transition-[background-color,border-color] duration-[550ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
         carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''
       }`}

@@ -21,6 +21,7 @@ import {
   type SelectionGate
 } from '../lib/termSelectionEdit'
 import { attachLinkPaint, type LinkPainter } from '../lib/termLinkPaint'
+import { cellFrom, cellText, type CellInfo } from '../lib/termCells'
 import {
   onTermLookChange,
   termBaseFontPx,
@@ -145,13 +146,10 @@ function fitKeepingCursorLine(term: Terminal, fit: FitAddon): void {
   }
   const oldCols = term.cols
   const y = b.baseY + b.cursorY
-  // The logical line: walk back over wrapped rows to its first row.
-  let first = y
-  while (first > 0 && b.getLine(first)?.isWrapped) first -= 1
-  let last = y
-  while (last + 1 < b.length && b.getLine(last + 1)?.isWrapped) last += 1
-  let text = ''
-  for (let i = first; i <= last; i += 1) text += b.getLine(i)?.translateToString(i === last) ?? ''
+  const { first, last, index, text: whole, textEnd } = logicalLine(term, y)
+  // Everything up to the last printed cell, and where the cursor is, both in
+  // CELLS (#20): the cursor goes back by cells, never by string length.
+  const text = whole.slice(0, index[textEnd])
   const offset = (y - first) * oldCols + b.cursorX
   let tail = false
   for (let i = last + 1; i < b.length && !tail; i += 1)
@@ -167,16 +165,10 @@ function fitKeepingCursorLine(term: Terminal, fit: FitAddon): void {
   term.write(`\x1b[${row + 1};1H\x1b[J${text}`, () => {
     const nb = term.buffer.active
     const end = nb.baseY + nb.cursorY
-    const back = text.length - Math.min(offset, text.length)
-    const endCol = nb.cursorX
-    // Walk the cursor back `back` cells over the wrapped rows just written.
-    let r = end
-    let c = endCol - back
-    while (c < 0 && r > 0) {
-      c += term.cols
-      r -= 1
-    }
-    term.write(`\x1b[${Math.max(0, r - nb.baseY) + 1};${Math.max(0, c) + 1}H`)
+    // Walk the cursor back over the wrapped rows just written, or forward
+    // when it sat past the last printed cell (a prompt's trailing space).
+    const at = cellFrom(end, nb.cursorX, textEnd - offset, term.cols)
+    term.write(`\x1b[${Math.max(0, at.row - nb.baseY) + 1};${at.col + 1}H`)
   })
 }
 
@@ -221,28 +213,14 @@ function attachClickCaret(term: Terminal, el: HTMLElement, id: string): () => vo
       const col = Math.max(0, Math.min(term.cols, Math.round((e.clientX - r.left) / cellW)))
       const row = Math.floor((e.clientY - r.top) / cellH)
       const y = b.baseY + b.cursorY
-      let first = y
-      while (first > 0 && b.getLine(first)?.isWrapped) first -= 1
-      let last = y
-      while (last + 1 < b.length && b.getLine(last + 1)?.isWrapped) last += 1
+      const { first, last, widths, text, textEnd, index } = logicalLine(term, y)
       const clicked = b.viewportY + row
       let textBelow = false
       for (let i = last + 1; i < b.length && !textBelow; i += 1)
         if ((b.getLine(i)?.translateToString(true) ?? '').length) textBelow = true
-      const widths: number[] = []
-      let textEnd = 0
-      let text = ''
-      for (let i = first; i <= last; i += 1) {
-        const line = b.getLine(i)
-        text += line?.translateToString(false) ?? ''
-        for (let x = 0; x < term.cols; x += 1) {
-          const cell = line?.getCell(x)
-          widths.push(cell?.getWidth() ?? 1)
-          if (cell && cell.getChars() !== '') textEnd = widths.length - 1 + Math.max(1, cell.getWidth())
-        }
-      }
       const target = (clicked - first) * term.cols + col
-      const charAt = widths.slice(0, target).filter((w) => w !== 0).length
+      // The clicked cell's place in the TEXT (#25), where findLinks counts.
+      const charAt = index[Math.min(Math.max(0, target), index.length - 1)]
       const gate: ClickGate = {
         button: e.button,
         detail: e.detail,
@@ -288,6 +266,8 @@ function logicalLine(term: Terminal, y: number): {
   last: number
   widths: number[]
   text: string
+  /** Cell -> where its text starts in `text` (termCells). */
+  index: number[]
   textEnd: number
 } {
   const b = term.buffer.active
@@ -295,19 +275,16 @@ function logicalLine(term: Terminal, y: number): {
   while (first > 0 && b.getLine(first)?.isWrapped) first -= 1
   let last = y
   while (last + 1 < b.length && b.getLine(last + 1)?.isWrapped) last += 1
-  const widths: number[] = []
-  let textEnd = 0
-  let text = ''
+  const cells: CellInfo[] = []
   for (let i = first; i <= last; i += 1) {
     const line = b.getLine(i)
-    text += line?.translateToString(false) ?? ''
     for (let x = 0; x < term.cols; x += 1) {
       const cell = line?.getCell(x)
-      widths.push(cell?.getWidth() ?? 1)
-      if (cell && cell.getChars() !== '') textEnd = widths.length - 1 + Math.max(1, cell.getWidth())
+      cells.push({ chars: cell?.getChars() ?? '', width: cell?.getWidth() ?? 1 })
     }
   }
-  return { first, last, widths, text, textEnd }
+  const { text, index, textEnd } = cellText(cells)
+  return { first, last, widths: cells.map((c) => c.width), text, index, textEnd }
 }
 
 /**
@@ -373,8 +350,7 @@ export function termContextAt(id: string, clientX: number, clientY: number): { s
   const y = term.buffer.active.viewportY + row
   const line = logicalLine(term, y)
   const target = (y - line.first) * term.cols + col
-  const charAt = line.widths.slice(0, target).filter((w) => w !== 0).length
-  return { selection, link: linkAt(line.text, charAt) }
+  return { selection, link: linkAt(line.text, line.index[Math.min(target, line.index.length - 1)]) }
 }
 
 /** Refit a session and tell the pty its new geometry. */
@@ -676,8 +652,15 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     }
   }
 
+  // Whether an agent runs in this shell right now, for Shift+Enter below: a
+  // resumed session is Claude from its first moment, and main's process poll
+  // says when one arrives or leaves.
+  let agentHere = Boolean(resume)
   const unsub = [
     attachClickCaret(term, el, id),
+    termApi().onTermAgent((forId, present) => {
+      if (forId === id) agentHere = present
+    }),
     termApi().onTermData((forId, data) => {
       if (forId === id) {
         stopSpin()
@@ -693,12 +676,18 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     // disposeTermSession, so nothing is subscribed here.
   ]
 
+  // Ctrl+C and Ctrl+V are matched by the PHYSICAL key as well as the letter
+  // (code review 2026-09-24, #6): on a Russian or Greek layout the C key's
+  // `key` is not 'c', xterm still maps it to ^C, and a copy over a selection
+  // interrupted the agent instead. Windows Terminal matches the key the same way.
+  const isKey = (e: KeyboardEvent, letter: 'c' | 'v'): boolean =>
+    e.key.toLowerCase() === letter || e.code === `Key${letter.toUpperCase()}`
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== 'keydown') return true
     // Ctrl+C over a SELECTION copies it, the way Windows Terminal does; with
     // nothing selected it stays the interrupt every shell expects.
     if (
-      (e.key === 'c' || e.key === 'C') &&
+      isKey(e, 'c') &&
       e.ctrlKey &&
       !e.shiftKey &&
       !e.altKey &&
@@ -729,10 +718,12 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     // Returning false keeps xterm from ALSO feeding the bytes to the pty: left
     // to xterm, Ctrl+` became a NUL, which counted as the user typing.
     if (termHost().ownsKey(e)) return false
-    if (e.key === 'Enter' && e.shiftKey) {
+    if (e.key === 'Enter' && e.shiftKey && agentHere) {
       // Newline-without-submit, the continuation form Claude Code accepts
       // everywhere. This is what /terminal-setup exists to configure; here it
-      // simply works.
+      // simply works. ONLY where an agent runs (code review 2026-09-24, #21):
+      // at a plain prompt `\` then Enter RAN the line with a backslash on its
+      // end, a command nobody wrote. There Shift+Enter is Enter, as xterm sends it.
       markTouched(id) // input like any other: its repaint is echo, not work
       termApi().termInput(id, '\\\r')
       return false
@@ -745,12 +736,12 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     // there. preventDefault cancels the native one; this handler is the paste,
     // since it is the one that knows about images (Claude Code reads those
     // itself when it gets the ^V keystroke) and bracketed framing.
-    if ((e.key === 'v' || e.key === 'V') && e.ctrlKey && !e.shiftKey) {
+    if (isKey(e, 'v') && e.ctrlKey && !e.shiftKey && !e.altKey) {
       e.preventDefault()
       pasteHere()
       return false
     }
-    if ((e.key === 'v' || e.key === 'V') && e.ctrlKey && e.shiftKey) {
+    if (isKey(e, 'v') && e.ctrlKey && e.shiftKey && !e.altKey) {
       e.preventDefault()
       // The escape hatch: plain text paste even when an image rides along.
       const clip = termApi().readClipboard()
@@ -773,6 +764,9 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // command), so nothing is ever visibly typed.
   void termApi().termSpawn(id, root, shellId, resume ?? undefined).then((ok) => {
     if (!ok && sessions.has(id)) {
+      // The resume spinner would go on writing over the error for the tab's
+      // whole life (code review 2026-09-24, #24): no pty data will ever stop it.
+      stopSpin()
       term.write('\x1b[31mCould not start the shell.\x1b[0m\r\n')
       return
     }
@@ -798,11 +792,21 @@ export default function TerminalPanel({
   shellId: string | undefined
 }): JSX.Element {
   const box = useRef<HTMLDivElement>(null)
+  // Read only when the session is CREATED, so the attach below is keyed on the
+  // session alone (code review 2026-09-24, #9 and #23): `root` is the tab's
+  // live folder, and every `cd` re-ran the attach, which re-appended the
+  // terminal and took the focus from the find bar or the help popup, so the
+  // rest of a search was typed into the shell.
+  const spawnWith = useRef({ root, shellId })
+  useEffect(() => {
+    spawnWith.current = { root, shellId }
+  }, [root, shellId])
 
   useEffect(() => {
     const host = box.current
     if (!host) return
-    const s = sessions.get(sessionId) ?? createSession(sessionId, root, shellId)
+    const s =
+      sessions.get(sessionId) ?? createSession(sessionId, spawnWith.current.root, spawnWith.current.shellId)
     host.appendChild(s.el)
     s.term.focus()
     const refit = (): void => {
@@ -838,7 +842,7 @@ export default function TerminalPanel({
       // Detach, don't dispose: the shell runs on unseen.
       if (s.el.parentElement === host) host.removeChild(s.el)
     }
-  }, [sessionId, root, shellId])
+  }, [sessionId])
 
   // Where the panel paints the ground, the 4px frame, the rows and the strip
   // under the last row are one surface in one coat (see currentTermTheme).

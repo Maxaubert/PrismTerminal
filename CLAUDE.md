@@ -436,6 +436,16 @@ terminal theme, anything that reads or shows files.
   and removes its temp folder after the install. `tabs.json` and `window.json` are written
   atomically (`atomicWrite.ts`). A command-line path is resolved against the folder it was typed
   in (`workingDirectory` for a handoff) and saved absolute; a drive root's `C:"` is `C:\` again.
+- **CELLS ARE NOT CHARACTERS, AND A KEY IS ITS PHYSICAL KEY** (#69, code review part 2). Anything
+  that turns a screen cell into a place in the line's TEXT goes through `lib/termCells.ts`
+  (`cellText`'s index), never by counting cells or `text.length`: the resize carry and link
+  hit-testing were each one off after a trailing space, a wide character or an emoji. Ctrl+C and
+  Ctrl+V match `e.code` too (a Russian layout's C is 'с'). Shift+Enter sends the `\` continuation
+  ONLY where an agent runs; at a plain prompt it is Enter. The panel's attach is keyed on the
+  session alone (a `cd` must not re-attach it and take the focus). Under a question or the update
+  window the tab chords do nothing (Ctrl+W keeps its rule). A kill while a spawn is pending wins,
+  and a warm shell's exit removes only itself. A stop during transcribing is not heard, so a clip is
+  pasted once. The `reviewKeys` e2e holds the renderer half.
 
 - **Bundled ConPTY.** Shells spawn with `useConptyDll: true`; the inbox conhost fast-fails the whole
   app (0xc0000409) when a pty is killed mid-read. `node-pty` stays `asarUnpack`ed and
