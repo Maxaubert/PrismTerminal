@@ -32,6 +32,7 @@
  * dies, one that answers nonsense or not at all: the token is empty and resume
  * resolves. Nothing here throws and nothing rejects.
  */
+import { SYS } from './sysTools'
 import { spawn, type ChildProcess } from 'child_process'
 import type { MediaPause, MediaPauseToken } from '../shared/dictationTypes'
 
@@ -104,7 +105,7 @@ export const MEDIA_HELPER_SCRIPT = [
  *  machine and whose WinRT support was removed in 7), as an argv array. */
 export function mediaHelperCommand(): { file: string; args: string[] } {
   return {
-    file: 'powershell.exe',
+    file: SYS.powershell,
     args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', MEDIA_HELPER_SCRIPT]
   }
 }

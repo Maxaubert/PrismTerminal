@@ -46,12 +46,19 @@ export function decideFollow(root: string, cwd: string): 'same' | 'inside' | 'ou
  * Prism does not write into (WSL, bash: they report nothing either). Written
  * ONLY at an idle prompt with nothing typed (the renderer's guard). pwsh takes
  * the literal path, single-quoted with quotes doubled; cmd needs `/d` to cross
- * drives, and a Windows path cannot hold a double quote, so none is escaped.
+ * drives.
+ *
+ * EVERY QUOTE POWERSHELL READS AS ONE IS DOUBLED (code review 2026-09-24,
+ * #7): it counts the curly ones (‘ ’ ‚ ‛) as single quotes too, so a folder
+ * named `x’; calc; ’y`, legal on Windows, closed the string and ran `calc`.
+ * cmd expands %NAME% even inside quotes at a prompt, and has no escape that
+ * holds there, so a path with a % (or a quote) is not written at all: the
+ * shell is left where it is, the renderer's null case.
  */
 export function cdCommand(shellId: string | undefined, path: string): string | null {
   if (!path) return null
   if (shellId === 'pwsh' || shellId === 'powershell')
-    return `Set-Location -LiteralPath '${path.replace(/'/g, "''")}'\r`
-  if (shellId === 'cmd') return `cd /d "${path}"\r`
+    return `Set-Location -LiteralPath '${path.replace(/['‘’‚‛]/g, '$&$&')}'\r`
+  if (shellId === 'cmd') return /[%"]/.test(path) ? null : `cd /d "${path}"\r`
   return null
 }

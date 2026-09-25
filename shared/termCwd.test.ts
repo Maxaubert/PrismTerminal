@@ -34,8 +34,18 @@ describe('cdCommand', () => {
     expect(cdCommand('powershell', 'C:\\a b')).toBe("Set-Location -LiteralPath 'C:\\a b'\r")
   })
 
+  it('doubles the curly quotes PowerShell also reads as quotes (#7: no way out of the string)', () => {
+    expect(cdCommand('pwsh', 'C:\\x’; calc; ’y')).toBe("Set-Location -LiteralPath 'C:\\x’’; calc; ’’y'\r")
+    expect(cdCommand('pwsh', 'C:\\a‘b‚c‛d')).toBe("Set-Location -LiteralPath 'C:\\a‘‘b‚‚c‛‛d'\r")
+  })
+
   it('writes cd /d for cmd, so a drive change works', () => {
     expect(cdCommand('cmd', 'D:\\a b')).toBe('cd /d "D:\\a b"\r')
+  })
+
+  it('writes nothing for cmd when the path holds a % or a quote, which it would expand', () => {
+    expect(cdCommand('cmd', 'D:\\%PATH%\\x')).toBeNull()
+    expect(cdCommand('cmd', 'D:\\a"b')).toBeNull()
   })
 
   it('writes nothing for shells it does not know how to move', () => {
