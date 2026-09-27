@@ -75,13 +75,15 @@ const REAL: AgentPollDeps = {
  * without a timer: `createAgentPoll` holds the state, `startAgentPoll` is the
  * interval around it.
  */
-export function createAgentPoll(send: AgentSend, deps: AgentPollDeps = REAL): () => void {
+export function createAgentPoll(send: AgentSend, deps: AgentPollDeps = REAL): (force?: boolean) => void {
   const agentState = new Map<string, boolean>()
   let agentBusy = false
   let agentSeenTicks = -1
   let agentEvery = AGENT_POLL_MIN
   let agentNext = 0
-  return (): void => {
+  // `force` skips the two waits below, never the answer (#73): a look the
+  // renderer asked for sends only what CHANGED, like any other.
+  return (force = false): void => {
     const pids = deps.pids()
     if (!pids.length || agentBusy) return
     const ticks = deps.ticks()
@@ -89,12 +91,12 @@ export function createAgentPoll(send: AgentSend, deps: AgentPollDeps = REAL): ()
     const known = pids.every((s) => agentState.has(s.id))
     // A shell that has said nothing since the last look, whose answer we
     // already have, cannot have changed its mind.
-    if (quiet && known) return
+    if (quiet && known && !force) return
     // The backoff is for an answer that keeps coming back the same; a
     // session nobody has asked about yet has no answer to hold, so it is
     // not made to wait 20 seconds for its first one (2026-08-28).
     const now = deps.now()
-    if (known && now < agentNext) return
+    if (known && now < agentNext && !force) return
     agentBusy = true
     deps.query((stdout) => {
       agentBusy = false
@@ -125,7 +127,7 @@ export function createAgentPoll(send: AgentSend, deps: AgentPollDeps = REAL): ()
 }
 
 /** The running poll, so a spawn can ask for an early look. */
-let running: (() => void) | null = null
+let running: ((force?: boolean) => void) | null = null
 
 /**
  * Start the poll; the function it returns stops it. `send` is how an answer
@@ -150,4 +152,17 @@ export function startAgentPoll(send: AgentSend): () => void {
  */
 export function pollAgentsSoon(ms = 300): void {
   setTimeout(() => running?.(), ms)
+}
+
+/**
+ * LOOK NOW, PAST THE BACKOFF (#73, MEASURED 2026-09-27). A title can make an
+ * agent present before the poll has seen it, and only the poll takes that back.
+ * With the answer unchanged for a while the poll waits up to 20 s, so a claude
+ * opened and quit inside that gap was never seen: no "present", so no "gone",
+ * and the tab kept its agent mark for good. The renderer asks for a look the
+ * moment a title claims an agent the poll has not reported; the poll then sees
+ * it while it runs, and hears it leave.
+ */
+export function pollAgentsNow(): void {
+  setTimeout(() => running?.(true), 0)
 }

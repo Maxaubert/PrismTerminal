@@ -42,6 +42,8 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
   const outputRuns = useRef(new Map<string, { start: number; last: number }>())
   /** Sessions whose agent reports its state through the title (Claude). */
   const titled = useRef(new Set<string>())
+  /** Sessions the process poll has said host an agent. */
+  const polled = useRef(new Set<string>())
   /** The one clearing timer per fallback-scored session. */
   const fallbackTimers = useRef(new Map<string, number>())
   const stopFallback = useCallback((id: string): void => {
@@ -55,6 +57,8 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
   useEffect(
     () =>
       termApi().onTermAgent((id, present, kind) => {
+        if (present) polled.current.add(id)
+        else polled.current.delete(id)
         if (present && kind) agentKinds.current.set(id, kind)
         else if (!present) {
           agentKinds.current.delete(id)
@@ -145,6 +149,10 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
         const r = readAgentTitle(id, title)
         if (!r) return
         if (r.kind === 'codex' && !agentKinds.current.has(id)) return
+        // Present by its title alone: have the poll look now, so it sees the
+        // agent while it runs and can say when it leaves (#73). Only the poll
+        // ever takes a title's claim back.
+        if (!polled.current.has(id)) termApi().termAgentLook?.()
         if (!titled.current.has(id)) {
           titled.current.add(id)
           outputRuns.current.delete(id)
@@ -191,6 +199,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
   const forget = useCallback((id: string): void => {
     outputRuns.current.delete(id)
     titled.current.delete(id)
+    polled.current.delete(id)
     agentKinds.current.delete(id)
     forgetAgentTitle(id)
     stopFallback(id)
