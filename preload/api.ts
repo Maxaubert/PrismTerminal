@@ -43,6 +43,8 @@ export interface TermPreloadApi {
   onTermData(cb: (id: string, data: string) => void): () => void
   /** An AI CLI (Claude Code, codex...) appeared or left a session's shell. */
   onTermAgent(cb: (id: string, has: boolean, kind: DetectedAgent | null) => void): () => void
+  /** Ask the process poll to look now, past its backoff (#73). */
+  termAgentLook(): void
   /** The shell ended by itself (`exit`); a shell main was told to kill says nothing. */
   onTermExit(cb: (id: string) => void): () => void
   /**
@@ -85,6 +87,7 @@ export function createTermApi(ipc: IpcRendererLike): TermPreloadApi {
     termCd: (id, path) => ipc.send(CH.cd, id, path),
     onTermData: (cb) => on(CH.data, cb),
     onTermAgent: (cb) => on(CH.agent, cb),
+    termAgentLook: () => ipc.send(CH.agentLook),
     onTermExit: (cb) => on(CH.exit, cb),
     readClipboard: () => ipc.sendSync(CH.clipboardRead) as ClipboardRead,
     writeClipboard: (text) => ipc.invoke(CH.clipboardWrite, text) as Promise<boolean>,
