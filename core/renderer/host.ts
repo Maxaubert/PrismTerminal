@@ -39,6 +39,9 @@ export interface TermApi {
   termPrewarm(cwd: string, shellId?: string): void
   onTermData(cb: (id: string, data: string) => void): () => void
   onTermAgent(cb: (id: string, has: boolean, kind: DetectedAgent | null) => void): () => void
+  /** Ask the process poll to look NOW, past its backoff (#73). Optional so a
+   *  host bridge without it still builds; the poll then finds agents late. */
+  termAgentLook?(): void
   onTermExit(cb: (id: string) => void): () => void
   readClipboard(): ClipboardRead
   /** Text onto the clipboard through main, for when the page itself is refused

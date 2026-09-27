@@ -1,6 +1,6 @@
 import { CH } from '../shared/channels'
 import { validResume } from './agentResume'
-import { pollAgentsSoon, startAgentPoll } from './agentPoll'
+import { pollAgentsNow, pollAgentsSoon, startAgentPoll } from './agentPoll'
 import { detectShells } from './shells'
 import { cdTerm, killTerm, prewarmShell, resizeTerm, spawnTerm, writeTerm } from './terminal'
 
@@ -94,6 +94,9 @@ export function registerTermIpc(deps: TermIpcDeps): () => void {
   ipcMain.on(CH.kill, (_e: unknown, id: unknown) => {
     if (typeof id === 'string') killTerm(id)
   })
+
+  // A title claimed an agent the poll has not seen (#73): look now.
+  ipcMain.on(CH.agentLook, () => pollAgentsNow())
 
   ipcMain.on(CH.prewarm, (_e: unknown, cwd: unknown, shellId: unknown) => {
     if (typeof cwd !== 'string') return

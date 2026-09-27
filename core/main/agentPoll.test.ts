@@ -37,6 +37,26 @@ function world(): {
 }
 
 describe('the agent poll', () => {
+  // #73, MEASURED: a claude opened and quit inside a 20 s backoff was never
+  // seen, so its title's claim was never taken back. A forced look skips the
+  // waits, and still sends only what changed.
+  it('a forced look sees an agent inside the backoff, and says only what changed', () => {
+    const w = world()
+    const poll = createAgentPoll(w.send, w.deps)
+    poll() // no agent, said once
+    w.set({ out: '100 1\n200 100 claude\n', now: 1 }) // claude starts, silently, inside the backoff
+    poll()
+    expect(w.sent).toEqual([['t1', false, null]])
+    poll(true)
+    expect(w.sent).toEqual([['t1', false, null], ['t1', true, 'claude']])
+    w.set({ out: '100 1\n', now: 2 }) // and quits
+    poll(true)
+    expect(w.sent.at(-1)).toEqual(['t1', false, null])
+    const before = w.sent.length
+    poll(true) // the same answer is still not news
+    expect(w.sent).toHaveLength(before)
+  })
+
   it('does not look at all while no shell is alive', () => {
     const w = world()
     w.set({ pids: [] })

@@ -480,6 +480,10 @@ terminal theme, anything that reads or shows files.
   is Full's alone, so the e2e turns the volume up before it looks for one.
 - **The process poll** (`agentPoll.ts`) asks only after a pty printed something and backs off 2.5s to
   20s. It reports CHANGES, so its first verdict on a shell is said once; the e2e waits for it.
+  A title that claims an agent the poll has not reported asks for a look NOW (`termAgentLook`,
+  `pollAgentsNow`, #73): only the poll takes a title's claim back, and a claude opened and quit
+  inside the 20s backoff was never seen, so its mark stayed. The detector matches the program as
+  the FIRST token too: a native `claude.exe` started by bare name has the command line `claude`.
 - **The only command the app writes into a shell is the agent resume**, as the shell's STARTUP
   command, with the id shape-checked in main (`validResume`). Never type into a user's shell.
 - **Closing the window QUITS; closing the last tab does not** (owner, 2026-09-18, after using the

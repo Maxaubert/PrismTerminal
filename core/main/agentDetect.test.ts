@@ -21,6 +21,19 @@ describe('looksLikeAgent', () => {
     expect(looksLikeAgent(String.raw`node C:\Users\Admin\Documents\Claude\Github\Prism\out\main\index.js`)).toBe(false)
     expect(looksLikeAgent(String.raw`vitest run C:\Users\Admin\Documents\Claude\Github\Prism`)).toBe(false)
   })
+  // #73, MEASURED: a native claude.exe started by bare name has no path in its
+  // command line, and the poll never saw it.
+  it('matches an agent started by bare name, as the first token only', () => {
+    expect(looksLikeAgent('claude')).toBe(true)
+    expect(looksLikeAgent('claude  --resume')).toBe(true)
+    expect(looksLikeAgent('"claude.exe" -c')).toBe(true)
+    expect(looksLikeAgent('codex resume --last')).toBe(true)
+    expect(treeAgentKind([{ pid: 2, ppid: 1, cmd: 'claude' }], 1)).toBe('claude')
+    expect(treeAgentKind([{ pid: 2, ppid: 1, cmd: 'codex' }], 1)).toBe('codex')
+    expect(looksLikeAgent('git commit -m claude')).toBe(false)
+    expect(looksLikeAgent('notepad claude.txt')).toBe(false)
+    expect(looksLikeAgent('claudette.exe')).toBe(false)
+  })
   it('does not match plain shells and tools', () => {
     expect(looksLikeAgent('pwsh.exe -NoLogo')).toBe(false)
     expect(looksLikeAgent(String.raw`C:\WINDOWS\system32\ping.exe -n 3 127.0.0.1`)).toBe(false)

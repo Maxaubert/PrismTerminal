@@ -13,6 +13,7 @@ export const CH = {
   cd: 'term:cd',
   data: 'term:data',
   agent: 'term:agent',
+  agentLook: 'term:agent-look',
   exit: 'term:exit',
   clipboardRead: 'clipboard:read',
   clipboardWrite: 'clipboard:write',

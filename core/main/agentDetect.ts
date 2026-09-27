@@ -17,7 +17,13 @@ export interface ProcRow {
 // FINAL basename counts too: ...in\claude.exe matches, a mid-path folder
 // like ...\Documents\Claude\Github does not (the segment is followed by a
 // separator, not the end of the token).
-const AGENT_RE = /claude-code|[\\/]claude(\.exe|\.cmd|\.ps1)?(["\s]|$)|[\\/](codex|aider|gemini)([\\/.]|["\s]|$)|@openai[\\/]codex|gemini-cli/i
+// AND THE PROGRAM ITSELF, AS THE FIRST TOKEN (#73, MEASURED 2026-09-27): a
+// native claude.exe started by bare name has the command line `claude` or
+// `claude  --resume`, with no path at all, so only a path segment was ever
+// matched and the poll never saw it. The agent was marked present by its
+// title alone, which nothing clears, and the mark outlived the agent. Only the
+// FIRST token counts: `git commit -m claude` is not an agent.
+const AGENT_RE = /claude-code|(?:^"?|[\\/])claude(\.exe|\.cmd|\.ps1)?(["\s]|$)|(?:^"?|[\\/])(codex|aider|gemini)([\\/.]|["\s]|$)|@openai[\\/]codex|gemini-cli/i
 
 export function looksLikeAgent(cmd: string): boolean {
   return AGENT_RE.test(cmd)
@@ -26,8 +32,8 @@ export function looksLikeAgent(cmd: string): boolean {
 /** The two agents whose sessions Prism can resume, each by its own flag:
  *  `claude --resume <id>` and `codex resume --last`. Anything else is 'other'
  *  - it still lights the dot, it just has nothing to come back to. */
-const CLAUDE_RE = /claude-code|[\\/]claude(\.exe|\.cmd|\.ps1)?(["\s]|$)/i
-const CODEX_RE = /[\\/]codex(\.exe|\.cmd|\.ps1)?(["\s]|$)|@openai[\\/]codex/i
+const CLAUDE_RE = /claude-code|(?:^"?|[\\/])claude(\.exe|\.cmd|\.ps1)?(["\s]|$)/i
+const CODEX_RE = /(?:^"?|[\\/])codex(\.exe|\.cmd|\.ps1)?(["\s]|$)|@openai[\\/]codex/i
 
 /** BFS the tree under `rootPid`: which agent runs there, if any. */
 export function treeAgentKind(
