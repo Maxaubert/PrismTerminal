@@ -1809,14 +1809,25 @@ const scenarios = {
         theme: localStorage.getItem('prism.term.theme'),
         accent: localStorage.getItem('prism.window.accent'),
         background: localStorage.getItem('prism.window.background'),
+        agent: localStorage.getItem('prism.term.agentColor'),
         pct: localStorage.getItem('prism.term.fontPct'),
+        font: localStorage.getItem('prism.term.font'),
+        indicator: localStorage.getItem('prism.term.agentIndicator'),
+        edges: localStorage.getItem('prism.window.edges'),
         custom: localStorage.getItem('prism.term.custom')
       }))
     const ask = page.locator('[data-theme-switch-ask]')
-    // Font size, through its own dropdown: the one setting here that makes
-    // Save changes light up.
-    const fontSize = async (label) => {
-      await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()
+    // The agent working colour, through its own field: a THEME setting, so it
+    // lights Save changes. (The font size did, until it left the theme's
+    // setup on 2026-09-28.)
+    const agentColour = async (hex) => {
+      const f = page.locator('[data-pref="agent-color"] input:not([type])')
+      await f.fill(hex)
+      await f.press('Enter')
+      await sleep(200)
+    }
+    const pickFrom = async (pref, label) => {
+      await page.locator(`[data-pref="${pref}"] button[aria-haspopup="listbox"]`).click()
       await page.locator('[role="listbox"] [role="option"]', { hasText: label }).first().click()
       await sleep(200)
     }
@@ -1824,12 +1835,48 @@ const scenarios = {
       await page.locator('[data-title-settings]').click()
       await page.locator('[data-settings-tab="appearance"]').click()
       await page.locator('[data-term-card]').first().waitFor({ timeout: 10000 })
-      // A Custom to lead the wall: a font size, saved.
-      await fontSize('125%')
+
+      // WHAT NO THEME OWNS SITS ABOVE THE WALL, WHAT A THEME SETS UNDER IT
+      // (owner, 2026-09-28).
+      const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
+      const want = ['tab-width', 'window-edges', 'term-font-family', 'term-font', 'agent-indicator', 'term-theme', 'window-background', 'window-accent']
+      ok(JSON.stringify(rows.slice(0, want.length)) === JSON.stringify(want), `the page runs ${want.join(' > ')} (${rows.slice(0, want.length).join(' > ')})`)
+      // Font size is 50% to 200% in tens.
+      await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()
+      const sizes = await page.locator('[role="listbox"] [role="option"]').allTextContents()
+      await page.keyboard.press('Escape')
+      const tens = Array.from({ length: 16 }, (_, i) => `${50 + i * 10}%`)
+      ok(JSON.stringify(sizes.map((x) => x.trim())) === JSON.stringify(tens), `font size offers 50% to 200% in tens (${sizes.map((x) => x.trim()).join(' ')})`)
+
+      // A theme switch leaves the font, its size, the indicator's style and
+      // the edges exactly as they were, and asks nothing about them.
+      await pickFrom('term-font', '140%')
+      await page.locator('[data-pref="window-edges"] [data-seg="solid"]').click()
+      await page.locator('[data-pref="agent-indicator"] [data-seg="full"]').click()
+      const fontIds = await page.locator('[data-pref="term-font-family"] button[aria-haspopup="listbox"]').click().then(() =>
+        page.locator('[role="listbox"] [role="option"]').allTextContents()
+      )
+      await page.locator('[role="listbox"] [role="option"]').nth(fontIds.length > 1 ? 1 : 0).click()
+      await sleep(200)
+      const mine = await store()
+      ok(await page.locator('[data-save-term]').isDisabled(), 'none of them lights Save changes')
+      await page.locator('[data-term-card="nord"]').first().click()
+      await sleep(300)
+      const switched = await store()
+      ok((await ask.count()) === 0 && switched.theme === 'nord', 'a theme switch after them asks nothing')
+      ok(
+        switched.pct === mine.pct && switched.font === mine.font && switched.indicator === mine.indicator && switched.edges === mine.edges,
+        `and keeps the font, size, indicator style and edges (${JSON.stringify({ pct: switched.pct, font: switched.font, indicator: switched.indicator, edges: switched.edges })})`
+      )
+
+      // A Custom to lead the wall: an agent colour, saved.
+      await agentColour('#3DA9FC')
       await page.locator('[data-save-term]').click()
       await until(async () => (await page.locator('[data-term-card="custom"]').count()) === 1, 4000)
       const order = await page.evaluate(() => [...document.querySelectorAll('[data-term-card]')].slice(0, 2).map((c) => c.getAttribute('data-term-card')))
       ok(order[0] === 'custom' && order[1] === 'pt-default', `Custom comes first, then the default (${order.join(', ')})`)
+      const savedCustom = JSON.parse((await store()).custom ?? '{}')
+      ok(savedCustom.fontPct === undefined && savedCustom.font === undefined, 'Save as Custom carries no font and no size')
 
       // A picked background and accent, then a plain switch: both are forgotten.
       for (const [pref, hex] of [['window-background', '#202830'], ['window-accent', '#E07A2F']]) {
@@ -1849,28 +1896,28 @@ const scenarios = {
       ok(after.theme === 'pitch' && after.accent === null && after.background === null, `the switch takes the picked background and accent with it (${JSON.stringify({ ...after, custom: undefined })})`)
 
       // Unsaved: Cancel keeps everything as it was.
-      await fontSize('90%')
+      await agentColour('#C0FFEE')
       const dirty = await store()
       await page.locator('[data-term-card="nord"]').first().click()
       ok(!!(await until(async () => (await ask.count()) === 1, 3000, 50)), 'with a change unsaved, picking a theme asks first')
       await page.locator('[data-ask-cancel]').click()
       const kept = await store()
-      ok((await ask.count()) === 0 && kept.theme === 'pitch' && kept.pct === dirty.pct, `Cancel changes nothing (${JSON.stringify({ ...kept, custom: undefined })})`)
+      ok((await ask.count()) === 0 && kept.theme === 'pitch' && kept.agent === dirty.agent, `Cancel changes nothing (${JSON.stringify({ ...kept, custom: undefined })})`)
       // Discard: switches, and the change is gone.
       await page.locator('[data-term-card="nord"]').first().click()
       await ask.waitFor({ timeout: 3000 })
       await page.locator('[data-ask-discard]').click()
       const gone = await store()
-      ok(gone.theme === 'nord' && gone.pct !== dirty.pct, `Discard switches and drops the change (${JSON.stringify({ ...gone, custom: undefined })})`)
+      ok(gone.theme === 'nord' && gone.agent !== dirty.agent, `Discard switches and drops the change (${JSON.stringify({ ...gone, custom: undefined })})`)
       // Save as Custom: the change is kept in Custom, then the switch happens.
-      await fontSize('90%')
+      await agentColour('#C0FFEE')
       await page.locator('[data-term-card="pitch"]').first().click()
       await ask.waitFor({ timeout: 3000 })
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/theme-switch-ask.png') }).catch(() => {})
       await page.locator('[data-ask-save]').click()
       const saved = await store()
       const custom = JSON.parse(saved.custom ?? '{}')
-      ok(saved.theme === 'pitch' && custom.fontPct === Number(dirty.pct ?? custom.fontPct), `Save as Custom keeps the change in Custom, then switches (${saved.theme}, custom fontPct ${custom.fontPct})`)
+      ok(saved.theme === 'pitch' && custom.indicatorColor === dirty.agent, `Save as Custom keeps the change in Custom, then switches (${saved.theme}, custom colour ${custom.indicatorColor})`)
     } finally {
       await closeApp(app)
     }
@@ -1917,9 +1964,11 @@ const scenarios = {
       ok(!!(await until(async () => (await page.locator('[data-theme-editor]').count()) === 0, 3000, 50)), 'Escape closes it')
       ok(await pencil.evaluate((el) => el === document.activeElement), 'and the focus is back on the pencil')
 
-      // #8, #29: a saved Custom with a font size, a picked background, then an edit.
-      await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()
-      await page.locator('[role="listbox"] [role="option"]', { hasText: '125%' }).first().click()
+      // #8, #29: a saved Custom with an agent colour, a picked background, then
+      // an edit. (A font size until 2026-09-28, when the font left the theme.)
+      const agent = page.locator('[data-pref="agent-color"] input:not([type])')
+      await agent.fill('#3DA9FC')
+      await agent.press('Enter')
       await page.locator('[data-save-term]').click()
       await until(async () => (await page.locator('[data-term-card="custom"]').count()) === 1, 4000)
       const bgField = page.locator('[data-pref="window-background"] input:not([type])')
@@ -1932,7 +1981,7 @@ const scenarios = {
       await editBg.press('Enter')
       await page.locator('[data-save-custom]').click()
       const custom = JSON.parse((await get('prism.term.custom')) ?? '{}')
-      ok(custom.bg === '#101820' && custom.fontPct === 125, `the editor's save keeps the saved font size (${JSON.stringify({ bg: custom.bg, fontPct: custom.fontPct })})`)
+      ok(custom.bg === '#101820' && custom.indicatorColor === '#3da9fc', `the editor's save keeps the saved agent colour (${JSON.stringify({ bg: custom.bg, indicatorColor: custom.indicatorColor })})`)
       ok((await get('prism.window.background')) === null, 'and forgets the picked background, so the edited one shows')
 
       // #27
@@ -2024,7 +2073,7 @@ const scenarios = {
           const r = c.getBoundingClientRect()
           return { id: c.getAttribute('data-term-card'), top: Math.round(r.top), h: Math.round(r.height * 10) / 10 }
         })
-        const below = document.querySelector('[data-pref="term-font"]')?.getBoundingClientRect().top ?? -1
+        const below = document.querySelector('[data-pref="window-background"]')?.getBoundingClientRect().top ?? -1
         return { cards, below: Math.round(below * 10) / 10 }
       })
     const first = await measure()
@@ -2373,12 +2422,13 @@ const scenarios = {
       'and it is the first card in the wall'
     )
 
-    // BACKGROUND AND ACCENT SIT RIGHT UNDER FONT SIZE (owner, same day).
+    // BACKGROUND AND ACCENT SIT RIGHT UNDER THE THEME WALL (2026-09-28: a
+    // theme sets them, so they follow it; they sat under Font size before).
     const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
-    const at = order.indexOf('term-font')
+    const at = order.indexOf('term-theme')
     ok(
       at >= 0 && order[at + 1] === 'window-background' && order[at + 2] === 'window-accent',
-      `Background and Accent come right after Font size (${order.slice(Math.max(0, at - 1), at + 4).join(' > ')})`
+      `Background and Accent come right after the theme wall (${order.slice(Math.max(0, at - 1), at + 4).join(' > ')})`
     )
 
     // THE BACKGROUND (owner: "let background colour be a setting"): the

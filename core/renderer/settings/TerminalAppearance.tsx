@@ -324,14 +324,20 @@ function pickPreset(id: string): void {
  * only lends them the place.
  */
 export function TerminalAppearanceSettings({
-  afterFont,
+  beforeTheme,
+  afterTheme,
   withIndicator = false,
   onThemePicked
 }: {
-  afterFont?: ReactNode
-  /** Draw the Agent indicator row here, above its two colours (2026-09-22).
-   *  Opt-in, so a host that still places the row itself (Prism before its
-   *  next core update) never shows it twice. */
+  /** The host's own rows that belong to no theme, drawn first (Prism
+   *  Terminal: Tab width and Edges). */
+  beforeTheme?: ReactNode
+  /** The host's own rows that a theme sets, drawn right under the theme wall
+   *  (Prism Terminal: Background colour and Accent colour). */
+  afterTheme?: ReactNode
+  /** Draw the Agent indicator row here, with the font above the theme wall
+   *  (2026-09-28; its style belongs to no theme). Opt-in, so a host that
+   *  still places the row itself never shows it twice. */
   withIndicator?: boolean
   /** A theme card was picked (Custom included), after the pick landed. For a
    *  host whose OWN rows follow the theme (owner, 2026-09-23: switching theme
@@ -416,13 +422,11 @@ export function TerminalAppearanceSettings({
       />
     )
   }
-  // "Save changes": the WHOLE look - palette of the selected theme, font,
-  // size, agent colours, acrylic and its opacity - lands in the Custom slot,
-  // reselectable after any theme switch. The indicator's volume is not part
-  // of it (see pickPreset).
+  // "Save changes": the theme's WHOLE look - palette of the selected theme,
+  // agent colours, acrylic and its opacity - lands in the Custom slot,
+  // reselectable after any theme switch. The font, its size and the
+  // indicator's style belong to no theme and are not part of it (2026-09-28).
   const extras = {
-    font: fontId,
-    fontPct,
     indicatorColor: agentCol,
     doneColor: doneCol,
     acrylic: acrylicOn,
@@ -435,8 +439,6 @@ export function TerminalAppearanceSettings({
   // is by JSON and key order is part of that.
   const src = themeId === 'custom' && custom ? custom : null
   const baseline = {
-    font: src?.font ?? termExtraDefaults().font,
-    fontPct: src?.fontPct ?? termExtraDefaults().fontPct,
     indicatorColor: src?.indicatorColor ?? termExtraDefaults().indicatorColor,
     doneColor: src?.doneColor ?? termExtraDefaults().doneColor,
     acrylic: src?.acrylic ?? termExtraDefaults().acrylic,
@@ -449,7 +451,7 @@ export function TerminalAppearanceSettings({
   }
   // A THEME PICK, Custom included. It lands at once when nothing is unsaved;
   // with Save changes lit it asks first (ThemeSwitchAsk), since landing puts
-  // the font, size, agent colours and acrylic back to the theme's own. Once
+  // the agent colours and acrylic back to the theme's own. Once
   // it lands the host hears of it (`onThemePicked`), for its own rows that
   // follow the theme.
   const [asking, setAsking] = useState<string | null>(null)
@@ -479,8 +481,38 @@ export function TerminalAppearanceSettings({
   const toggleWall = (): void =>
     setWallHeight(allThemes ? 268 : (themeWall.current?.scrollHeight ?? 2400))
   return (
-    <div className={ROWS} data-pref="term-theme">
-      <div className="border-b border-[color:var(--p-line)] py-2.5">
+    <div className={ROWS}>
+      {/* WHAT NO THEME OWNS COMES FIRST (owner, 2026-09-28: font and font size
+          "should transcend" the theme's save, "so changing a theme should not
+          reset the font and font size or if you use a minimal or full agent
+          indicator, or edges. those options should be above the themes in the
+          list so the themes and save button appear under it"). The host's own
+          such rows lead (Prism Terminal: Tab width, Edges), then the font, its
+          size and the indicator's style; the theme wall and its Save follow,
+          and under them only what a theme DOES set. */}
+      {beforeTheme}
+      <Pref id="term-font-family" label="Font" hint="The typeface used in the terminal.">
+        <Select
+          id="term-font-family"
+          value={fontId}
+          onChange={setTermFontId}
+          options={TERM_FONTS.map((f) => ({ id: f.id, name: f.name, style: { fontFamily: f.stack } }))}
+        />
+      </Pref>
+      <Pref
+        id="term-font"
+        label="Font size"
+        hint="The text size for every terminal."
+      >
+        <Select
+          id="term-font"
+          value={String(fontPct)}
+          onChange={(v) => setTermFontPct(Number(v))}
+          options={FONT_PCTS.map((p) => ({ id: String(p), name: `${p}%` }))}
+        />
+      </Pref>
+      {withIndicator && <AgentIndicatorSetting />}
+      <div data-pref="term-theme" className="border-b border-[color:var(--p-line)] py-2.5">
         <ThemeHead
           // Where the host has styles of its own the window wears THOSE; only a
           // host with none (Prism Terminal) dresses its window in the theme.
@@ -493,7 +525,7 @@ export function TerminalAppearanceSettings({
             <SaveButton
               dirty={termDirty}
               onClick={saveTermSetup}
-              title="Saves the theme, font, agent colours and acrylic as Custom"
+              title="Saves the theme, agent colours and acrylic as Custom"
             />
           }
         />
@@ -574,7 +606,7 @@ export function TerminalAppearanceSettings({
             seed={editing}
             onSave={(t) => {
               // The Custom slot is the WHOLE setup (code review 2026-09-24,
-              // #8): saved as a bare palette, the font, size, agent colours and
+              // #8): saved as a bare palette, the agent colours and
               // acrylic it held were gone for good. And it is a theme pick like
               // a card's (#29), so the host forgets its own window colours and
               // the edited background is the one that shows.
@@ -587,27 +619,7 @@ export function TerminalAppearanceSettings({
           />
         )}
       </div>
-      <Pref id="term-font-family" label="Font" hint="The typeface used in the terminal.">
-        <Select
-          id="term-font-family"
-          value={fontId}
-          onChange={setTermFontId}
-          options={TERM_FONTS.map((f) => ({ id: f.id, name: f.name, style: { fontFamily: f.stack } }))}
-        />
-      </Pref>
-      <Pref
-        id="term-font"
-        label="Font size"
-        hint="The text size for every terminal."
-      >
-        <Select
-          id="term-font"
-          value={String(fontPct)}
-          onChange={(v) => setTermFontPct(Number(v))}
-          options={FONT_PCTS.map((p) => ({ id: String(p), name: `${p}%` }))}
-        />
-      </Pref>
-      {afterFont}
+      {afterTheme}
       {/* The material does not exist before Windows 11, so there the row says
           why instead of offering a switch that would do nothing. */}
       <Pref
@@ -655,11 +667,6 @@ export function TerminalAppearanceSettings({
           </div>
         </Pref>
       )}
-      {/* ONE ORDER IN BOTH APPS (owner, 2026-09-22: "the terminal settings
-          pages in Prism and Prism Terminal should be the same in terms of
-          order"). The indicator sits directly above the two colours it uses,
-          here in the core, so neither app places it on its own. */}
-      {withIndicator && <AgentIndicatorSetting />}
       <Pref
         id="agent-color"
         label="Agent working indicator"

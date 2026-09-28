@@ -159,8 +159,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
   user can pick fixed size or dynamic, so essentially what we got now and what we had before").
   Then, the same day: "put the option closer to the top of appearance, and call it dynamic not
   based on name. also have dynamic be the default setting, not fixed". So Settings > Appearance
-  opens with Tab width (`tab-width`, `prism.window.tabWidth`, `lib/tabWidthPrefs.ts`), its own
-  top rule and no bottom one so the theme block's rule is not doubled: **Dynamic** (the DEFAULT,
+  opens with Tab width (`tab-width`, `prism.window.tabWidth`, `lib/tabWidthPrefs.ts`): **Dynamic** (the DEFAULT,
   by the owner's word, so a strip fixed since #35 goes back to dynamic with this update: the
   label sizes the tab, capped at 14rem, shrinking only when out of room) or **Fixed** (the above).
   This app's row, in the `options` e2e's own list; `tabWidth` measures both and that the row is
@@ -253,7 +252,16 @@ so an update never silently changes what an existing user sees; the bridge to ma
   settings pages in Prism and Prism Terminal should be the same in terms of order"). Every hint,
   sub and note is checked by `core/shared/settingsCopy.ts` (a test in the core and one per app).
   `TERMINAL_OPTIONS` is in display order and the `options` e2e reads the page top to bottom against
-  it; the Agent indicator lives in the core's appearance list, directly above its two colours.
+  it.
+- **WHAT NO THEME OWNS SITS ABOVE THE THEME WALL** (owner, 2026-09-28: font and font size "should
+  transcend" the theme's save, "so changing a theme should not reset the font and font size or if
+  you use a minimal or full agent indicator, or edges. those options should be above the themes").
+  Appearance runs: the host's `beforeTheme` (here Tab width, Edges), Font, Font size, Agent
+  indicator; then the theme wall and Save changes; then what a theme SETS: the host's `afterTheme`
+  (here Background, Accent), Acrylic, Opacity, the two indicator colours. A theme switch and Save
+  as Custom leave the font and its size alone (`termExtraDefaults`, `resetTermExtras`,
+  `applyCustomExtras`; an older Custom's `font`/`fontPct` are ignored). Font size is 50% to 200%
+  in tens; a saved size off that list reads as the nearest step. `themeSwitch` e2e holds it all.
 - **THE RESTORE LOOKS UP CLAUDE SESSIONS OFF MAIN'S THREAD** (2026-09-22, the "soft lock on first
   launch"): `claudeSessionsAsync` stats sixteen at a time; a home folder holds thousands of
   transcripts. The theme wall caches each preset's resolved look, and its previews use installed
@@ -540,8 +548,8 @@ terminal theme, anything that reads or shows files.
   / `.accent`; stores `lib/backgroundPrefs.ts` / `accentPrefs.ts`, both `lib/colourPref.ts`). Each
   shows the theme's own colour until one is picked, then a plain **Reset** word (the core's
   `RESET_LINK`, Prism's own style) forgets it. This app's rows, for the edges' reason (in Prism the
-  window's colours are the app style's); they sit under Font size because the core lends the place
-  (`TerminalAppearanceSettings`' `afterFont`; Prism passes nothing). Applied ONCE, in `paintChrome`:
+  window's colours are the app style's); a theme sets them, so they sit right under the theme wall
+  (`TerminalAppearanceSettings`' `afterTheme`; Prism passes nothing). Applied ONCE, in `paintChrome`:
   the background replaces the theme's before `chromeTokens` measures it, so the mode, every ink and
   the accent's floor follow; the terminal follows too because the panel paints its ground from the
   same token (`paintsGround`). The TERMINAL follows too (2026-09-28, the owner's "do all those"):

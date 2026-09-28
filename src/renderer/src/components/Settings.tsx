@@ -200,8 +200,8 @@ const onColoursChange = (cb: () => void): (() => void) => {
  * effect") and the BACKGROUND ("let background colour be a setting"). Each
  * follows the theme until a colour is picked, and a plain Reset word puts it
  * back, as in Prism. This app's own rows, for the edges' reason: in Prism the
- * window's colours are the app style's. They sit right under Font size (the
- * core lends the place, `afterFont`).
+ * window's colours are the app style's. A theme sets them, so they sit right
+ * under the theme wall, where the core lends the place (`afterTheme`).
  */
 function WindowColour({
   id,
@@ -269,37 +269,37 @@ function AppearanceTab(): JSX.Element {
   const edges = useWindowEdges()
   const width = useTabWidth()
   return (
-    <>
-      {/* TAB WIDTH, AT THE TOP (owner, 2026-09-23: "put the option closer to the
-          top of appearance"). It carries the list's top rule and gives up its
-          own bottom one, since the theme block under it draws a top rule of
-          its own: two rules there would be one doubled line. */}
-      <div className={`${ROWS} [&>*]:border-b-0`}>
-        <Pref id="tab-width" label="Tab width" hint="Each tab as wide as its name, or every tab the same width.">
-          <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
-        </Pref>
-      </div>
-      <TerminalAppearanceSettings
-        afterFont={<WindowColours />}
-        withIndicator
-        // A THEME PICK TAKES THE WINDOW'S COLOURS WITH IT (owner, 2026-09-23:
-        // "when you change a colour away from the preset and then switch theme
-        // it doesn't change the altered bg and accent colours, though it
-        // should"): the two picks are forgotten, as Reset does, so the new
-        // theme's own background and accent are what the window wears.
-        onThemePicked={() => {
-          setWindowBackground(null)
-          setWindowAccent(null)
-        }}
-      />
-      <Pref
-        id="window-edges"
-        label="Edges"
-        hint="The lines between the parts of the window, and the border round it."
-      >
-        <Segmented value={edges} onChange={setWindowEdges} options={EDGE_OPTIONS} />
-      </Pref>
-    </>
+    <TerminalAppearanceSettings
+      // ABOVE THE THEME WALL, WHAT NO THEME SETS (owner, 2026-09-23: Tab width
+      // "closer to the top of appearance"; 2026-09-28: the edges, like the
+      // font, "should be above the themes"). A theme switch leaves them alone.
+      beforeTheme={
+        <>
+          <Pref id="tab-width" label="Tab width" hint="Each tab as wide as its name, or every tab the same width.">
+            <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
+          </Pref>
+          <Pref
+            id="window-edges"
+            label="Edges"
+            hint="The lines between the parts of the window, and the border round it."
+          >
+            <Segmented value={edges} onChange={setWindowEdges} options={EDGE_OPTIONS} />
+          </Pref>
+        </>
+      }
+      // Under the wall, what a theme DOES set: the window's two colours.
+      afterTheme={<WindowColours />}
+      withIndicator
+      // A THEME PICK TAKES THE WINDOW'S COLOURS WITH IT (owner, 2026-09-23:
+      // "when you change a colour away from the preset and then switch theme
+      // it doesn't change the altered bg and accent colours, though it
+      // should"): the two picks are forgotten, as Reset does, so the new
+      // theme's own background and accent are what the window wears.
+      onThemePicked={() => {
+        setWindowBackground(null)
+        setWindowAccent(null)
+      }}
+    />
   )
 }
 
