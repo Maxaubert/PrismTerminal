@@ -613,7 +613,11 @@ export default function App(): JSX.Element {
             // clipboard has it. Close tab left this menu the same day ("remove close
             // tab from the right click menu"); the tab's own menu still has it.
             ...(termMenu.link
-              ? [{ label: 'Copy link', onPick: () => void copyText(termMenu.link!) }]
+              ? [
+                  { label: 'Copy link', onPick: () => void copyText(termMenu.link!) },
+                  // A right-click never opens it (2026-09-28), so the menu does.
+                  { label: 'Open link', onPick: () => window.prism.openExternal(termMenu.link!) }
+                ]
               : []),
             ...(termMenu.selection
               ? [{ label: 'Copy', hint: 'Ctrl+C', onPick: () => void copyText(termMenu.selection) }]

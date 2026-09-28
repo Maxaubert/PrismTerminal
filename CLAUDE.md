@@ -244,8 +244,10 @@ so an update never silently changes what an existing user sees; the bridge to ma
 - **THE MENU FITS WHAT WAS CLICKED** (#44; owner, same day: "if i click it on a link it shows copy
   link, if i click it with text marked it says copy ... remove close tab from the right click
   menu"). `termContextAt` (core, read-only) answers what is under the point: the selection's text
-  and the link there (whole, across a wrap, by `findLinks`). App's menu leads with Copy link and
-  Copy, both copied exactly through main (`writeClipboard`); Close tab stays on the TAB's menu.
+  and the link there (whole, across a wrap, by `findLinks`). App's menu leads with Copy link, Open link and
+  Copy, both copies exact through main (`writeClipboard`); Close tab stays on the TAB's menu.
+  **A RIGHT-CLICK ON A LINK OPENS NOTHING** (#95; owner, 2026-09-28): the link addon hands over a
+  click of ANY button, so it opened the link and the menu at once; only a left click opens now.
   The `selectionEdit` e2e reads the clipboard back in main and puts the owner's back.
 - **SETTINGS DESCRIPTIONS ARE PLAIN WORDS, AND THE ROWS KEEP ONE ORDER** (owner, 2026-09-22: "no
   symbols other than comma and dot, no mentioning of specific keys or tips"; "the terminal
