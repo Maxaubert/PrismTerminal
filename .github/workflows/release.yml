@@ -124,5 +124,20 @@ jobs:
           # 2026-09-24, #11). Without it GitHub tags main's head at publish
           # time, which is a later merge whenever one landed during the build:
           # the installer from one commit, the tag, source and notes of another.
+          #
+          # BUT NOT OVER A NEWER WORKFLOW (2026-09-28, MEASURED on v0.18.5): a
+          # merge that changed .github/workflows landed 49 s before this step,
+          # and GitHub refuses the workflow token a tag on a commit whose
+          # workflows differ from main's ("HTTP 403: Resource not accessible by
+          # integration"; that needs a permission the token cannot hold). The
+          # next run on main builds a commit that contains this one, starts
+          # only after this run (the concurrency group), finds the version
+          # unreleased and publishes it; so this run says so and stands down.
+          git fetch -q --depth=1 origin main
+          git diff --quiet "${{ github.sha }}" FETCH_HEAD -- .github/workflows
+          if ($LASTEXITCODE -ne 0) {
+            "::notice::main has moved past ${{ github.sha }} with changed workflows; the next release run publishes v$v."
+            exit 0
+          }
           gh release create "v$v" $exe --target "${{ github.sha }}" --title "Prism Terminal $v" --generate-notes --latest
           if ($LASTEXITCODE -ne 0) { throw "Release publication failed" }
