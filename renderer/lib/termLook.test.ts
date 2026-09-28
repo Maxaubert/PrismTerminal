@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { agentColorChoice, agentIndicator, customTermTheme, setAgentColor, saveCustomTermTheme, setAgentIndicator, setTermAcrylic, setTermFontPct, setTermOpacity, setTermThemeId, termAcrylic, termBaseFontPx, termFontPct, termOpacity, termThemeId } from './termLook'
+import { FONT_PCTS, agentColorChoice, applyCustomExtras, resetTermExtras, agentIndicator, customTermTheme, setAgentColor, saveCustomTermTheme, setAgentIndicator, setTermAcrylic, setTermFontPct, setTermOpacity, setTermThemeId, termAcrylic, termBaseFontPx, termFontPct, termOpacity, termThemeId } from './termLook'
 
 beforeEach(() => localStorage.clear())
 
@@ -11,9 +11,9 @@ describe('terminal look prefs', () => {
   })
   it('round-trips a preset and a size', () => {
     setTermThemeId('dracula')
-    setTermFontPct(125)
+    setTermFontPct(120)
     expect(termThemeId()).toBe('dracula')
-    expect(termFontPct()).toBe(125)
+    expect(termFontPct()).toBe(120)
     expect(termBaseFontPx()).toBe(16)
   })
   it("a stored 'style' (Prism's follow-the-app default) reads as prism", () => {
@@ -23,6 +23,27 @@ describe('terminal look prefs', () => {
   it('an off-menu percentage falls back to 100', () => {
     localStorage.setItem('prism.term.fontPct', '733')
     expect(termFontPct()).toBe(100)
+    localStorage.setItem('prism.term.fontPct', '20')
+    expect(termFontPct()).toBe(100)
+  })
+  it('the sizes run 50 to 200 in tens, and an old step lands on the nearest', () => {
+    expect(FONT_PCTS[0]).toBe(50)
+    expect(FONT_PCTS[FONT_PCTS.length - 1]).toBe(200)
+    expect(FONT_PCTS.every((p, i) => i === 0 || p - FONT_PCTS[i - 1] === 10)).toBe(true)
+    localStorage.setItem('prism.term.fontPct', '125')
+    expect(termFontPct()).toBe(130)
+    localStorage.setItem('prism.term.fontPct', '175')
+    expect(termFontPct()).toBe(180)
+    localStorage.setItem('prism.term.fontPct', '60')
+    expect(termFontPct()).toBe(60)
+  })
+  it('a theme leaves the font and its size alone', () => {
+    localStorage.setItem('prism.term.font', 'consolas')
+    localStorage.setItem('prism.term.fontPct', '140')
+    resetTermExtras()
+    applyCustomExtras({ bg: '#000000', fg: '#ffffff', cursor: '#ff0000', ansi: {}, font: 'cascadia', fontPct: 90 })
+    expect(localStorage.getItem('prism.term.font')).toBe('consolas')
+    expect(termFontPct()).toBe(140)
   })
 })
 

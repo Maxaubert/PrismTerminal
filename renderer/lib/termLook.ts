@@ -12,7 +12,9 @@ const THEME_KEY = 'prism.term.theme'
 const FONT_KEY = 'prism.term.fontPct'
 
 export const TERM_BASE_FONT_PX = 13
-export const FONT_PCTS = [80, 90, 100, 110, 125, 150, 175, 200] as const
+/** 50% to 200% in tens (owner, 2026-09-28: "font size should have 10%
+ *  increments from 50-200"). It was 80-200 with uneven steps. */
+export const FONT_PCTS = [50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200] as const
 
 let listeners: Array<() => void> = []
 const notify = (): void => listeners.forEach((l) => l())
@@ -72,8 +74,13 @@ export function termFontStack(): string {
 }
 
 export function termFontPct(): number {
-  const v = Number(localStorage.getItem(FONT_KEY))
-  return FONT_PCTS.includes(v as (typeof FONT_PCTS)[number]) ? v : 100
+  const raw = localStorage.getItem(FONT_KEY)
+  const v = Number(raw)
+  // Never set (or nonsense) is the default size. A size saved on the old
+  // list that is not on this one (125, 175) is the NEAREST step, not a jump
+  // back to 100: the text should not change size under anyone with the update.
+  if (!raw || !Number.isFinite(v) || v < FONT_PCTS[0] || v > FONT_PCTS[FONT_PCTS.length - 1]) return 100
+  return Math.round(v / 10) * 10
 }
 
 export function setTermFontPct(pct: number): void {
@@ -176,7 +183,10 @@ export interface CustomTermTheme {
   cursor: string
   ansi: Record<string, string>
   /** The rest of the terminal setup, captured by "Save changes": the look is
-   *  more than the palette. All optional - older saves carry colours only. */
+   *  more than the palette. All optional - older saves carry colours only.
+   *  `font` and `fontPct` are READ NO MORE (owner, 2026-09-28: the font and its
+   *  size "should transcend" a theme, so no theme sets them); older saves may
+   *  still carry them, and they are ignored. */
   font?: string
   fontPct?: number
   indicator?: AgentIndicator
@@ -186,11 +196,10 @@ export interface CustomTermTheme {
   opacity?: number
 }
 
-/** What every non-colour terminal setting is out of the box. Picking any
- *  theme returns to these; deviating from them is what "Save changes" saves. */
+/** What every theme-bound non-colour setting is out of the box. Picking any
+ *  theme returns to these; deviating from them is what "Save changes" saves.
+ *  The font and its size are not among them: they belong to no theme. */
 export function termExtraDefaults(): {
-  font: string
-  fontPct: number
   indicator: AgentIndicator
   indicatorColor: string
   doneColor: string
@@ -199,8 +208,6 @@ export function termExtraDefaults(): {
 } {
   const d = hostDefaults()
   return {
-    font: 'cascadia',
-    fontPct: 100,
     indicator: d.indicator,
     // '' = the theme's own (see agentColorChoice).
     indicatorColor: d.agentColor,
@@ -213,8 +220,6 @@ export function termExtraDefaults(): {
 /** Selecting a theme overwrites the terminal settings with their defaults:
  *  the theme is the whole setup, not just the palette. */
 export function resetTermExtras(): void {
-  localStorage.removeItem(FONT_FAMILY_KEY)
-  localStorage.removeItem(FONT_KEY)
   localStorage.removeItem(AGENT_IND_KEY)
   localStorage.removeItem(AGENT_COLOR_KEY)
   localStorage.removeItem(AGENT_DONE_KEY)
@@ -226,8 +231,8 @@ export function resetTermExtras(): void {
 /** Re-apply the non-colour half of a saved Custom setup, when it has one. */
 export function applyCustomExtras(t: CustomTermTheme | null): void {
   if (!t) return
-  if (t.font) setTermFontId(t.font)
-  if (t.fontPct) localStorage.setItem(FONT_KEY, String(t.fontPct))
+  // The font and its size belong to no theme (2026-09-28): an older save that
+  // carries them does not put them back.
   if (t.indicator) localStorage.setItem(AGENT_IND_KEY, t.indicator)
   // A saved setup that followed the theme goes back to following it.
   if (t.indicatorColor) localStorage.setItem(AGENT_COLOR_KEY, t.indicatorColor)
