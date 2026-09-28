@@ -666,9 +666,10 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
 - CI hardening (#71): `release.yml` tags the commit it BUILT (`--target`); `core-release` releases
   from main only, merges a Prism bump only once `terminal-gate` itself is green (by name, not a
   count), and opens an issue when a core change on main could not be released; `core-version`
-  also requires the core version to be above the base's. Two PRs bumping core to the same version
-  are still only caught on a re-run: "require branches to be up to date" would close that, and is
-  the owner's call.
+  also requires the core version to be above the base's. **main is PROTECTED** (owner, 2026-09-28):
+  a PR must be up to date with main and pass `check` and `core-version` (admins may bypass), which
+  closes the two-PRs-one-core-version gap. A PR that falls behind is updated
+  (`gh pr update-branch`) and its checks run again before it merges.
 - CI (`ci.yml`): typecheck + lint + unit on PR and push to main. The e2e is the local pre-push gate.
 - **Code signing is PREPARED, not enrolled** (2026-09-28): `release.yml` signs the installer through
   SignPath once the secret `SIGNPATH_API_TOKEN` exists, and skips it until then. The owner's steps,

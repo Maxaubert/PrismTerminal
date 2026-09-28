@@ -23,7 +23,9 @@ unsigned". Conditions checked 2026-09-28 against <https://signpath.org/terms.htm
 | MFA for everyone on GitHub and SignPath | Owner to confirm on both accounts |
 
 Prism (the viewer) is NOT eligible as it stands: it bundles the Everything search engine
-(freeware, not open source) and 7-Zip's unRAR code (not an OSI licence).
+(freeware, not open source) and 7-Zip's unRAR code (not an OSI licence). **Owner decision,
+2026-09-28: Prism stays unsigned** ("keep unsigned"), rather than replacing those components or
+buying a commercial certificate.
 
 ## What the owner does (once)
 
