@@ -98,7 +98,7 @@ export const TERM_PRESETS: TermPreset[] = [
   // should be normal themes grey, white, black, and so on. but have some brown
   // themes, pink, green, etc"). The forty near-copies became sixteen, then the
   // next day forty again, each distinct (see "FORTY" below): the neutrals
-  // first (the app's own four, a plain grey, a blue-black, a white and a light
+  // first (the app's own four, a plain grey, Volt's yellow-green on black, a white and a light
   // grey), a pair, dark and light, per colour: brown, pink, green; then the
   // classic terminal looks, more colours, and the well-known schemes. A retired
   // theme is not a dead end: RETIRED_THEMES (termThemeRetired.ts) moves whoever
@@ -149,7 +149,21 @@ export const TERM_PRESETS: TermPreset[] = [
   },
   // A plain grey, no tint and no opinion: the neutral the others are not.
   { id: 'graphite', name: 'Graphite', bg: '#1f1f1f', fg: '#d6d6d6', cursor: '#d6d6d6', accent: '#9a9a9a' },
-  { id: 'ink', name: 'Ink', bg: '#0d1117', fg: '#dbe2ea', cursor: '#7aa5d8' },
+  // VOLT (owner, 2026-09-28, a screenshot of a black page with one
+  // yellow-green button: "make one of the black themes this colour scheme ...
+  // kind of cyberpunk style"). It took Ink's place: Ink was a blue-black
+  // next to Prism and Tokyo Night, the one black the forty could lose.
+  // Its own sixteen, neon on black: the lime as the green (the prompt), a
+  // yellow beside it, cyan and a hot pink for the rest.
+  {
+    id: 'volt',
+    name: 'Volt',
+    bg: '#050706',
+    fg: '#eef2e6',
+    cursor: '#d8ff26',
+    accent: '#d8ff26',
+    ansi: { black: '#3a4234', red: '#ff3b5c', green: '#c6f41f', yellow: '#f4ff52', blue: '#38b6ff', magenta: '#ff4fd8', cyan: '#22f0d0', white: '#d9dfd0', brightBlack: '#6b7562', brightRed: '#ff7088', brightGreen: '#e2ff5c', brightYellow: '#fbff9a', brightBlue: '#7cd0ff', brightMagenta: '#ff8ae5', brightCyan: '#78ffe8', brightWhite: '#ffffff' }
+  },
   { id: 'paper', name: 'Paper', bg: '#f6f4ee', fg: '#2a2620', cursor: '#3a63c2' },
   // A light grey, cooler than Paper's cream.
   { id: 'mist', name: 'Mist', bg: '#e4e4e2', fg: '#26262a', cursor: '#4a4a52', accent: '#5c5c66' },

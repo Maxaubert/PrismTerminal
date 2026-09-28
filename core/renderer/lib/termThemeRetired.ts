@@ -17,7 +17,7 @@ export const RETIRED_THEMES: Readonly<Record<string, string>> = {
   'jetbrains-darcula': 'graphite',
   afterglow: 'graphite',
   materialdark: 'graphite',
-  onehalfdark: 'ink',
+  onehalfdark: 'prism',
   espresso: 'umber',
   zenburn: 'moss',
   onehalflight: 'paper',
@@ -27,16 +27,18 @@ export const RETIRED_THEMES: Readonly<Record<string, string>> = {
   'rose-pine-dawn': 'blossom',
   'solarized-light': 'fawn',
   'night-owl': 'tokyonight',
-  ayu: 'ink',
-  denim: 'ink',
+  ayu: 'prism',
+  denim: 'prism',
   spacegray: 'nord',
-  argonaut: 'ink',
+  argonaut: 'prism',
   iceberg: 'nord',
   'tokyonight-storm': 'tokyonight',
-  adventuretime: 'ink',
+  adventuretime: 'prism',
   'rose-pine-moon': 'rosewood',
   'rose-pine': 'rosewood',
-  ubuntu: 'rosewood'
+  ubuntu: 'rosewood',
+  // Ink made way for Volt (2026-09-28); Prism is the black nearest it.
+  ink: 'prism'
 }
 
 /** The id to use for `id`: its replacement when it was retired, else itself. */
