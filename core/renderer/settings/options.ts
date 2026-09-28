@@ -23,9 +23,11 @@ export interface TerminalOption {
  *  asserts these ids appear in this order, whatever of its own sits between. */
 export const TERMINAL_OPTIONS: readonly TerminalOption[] = [
   { id: 'term-shell', label: 'Shell', type: 'choice', key: 'prism.term.shell' },
-  { id: 'term-theme', label: 'Theme', type: 'theme', key: 'prism.term.theme' },
   { id: 'term-font-family', label: 'Font', type: 'choice', key: 'prism.term.font' },
   { id: 'term-font', label: 'Font size', type: 'choice', key: 'prism.term.fontPct' },
+  { id: 'agent-indicator', label: 'Agent indicator', type: 'choice', key: 'prism.term.agentIndicator' },
+  // The theme wall, and under it only what a theme sets (2026-09-28).
+  { id: 'term-theme', label: 'Theme', type: 'theme', key: 'prism.term.theme' },
   { id: 'term-acrylic', label: 'Acrylic background', type: 'switch', key: 'prism.term.acrylic' },
   {
     id: 'term-opacity',
@@ -36,7 +38,6 @@ export const TERMINAL_OPTIONS: readonly TerminalOption[] = [
     // over the same glass would fight it (owner, 2026-09-19).
     onlyWhere: 'the terminal owns the window acrylic'
   },
-  { id: 'agent-indicator', label: 'Agent indicator', type: 'choice', key: 'prism.term.agentIndicator' },
   { id: 'agent-color', label: 'Agent working indicator', type: 'colour', key: 'prism.term.agentColor' },
   { id: 'agent-done-color', label: 'Agent finished indicator', type: 'colour', key: 'prism.term.agentDoneColor' }
 ]
