@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore, type JSX, type ReactNode } f
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../lib/newTabPrefs'
 import { setWindowEdges, useWindowEdges } from '../lib/edgesPrefs'
 import { setTabWidth, useTabWidth, type TabWidth } from '../lib/tabWidthPrefs'
+import { setTaskbarBadgeOn, useTaskbarBadgeOn } from '../lib/taskbarBadge'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
 import { HexSwatch, Pref, RESET_LINK, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
 import { setWindowAccent, useWindowAccent } from '../lib/accentPrefs'
@@ -34,6 +35,7 @@ import { ShellSetting } from '@core/renderer/settings/TerminalBehaviour'
 /* ---------- general ---------- */
 
 function GeneralTab(): JSX.Element {
+  const badgeOn = useTaskbarBadgeOn()
   const [version, setVersion] = useState('')
   // Explorer's context-menu verb lives in the registry, not in a settings
   // file: the switch reports what Windows actually has.
@@ -134,6 +136,13 @@ function GeneralTab(): JSX.Element {
           label="Open terminal here, in the Explorer menu"
           disabled={verbBusy}
         />
+      </Pref>
+      <Pref
+        id="taskbar-badge"
+        label="Taskbar badge"
+        hint="Shows on the taskbar how many tabs have an agent that finished or is waiting for you."
+      >
+        <Switch on={badgeOn} onChange={setTaskbarBadgeOn} label="Taskbar badge" />
       </Pref>
       <Pref id="app-version" label="Version" hint="The installed version of Prism Terminal.">
         <span id="app-version" data-app-version className="font-mono text-[12px] text-[var(--p-text-soft)]">

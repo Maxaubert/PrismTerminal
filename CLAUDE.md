@@ -61,6 +61,14 @@ so an update never silently changes what an existing user sees; the bridge to ma
     signed by Microsoft, plus the MIT notice. The GPU pack finds them through PATH (the engine sets it).
   - **Shared files, per-app values.** Models and the GPU pack live in `%LOCALAPPDATA%\PrismDictation`
     (both apps; never removed by an uninstall); every setting VALUE is per app.
+  - **THE ENGINE IS WARM BEFORE YOU SPEAK** (owner, 2026-09-28: "it should work from the get-go").
+    MEASURED on an RTX 5090, Large v3 Turbo: the server answers in 1.1 s, but the FIRST pass took
+    31.8 s with no cached kernels (the pack has none for the card) and 0.26 s with them. So the GPU
+    engine has its own kernel cache (`%LOCALAPPDATA%\PrismDictation\cuda-cache`, 4 GB,
+    `CUDA_CACHE_PATH`), the renderer asks for a warm-up (`dictationWarm`, a silent pass) when
+    dictation is armed, when its model or language changes and at every press, a partial on a
+    cold engine answers `warming` at once instead of queueing, and the pill says "Starting speech
+    engine" rather than "Transcribing". After a failed warm-up partials go the ordinary way.
   - **GPU:** the official CUDA 12.4 pack (643 MB) is an optional download, offered only when an NVIDIA
     adapter is found. MEASURED on an RTX 5090: it runs (first run 9 s compiling kernels), Large-v3 then
     answers in 0.36-0.5 s. AMD/Intel stay on CPU (Base/Small) until there is an official build.
@@ -478,6 +486,21 @@ terminal theme, anything that reads or shows files.
   first idle title is the agent STARTING, not working. Output scoring (`termActivity`) is only the
   fallback, and an agent's startup paint is not work (`markBorn` / `startupOutput`). The rules live in
   `lib/useAgentIndicator.ts`; change them there, with Prism's reasoning in hand.
+- **FINISHED AND QUESTION ARE LINES, EACH OPTIONAL; A RUN OF WORKERS SHARES ONE BAR; THE TASKBAR
+  COUNTS** (owner, 2026-09-28; spec `docs/superpowers/specs/2026-09-28-attention-and-warm-dictation-design.md`).
+  A tab whose agent finished, or waits on you, while you were NOT LOOKING (another tab in front, or
+  the window unfocused) gets a static 3 px line along its bottom: Finished colour, or Question
+  colour (default blue) which outranks it; each behind its own switch (`agent-done-on`,
+  `agent-question-on`, both on). Opening the tab clears it. Full's fill is for working alone now.
+  CLAUDE GIVES NO SIGNAL FOR A QUESTION (MEASURED in a pty: the title is `✳` exactly as when done, no
+  bell, no OSC 9), so `agentQuestion.looksLikeQuestion` reads the last text rows of the screen
+  (through termBus, never by importing the panel) for its footer when the title goes idle and as
+  output arrives while idle; a rewording in a Claude update is a change there. In Minimal, two or
+  more NEIGHBOURING working tabs draw ONE bar across them (`workingRuns`, `data-working-run`) at a
+  single tab's length and speed; tabs apart keep their own. The taskbar button's overlay icon shows
+  how many tabs carry a mark (`taskbarBadge.ts`, `window:badge`, Settings > General switch, on).
+  Tab names are centred in both widths, and a Dynamic tab is never under four characters wide.
+  The `attention` e2e holds all of it.
 - **The indicator is MINIMAL by default and wears the THEME** (owner, 2026-09-18, #4; it was Full
   and a fixed orange in Prism and the first build). `termLook` stores the two colours as CHOICES,
   `''` meaning "follow the theme"; `lib/agentColors.ts` resolves what is in force: working = the

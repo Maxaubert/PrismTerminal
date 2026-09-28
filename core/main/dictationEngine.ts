@@ -43,6 +43,41 @@ export const DICTATION_IDLE_MS = 300000
  *  minutes, so two minutes is far past anything a live server takes. */
 export const DICTATION_REQUEST_TIMEOUT_MS = 120000
 
+/**
+ * THE GPU ENGINE'S OWN KERNEL CACHE (2026-09-28; owner: the model "is slow to
+ * start up ... after like one to two minutes it suddenly transcribed"). The
+ * official pack has no kernels for the newest cards, so the driver compiles
+ * them at the FIRST pass: MEASURED on an RTX 5090 with Large v3 Turbo, 31.8 s
+ * with no cached kernels and 0.26 s with them. The driver's cache is shared
+ * with every CUDA program on the PC and capped, so ours were evicted and paid
+ * again. A folder of our own, with room, keeps them for good.
+ */
+export const DICTATION_CUDA_CACHE_BYTES = 4 * 1024 * 1024 * 1024
+
+/** Half a second of silence, the pass that warms a new server: it loads the
+ *  model onto the device and compiles the kernels before anybody speaks. */
+export function silentWav(seconds = 0.5, rate = 16000): Uint8Array {
+  const samples = Math.round(seconds * rate)
+  const out = new Uint8Array(44 + samples * 2)
+  const v = new DataView(out.buffer)
+  const text = (at: number, s: string): void => {
+    for (let i = 0; i < s.length; i += 1) out[at + i] = s.charCodeAt(i)
+  }
+  text(0, 'RIFF')
+  v.setUint32(4, 36 + samples * 2, true)
+  text(8, 'WAVEfmt ')
+  v.setUint32(16, 16, true)
+  v.setUint16(20, 1, true)
+  v.setUint16(22, 1, true)
+  v.setUint32(24, rate, true)
+  v.setUint32(28, rate * 2, true)
+  v.setUint16(32, 2, true)
+  v.setUint16(34, 16, true)
+  text(36, 'data')
+  v.setUint32(40, samples * 2, true)
+  return out
+}
+
 /** How often a starting server is asked whether it is up yet. */
 const READY_POLL_MS = 100
 /** How much of the server's stderr is kept: enough for its last few lines,
@@ -55,6 +90,9 @@ export interface DictationEngineDeps {
   store: Pick<DictationStore, 'modelPath' | 'gpuEngineDir'>
   /** An NVIDIA adapter is present. Asked until it answers, then remembered. */
   hasNvidia: () => Promise<boolean>
+  /** Where the GPU engine keeps its compiled kernels (see
+   *  DICTATION_CUDA_CACHE_BYTES). Absent: the driver's shared cache. */
+  cudaCacheDir?: () => string | null
   idleMs?: number
   startTimeoutMs?: number
   requestTimeoutMs?: number
@@ -75,6 +113,9 @@ interface Server {
   port: number
   /** The tail of its stderr: what it said last is why it died. */
   stderr: string
+  /** A pass has come back from it: the model is on the device and, on the
+   *  GPU, the kernels are compiled. Until then a pass can take half a minute. */
+  warm: boolean
   exitCode: number | null
   exited: boolean
   /** Called once, when it has exited and its stderr has been read out. */
@@ -84,6 +125,8 @@ interface Server {
 interface Job {
   req: TranscribeRequest
   resolve: (r: TranscribeResult) => void
+  /** The silent pass that warms a server; nobody reads its text. */
+  warmup?: boolean
 }
 
 type Launch = { ok: true; server: Server } | { ok: false; detail: string }
@@ -190,6 +233,28 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
   let partial: Job | null = null
   let idleTimer: ReturnType<typeof setTimeout> | null = null
   let lastUsed = 0
+  /** A warm-up pass is queued or running. */
+  let warming = false
+  /** The last warm-up failed. Partials then go the ordinary way, so the
+   *  failure is reported, instead of each one starting another warm-up. */
+  let warmFailed = false
+
+  /** Queue the silent pass that warms a server for this model and language,
+   *  unless one is already on its way or the server up now is warm for it. It
+   *  goes in the FINALS queue, so a real final asked for after it runs on the
+   *  server it warmed rather than racing it for the device. */
+  function warmFor(req: { modelId: string; language: string }): Promise<TranscribeResult> {
+    const modelPath = deps.store.modelPath(req.modelId)
+    const language = req.language || 'auto'
+    if (current && current.warm && !current.exited && current.modelPath === modelPath && current.language === language)
+      return Promise.resolve({ ok: true, text: '', engine: current.kind })
+    if (warming) return Promise.resolve({ ok: false, reason: 'warming' })
+    warming = true
+    return new Promise<TranscribeResult>((resolve) => {
+      finals.push({ req: { wav: silentWav(), modelId: req.modelId, language: req.language, final: true }, resolve, warmup: true })
+      pump()
+    })
+  }
 
   function kill(s: Server): void {
     if (current === s) current = null
@@ -268,12 +333,18 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
       // the front of the child's PATH: Windows looks beside the exe first, then
       // along PATH, and the GPU server finds the same four DLLs there.
       const runtimeDir = deps.cpuDir()
-      const env = runtimeDir && runtimeDir !== dir ? { ...process.env, PATH: `${runtimeDir};${process.env.PATH ?? ''}` } : process.env
+      const env: NodeJS.ProcessEnv =
+        runtimeDir && runtimeDir !== dir ? { ...process.env, PATH: `${runtimeDir};${process.env.PATH ?? ''}` } : { ...process.env }
+      const cache = kind === 'gpu' ? deps.cudaCacheDir?.() : null
+      if (cache) {
+        env.CUDA_CACHE_PATH = cache
+        env.CUDA_CACHE_MAXSIZE = String(DICTATION_CUDA_CACHE_BYTES)
+      }
       child = spawnImpl(cmd.file, cmd.args, { cwd: dir, env, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
     } catch (e) {
       return { ok: false, detail: (e as Error).message }
     }
-    const s: Server = { child, kind, modelPath, language, port, stderr: '', exitCode: null, exited: false, onExit: new Set() }
+    const s: Server = { child, kind, modelPath, language, port, stderr: '', warm: false, exitCode: null, exited: false, onExit: new Set() }
     // Current from the moment it exists, so a stop() during the start kills it.
     current = s
     child.stderr?.setEncoding('utf8')
@@ -419,7 +490,10 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
 
     const answer = await post(s, req.wav)
     if (stopped()) return STOPPED
-    if (answer.ok) return { ok: true, text: answer.text, engine: s.kind }
+    if (answer.ok) {
+      s.warm = true
+      return { ok: true, text: answer.text, engine: s.kind }
+    }
     // A GPU server that started and then died UNDER A PASS (a model too big for
     // the card's memory does exactly this) would die under the next one too.
     // This request is lost either way; the next goes to the CPU engine.
@@ -462,6 +536,10 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
       .catch((e: unknown): TranscribeResult => ({ ok: false, reason: 'engine-failed', detail: String(e) }))
       .then((result) => {
         if (running === mine) running = null
+        if (mine.warmup) {
+          warming = false
+          warmFailed = !result.ok
+        }
         mine.resolve(result)
         pump()
       })
@@ -469,6 +547,14 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
 
   return {
     transcribe(req) {
+      // A PARTIAL IS NOT QUEUED BEHIND A COLD START (2026-09-28): it is only
+      // the pill's live text, and one waiting behind a half-minute kernel
+      // compile showed nothing and then held up the final. It is answered
+      // 'warming' at once and the warm-up is started, so the pill can say so.
+      if (!req.final && !warmFailed && !(current && current.warm && !current.exited)) {
+        void warmFor(req)
+        return Promise.resolve({ ok: false, reason: 'warming' })
+      }
       return new Promise<TranscribeResult>((resolve) => {
         const job: Job = { req, resolve }
         if (partial) {
@@ -482,8 +568,14 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
       })
     },
 
+    warm(req) {
+      return warmFor(req)
+    },
+
     stop() {
       epoch += 1
+      warming = false
+      warmFailed = false
       if (idleTimer) {
         clearTimeout(idleTimer)
         idleTimer = null
