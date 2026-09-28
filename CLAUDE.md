@@ -655,6 +655,9 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
 ## Build, test, release
 
 - `npm run dev`, `npm test` (vitest), `npm run typecheck`, `npm run lint`.
+- **A test run leaves nothing in %TEMP%** (2026-09-28): `vitest.global.ts` points the whole run's
+  TEMP at one folder and removes it afterwards (14 `pt-*` folders a run leaked before; Prism's suite
+  had left 40,000, which is what made its tree stall). A new test may mkdtemp freely.
 - `npm run e2e` builds and drives the app through Playwright over CDP, PARKED offscreen and
   unfocusable (`--e2e`), each scenario in its own profile and reaping its processes (the app is
   single-instance, so a stray one takes every later launch's folder and exits it).
