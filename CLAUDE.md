@@ -247,7 +247,9 @@ so an update never silently changes what an existing user sees; the bridge to ma
   and the link there (whole, across a wrap, by `findLinks`). App's menu leads with Copy link, Open link and
   Copy, both copies exact through main (`writeClipboard`); Close tab stays on the TAB's menu.
   **A RIGHT-CLICK ON A LINK OPENS NOTHING** (#95; owner, 2026-09-28): the link addon hands over a
-  click of ANY button, so it opened the link and the menu at once; only a left click opens now.
+  click of ANY button, so it opened the link and the menu at once; only a left click opens now. Every
+  row of both menus carries a glyph (`components/MenuIcon.tsx`, Prism's `FileMenuIcon` paths; owner: "the items
+  should have icons like in prism explorer").
   The `selectionEdit` e2e reads the clipboard back in main and puts the owner's back.
 - **SETTINGS DESCRIPTIONS ARE PLAIN WORDS, AND THE ROWS KEEP ONE ORDER** (owner, 2026-09-22: "no
   symbols other than comma and dot, no mentioning of specific keys or tips"; "the terminal

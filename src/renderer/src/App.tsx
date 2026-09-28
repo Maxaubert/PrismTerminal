@@ -38,6 +38,7 @@ import { forgetSession, markResume, markTouched } from '@core/renderer/lib/termA
 import { onCwd, pasteInto } from '@core/renderer/lib/termBus'
 import { quotePaths } from '@core/renderer/lib/termPaste'
 import { ContextMenu } from './components/ContextMenu'
+import { MenuIcon } from './components/MenuIcon'
 import { rememberRoot } from '@core/renderer/lib/recentRoots'
 import { savedShellId } from '@core/renderer/lib/termPrefs'
 import { helpEnabled, helpShell, setHelpShell, useHelpEnabled } from '@core/renderer/lib/helpPrefs'
@@ -614,21 +615,21 @@ export default function App(): JSX.Element {
             // tab from the right click menu"); the tab's own menu still has it.
             ...(termMenu.link
               ? [
-                  { label: 'Copy link', onPick: () => void copyText(termMenu.link!) },
+                  { label: 'Copy link', icon: <MenuIcon name="link" />, onPick: () => void copyText(termMenu.link!) },
                   // A right-click never opens it (2026-09-28), so the menu does.
-                  { label: 'Open link', onPick: () => window.prism.openExternal(termMenu.link!) }
+                  { label: 'Open link', icon: <MenuIcon name="open" />, onPick: () => window.prism.openExternal(termMenu.link!) }
                 ]
               : []),
             ...(termMenu.selection
-              ? [{ label: 'Copy', hint: 'Ctrl+C', onPick: () => void copyText(termMenu.selection) }]
+              ? [{ label: 'Copy', icon: <MenuIcon name="copy" />, hint: 'Ctrl+C', onPick: () => void copyText(termMenu.selection) }]
               : []),
             // Paste through the terminal's own rule (an image forwards the
             // keystroke to the agent, files become quoted paths, text is a
             // bracketed paste).
-            { label: 'Paste', hint: 'Ctrl+V', onPick: () => void pasteInto(activeShell.id) },
-            { label: 'Find in scrollback', hint: 'Ctrl+F', onPick: () => setFindFor(activeShell.id) },
+            { label: 'Paste', icon: <MenuIcon name="paste" />, hint: 'Ctrl+V', onPick: () => void pasteInto(activeShell.id) },
+            { label: 'Find in scrollback', icon: <MenuIcon name="find" />, hint: 'Ctrl+F', onPick: () => setFindFor(activeShell.id) },
             // Only while the setting is on: off means the app offers it nowhere.
-            ...(helpOn ? [{ label: 'Command help', hint: 'F1', onPick: toggleHelp }] : [])
+            ...(helpOn ? [{ label: 'Command help', icon: <MenuIcon name="help" />, hint: 'F1', onPick: toggleHelp }] : [])
           ]}
         />
       )}

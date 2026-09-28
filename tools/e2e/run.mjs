@@ -629,6 +629,13 @@ const scenarios = {
       ok((await opened()) === 0, 'a right-click on a link does not open it')
       ok(!!rows && rows[0].includes('Copy link') && !rows.some((r) => r.includes('Close tab')), `right-click on a link: Copy link first, no Close tab (${JSON.stringify(rows)})`)
       ok(!!rows && rows[1]?.includes('Open link'), `and Open link beside it (${JSON.stringify(rows)})`)
+      // A GLYPH ON EVERY ROW, as in Prism's Explorer (owner, 2026-09-28).
+      const glyphs = await page.evaluate(() =>
+        [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((r) => r.querySelector('[data-menu-icon]')?.getAttribute('data-menu-icon') ?? null)
+      )
+      ok(glyphs.length > 0 && glyphs.every(Boolean), `every row of the menu has its icon (${JSON.stringify(glyphs)})`)
+      await sleep(250) // past the menu's fade-in, for the picture
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/term-menu-link.png') }).catch(() => {})
       await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Copy link' }).click()
       ok((await until(async () => (await clip()) === url, 4000)) === true, 'and it copies the whole link')
       // A CLICKED LINK NEVER REACHES THE OWNER'S BROWSER UNDER --e2e (#64;
