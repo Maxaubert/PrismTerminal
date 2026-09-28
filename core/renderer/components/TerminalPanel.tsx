@@ -9,6 +9,7 @@ import { shellOfShellId } from '../../shared/help/shells'
 import { registerPaste, reportCwd, reportTitle, setTextPaster } from '../lib/termBus'
 import { parseOsc9 } from '../../shared/termCwd'
 import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
+import { onGround } from '../lib/termGround'
 import { followsHostStyle, paintsGround, termApi, termHost } from '../host'
 import { normalizeColor } from '../lib/termAnsi'
 import { findLinks, linkColor } from '../lib/termLinks'
@@ -62,8 +63,12 @@ const sessions = new Map<string, Session>()
 
 /** What a link wears on the theme in force: blue, moved as far as this
  *  ground (a preset's, or one the user picked) needs for it to read. */
+/** The theme on the ground the panel really paints (the host's pick, if any). */
+const groundedTheme = (): ReturnType<typeof resolveTermTheme> =>
+  onGround(resolveTermTheme(termThemeId()), termHost().terminalGround?.())
+
 function currentLinkColor(): string {
-  const theme = resolveTermTheme(termThemeId())
+  const theme = groundedTheme()
   return linkColor(theme.background, theme.foreground)
 }
 
@@ -93,7 +98,7 @@ function currentTermTheme(): ReturnType<typeof resolveTermTheme> & {
   scrollbarSliderHoverBackground?: string
   scrollbarSliderActiveBackground?: string
 } {
-  const base = resolveTermTheme(termThemeId())
+  const base = groundedTheme()
   // THE SCROLLBAR WEARS THE THEME (owner, 2026-09-23: "make the scrollbar more
   // minimalistic and make sure it follows the theme"). xterm 6 draws its own
   // slider, coloured from these three; left unset they are a fixed grey on
@@ -386,7 +391,10 @@ onTermLookChange(applyLook)
 let styleWatch: (() => void) | null = null
 function watchHostStyle(): void {
   if (!styleWatch && followsHostStyle()) styleWatch = watchTermTheme(() => applyLook())
+  // A host whose picked window colours change the ground: restyle with them.
+  if (!chromeWatch) chromeWatch = termHost().onChromeChange?.(() => applyLook()) ?? (() => {})
 }
+let chromeWatch: (() => void) | null = null
 
 /** Ctrl+scroll: zoom THIS session's text, unpersisted. */
 function zoomSession(id: string, delta: number): void {

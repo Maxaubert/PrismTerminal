@@ -1,4 +1,6 @@
 import { chromeTokens } from './chromeTheme'
+import { windowAccent } from './accentPrefs'
+import { windowBackground } from './backgroundPrefs'
 import { contrastRatio, ensureContrast, normalizeColor } from '@core/renderer/lib/termAnsi'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 
@@ -19,8 +21,13 @@ const FALLBACK_DONE = '#22c55e'
 const FLOOR = 3
 
 export function themeAgentColors(themeId: string): { working: string; finished: string } {
-  const theme = resolveTermTheme(themeId)
-  const vars = chromeTokens(theme, 100, presetAccent(themeId)).vars
+  // What the chrome REALLY wears (2026-09-28): the picked background and
+  // accent, where there are any, exactly as paintChrome derives the window. An
+  // unpicked indicator follows "the accent you see", which is the pick.
+  const own = resolveTermTheme(themeId)
+  const background = windowBackground()
+  const theme = background ? { ...own, background } : own
+  const vars = chromeTokens(theme, 100, presetAccent(themeId), undefined, windowAccent()).vars
   const bg = vars['--p-bg-solid']
   const working = vars['--p-accent']
   const green = ensureContrast(normalizeColor(theme.green ?? '', FALLBACK_DONE), bg, FLOOR)
