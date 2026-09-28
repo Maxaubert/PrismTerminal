@@ -544,10 +544,12 @@ terminal theme, anything that reads or shows files.
   (`TerminalAppearanceSettings`' `afterFont`; Prism passes nothing). Applied ONCE, in `paintChrome`:
   the background replaces the theme's before `chromeTokens` measures it, so the mode, every ink and
   the accent's floor follow; the terminal follows too because the panel paints its ground from the
-  same token (`paintsGround`). Known gap: xterm's ANSI floor and the character under the block
-  cursor are still measured against the theme's own background, which is the core's. A chosen
-  accent is KEPT where the ground can show it and only MOVED to the 3:1 floor where it cannot. The
-  agent working indicator still follows the THEME's accent (a core change and an owner decision).
+  same token (`paintsGround`). The TERMINAL follows too (2026-09-28, the owner's "do all those"):
+  the host's `terminalGround` hands the core the picked background, and `onGround` floors the text
+  (4.5:1), the cursor and the sixteen (3:1) against it; `onChromeChange` restyles running shells.
+  A chosen accent is KEPT where the ground can show it and only MOVED to the 3:1 floor where it
+  cannot, and an unpicked Agent working indicator wears it (`themeAgentColors` reads both picks).
+  Prism passes neither field and is unchanged. The `pickedGround` e2e measures both.
   The `accent` e2e measures the active tab's rule, the row order and the ground.
 - **SETTINGS CONTROLS ARE NEUTRAL; ONLY SAVE WEARS THE ACCENT** (#42; owner, 2026-09-23: "i dont
   want settings buttons to be affected by the accent colour... grey based on the bg colour ... same

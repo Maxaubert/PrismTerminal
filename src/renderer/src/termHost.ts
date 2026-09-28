@@ -2,6 +2,8 @@ import { focusedTermFullScreen } from '@core/renderer/components/TerminalPanel'
 import { configureTermCore } from '@core/renderer/host'
 import { helpEnabled } from '@core/renderer/lib/helpPrefs'
 import { themeAgentColors } from './lib/agentColors'
+import { onWindowAccentChange } from './lib/accentPrefs'
+import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPrefs'
 
 /**
  * PRISM TERMINAL AS A HOST OF THE TERMINAL CORE (#15).
@@ -32,6 +34,18 @@ configureTermCore({
   // The window's chrome is derived from the terminal theme here, so that is
   // where the accent an unpicked indicator wears comes from.
   themedAgentColors: themeAgentColors,
+  // The Background colour setting paints the terminal's ground too (the panel
+  // reads --p-bg), so the core floors the palette against it; a picked accent
+  // or background recolours the indicator and restyles the running shells.
+  terminalGround: windowBackground,
+  onChromeChange: (cb) => {
+    const offAccent = onWindowAccentChange(cb)
+    const offBackground = onWindowBackgroundChange(cb)
+    return () => {
+      offAccent()
+      offBackground()
+    }
+  },
   // Nothing else owns the window, so the terminal setting switches its material.
   acrylic: { kind: 'window', supported: () => window.prism.acrylicSupported() },
   paintsGround: true,

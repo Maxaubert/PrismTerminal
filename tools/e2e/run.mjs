@@ -1953,6 +1953,61 @@ const scenarios = {
     }
   },
 
+  /**
+   * THE TERMINAL READS ON A PICKED BACKGROUND, AND AN UNPICKED INDICATOR WEARS
+   * A PICKED ACCENT (2026-09-28; the two known gaps of the colour settings).
+   * On the dark default theme, a light Background colour: the prompt's text is
+   * measured against it, off the real DOM. And with an Accent colour picked,
+   * the Agent working indicator's field shows that accent, not the theme's.
+   */
+  async pickedGround(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const inkOnGround = () =>
+      page.evaluate(() => {
+        const rgb = (s) => (s.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
+        const lin = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+        const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+        const ground = rgb(getComputedStyle(document.querySelector('[data-term-region]')).backgroundColor)
+        // The prompt's own text: the default ink, in the rows xterm draws.
+        const span = [...document.querySelectorAll('.xterm-rows span')].find((s) => /PS /.test(s.textContent ?? ''))
+        const row = span ?? document.querySelector('.xterm-rows > div')
+        const ink = rgb(getComputedStyle(row).color)
+        const [a, b] = [lum(ink), lum(ground)]
+        return { ground, ink, contrast: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) }
+      })
+    try {
+      await typeLine(page, 'cls')
+      await sleep(500)
+      const before = await inkOnGround()
+      ok(before.contrast >= 4.5, `the theme's text reads on its own ground (${before.contrast.toFixed(1)}:1)`)
+      // Through the setting's own field, so the store's listeners fire.
+      await page.locator('[data-title-settings]').click()
+      await page.locator('[data-settings-tab="appearance"]').click()
+      const bg = page.locator('[data-pref="window-background"] input:not([type])')
+      await bg.fill('#F4F1E8')
+      await bg.press('Enter')
+      const accent = page.locator('[data-pref="window-accent"] input:not([type])')
+      await accent.fill('#1D3FBF')
+      await accent.press('Enter')
+      const working = await until(async () => {
+        const v = (await page.locator('[data-pref="agent-color"] input:not([type])').inputValue()).toLowerCase()
+        return v === '#1d3fbf' ? v : null
+      }, 3000, 50)
+      ok(!!working, `the working indicator follows the picked accent (${await page.locator('[data-pref="agent-color"] input:not([type])').inputValue()})`)
+      await page.keyboard.press('Control+Tab') // back to the shell
+      await page.locator('[data-tab]').first().click()
+      await sleep(600)
+      const after = await until(async () => {
+        const m = await inkOnGround()
+        return m.ground.join() === '244,241,232' ? m : null
+      }, 4000, 100)
+      ok(!!after && after.contrast >= 4.5, `on a picked light background the text still reads (${after ? after.contrast.toFixed(1) : '?'}:1, ink ${after?.ink})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async themeCards(ok) {
     // PICKING A THEME MOVES NOTHING (owner, 2026-09-22: "when I click a theme
     // ... the ui shifts a bit, it's not every theme but some"). Only the
