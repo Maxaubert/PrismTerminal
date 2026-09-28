@@ -670,6 +670,10 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
   are still only caught on a re-run: "require branches to be up to date" would close that, and is
   the owner's call.
 - CI (`ci.yml`): typecheck + lint + unit on PR and push to main. The e2e is the local pre-push gate.
+- **Code signing is PREPARED, not enrolled** (2026-09-28): `release.yml` signs the installer through
+  SignPath once the secret `SIGNPATH_API_TOKEN` exists, and skips it until then. The owner's steps,
+  the application answers and the eligibility check are in `docs/code-signing.md`. `PRIVACY.md` is
+  the privacy statement the signing policy links: a new network request changes it in the same PR.
 - Shipping follows the global rules: issue, branch, PR, squash-merge, never commit to main, never
   merge without the owner's explicit approval of that PR. Bump the version inside the PR.
 - `release.yml` arrives with the icon PR (#2): no release is published with the placeholder icon

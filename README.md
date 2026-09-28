@@ -74,6 +74,23 @@ npm run package    # dist/PrismTerminal-Setup-x64-<version>.exe
 Electron, React 19, TypeScript, Vite, Tailwind v4, [xterm.js](https://xtermjs.org) and
 [node-pty](https://github.com/microsoft/node-pty).
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by
+[SignPath Foundation](https://signpath.org). Enrolment is pending: until it is done, releases are
+unsigned, as the note under Install says.
+
+- Committers and reviewers: [@Maxaubert](https://github.com/Maxaubert)
+- Approvers: [@Maxaubert](https://github.com/Maxaubert)
+
+Every release is built from this repository by GitHub Actions (`.github/workflows/release.yml`)
+and each signing request is approved by hand. Only the installer this repository builds is
+signed. How signing is set up: [docs/code-signing.md](docs/code-signing.md).
+
+**Privacy:** see [PRIVACY.md](PRIVACY.md). In short, Prism Terminal collects nothing and sends
+nothing about you anywhere. Its one automatic network request is the update check against this
+repository's GitHub Releases; everything else happens only when you ask for it.
+
 ## License
 
 [MIT](LICENSE)

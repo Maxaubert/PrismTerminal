@@ -15,7 +15,11 @@
 # tags with no GitHub Release behind them (core-release.yml), so "latest
 # release" is always an app release.
 #
-# Unsigned, like Prism, until a certificate is configured.
+# SIGNED ONCE SIGNPATH IS SET UP (docs/code-signing.md). Until the secret
+# SIGNPATH_API_TOKEN exists the two signing steps are skipped and the release is
+# unsigned, exactly as before; with it, the installer is sent to SignPath
+# (SignPath Foundation's free certificate for open source), approved there, and
+# the SIGNED file is what gets published. Nothing else changes.
 name: release
 
 on:
@@ -32,6 +36,9 @@ jobs:
     timeout-minutes: 40
     permissions:
       contents: write
+    # Job level, so a step's `if` can see whether signing is set up at all.
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -80,6 +87,29 @@ jobs:
 
       - run: npx electron-builder --win --publish never
         if: steps.ver.outputs.fresh == 'true'
+
+      # Code signing (docs/code-signing.md). Skipped while the secret is absent.
+      - name: Upload the unsigned installer for signing
+        id: unsigned
+        if: steps.ver.outputs.fresh == 'true' && env.SIGNPATH_API_TOKEN != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-installer
+          path: dist/PrismTerminal-Setup-x64-${{ steps.ver.outputs.version }}.exe
+          if-no-files-found: error
+
+      - name: Sign the installer through SignPath
+        if: steps.ver.outputs.fresh == 'true' && env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          # Written over the unsigned file, so Publish below sends the signed one.
+          output-artifact-directory: dist
 
       - name: Publish
         if: steps.ver.outputs.fresh == 'true'
