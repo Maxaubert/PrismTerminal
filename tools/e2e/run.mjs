@@ -1041,6 +1041,22 @@ const scenarios = {
       'a link that wraps over rows is painted on every one of them'
     )
     ok((await inked(BLUE)).length >= 2, 'and it really did wrap')
+    // ON THE ALTERNATE SCREEN TOO (owner, 2026-09-28: a link in Claude Code's
+    // fullscreen view "is not blue ... it seems to know it's a link since i can
+    // click it"). Markers, so decorations, do not exist there; the rows are
+    // inked as xterm draws them. And a row a TUI rewrites loses the colour.
+    const alt = 'https://example.org/alt/path?x=1'
+    await typeLine(page, `Write-Host -NoNewline "$([char]27)[?1049h$([char]27)[H"; Write-Host 'open ${alt} here'`)
+    ok(await until(async () => (await inked(BLUE)).includes(alt), 8000), 'on the alternate screen a printed link wears the link blue')
+    await typeLine(page, `Write-Host -NoNewline "$([char]27)[H$([char]27)[2Kplain words where the link was"`)
+    ok(
+      await until(async () => !(await inked(BLUE)).some((t) => t.includes('plain') || t.includes('words')), 8000),
+      'and a row rewritten in place keeps no link colour'
+    )
+    // Out again. Typed as it is: the prompt now sits at the top of the
+    // alternate screen, not at the end of its rows, which typeLine waits for.
+    await page.keyboard.type(`Write-Host -NoNewline "$([char]27)[?1049l"`)
+    await page.keyboard.press('Enter')
     // A light theme: the same blue would be unreadable, so it moves.
     await typeLine(page, `cls; Write-Host 'see ${url}'`)
     await until(async () => (await inked(BLUE)).includes(url), 8000)
