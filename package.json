@@ -16,6 +16,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "fetch:bin": "node core/tools/fetch-whisper.mjs vendor/whisper",
+    "install:stable": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/install-stable.ps1",
     "e2e": "npm run fetch:bin && npm run build && node tools/e2e/run.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",

@@ -696,6 +696,13 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
   `PrismTerminal-Setup*` process, run `dist/PrismTerminal-Setup-x64-<version>.exe /S`, then POLL
   `%LOCALAPPDATA%\Programs\PrismTerminal\PrismTerminal.exe` until its LastWriteTime moves (it goes
   missing mid-install). Launch only after setup has gone, and report the installed version.
+- **THE OWNER WORKS IN A STABLE COPY; NEVER CLOSE IT** (2026-09-28: "install prism terminal somewhere
+  safe, a duplicate version, just so i can code with claude or codex in there without it closing").
+  `npm run install:stable` (`tools/install-stable.ps1`) copies the installed app to `%LOCALAPPDATA%\Programs\PrismTerminalStable`
+  as `PrismTerminalStable.exe`, profile `%APPDATA%\PrismTerminalStable` (`--user-data-dir`, its own
+  lock and tabs, `shell-verb-off` so it never writes the Explorer verbs), Start menu "Prism Terminal
+  (Stable)". Install steps close processes named `PrismTerminal` ONLY: never `PrismTerminalStable`,
+  never by path or window title. The copy moves to a new version only when the owner runs the script.
 
 ## Style
 
