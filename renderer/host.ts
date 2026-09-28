@@ -100,6 +100,22 @@ export interface TermHostConfig {
   themedAgentColors(themeId: string): { working: string; finished: string }
 
   /**
+   * The colour the terminal is really painted on, where the host lets somebody
+   * pick one over the theme's (Prism Terminal's Background colour; 2026-09-28).
+   * The core floors the text, the cursor and the sixteen against it
+   * (`onGround`). Absent or null: the theme's own background (Prism).
+   */
+  terminalGround?(): string | null
+
+  /**
+   * The host's window colours changed (a picked accent or background), so
+   * whatever the core worked out from `themedAgentColors` or `terminalGround`
+   * is worked out again: running terminals restyle, the indicator recolours.
+   * Absent: they change only with the theme, as before (Prism).
+   */
+  onChromeChange?(cb: () => void): () => void
+
+  /**
    * What "Acrylic" means as a TERMINAL setting. 'window': the terminal setting
    * switches the window's own material on, for any theme, with an opacity
    * slider (Prism Terminal, where nothing else owns the window). 'style': the
