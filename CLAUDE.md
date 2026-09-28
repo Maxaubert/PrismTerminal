@@ -156,6 +156,13 @@ so an update never silently changes what an existing user sees; the bridge to ma
   core takes over from the browser needs the same: returning false is not cancelling. The
   `paste` e2e counts what reached the shell for Ctrl+V, Ctrl+Shift+V and the right-click Paste
   (it failed with 2 copies before the fix).
+- **THE TITLE BAR CAN BE HIDDEN** (#91; owner, 2026-09-28: "add a no title bar option for pt in
+  appearance as well, not theme related", and of the shapes offered, "tabs in the top row").
+  Settings > Appearance > Title bar (`title-bar`, `prism.window.titleBar`, `lib/titleBarPrefs.ts`),
+  above the theme wall: **Shown** (the DEFAULT, the window as it was) or **Hidden**: one row, the
+  tab strip (`inTitleRow`) with `TitleButtons` (chip, help, cog, window buttons) at its end, the
+  strip's empty space the drag handle; with no tabs the row is the handle and the buttons. This
+  app's row. The `titleBar` e2e measures both and the start screen.
 - **EVERY TAB IS ONE WIDTH** (owner, 2026-09-21: "make tabs in both apps have a fixed size, and not
   dynamically adjust based on the content"). A tab was as wide as its label, up to 14rem, so a
   folder with a long name shoved every tab after it sideways and the close button was never in

@@ -1003,6 +1003,64 @@ const scenarios = {
     await closeApp(app)
   },
 
+  // NO TITLE BAR (#91; owner, 2026-09-28, "tabs in the top row"): Hidden
+  // puts the tabs in the title bar's row with its buttons at the end, one row
+  // where there were two. Shown, the default, is the window as it was.
+  async titleBar(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open')
+    const layout = () =>
+      page.evaluate(() => {
+        const bar = document.querySelector('[data-title-bar]')
+        const strip = document.querySelector('[data-tab-strip]')
+        const host = document.querySelector('[data-term-host]')
+        const inBar = (sel) => !!bar?.querySelector(sel)
+        return {
+          mode: bar?.getAttribute('data-title-bar') ?? null,
+          name: (bar?.textContent ?? '').includes('Prism Terminal'),
+          stripInBar: !!(bar && strip && bar.contains(strip)),
+          buttons: inBar('[data-title-settings]') && inBar('[data-window-close]') && inBar('[aria-label="Minimize"]'),
+          hostTop: Math.round(host?.getBoundingClientRect().top ?? -1),
+          stripTop: Math.round(strip?.getBoundingClientRect().top ?? -1),
+          stripDrag: strip ? getComputedStyle(strip).getPropertyValue('-webkit-app-region') || getComputedStyle(strip).getPropertyValue('app-region') : '',
+          closeRight: Math.round(innerWidth - (document.querySelector('[data-window-close]')?.getBoundingClientRect().right ?? 0))
+        }
+      })
+    const shown = await layout()
+    ok(shown.mode !== 'tabs' && shown.name && !shown.stripInBar && shown.buttons, `by default the title bar is its own row, with the name (${JSON.stringify(shown)})`)
+    ok(shown.hostTop >= 64, `two rows above the terminal (${shown.hostTop}px)`)
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    const row = page.locator('[data-pref="title-bar"]')
+    await row.waitFor({ timeout: 8000 })
+    await row.locator('[data-seg="hidden"]').click()
+    ok((await page.evaluate(() => localStorage.getItem('prism.window.titleBar'))) === 'hidden', 'Hidden is stored')
+    await page.locator('[data-tab]').first().click()
+    await sleep(300)
+    const hidden = await layout()
+    ok(hidden.mode === 'tabs' && hidden.stripInBar && !hidden.name, `hidden: the tabs are in the top row, no name (${JSON.stringify(hidden)})`)
+    ok(hidden.buttons && hidden.closeRight <= 12, `and the settings, minimise and close buttons sit at its right end (${hidden.closeRight}px from the edge)`)
+    ok(hidden.stripTop === 0 && hidden.hostTop > 20 && hidden.hostTop <= 40, `one row above the terminal (${hidden.hostTop}px, was ${shown.hostTop}px)`)
+    ok(hidden.stripDrag === 'drag', `the strip's empty space still moves the window (${hidden.stripDrag})`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/title-bar-hidden.png') }).catch(() => {})
+    // The start screen: no tabs, and the buttons are still there to reach.
+    for (let i = 0; i < 6 && (await tabLabels(page)).length; i += 1) {
+      await page.keyboard.press('Control+w')
+      await sleep(300)
+    }
+    ok(await until(async () => (await tabLabels(page)).length === 0), 'every tab closed')
+    const empty = await layout()
+    ok(empty.mode === 'tabs' && empty.buttons, 'with no tabs the top row still holds the buttons')
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    await row.locator('[data-seg="shown"]').click()
+    await sleep(200)
+    const back = await layout()
+    ok(back.mode !== 'tabs' && back.name, 'Shown brings the title bar back')
+    await closeApp(app)
+  },
+
   async restore(ok) {
     const w = world()
     let { app, page } = await launch(w, { args: [w.alpha, w.beta] })
@@ -1828,7 +1886,7 @@ const scenarios = {
     // 'window-edges' (#27) is the window's chrome, which in Prism belongs to
     // the app style and has a row of its own there: this app's, not the core's.
     // 'window-accent' is the same: the accent is the app style's in Prism.
-    const own = ['newtab-mode', 'explorer-verb', 'taskbar-badge', 'app-version', 'window-edges', 'window-accent', 'window-background', 'tab-width']
+    const own = ['newtab-mode', 'explorer-verb', 'taskbar-badge', 'app-version', 'window-edges', 'window-accent', 'window-background', 'tab-width', 'title-bar']
     const extra = [...shown].filter((id) => !wanted.includes(id) && !own.includes(id))
     ok(extra.length === 0, `and nothing else claims to be a setting (extra: ${JSON.stringify(extra)})`)
     ok((await page.locator('[data-pref="confirm-close"]').count()) === 0, 'the close question is not a setting any more')
@@ -1937,7 +1995,7 @@ const scenarios = {
       // WHAT NO THEME OWNS SITS ABOVE THE WALL, WHAT A THEME SETS UNDER IT
       // (owner, 2026-09-28).
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
-      const want = ['tab-width', 'window-edges', 'term-font-family', 'term-font', 'agent-indicator', 'agent-done-on', 'agent-question-on', 'term-theme', 'window-background', 'window-accent']
+      const want = ['tab-width', 'title-bar', 'window-edges', 'term-font-family', 'term-font', 'agent-indicator', 'agent-done-on', 'agent-question-on', 'term-theme', 'window-background', 'window-accent']
       ok(JSON.stringify(rows.slice(0, want.length)) === JSON.stringify(want), `the page runs ${want.join(' > ')} (${rows.slice(0, want.length).join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()
