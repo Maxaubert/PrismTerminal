@@ -2,6 +2,8 @@ import { useEffect, useState, useSyncExternalStore, type JSX, type ReactNode } f
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../lib/newTabPrefs'
 import { setWindowEdges, useWindowEdges } from '../lib/edgesPrefs'
 import { setTabWidth, useTabWidth, type TabWidth } from '../lib/tabWidthPrefs'
+import { setTitleBarMode, useTitleBarMode, type TitleBarMode } from '../lib/titleBarPrefs'
+import { setTaskbarBadgeOn, useTaskbarBadgeOn } from '../lib/taskbarBadge'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
 import { HexSwatch, Pref, RESET_LINK, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
 import { setWindowAccent, useWindowAccent } from '../lib/accentPrefs'
@@ -34,6 +36,7 @@ import { ShellSetting } from '@core/renderer/settings/TerminalBehaviour'
 /* ---------- general ---------- */
 
 function GeneralTab(): JSX.Element {
+  const badgeOn = useTaskbarBadgeOn()
   const [version, setVersion] = useState('')
   // Explorer's context-menu verb lives in the registry, not in a settings
   // file: the switch reports what Windows actually has.
@@ -134,6 +137,13 @@ function GeneralTab(): JSX.Element {
           label="Open terminal here, in the Explorer menu"
           disabled={verbBusy}
         />
+      </Pref>
+      <Pref
+        id="taskbar-badge"
+        label="Taskbar badge"
+        hint="Shows on the taskbar how many tabs have an agent that finished or is waiting for you."
+      >
+        <Switch on={badgeOn} onChange={setTaskbarBadgeOn} label="Taskbar badge" />
       </Pref>
       <Pref id="app-version" label="Version" hint="The installed version of Prism Terminal.">
         <span id="app-version" data-app-version className="font-mono text-[12px] text-[var(--p-text-soft)]">
@@ -265,9 +275,16 @@ const TAB_WIDTH_OPTIONS: Array<{ id: TabWidth; name: string }> = [
   { id: 'fixed', name: 'Fixed' }
 ]
 
+// Shown first: it is the default, the window as it always was (#91).
+const TITLE_BAR_OPTIONS: Array<{ id: TitleBarMode; name: string }> = [
+  { id: 'shown', name: 'Shown' },
+  { id: 'hidden', name: 'Hidden' }
+]
+
 function AppearanceTab(): JSX.Element {
   const edges = useWindowEdges()
   const width = useTabWidth()
+  const titleBar = useTitleBarMode()
   return (
     <TerminalAppearanceSettings
       // ABOVE THE THEME WALL, WHAT NO THEME SETS (owner, 2026-09-23: Tab width
@@ -277,6 +294,9 @@ function AppearanceTab(): JSX.Element {
         <>
           <Pref id="tab-width" label="Tab width" hint="Each tab as wide as its name, or every tab the same width.">
             <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
+          </Pref>
+          <Pref id="title-bar" label="Title bar" hint="Hidden puts the tabs in the top row, beside the window buttons.">
+            <Segmented value={titleBar} onChange={setTitleBarMode} options={TITLE_BAR_OPTIONS} />
           </Pref>
           <Pref
             id="window-edges"

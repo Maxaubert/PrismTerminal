@@ -1,13 +1,23 @@
-import { useEffect, useRef, useState, type JSX, type MouseEvent, type PointerEvent } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type JSX,
+  type MouseEvent,
+  type PointerEvent
+} from 'react'
 import { tabLabels, type Tab } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
-import { useAgentIndicator } from '@core/renderer/lib/termLook'
+import { useAgentDoneOn, useAgentIndicator, useAgentQuestionOn } from '@core/renderer/lib/termLook'
 import { useAgentColors } from '@core/renderer/lib/agentColors'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
 import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from '@core/renderer/lib/recentRoots'
 import { ContextMenu } from './ContextMenu'
 import { MenuIcon } from './MenuIcon'
 import { useTabWidth } from '../lib/tabWidthPrefs'
+import { workingRuns } from '../lib/workingRuns'
 
 /**
  * The open shells, as a row under the title bar.
@@ -55,13 +65,15 @@ export function TabStrip({
   activeId,
   workingIds,
   doneIds,
+  questionIds,
   agentIds,
   onPick,
   onClose,
   onNew,
   onDropFolder,
   onReorder,
-  onOpenRecent
+  onOpenRecent,
+  inTitleRow = false
 }: {
   tabs: Tab[]
   activeId: string | null
@@ -71,6 +83,8 @@ export function TabStrip({
   /** Sessions whose agent finished while their tab was in the background;
    *  they wear the finished colour until the tab is visited. */
   doneIds: ReadonlySet<string>
+  /** Sessions whose agent waits for your answer, unseen (2026-09-28). */
+  questionIds: ReadonlySet<string>
   /** Sessions whose shell currently hosts an AI CLI (Claude Code, codex). */
   agentIds: ReadonlySet<string>
   onPick: (id: string) => void
@@ -87,11 +101,47 @@ export function TabStrip({
   onReorder: (id: string, toIndex: number) => void
   /** Open a folder from the + menu's list of places a tab has been opened. */
   onOpenRecent: (path: string) => void
+  /** The title bar is hidden (#91): the strip sits in the window's top row,
+   *  beside the title buttons, and that row draws the rule under it. */
+  inTitleRow?: boolean
 }): JSX.Element | null {
   const indicator = useAgentIndicator()
   const width = useTabWidth()
   // The user's pick where there is one, else the theme's accent and green.
-  const { working: agentColor, finished: doneColor } = useAgentColors()
+  const { working: agentColor, finished: doneColor, question: questionColor } = useAgentColors()
+  const doneOn = useAgentDoneOn()
+  const questionOn = useAgentQuestionOn()
+  // Which tabs are WORKING, in strip order, for the joined bar below.
+  const workingAt = tabs.map((t) => indicator === 'minimal' && agentIds.has(t.id) && workingIds.has(t.id))
+  const runs = workingRuns(workingAt)
+  const inRun = new Set(runs.flatMap((r) => Array.from({ length: r.end - r.start + 1 }, (_, k) => r.start + k)))
+  const [runBars, setRunBars] = useState<Array<{ key: string; left: number; width: number; one: number }>>([])
+  const runKey = runs.map((r) => `${tabs[r.start].id}:${tabs[r.end].id}`).join('|')
+  useLayoutEffect(() => {
+    const box = strip.current
+    if (!box || !runs.length) {
+      setRunBars((prev) => (prev.length ? [] : prev))
+      return
+    }
+    const measure = (): void => {
+      const boxes = [...box.querySelectorAll<HTMLElement>('[data-tab]')]
+      setRunBars(
+        runs.map((r) => {
+          const a = boxes[r.start]
+          const b = boxes[r.end]
+          const left = a?.offsetLeft ?? 0
+          const width = b ? b.offsetLeft + b.offsetWidth - left : 0
+          return { key: `${tabs[r.start].id}:${tabs[r.end].id}`, left, width, one: width / (r.end - r.start + 1) }
+        })
+      )
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(box)
+    return () => ro.disconnect()
+    // runKey stands for `runs` and `tabs`, which are new arrays every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runKey, width, tabs.map((t) => t.cwd).join('\n')])
   // Full mode fills the tab with the colour. Text biases WHITE: strict
   // contrast maths picks black on a mid orange or indigo, but white on a
   // saturated fill is the look; black only wins on genuinely light fills
@@ -268,7 +318,7 @@ export function TabStrip({
       // icon slot and an X, each with a cursor of its own, and letting them
       // answer for themselves made it flicker under the moving pointer.
       data-tab-strip
-      className={`${dragInFlight ? 'no-drag' : 'drag'} p-styled-font flex h-8 shrink-0 items-stretch gap-0 overflow-x-auto border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1 text-[12px] transition-[background-color,border-color] duration-[550ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
+      className={`${dragInFlight ? 'no-drag' : 'drag'} p-styled-font relative flex ${inTitleRow ? 'min-w-0 flex-1' : 'h-8 shrink-0 border-b border-[var(--p-divider)]'} items-stretch gap-0 overflow-x-auto bg-[var(--p-tabs)] pr-1 text-[12px] transition-[background-color,border-color] duration-[550ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
         carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''
       }`}
     >
@@ -280,17 +330,22 @@ export function TabStrip({
         // icon plus edge bar tinted (minimal). Idle shows nothing.
         // A tab IS its shell here, so the tab's id is the session's.
         const working = indicator !== 'off' && agentIds.has(t.id) && workingIds.has(t.id)
-        // Finished-while-away belongs to FULL alone (owner, 2026-08-23):
-        // minimal answers one question, "is something running right now", and
-        // a tab that has merely stopped is not that.
-        const done = indicator === 'full' && !working && doneIds.has(t.id)
-        const tint = working ? agentColor : done ? doneColor : null
-        const loud = tint !== null && indicator === 'full'
+        // THE ATTENTION MARKS (2026-09-28; owner: a finished indicator, "a
+        // static colour like a green border on the bottom ... until you click
+        // the tab", and "a question indicator ... blue"). A static line along
+        // the bottom, the same in Minimal and Full, each behind its own
+        // switch; a question outranks a plain finish. Full's fill is for
+        // WORKING alone now: the finished fill it used to have is this line.
+        const question = questionOn && !working && questionIds.has(t.id)
+        const done = doneOn && !working && !question && doneIds.has(t.id)
+        const mark = question ? questionColor : done ? doneColor : null
+        const tint = working ? agentColor : mark
+        const loud = working && indicator === 'full'
         return (
           <div
             key={t.id}
             data-agent={tint ? indicator : undefined}
-            data-agent-state={working ? 'working' : done ? 'done' : undefined}
+            data-agent-state={working ? 'working' : question ? 'question' : done ? 'done' : undefined}
             data-agent-present={agentIds.has(t.id) ? '' : undefined}
             // Hairline side edges in the divider token: they separate flush
             // tabs when the style draws edges, and vanish (the token goes
@@ -314,7 +369,11 @@ export function TabStrip({
             data-tab-fixed={width === 'fixed' || undefined}
             data-tab-dynamic={width === 'dynamic' || undefined}
             className={`no-drag group relative flex items-center gap-1.5 border-r border-[color:var(--p-divider)] px-2.5 transition-colors ${
-              width === 'fixed' ? 'min-w-[64px] flex-[0_1_114px]' : 'min-w-0 shrink'
+              // Dynamic has a floor too (owner, 2026-09-28: "so it's not too
+              // small when there's a tab with only one letter ... maybe like 4
+              // letters"): never narrower than its own content, whose label
+              // is at least four characters wide.
+              width === 'fixed' ? 'min-w-[64px] flex-[0_1_114px]' : 'min-w-min shrink'
             } ${
               loud
                 ? ''
@@ -382,7 +441,15 @@ export function TabStrip({
                 agent works, the way a loading tab reads. It sits under the
                 label rather than beside it, so a narrow tab loses none of its
                 name to it. */}
-            {working && indicator === 'minimal' && (
+            {mark && (
+              <span
+                data-attention={question ? 'question' : 'done'}
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px]"
+                style={{ background: mark }}
+                aria-hidden
+              />
+            )}
+            {working && indicator === 'minimal' && !inRun.has(i) && (
               <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] overflow-hidden" aria-hidden>
                 <span
                   className="p-agent-run absolute inset-y-0 w-[42%] rounded-full"
@@ -429,7 +496,9 @@ export function TabStrip({
               // Fixed: takes whatever the tab leaves after its marks and the
               // close button, and truncates there. Fit: the label sizes the
               // tab, up to 14rem, as before #35.
-              className={`min-w-0 truncate py-1 text-left ${width === 'fixed' ? 'flex-1' : 'max-w-[14rem]'}`}
+              // CENTRED in both widths (owner, 2026-09-28), and never under
+              // four characters wide, so a one-letter name is not a sliver.
+              className={`min-w-[4ch] truncate py-1 text-center ${width === 'fixed' ? 'flex-1' : 'max-w-[14rem]'}`}
               // The label is the folder's last segment; the whole path is here.
               title={t.kind === 'settings' ? undefined : t.cwd}
               onClick={() => {
@@ -462,6 +531,33 @@ export function TabStrip({
           </div>
         )
       })}
+      {/* ONE BAR ACROSS NEIGHBOURING WORKING TABS (owner, 2026-09-28: "when
+          tabs 1, 2 and 3 are all working ... there should be one single working
+          indicator that moves across all the tabs and not 3 separate"). A run
+          of two or more draws one bar over their combined width; its length
+          and speed are a single tab's, so a wide run is not a blur. Tabs apart
+          keep their own. Measured from the tabs, so it follows every resize. */}
+      {runBars.map((b) => (
+        <span
+          key={b.key}
+          data-working-run
+          className="pointer-events-none absolute bottom-0 z-[6] h-[3px] overflow-hidden"
+          style={{ left: b.left, width: b.width }}
+          aria-hidden
+        >
+          <span
+            className="p-agent-run-span absolute inset-y-0 rounded-full"
+            style={
+              {
+                background: agentColor,
+                width: b.one * 0.42,
+                '--run-bar': `${b.one * 0.42}px`,
+                animationDuration: `${(1.25 * (b.width + b.one * 0.42)) / (b.one * 1.42)}s`
+              } as CSSProperties
+            }
+          />
+        </span>
+      ))}
       <button
         className="no-drag my-1 grid w-7 shrink-0 place-items-center rounded text-[var(--p-icon)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)]"
         title="New tab (Ctrl+T). Right-click for recent folders"

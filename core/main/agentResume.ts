@@ -1,5 +1,5 @@
-import { readdirSync, statSync } from 'fs'
-import { readdir, stat } from 'fs/promises'
+import { closeSync, openSync, readdirSync, readSync, statSync } from 'fs'
+import { open, readdir, stat } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 
@@ -10,6 +10,66 @@ import { join } from 'path'
 /** The marker that means "codex, continue this folder's newest session". Not
  *  an id: codex finds it itself. */
 export const CODEX_RESUME = 'codex:last'
+
+/**
+ * ONLY A CONVERSATION SOMEBODY HAD IN A TERMINAL IS RESUMED (2026-09-28; owner:
+ * "it continued the wrong session ... a message I hadn't sent, about a review
+ * it wanted the agent to conduct"). Claude's store for a folder also holds
+ * every session a TOOL started there through the Agent SDK: MEASURED, 25 of
+ * the 26 newest in the owner's repo folder were a commit hook's "Review this
+ * change for security vulnerabilities" runs, and 149 of the 150 newest in his
+ * home folder were SDK runs too. The newest file was one of those, so a tab
+ * came back to a conversation its user never had.
+ *
+ * What tells them apart is in the first few kilobytes, MEASURED on all of
+ * them: an SDK session opens with a `queue-operation` line and records an
+ * `entrypoint` of `sdk-py`, `sdk-cli` and the like; an interactive one records
+ * `cli`. A file that says neither (an older claude) is kept, as before.
+ */
+export function isInteractiveHead(head: string): boolean {
+  const cut = head.indexOf('\n')
+  const first = cut >= 0 ? head.slice(0, cut) : head
+  if (/"type"\s*:\s*"queue-operation"/.test(first)) return false
+  const ep = /"entrypoint"\s*:\s*"([^"]+)"/.exec(head)
+  return !ep || ep[1] === 'cli'
+}
+
+/** How much of a transcript is read to tell an interactive one: the marks
+ *  sit in its first lines. */
+const HEAD_BYTES = 4096
+
+/** How many interactive sessions a lookup answers with: one per tab in the
+ *  folder is what is used, and nobody restores this many into one folder. */
+const WANT = 32
+
+function headSync(file: string): string {
+  let fd = -1
+  try {
+    fd = openSync(file, 'r')
+    const buf = Buffer.alloc(HEAD_BYTES)
+    const n = readSync(fd, buf, 0, HEAD_BYTES, 0)
+    return buf.subarray(0, n).toString('utf8')
+  } catch {
+    return ''
+  } finally {
+    if (fd >= 0) closeSync(fd)
+  }
+}
+
+async function headAsync(file: string): Promise<string> {
+  try {
+    const fh = await open(file, 'r')
+    try {
+      const buf = Buffer.alloc(HEAD_BYTES)
+      const { bytesRead } = await fh.read(buf, 0, HEAD_BYTES, 0)
+      return buf.subarray(0, bytesRead).toString('utf8')
+    } finally {
+      await fh.close()
+    }
+  } catch {
+    return ''
+  }
+}
 
 /**
  * The Claude sessions recorded for `cwd`, newest first, from claude's own
@@ -29,11 +89,16 @@ export function claudeSessions(cwd: string, home: string = homedir()): string[] 
   const enc = cwd.replace(/[^A-Za-z0-9]/g, '-')
   const dir = join(home, '.claude', 'projects', enc)
   try {
-    return readdirSync(dir)
+    const newest = readdirSync(dir)
       .filter((f) => f.endsWith('.jsonl'))
       .map((f) => ({ id: f.slice(0, -'.jsonl'.length), m: statSync(join(dir, f)).mtimeMs }))
       .sort((a, b) => b.m - a.m)
-      .map((s) => s.id)
+    const out: string[] = []
+    for (const s of newest) {
+      if (out.length >= WANT) break
+      if (isInteractiveHead(headSync(join(dir, `${s.id}.jsonl`)))) out.push(s.id)
+    }
+    return out
   } catch {
     return []
   }
@@ -71,7 +136,19 @@ export async function claudeSessionsAsync(cwd: string, home: string = homedir())
     }
   }
   await Promise.all(Array.from({ length: Math.min(16, names.length) }, worker))
-  return found.sort((a, b) => b.m - a.m).map((s) => s.id)
+  // Newest first, and only the interactive ones: heads are read from the
+  // newest down, a batch at a time, until enough are found. A folder whose
+  // newest files are all a tool's still costs a few kilobytes per file.
+  const newest = found.sort((a, b) => b.m - a.m)
+  const out: string[] = []
+  for (let i = 0; i < newest.length && out.length < WANT; i += 16) {
+    const batch = newest.slice(i, i + 16)
+    const heads = await Promise.all(batch.map((s) => headAsync(join(dir, `${s.id}.jsonl`))))
+    batch.forEach((s, k) => {
+      if (out.length < WANT && isInteractiveHead(heads[k])) out.push(s.id)
+    })
+  }
+  return out
 }
 
 /**

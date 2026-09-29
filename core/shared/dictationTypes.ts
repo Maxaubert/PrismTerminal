@@ -56,7 +56,7 @@ export interface TranscribeRequest {
 
 export type TranscribeResult =
   | { ok: true; text: string; engine: EngineKind }
-  | { ok: false; reason: 'no-model' | 'no-engine' | 'engine-failed' | 'superseded'; detail?: string }
+  | { ok: false; reason: 'no-model' | 'no-engine' | 'engine-failed' | 'superseded' | 'warming'; detail?: string }
 
 export interface EngineInfo {
   /** An NVIDIA adapter is present, so the GPU pack is worth offering. */
@@ -87,6 +87,10 @@ export interface DictationStore {
 /** The resident whisper-server: started on first use, gone when idle or stopped. */
 export interface DictationEngine {
   transcribe(req: TranscribeRequest): Promise<TranscribeResult>
+  /** Start the server for this model and language and run one silent pass,
+   *  so the first real one is fast (2026-09-28). Does nothing when the server
+   *  up is already warm for them, or a warm-up is on its way. */
+  warm(req: { modelId: string; language: string }): Promise<TranscribeResult>
   /** Kill the server now (dictation switched off, app quitting). */
   stop(): void
   info(): { running: boolean; engine: EngineKind | null; gpuFellBack: boolean }
