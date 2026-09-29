@@ -702,11 +702,14 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
   missing mid-install). Launch only after setup has gone, and report the installed version.
 - **THE OWNER WORKS IN A STABLE COPY; NEVER CLOSE IT** (2026-09-28: "install prism terminal somewhere
   safe, a duplicate version, just so i can code with claude or codex in there without it closing").
-  `npm run install:stable` (`tools/install-stable.ps1`) copies the installed app to `%LOCALAPPDATA%\Programs\PrismTerminalStable`
+  `npm run install:stable` (`tools/install-stable.ps1`) copies the installed app to `%LOCALAPPDATA%\PrismTerminalStable`
   as `PrismTerminalStable.exe`, profile `%APPDATA%\PrismTerminalStable` (`--user-data-dir`, its own
   lock and tabs, `shell-verb-off` so it never writes the Explorer verbs), Start menu "Prism Terminal
   (Stable)". Install steps close processes named `PrismTerminal` ONLY: never `PrismTerminalStable`,
   never by path or window title. The copy moves to a new version only when the owner runs the script.
+  **NEVER UNDER `Programs\`** (#88): the NSIS installer also stops every process whose path STARTS
+  WITH its install folder, and `Programs\PrismTerminal` prefixes `Programs\PrismTerminalStable\`, so
+  every install killed the copy. No folder the copy lives in may start with an install folder.
 
 ## Style
 
