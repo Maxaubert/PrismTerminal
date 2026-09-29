@@ -97,7 +97,7 @@ export interface TermHostConfig {
    * host's to name: Prism Terminal derives its chrome from the terminal theme,
    * Prism takes it from the app style.
    */
-  themedAgentColors(themeId: string): { working: string; finished: string }
+  themedAgentColors(themeId: string): { working: string; finished: string; question?: string }
 
   /**
    * The colour the terminal is really painted on, where the host lets somebody

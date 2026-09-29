@@ -11,6 +11,7 @@ import {
   saveCustomTermTheme,
   setAgentColor,
   setAgentDoneColor,
+  setAgentQuestionColor,
   setAgentIndicator,
   setTermAcrylic,
   setTermFontId,
@@ -20,6 +21,7 @@ import {
   termThemeId,
   useAgentColorChoice,
   useAgentDoneColorChoice,
+  useAgentQuestionColorChoice,
   useCustomTermTheme,
   useTermAcrylic,
   useTermFontId,
@@ -32,7 +34,7 @@ import { resolveTermTheme, watchTermTheme, TERM_PRESETS } from '../lib/termTheme
 import { useAgentColors } from '../lib/agentColors'
 import { luminance, normalizeColor } from '../lib/termAnsi'
 import { HexSwatch, Pref, RESET_LINK, ROWS, SaveButton, Select, Switch, ThemeHead } from './fields'
-import { AgentIndicatorSetting } from './TerminalBehaviour'
+import { AgentIndicatorSetting, AttentionSettings } from './TerminalBehaviour'
 import ThemeSwitchAsk from '../components/ThemeSwitchAsk'
 
 // THE TERMINAL'S LOOK, as one settings section for both hosts (#15): the theme
@@ -354,6 +356,7 @@ export function TerminalAppearanceSettings({
   // colours in force are what the swatches show.
   const agentCol = useAgentColorChoice()
   const doneCol = useAgentDoneColorChoice()
+  const questionCol = useAgentQuestionColorChoice()
   const inForce = useAgentColors()
   const custom = useCustomTermTheme()
   // What the HOST's style looks like right now, for its card; re-read when the
@@ -429,6 +432,7 @@ export function TerminalAppearanceSettings({
   const extras = {
     indicatorColor: agentCol,
     doneColor: doneCol,
+    questionColor: questionCol,
     acrylic: acrylicOn,
     opacity
   }
@@ -441,6 +445,7 @@ export function TerminalAppearanceSettings({
   const baseline = {
     indicatorColor: src?.indicatorColor ?? termExtraDefaults().indicatorColor,
     doneColor: src?.doneColor ?? termExtraDefaults().doneColor,
+    questionColor: src?.questionColor ?? termExtraDefaults().questionColor,
     acrylic: src?.acrylic ?? termExtraDefaults().acrylic,
     opacity: src?.opacity ?? termExtraDefaults().opacity
   }
@@ -512,6 +517,7 @@ export function TerminalAppearanceSettings({
         />
       </Pref>
       {withIndicator && <AgentIndicatorSetting />}
+      {withIndicator && <AttentionSettings />}
       <div data-pref="term-theme" className="border-b border-[color:var(--p-line)] py-2.5">
         <ThemeHead
           // Where the host has styles of its own the window wears THOSE; only a
@@ -669,7 +675,7 @@ export function TerminalAppearanceSettings({
       )}
       <Pref
         id="agent-color"
-        label="Agent working indicator"
+        label="Working colour"
         hint={
           agentCol
             ? 'The colour a tab shows while its agent is working. Uses your own colour.'
@@ -682,12 +688,12 @@ export function TerminalAppearanceSettings({
               Reset
             </button>
           )}
-          <HexSwatch label="Agent working indicator" value={inForce.working} onChange={setAgentColor} />
+          <HexSwatch label="Working colour" value={inForce.working} onChange={setAgentColor} />
         </div>
       </Pref>
       <Pref
         id="agent-done-color"
-        label="Agent finished indicator"
+        label="Finished colour"
         hint={
           doneCol
             ? 'The colour a tab keeps after its agent finishes, until you open it. Uses your own colour.'
@@ -700,7 +706,25 @@ export function TerminalAppearanceSettings({
               Reset
             </button>
           )}
-          <HexSwatch label="Agent finished indicator" value={inForce.finished} onChange={setAgentDoneColor} />
+          <HexSwatch label="Finished colour" value={inForce.finished} onChange={setAgentDoneColor} />
+        </div>
+      </Pref>
+      <Pref
+        id="agent-question-color"
+        label="Question colour"
+        hint={
+          questionCol
+            ? 'The colour a tab shows while its agent waits for your answer, until you open it. Uses your own colour.'
+            : 'The colour a tab shows while its agent waits for your answer, until you open it. Follows the theme.'
+        }
+      >
+        <div className="flex items-center gap-2.5">
+          {questionCol && (
+            <button data-follow-theme="question" onClick={() => setAgentQuestionColor('')} className={RESET_LINK}>
+              Reset
+            </button>
+          )}
+          <HexSwatch label="Question colour" value={inForce.question} onChange={setAgentQuestionColor} />
         </div>
       </Pref>
     </div>

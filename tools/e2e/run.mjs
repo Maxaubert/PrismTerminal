@@ -18,7 +18,7 @@ import { execFileSync, spawn } from 'child_process'
 import { createHash } from 'crypto'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join, resolve } from 'path'
+import { dirname, join, resolve } from 'path'
 import { createRequire } from 'module'
 
 const require = createRequire(import.meta.url)
@@ -338,6 +338,104 @@ const scenarios = {
     const cleared = await until(() => page.evaluate(() => !document.querySelector('[data-agent-state="done"]')), 5000, 50)
     ok(cleared, 'visiting the tab clears it')
     await closeApp(app)
+  },
+
+  /**
+   * ATTENTION MARKS, ONE BAR FOR A RUN, THE TASKBAR BADGE, TAB LABELS
+   * (2026-09-28, the owner's requests of the day). Shells stand in for Claude
+   * through its titles, as in `indicator`; a question is Claude's footer on
+   * the screen while the title is idle (MEASURED: that is all Claude gives).
+   */
+  async attention(ok) {
+    const w = world()
+    const gamma = join(dirname(w.alpha), 'gamma')
+    const one = join(dirname(w.alpha), 'x')
+    mkdirSync(gamma)
+    mkdirSync(one)
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta, gamma, one] })
+    try {
+      await until(async () => (await tabLabels(page)).length === 4)
+      const tab = (i) => page.locator('[data-tab]').nth(i)
+      const at = (i, cmd) => tab(i).click().then(() => typeLine(page, cmd))
+      const state = (i) => tab(i).getAttribute('data-agent-state')
+      const badge = () => page.evaluate(() => window.prism.e2eTaskbarBadge())
+      const IDLE = "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'"
+      const WORK = "$Host.UI.RawUI.WindowTitle = [char]0x25D0 + ' Claude Code'"
+
+      // TAB LABELS: centred, and a one-letter folder is not a sliver.
+      const label = await page.evaluate(() => {
+        const tabs = [...document.querySelectorAll('[data-tab]')]
+        const x = tabs.find((t) => (t.textContent ?? '').trim().startsWith('x'))
+        const btn = x?.querySelector('[role="tab"]')
+        const probe = document.createElement('span')
+        probe.textContent = '0000'
+        probe.style.font = btn ? getComputedStyle(btn).font : ''
+        probe.style.position = 'absolute'
+        document.body.appendChild(probe)
+        const four = probe.getBoundingClientRect().width
+        probe.remove()
+        return { align: btn ? getComputedStyle(btn).textAlign : '', width: btn?.getBoundingClientRect().width ?? 0, four }
+      })
+      ok(label.align === 'center', `tab names are centred (${label.align})`)
+      ok(label.width >= label.four - 1, `a one-letter tab is at least four characters wide (${label.width.toFixed(1)} vs ${label.four.toFixed(1)})`)
+
+      // Three Claudes side by side, all working: ONE bar across them.
+      for (const i of [0, 1, 2]) {
+        await tab(i).click()
+        await polled(page)
+        await typeLine(page, IDLE)
+      }
+      for (const i of [0, 1, 2]) await at(i, WORK)
+      await until(async () => (await state(0)) === 'working' && (await state(1)) === 'working' && (await state(2)) === 'working', 8000, 50)
+      const joined = await page.evaluate(() => {
+        const runs = [...document.querySelectorAll('[data-working-run]')].map((r) => r.getBoundingClientRect())
+        const tabs = [...document.querySelectorAll('[data-tab]')].slice(0, 3).map((t) => t.getBoundingClientRect())
+        return { runs: runs.map((r) => [Math.round(r.left), Math.round(r.width)]), span: [Math.round(tabs[0].left), Math.round(tabs[2].right - tabs[0].left)], single: document.querySelectorAll('[data-tab] .p-agent-run').length }
+      })
+      ok(joined.runs.length === 1 && Math.abs(joined.runs[0][0] - joined.span[0]) <= 1 && Math.abs(joined.runs[0][1] - joined.span[1]) <= 2, `three working neighbours draw one bar across all three (${JSON.stringify(joined)})`)
+      ok(joined.single === 0, 'and none of their own')
+      await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/attention-run.png') }).catch(() => {})
+      // The middle one stops: 1 and 3 are not neighbours, so each has its own.
+      await at(1, IDLE)
+      ok(
+        !!(await until(() => page.evaluate(() => document.querySelectorAll('[data-working-run]').length === 0 && document.querySelectorAll('[data-tab] .p-agent-run').length === 2), 5000, 50)),
+        'with the middle one idle, the two apart each draw their own'
+      )
+
+      // A QUESTION on a background tab: Claude's footer on screen, title idle.
+      await at(0, "Start-Sleep -Milliseconds 1500; Write-Host 'Enter to select, Esc to cancel'; " + IDLE)
+      await tab(1).click()
+      ok(!!(await until(async () => (await state(0)) === 'question', 10000, 50)), 'a question asked on a background tab marks it')
+      const q = await page.evaluate(() => {
+        const line = document.querySelectorAll('[data-tab]')[0].querySelector('[data-attention]')
+        return { kind: line?.getAttribute('data-attention'), height: line ? Math.round(line.getBoundingClientRect().height) : 0 }
+      })
+      ok(q.kind === 'question' && q.height === 3, `as a line along the bottom (${JSON.stringify(q)})`)
+      await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/attention-question.png') }).catch(() => {})
+      ok(!!(await until(async () => (await badge()) === '1 tab needs a look', 4000, 50)), `and the taskbar badge counts it (${await badge()})`)
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+      await tab(0).click()
+      ok(!!(await until(async () => (await state(0)) === null, 4000, 50)), 'opening the tab clears it')
+      ok(!!(await until(async () => (await badge()) === '', 4000, 50)), 'and the badge with it')
+
+      // FINISHED on a background tab: the green line, until the tab is opened.
+      await at(2, "Start-Sleep -Milliseconds 1500; " + IDLE)
+      await tab(1).click()
+      ok(!!(await until(async () => (await state(2)) === 'done', 10000, 50)), 'an agent that finishes on a background tab marks it')
+      ok(!!(await until(async () => (await badge()) === '1 tab needs a look', 4000, 50)), 'and is counted on the taskbar')
+      // Switched off, the finished mark goes, and the badge has nothing to count.
+      await page.evaluate(() => localStorage.setItem('prism.term.agentDoneOn', '0'))
+      await page.locator('[data-title-settings]').click()
+      await page.locator('[data-settings-tab="appearance"]').click()
+      const sw = page.locator('[data-pref="agent-done-on"] [role="switch"]')
+      if ((await sw.getAttribute('aria-checked')) === 'true') await sw.click()
+      ok(!!(await until(async () => (await badge()) === '', 4000, 50)), 'with the Finished indicator off, nothing is counted')
+      ok((await page.locator('[data-tab] [data-attention="done"]').count()) === 0, 'and no finished line is drawn')
+      await page.locator('[data-pref="agent-done-on"] [role="switch"]').click()
+      await at(0, "$Host.UI.RawUI.WindowTitle = 'pwsh'")
+    } finally {
+      await closeApp(app)
+    }
   },
 
   /** A light theme makes a light window: measured, never read off a name. */
@@ -902,6 +1000,64 @@ const scenarios = {
     await sleep(200)
     ok((await boxes()).map((b) => b.w).join('|') === before, 'picking another tab moves no tab')
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tabs-fixed.png') }).catch(() => {})
+    await closeApp(app)
+  },
+
+  // NO TITLE BAR (#91; owner, 2026-09-28, "tabs in the top row"): Hidden
+  // puts the tabs in the title bar's row with its buttons at the end, one row
+  // where there were two. Shown, the default, is the window as it was.
+  async titleBar(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open')
+    const layout = () =>
+      page.evaluate(() => {
+        const bar = document.querySelector('[data-title-bar]')
+        const strip = document.querySelector('[data-tab-strip]')
+        const host = document.querySelector('[data-term-host]')
+        const inBar = (sel) => !!bar?.querySelector(sel)
+        return {
+          mode: bar?.getAttribute('data-title-bar') ?? null,
+          name: (bar?.textContent ?? '').includes('Prism Terminal'),
+          stripInBar: !!(bar && strip && bar.contains(strip)),
+          buttons: inBar('[data-title-settings]') && inBar('[data-window-close]') && inBar('[aria-label="Minimize"]'),
+          hostTop: Math.round(host?.getBoundingClientRect().top ?? -1),
+          stripTop: Math.round(strip?.getBoundingClientRect().top ?? -1),
+          stripDrag: strip ? getComputedStyle(strip).getPropertyValue('-webkit-app-region') || getComputedStyle(strip).getPropertyValue('app-region') : '',
+          closeRight: Math.round(innerWidth - (document.querySelector('[data-window-close]')?.getBoundingClientRect().right ?? 0))
+        }
+      })
+    const shown = await layout()
+    ok(shown.mode !== 'tabs' && shown.name && !shown.stripInBar && shown.buttons, `by default the title bar is its own row, with the name (${JSON.stringify(shown)})`)
+    ok(shown.hostTop >= 64, `two rows above the terminal (${shown.hostTop}px)`)
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    const row = page.locator('[data-pref="title-bar"]')
+    await row.waitFor({ timeout: 8000 })
+    await row.locator('[data-seg="hidden"]').click()
+    ok((await page.evaluate(() => localStorage.getItem('prism.window.titleBar'))) === 'hidden', 'Hidden is stored')
+    await page.locator('[data-tab]').first().click()
+    await sleep(300)
+    const hidden = await layout()
+    ok(hidden.mode === 'tabs' && hidden.stripInBar && !hidden.name, `hidden: the tabs are in the top row, no name (${JSON.stringify(hidden)})`)
+    ok(hidden.buttons && hidden.closeRight <= 12, `and the settings, minimise and close buttons sit at its right end (${hidden.closeRight}px from the edge)`)
+    ok(hidden.stripTop === 0 && hidden.hostTop > 20 && hidden.hostTop <= 40, `one row above the terminal (${hidden.hostTop}px, was ${shown.hostTop}px)`)
+    ok(hidden.stripDrag === 'drag', `the strip's empty space still moves the window (${hidden.stripDrag})`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/title-bar-hidden.png') }).catch(() => {})
+    // The start screen: no tabs, and the buttons are still there to reach.
+    for (let i = 0; i < 6 && (await tabLabels(page)).length; i += 1) {
+      await page.keyboard.press('Control+w')
+      await sleep(300)
+    }
+    ok(await until(async () => (await tabLabels(page)).length === 0), 'every tab closed')
+    const empty = await layout()
+    ok(empty.mode === 'tabs' && empty.buttons, 'with no tabs the top row still holds the buttons')
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="appearance"]').click()
+    await row.locator('[data-seg="shown"]').click()
+    await sleep(200)
+    const back = await layout()
+    ok(back.mode !== 'tabs' && back.name, 'Shown brings the title bar back')
     await closeApp(app)
   },
 
@@ -1730,7 +1886,7 @@ const scenarios = {
     // 'window-edges' (#27) is the window's chrome, which in Prism belongs to
     // the app style and has a row of its own there: this app's, not the core's.
     // 'window-accent' is the same: the accent is the app style's in Prism.
-    const own = ['newtab-mode', 'explorer-verb', 'app-version', 'window-edges', 'window-accent', 'window-background', 'tab-width']
+    const own = ['newtab-mode', 'explorer-verb', 'taskbar-badge', 'app-version', 'window-edges', 'window-accent', 'window-background', 'tab-width', 'title-bar']
     const extra = [...shown].filter((id) => !wanted.includes(id) && !own.includes(id))
     ok(extra.length === 0, `and nothing else claims to be a setting (extra: ${JSON.stringify(extra)})`)
     ok((await page.locator('[data-pref="confirm-close"]').count()) === 0, 'the close question is not a setting any more')
@@ -1839,7 +1995,7 @@ const scenarios = {
       // WHAT NO THEME OWNS SITS ABOVE THE WALL, WHAT A THEME SETS UNDER IT
       // (owner, 2026-09-28).
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
-      const want = ['tab-width', 'window-edges', 'term-font-family', 'term-font', 'agent-indicator', 'term-theme', 'window-background', 'window-accent']
+      const want = ['tab-width', 'title-bar', 'window-edges', 'term-font-family', 'term-font', 'agent-indicator', 'agent-done-on', 'agent-question-on', 'term-theme', 'window-background', 'window-accent']
       ok(JSON.stringify(rows.slice(0, want.length)) === JSON.stringify(want), `the page runs ${want.join(' > ')} (${rows.slice(0, want.length).join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()
@@ -2069,12 +2225,22 @@ const scenarios = {
     await page.locator('[data-term-card]').first().waitFor({ timeout: 10000 })
     const measure = () =>
       page.evaluate(() => {
-        const cards = [...document.querySelectorAll('[data-term-card]')].map((c) => {
-          const r = c.getBoundingClientRect()
-          return { id: c.getAttribute('data-term-card'), top: Math.round(r.top), h: Math.round(r.height * 10) / 10 }
-        })
-        const below = document.querySelector('[data-pref="window-background"]')?.getBoundingClientRect().top ?? -1
-        return { cards, below: Math.round(below * 10) / 10 }
+        // Positions IN THE PAGE, not on the screen: a picked card low on the
+        // page is scrolled into view, which moves everything on screen and
+        // shifts nothing in the layout (2026-09-28, when rows moved above the
+        // wall and put it lower). The shift is what this is about.
+        const any = document.querySelector('[data-term-card]')
+        let box = any?.parentElement ?? null
+        while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement
+        const origin = box ? box.getBoundingClientRect().top - box.scrollTop : 0
+        const y = (el) => el.getBoundingClientRect().top - origin
+        const cards = [...document.querySelectorAll('[data-term-card]')].map((c) => ({
+          id: c.getAttribute('data-term-card'),
+          top: Math.round(y(c)),
+          h: Math.round(c.getBoundingClientRect().height * 10) / 10
+        }))
+        const row = document.querySelector('[data-pref="window-background"]')
+        return { cards, below: row ? Math.round(y(row) * 10) / 10 : -1 }
       })
     const first = await measure()
     const rowTops = [...new Set(first.cards.map((c) => c.top))]
@@ -3063,6 +3229,9 @@ const scenarios = {
       (await page.locator('[data-pref="dictation-enabled"] [role="switch"]').getAttribute('aria-checked')) === 'true',
       'the Dictation page switches it on'
     )
+    // WARM BEFORE ANYBODY SPEAKS (2026-09-28): switched on, the engine is
+    // started and warmed a moment later, not at the first press.
+    ok(await until(() => ourSpeechServers() === 1, 15000), 'switched on, the speech engine is started before any press')
     await page.locator('[data-tab]').first().click()
     await page.locator('.xterm').first().click({ force: true })
     const rowsTop = () => page.evaluate(() => Math.round(document.querySelector('.xterm .xterm-rows')?.getBoundingClientRect().top ?? -1))

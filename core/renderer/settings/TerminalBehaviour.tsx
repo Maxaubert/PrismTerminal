@@ -1,8 +1,16 @@
 import { useEffect, useState, type JSX } from 'react'
 import { termApi } from '../host'
 import { savedShellId, saveShellId } from '../lib/termPrefs'
-import { setAgentIndicator, useAgentIndicator, type AgentIndicator } from '../lib/termLook'
-import { Pref, Segmented, Select } from './fields'
+import {
+  setAgentDoneOn,
+  setAgentIndicator,
+  setAgentQuestionOn,
+  useAgentDoneOn,
+  useAgentIndicator,
+  useAgentQuestionOn,
+  type AgentIndicator
+} from '../lib/termLook'
+import { Pref, Segmented, Select, Switch } from './fields'
 
 // THE TERMINAL'S BEHAVIOUR ROWS, for both hosts (#15): which shell a new
 // terminal launches, and how loudly a working agent shows on its tab. Rows
@@ -47,6 +55,34 @@ export function ShellSetting(): JSX.Element | null {
 /** Off, a line under the tab, or the whole tab filled. It is about how YOU like
  *  the indicator, not part of a colour theme: a theme pick never resets it and
  *  a saved theme never carries it (owner, 2026-09-19, for both apps). */
+/**
+ * THE TWO ATTENTION MARKS, each a switch (2026-09-28; owner: "an optional
+ * completion indicator" and "a question indicator ... also optional"). What
+ * each shows, the tab strip draws; their colours are with the theme's.
+ */
+export function AttentionSettings(): JSX.Element {
+  const doneOn = useAgentDoneOn()
+  const questionOn = useAgentQuestionOn()
+  return (
+    <>
+      <Pref
+        id="agent-done-on"
+        label="Finished indicator"
+        hint="Marks a tab whose agent finished while you were away, until you open it."
+      >
+        <Switch on={doneOn} onChange={setAgentDoneOn} label="Finished indicator" />
+      </Pref>
+      <Pref
+        id="agent-question-on"
+        label="Question indicator"
+        hint="Marks a tab whose agent is waiting for your answer, until you open it."
+      >
+        <Switch on={questionOn} onChange={setAgentQuestionOn} label="Question indicator" />
+      </Pref>
+    </>
+  )
+}
+
 export function AgentIndicatorSetting(): JSX.Element {
   const volume = useAgentIndicator()
   return (

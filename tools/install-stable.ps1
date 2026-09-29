@@ -7,6 +7,12 @@
 # profile:
 #  - `PrismTerminalStable.exe`: every install step closes `PrismTerminal`
 #    processes by name, and so does the NSIS installer; this name is neither.
+#  - NOT under Programs (#88): the NSIS installer ALSO stops every process
+#    whose path starts with its install folder (`Path.StartsWith($INSTDIR)` in
+#    electron-builder's allowOnlyOneInstallerInstance.nsh), and
+#    `Programs\PrismTerminal` is a prefix of `Programs\PrismTerminalStable\`.
+#    So the copy lives at %LOCALAPPDATA%\PrismTerminalStable, which no install
+#    folder prefixes. A copy at the old place is moved on the next run.
 #  - `--user-data-dir` = %APPDATA%\PrismTerminalStable: the app keeps that
 #    profile (main/index.ts), and the single-instance lock is per profile, so
 #    it runs beside the installed app with its own tabs and its own restore.
@@ -20,7 +26,8 @@
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File tools\install-stable.ps1
 $ErrorActionPreference = 'Stop'
 $source = Join-Path $env:LOCALAPPDATA 'Programs\PrismTerminal'
-$target = Join-Path $env:LOCALAPPDATA 'Programs\PrismTerminalStable'
+$target = Join-Path $env:LOCALAPPDATA 'PrismTerminalStable'
+$oldTarget = Join-Path $env:LOCALAPPDATA 'Programs\PrismTerminalStable'
 $profileDir = Join-Path $env:APPDATA 'PrismTerminalStable'
 $exe = Join-Path $target 'PrismTerminalStable.exe'
 if (-not (Test-Path (Join-Path $source 'PrismTerminal.exe'))) { throw "Prism Terminal is not installed at $source" }
@@ -42,6 +49,8 @@ $global:LASTEXITCODE = 0
 Move-Item -Force (Join-Path $target 'PrismTerminal.exe') $exe
 # The uninstaller belongs to the installed app; one in the copy would remove it.
 Get-ChildItem $target -Filter 'Uninstall*.exe' | Remove-Item -Force
+# The copy at the old place (the process was closed above, by name).
+if (Test-Path $oldTarget) { Remove-Item -Recurse -Force $oldTarget -ErrorAction SilentlyContinue }
 
 $first = -not (Test-Path $profileDir)
 New-Item -ItemType Directory -Force $profileDir | Out-Null
