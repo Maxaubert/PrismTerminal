@@ -63,8 +63,6 @@ import { onWindowAccentChange, windowAccent } from './lib/accentPrefs'
 import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPrefs'
 import { attentionCount, drawBadge, useTaskbarBadgeOn } from './lib/taskbarBadge'
 import { useAgentDoneOn, useAgentQuestionOn } from '@core/renderer/lib/termLook'
-import { useAgentColors } from '@core/renderer/lib/agentColors'
-import { contrastRatio } from '@core/renderer/lib/termAnsi'
 
 const Settings = lazy(() => import('./components/Settings'))
 // Loaded when it is first opened: the popup brings the whole catalogue with it,
@@ -423,23 +421,20 @@ export default function App(): JSX.Element {
     window.prism.setAgentBusy(holdsWindowClose(workingIds.size))
   }, [workingIds])
 
-  // THE TASKBAR BADGE (2026-09-28): how many tabs show a mark, drawn in the
-  // question colour when any is a question, else the finished colour.
+  // THE TASKBAR BADGE (2026-09-28): how many tabs show a mark, as a small grey
+  // disc with a white number (2026-09-29, the owner's look).
   const badgeOn = useTaskbarBadgeOn()
   const doneOn = useAgentDoneOn()
   const questionOn = useAgentQuestionOn()
-  const marks = useAgentColors()
   const need = attentionCount({ doneIds, questionIds, workingIds, doneOn, questionOn })
   useEffect(() => {
     if (!badgeOn || need.count === 0) {
       window.prism.setTaskbarBadge(null, '')
       return
     }
-    const fill = need.question ? marks.question : marks.finished
-    const ink = contrastRatio('#000000', fill) < 12 ? '#ffffff' : '#000000'
     const said = `${need.count} ${need.count === 1 ? 'tab needs' : 'tabs need'} a look`
-    window.prism.setTaskbarBadge(drawBadge(need.count, fill, ink) || null, said)
-  }, [badgeOn, need.count, need.question, marks.question, marks.finished])
+    window.prism.setTaskbarBadge(drawBadge(need.count) || null, said)
+  }, [badgeOn, need.count])
 
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
   // keyboard back: clicking or dragging a tab is not "I left the shell".
