@@ -39,6 +39,20 @@ export function pasteInto(sessionId: string): boolean {
  * panel. The panel hands its paste in when its module loads, and until then
  * there is no session to paste into anyway.
  */
+/**
+ * THE BOTTOM OF A SESSION'S SCREEN, as text rows (2026-09-28), for the question
+ * indicator (`agentQuestion`). The panel owns the xterm instances and sits
+ * behind Prism's lazy boundary, so the indicator hook reads through here and
+ * never imports it. No reader yet: no rows.
+ */
+let screenTail: ((sessionId: string, rows: number) => string[]) | null = null
+export function setScreenTail(fn: (sessionId: string, rows: number) => string[]): void {
+  screenTail = fn
+}
+export function readScreenTail(sessionId: string, rows = 16): string[] {
+  return screenTail ? screenTail(sessionId, rows) : []
+}
+
 let textPaster: ((sessionId: string, text: string) => boolean) | null = null
 export function setTextPaster(fn: (sessionId: string, text: string) => boolean): void {
   textPaster = fn

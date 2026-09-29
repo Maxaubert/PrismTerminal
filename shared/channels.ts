@@ -30,6 +30,7 @@ export const DCH = {
   remove: 'dictation:remove',
   progress: 'dictation:progress',
   transcribe: 'dictation:transcribe',
+  warm: 'dictation:warm',
   stop: 'dictation:stop',
   mediaPause: 'dictation:media-pause',
   mediaResume: 'dictation:media-resume'
