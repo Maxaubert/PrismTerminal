@@ -425,7 +425,8 @@ confirmation, Explorer verbs, the update chip and its window, command help (#12)
 
 Out, each a fresh owner decision and not a natural next step: split panes, several shells per tab,
 per-shell profiles, a tray icon, multiple windows, SSH management, app styles separate from the
-terminal theme, anything that reads or shows files.
+terminal theme, anything that reads or shows files. (OPENING a path in the app Windows gives it is in:
+the owner's own call, #99.)
 
 ## Rules that must not regress (all measured in Prism, not assumed)
 
@@ -624,6 +625,18 @@ terminal theme, anything that reads or shows files.
   rewritten row starts clean. Per row, since a TUI places its own text. Columns are counted in
   CELLS, since a wide character is one character and two cells. xterm splits a row into spans as
   it likes, so the e2e finds a link's span by POSITION, never by its text.
+- **A PATH ON SCREEN IS A LINK WHEN IT EXISTS** (#99; owner, 2026-09-29: "clickable links that would
+  open the file or folder", then "go ahead"). `lib/termPaths` finds what COULD be a path (relative or
+  absolute, sentence punctuation and `:12` taken off); main's `termPathOpen` answers which exist from
+  the shell's folder (`cwd` tracks the prompt's OSC 9;9), and ONLY those are painted and clickable
+  (`lib/termPathLinks`: batched, cached per folder, a "no" forgotten after 15 s). A left click opens
+  a file in its own app and a folder in Explorer; ANYTHING RUNNABLE (exe, scripts, shortcuts,
+  installers: `isRunnable`) is only SHOWN in Explorer, never run. Main never trusts the page with
+  a path: it gets the TEXT back and resolves and checks it again. No UNC paths (a share can stall a
+  stat). A prompt (`PS C:\x>`, `C:\x>`) is not a link. Menu: Open, Show in Explorer, Copy path.
+  Under `--e2e` main records (`__e2eOpenedPaths`) and opens nothing. A host without `paths` in its
+  main deps (Prism, until wired) paints no paths at all; `TermHostConfig.openPath` is where Prism
+  opens them inside Prism. The `pathLinks` e2e holds it.
 - **A file dropped on the terminal types its quoted path, and the terminal answers a right-click**
   (2026-09-19, #16). Both lived in Prism's `TermDock.tsx`, the split dock, and went with it when
   the dock was stripped, while the README, the spec and PR #3 went on listing the drop as shipped

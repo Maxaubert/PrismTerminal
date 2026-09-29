@@ -5,7 +5,9 @@ import TerminalPanel, {
   ensureTermSession,
   focusTermSession,
   focusedTermFullScreen,
-  termContextAt
+  openTermPath,
+  termContextAt,
+  type TermPathAt
 } from '@core/renderer/components/TerminalPanel'
 import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
@@ -125,6 +127,8 @@ export default function App(): JSX.Element {
     /** What was selected when the menu opened, and the link under the point. */
     selection: string
     link: string | null
+    /** A file or folder under the point that exists (#99). */
+    path: TermPathAt | null
   } | null>(null)
   /** The command help popup (#12). The core's, the same in Prism; what is this
    *  app's is the way in (F1, the ? in the title bar, the terminal's menu). */
@@ -612,6 +616,18 @@ export default function App(): JSX.Element {
             // the command help, which also raises the "Copied" badge once the
             // clipboard has it. Close tab left this menu the same day ("remove close
             // tab from the right click menu"); the tab's own menu still has it.
+            // A PATH (#99; owner, 2026-09-29): open it as a click would, show
+            // it in Explorer, or copy it whole and absolute.
+            ...(termMenu.path
+              ? [
+                  {
+                    label: termMenu.path.kind === 'dir' ? 'Open folder' : 'Open',
+                    onPick: () => openTermPath(termMenu.id, termMenu.path!, 'open')
+                  },
+                  { label: 'Show in Explorer', onPick: () => openTermPath(termMenu.id, termMenu.path!, 'reveal') },
+                  { label: 'Copy path', onPick: () => void copyText(termMenu.path!.abs) }
+                ]
+              : []),
             ...(termMenu.link
               ? [{ label: 'Copy link', onPick: () => void copyText(termMenu.link!) }]
               : []),

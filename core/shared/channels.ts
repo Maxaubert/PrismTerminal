@@ -17,7 +17,9 @@ export const CH = {
   exit: 'term:exit',
   clipboardRead: 'clipboard:read',
   clipboardWrite: 'clipboard:write',
-  openExternal: 'shell:open-external'
+  openExternal: 'shell:open-external',
+  pathKinds: 'term:path-kinds',
+  openPath: 'term:open-path'
 } as const
 
 /** Dictation's channels (#13). A table of its own: dictation is optional, and

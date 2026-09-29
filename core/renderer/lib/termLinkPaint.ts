@@ -46,7 +46,13 @@ interface Cell {
 
 const DEBOUNCE_MS = 80
 
-export function attachLinkPaint(term: Terminal, color: () => string): LinkPainter {
+export function attachLinkPaint(
+  term: Terminal,
+  color: () => string,
+  /** What wears the link colour in a line of text: the web links, and the
+   *  host panel adds the paths that exist (#99). */
+  find: (text: string) => Array<{ start: number; end: number }> = findLinks
+): LinkPainter {
   let painted: Painted[] = []
   /** Everything above this line is scrollback that has been painted. */
   let finished: IMarker | undefined
@@ -93,7 +99,7 @@ export function attachLinkPaint(term: Terminal, color: () => string): LinkPainte
       rows.push(line)
       quick += line.translateToString(r === last)
     }
-    if (!quick.includes('://')) return
+    if (!/[\\/.]/.test(quick)) return // no URL and no path can be here
     // Built cell by cell, because a wide character is one character and TWO
     // cells: an index into the string is not a column once a line holds one.
     let text = ''
@@ -109,7 +115,7 @@ export function attachLinkPaint(term: Terminal, color: () => string): LinkPainte
         for (let k = 0; k < chars.length; k += 1) cells.push({ row: first + i, x, w })
       }
     })
-    for (const link of findLinks(text)) {
+    for (const link of find(text)) {
       let from = link.start
       while (from < link.end) {
         const row = cells[from].row
@@ -124,8 +130,8 @@ export function attachLinkPaint(term: Terminal, color: () => string): LinkPainte
   /** Ink the links in one drawn row of the alternate screen. */
   const inkRow = (row: Element, ink: string): void => {
     const text = row.textContent ?? ''
-    if (!text.includes('://')) return
-    const links = findLinks(text)
+    if (!/[\\/.]/.test(text)) return
+    const links = find(text)
     if (!links.length) return
     // Where each text node starts in the row's text.
     const nodes: Array<{ node: Text; at: number }> = []

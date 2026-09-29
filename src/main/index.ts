@@ -71,6 +71,24 @@ function openLink(url: string): void {
   void shell.openExternal(url)
 }
 
+/**
+ * A PATH CLICKED IN THE TERMINAL (#99): the core has resolved it and checked it
+ * exists, and decided open or show. Under --e2e it is RECORDED, like a link:
+ * a test run never opens a file or an Explorer window on the owner's desktop.
+ */
+const e2eOpenedPaths: Array<{ how: 'open' | 'reveal'; abs: string }> = []
+if (E2E) Object.assign(globalThis, { __e2eOpenedPaths: e2eOpenedPaths })
+const pathOpeners = {
+  openPath: (abs: string): void => {
+    if (E2E) e2eOpenedPaths.push({ how: 'open', abs })
+    else void shell.openPath(abs)
+  },
+  revealPath: (abs: string): void => {
+    if (E2E) e2eOpenedPaths.push({ how: 'reveal', abs })
+    else shell.showItemInFolder(abs)
+  }
+}
+
 // userData is `%APPDATA%\PrismTerminal`, whatever the product name's spacing
 // would have made it. The e2e (and anyone else) passing Chromium's own
 // --user-data-dir keeps the profile they asked for: Electron has already
@@ -424,7 +442,8 @@ function wireIpc(): void {
     // Not while the strip is still being rebuilt from tabs.json.
     mayPrewarm: async (cwd) => !awaitingRestore && (await isDir(cwd)),
     // Prism's reroot. This app never moves a shell it did not start there.
-    mayCd: () => false
+    mayCd: () => false,
+    paths: pathOpeners
   })
   // DICTATION (#13) is the core's too. What is this app's own: where ITS
   // installer put the CPU engine, the folder it shares with Prism, and the GPU
