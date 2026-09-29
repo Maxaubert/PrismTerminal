@@ -61,6 +61,8 @@ import { applyChrome, chromeTokens } from './lib/chromeTheme'
 import { onWindowEdgesChange, windowEdges } from './lib/edgesPrefs'
 import { onWindowAccentChange, windowAccent } from './lib/accentPrefs'
 import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPrefs'
+import { attentionCount, drawBadge, useTaskbarBadgeOn } from './lib/taskbarBadge'
+import { useAgentDoneOn, useAgentQuestionOn } from '@core/renderer/lib/termLook'
 
 const Settings = lazy(() => import('./components/Settings'))
 // Loaded when it is first opened: the popup brings the whole catalogue with it,
@@ -152,7 +154,7 @@ export default function App(): JSX.Element {
   // nothing, and with the setting off it listens to nothing.
   useDictationArm(activeShell ? activeShell.id : null)
   const findOpen = !!activeShell && findFor === activeShell.id
-  const { agentIds, workingIds, doneIds, agentKinds } = indicator
+  const { agentIds, workingIds, doneIds, questionIds, agentKinds } = indicator
 
   // The latest of everything, for listeners registered once.
   const live = useRef({ state, workingIds, agentIds, blocked: false, front: '' })
@@ -419,6 +421,21 @@ export default function App(): JSX.Element {
     window.prism.setAgentBusy(holdsWindowClose(workingIds.size))
   }, [workingIds])
 
+  // THE TASKBAR BADGE (2026-09-28): how many tabs show a mark, as a small grey
+  // disc with a white number (2026-09-29, the owner's look).
+  const badgeOn = useTaskbarBadgeOn()
+  const doneOn = useAgentDoneOn()
+  const questionOn = useAgentQuestionOn()
+  const need = attentionCount({ doneIds, questionIds, workingIds, doneOn, questionOn })
+  useEffect(() => {
+    if (!badgeOn || need.count === 0) {
+      window.prism.setTaskbarBadge(null, '')
+      return
+    }
+    const said = `${need.count} ${need.count === 1 ? 'tab needs' : 'tabs need'} a look`
+    window.prism.setTaskbarBadge(drawBadge(need.count) || null, said)
+  }, [badgeOn, need.count])
+
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
   // keyboard back: clicking or dragging a tab is not "I left the shell".
   useEffect(() => {
@@ -522,6 +539,7 @@ export default function App(): JSX.Element {
           activeId={activeId}
           workingIds={workingIds}
           doneIds={doneIds}
+          questionIds={questionIds}
           agentIds={agentIds}
           onPick={(id) => setState((s) => pickTab(s, id))}
           onClose={requestClose}

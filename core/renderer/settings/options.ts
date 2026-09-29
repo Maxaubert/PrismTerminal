@@ -26,6 +26,8 @@ export const TERMINAL_OPTIONS: readonly TerminalOption[] = [
   { id: 'term-font-family', label: 'Font', type: 'choice', key: 'prism.term.font' },
   { id: 'term-font', label: 'Font size', type: 'choice', key: 'prism.term.fontPct' },
   { id: 'agent-indicator', label: 'Agent indicator', type: 'choice', key: 'prism.term.agentIndicator' },
+  { id: 'agent-done-on', label: 'Finished indicator', type: 'switch', key: 'prism.term.agentDoneOn' },
+  { id: 'agent-question-on', label: 'Question indicator', type: 'switch', key: 'prism.term.agentQuestionOn' },
   // The theme wall, and under it only what a theme sets (2026-09-28).
   { id: 'term-theme', label: 'Theme', type: 'theme', key: 'prism.term.theme' },
   { id: 'term-acrylic', label: 'Acrylic background', type: 'switch', key: 'prism.term.acrylic' },
@@ -38,8 +40,9 @@ export const TERMINAL_OPTIONS: readonly TerminalOption[] = [
     // over the same glass would fight it (owner, 2026-09-19).
     onlyWhere: 'the terminal owns the window acrylic'
   },
-  { id: 'agent-color', label: 'Agent working indicator', type: 'colour', key: 'prism.term.agentColor' },
-  { id: 'agent-done-color', label: 'Agent finished indicator', type: 'colour', key: 'prism.term.agentDoneColor' }
+  { id: 'agent-color', label: 'Working colour', type: 'colour', key: 'prism.term.agentColor' },
+  { id: 'agent-done-color', label: 'Finished colour', type: 'colour', key: 'prism.term.agentDoneColor' },
+  { id: 'agent-question-color', label: 'Question colour', type: 'colour', key: 'prism.term.agentQuestionColor' }
 ]
 
 /** The option ids a host should be showing. */

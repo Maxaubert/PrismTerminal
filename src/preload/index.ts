@@ -78,6 +78,10 @@ const api = {
    *  follows the lines inside it. Not persisted in main: say it at launch and
    *  on a change. Main reads anything it does not know as the default. */
   setWindowEdges: (edges: WindowEdges): void => ipcRenderer.send('window:edges', edges),
+  /** The taskbar badge (2026-09-28): a PNG data url and what it says, or null
+   *  for none. Main sets it as the window's overlay icon. */
+  setTaskbarBadge: (png: string | null, description: string): void =>
+    ipcRenderer.send('window:badge', png, description),
   windowMinimize: (): void => ipcRenderer.send('window:minimize'),
   windowToggleMaximize: (): void => ipcRenderer.send('window:toggle-maximize'),
   /** Closes the window, which quits (after the agent question, if one is due). */
@@ -115,6 +119,8 @@ const api = {
   /** The e2e's: the edges setting as MAIN heard it (the DWM border it drives is
    *  off under --e2e, so what main was told is what can be asserted). */
   e2eWindowEdges: (): Promise<string> => ipcRenderer.invoke('e2e:window-edges'),
+  /** What main last put on the taskbar: the badge's description, '' for none. */
+  e2eTaskbarBadge: (): Promise<string> => ipcRenderer.invoke('e2e:taskbar-badge'),
   /** The e2e's: release checks sent and installs attempted this session. A
    *  preview, fake install included, must leave both at 0. */
   e2eUpdateCalls: (): Promise<{ checks: number; installs: number }> =>

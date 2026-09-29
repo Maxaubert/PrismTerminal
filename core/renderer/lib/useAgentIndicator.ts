@@ -3,7 +3,8 @@ import type { DetectedAgent } from '../../shared/types'
 import { activitySuppressed, inputEcho, markBorn, startupOutput } from './termActivity'
 import { forgetAgentTitle, readAgentTitle } from './agentTitle'
 import { noteWorking } from './agentClock'
-import { onTitle } from './termBus'
+import { onTitle, readScreenTail } from './termBus'
+import { looksLikeQuestion } from './agentQuestion'
 import { termApi } from '../host'
 
 /**
@@ -21,6 +22,9 @@ export interface AgentIndicator {
   agentIds: ReadonlySet<string>
   workingIds: ReadonlySet<string>
   doneIds: ReadonlySet<string>
+  /** Sessions whose agent is waiting on YOU (a question or a permission
+   *  prompt), marked while you were not looking at them (2026-09-28). */
+  questionIds: ReadonlySet<string>
   /** Which agent each session hosts. A ref: read at the moment of asking. */
   agentKinds: RefObject<Map<string, DetectedAgent>>
   /** The session ended: every mark it carried goes with it. */
@@ -38,6 +42,49 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
   const [agentIds, setAgentIds] = useState<ReadonlySet<string>>(new Set())
   const [workingIds, setWorkingIds] = useState<ReadonlySet<string>>(new Set())
   const [doneIds, setDoneIds] = useState<ReadonlySet<string>>(new Set())
+  const [questionIds, setQuestionIds] = useState<ReadonlySet<string>>(new Set())
+  /**
+   * LOOKING AT A TAB is having it in front AND the window focused (2026-09-28;
+   * owner: the marks "stay there until you click the tab"). A tab that finished
+   * or asked while the window was behind another app was not seen either.
+   */
+  const [focused, setFocused] = useState(() => (typeof document === 'undefined' ? true : document.hasFocus()))
+  useEffect(() => {
+    const on = (): void => setFocused(true)
+    const off = (): void => setFocused(false)
+    window.addEventListener('focus', on)
+    window.addEventListener('blur', off)
+    return () => {
+      window.removeEventListener('focus', on)
+      window.removeEventListener('blur', off)
+    }
+  }, [])
+  const looking = useRef({ activeId, focused })
+  useEffect(() => {
+    looking.current = { activeId, focused }
+  }, [activeId, focused])
+  const lookedAt = (id: string): boolean => looking.current.focused && looking.current.activeId === id
+  /** The last title state of each titled session, so output can be checked
+   *  for a question only while its agent is idle. */
+  const titleState = useRef(new Map<string, string>())
+  const questionTimers = useRef(new Map<string, number>())
+  /** Read the session's screen for Claude's question box: mark it when it
+   *  appears (unless you are looking), unmark it when it has gone. */
+  const checkQuestion = useCallback((id: string): void => {
+    if (questionTimers.current.has(id)) return
+    questionTimers.current.set(
+      id,
+      window.setTimeout(() => {
+        questionTimers.current.delete(id)
+        const asking = titleState.current.get(id) === 'idle' && looksLikeQuestion(readScreenTail(id))
+        setQuestionIds((prev) => {
+          if (asking && !prev.has(id) && !lookedAt(id)) return new Set(prev).add(id)
+          if (!asking && prev.has(id)) return without(prev, id)
+          return prev
+        })
+      }, 200)
+    )
+  }, [])
   const agentKinds = useRef(new Map<string, DetectedAgent>())
   const outputRuns = useRef(new Map<string, { start: number; last: number }>())
   /** Sessions whose agent reports its state through the title (Claude). */
@@ -99,7 +146,12 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
         // A session whose agent SAYS what it is doing (through the title,
         // see onTitle below) is never scored from its output: the agent's
         // own word is exact, and its repaints would only second-guess it.
-        if (titled.current.has(id)) return
+        // Its output while idle is only read for a question box appearing or
+        // going (2026-09-28).
+        if (titled.current.has(id)) {
+          if (titleState.current.get(id) === 'idle') checkQuestion(id)
+          return
+        }
         // Output on the heels of a keystroke is that keystroke's echo (the TUI
         // repainting its input box), so typing at an idle agent never scores.
         // Every chunk is shown to the birth rule (it tracks the gaps), and
@@ -127,7 +179,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           )
         }
       }),
-    [stopFallback]
+    [stopFallback, checkQuestion]
   )
 
   /**
@@ -160,6 +212,11 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
         }
         if (!agentKinds.current.has(id)) agentKinds.current.set(id, r.kind)
         setAgentIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+        titleState.current.set(id, r.state)
+        // Idle is where a question is asked: read the screen for its box. Any
+        // other state is the agent at work again, so no question is pending.
+        if (r.state === 'idle') checkQuestion(id)
+        else setQuestionIds((prev) => without(prev, id))
         const working = r.state === 'working'
         setWorkingIds((prev) => {
           if (prev.has(id) === working) return prev
@@ -169,7 +226,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           return next
         })
       }),
-    [stopFallback]
+    [stopFallback, checkQuestion]
   )
 
   // Finished-while-away: an agent that STOPS working on a background tab
@@ -181,19 +238,23 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     noteWorking(workingIds)
     const was = prevWorking.current
     prevWorking.current = workingIds
+    const seeing = (id: string): boolean => focused && id === activeId
     setDoneIds((prev) => {
       let next: Set<string> | null = null
       const mut = (): Set<string> => (next ??= new Set(prev))
       for (const id of was) {
-        // Stopped, still an agent session, and its tab is in the background.
-        if (!workingIds.has(id) && agentIds.has(id) && id !== activeId) mut().add(id)
+        // Stopped, still an agent session, and nobody was looking at it: its
+        // tab was in the background, or the window was.
+        if (!workingIds.has(id) && agentIds.has(id) && !seeing(id)) mut().add(id)
       }
       for (const id of prev) {
-        if (workingIds.has(id) || id === activeId || !agentIds.has(id)) mut().delete(id)
+        if (workingIds.has(id) || seeing(id) || !agentIds.has(id)) mut().delete(id)
       }
       return next ?? prev
     })
-  }, [workingIds, activeId, agentIds])
+    // A question you are now looking at has been seen.
+    setQuestionIds((prev) => (activeId && focused && prev.has(activeId) ? without(prev, activeId) : prev))
+  }, [workingIds, activeId, agentIds, focused])
 
   // STABLE: a host subscribes to the pty's exit ONCE and calls this from there.
   const forget = useCallback((id: string): void => {
@@ -206,7 +267,12 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     setAgentIds((prev) => without(prev, id))
     setWorkingIds((prev) => without(prev, id))
     setDoneIds((prev) => without(prev, id))
+    setQuestionIds((prev) => without(prev, id))
+    titleState.current.delete(id)
+    const t = questionTimers.current.get(id)
+    if (t !== undefined) clearTimeout(t)
+    questionTimers.current.delete(id)
   }, [stopFallback])
 
-  return { agentIds, workingIds, doneIds, agentKinds, forget }
+  return { agentIds, workingIds, doneIds, questionIds, agentKinds, forget }
 }
