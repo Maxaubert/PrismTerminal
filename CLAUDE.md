@@ -192,7 +192,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
   verify all themes look good, no invisible text, make some typical colour schemes like a green
   window, blue, and more fun ones ... don't make them ugly"). THE COUNT IS FORTY, the trailer's
   number, held by a test. Core `TERM_PRESETS`: the neutrals (PT Default, Prism, Pitch, Cinder,
-  Graphite, Ink, Paper, Mist); a dark and a light per colour (Umber and Fawn, the fan's brown and
+  Graphite, Volt, Paper, Mist); a dark and a light per colour (Umber and Fawn, the fan's brown and
   beige; Rosewood and Blossom; Moss and Sage); the classic looks (Phosphor, Amber, Marine,
   Retro, Campbell, High Contrast); more colours (Ocean, Garnet, Plum, Lavender, Sky, Peach,
   Butter, Mint); and well-known schemes in their real colours (Nord, Dracula, Solarized Dark,
@@ -200,6 +200,9 @@ so an update never silently changes what an existing user sees; the bridge to ma
   Horizon). NO INVISIBLE TEXT is a test (`termTheme.legible.test.ts`): text 4.5:1, cursor and
   accent 3:1, all sixteen 3:1 against the theme's own ground. It caught Catppuccin Latte's own
   cursor at 2.3:1, which is its mauve here. Original themes give base colours only.
+  **VOLT TOOK INK'S PLACE** (#93; owner, 2026-09-28, with a screenshot: "make one of the black
+  themes this colour scheme with black and that yellow greenish colour, kind of cyberpunk"):
+  `#d8ff26` on `#050706`; Ink, the blue-black next to Prism and Tokyo Night, retired to `prism`.
   A THEME ID IS A SAVED SETTING, so a retired one maps to its nearest kept one
   (`termThemeRetired.ts`, read in `termThemeId` and `resolveTermTheme`), never to the default;
   `termThemeRetired.test.ts` holds the map to the list. The e2e picks Paper and Fawn where it
