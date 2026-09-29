@@ -22,6 +22,7 @@ import {
   type SelectionGate
 } from '../lib/termSelectionEdit'
 import { attachLinkPaint, type LinkPainter } from '../lib/termLinkPaint'
+import { knownPath, linkRanges, onPathsFound, pathCandidates, type PathHit } from '../lib/termPathLinks'
 import { cellFrom, cellText, type CellInfo } from '../lib/termCells'
 import {
   onTermLookChange,
@@ -57,6 +58,9 @@ interface Session {
   unsub: Array<() => void>
   /** Ctrl+scroll zoom, this session only: never persisted, dies with it. */
   fontOverride?: number
+  /** The folder the shell is in: where it started, then what its prompt
+   *  last reported. A relative path on screen is relative to it (#99). */
+  cwd(): string
 }
 
 const sessions = new Map<string, Session>()
@@ -356,21 +360,54 @@ setScreenTail((id, rows) => {
   return out
 })
 
-export function termContextAt(id: string, clientX: number, clientY: number): { selection: string; link: string | null } {
+export interface TermPathAt extends PathHit {
+  /** As written on screen, which is what main resolves again on a click. */
+  text: string
+}
+
+/** The path, known to exist, that covers character `at` of `text`. */
+function pathAt(text: string, at: number, cwd: string): TermPathAt | null {
+  for (const c of pathCandidates(text)) {
+    if (at < c.start || at >= c.end) continue
+    const hit = knownPath(cwd, c.path)
+    return hit ? { ...hit, text: c.path } : null
+  }
+  return null
+}
+
+/**
+ * OPEN A PATH FROM THE TERMINAL (#99): the host's own way first (Prism opens
+ * files inside Prism), else main's: the file's own app, a folder in Explorer,
+ * anything runnable only SHOWN in Explorer.
+ */
+export function openTermPath(id: string, target: TermPathAt, mode: 'open' | 'reveal'): void {
   const s = sessions.get(id)
-  if (!s) return { selection: '', link: null }
+  if (!s) return
+  if (termHost().openPath?.({ abs: target.abs, kind: target.kind, mode })) return
+  termApi().termOpenPath?.(s.cwd(), target.text, mode)
+}
+
+export function termContextAt(
+  id: string,
+  clientX: number,
+  clientY: number
+): { selection: string; link: string | null; path: TermPathAt | null } {
+  const s = sessions.get(id)
+  if (!s) return { selection: '', link: null, path: null }
   const term = s.term
   const selection = term.hasSelection() ? term.getSelection() : ''
   const screen = term.element?.querySelector<HTMLElement>('.xterm-screen')
-  if (!screen) return { selection, link: null }
+  if (!screen) return { selection, link: null, path: null }
   const r = screen.getBoundingClientRect()
   const col = Math.floor((clientX - r.left) / (r.width / term.cols))
   const row = Math.floor((clientY - r.top) / (r.height / term.rows))
-  if (col < 0 || col >= term.cols || row < 0 || row >= term.rows) return { selection, link: null }
+  if (col < 0 || col >= term.cols || row < 0 || row >= term.rows) return { selection, link: null, path: null }
   const y = term.buffer.active.viewportY + row
   const line = logicalLine(term, y)
   const target = (y - line.first) * term.cols + col
-  return { selection, link: linkAt(line.text, line.index[Math.min(target, line.index.length - 1)]) }
+  const at = line.index[Math.min(target, line.index.length - 1)]
+  const link = linkAt(line.text, at)
+  return { selection, link, path: link ? null : pathAt(line.text, at, s.cwd()) }
 }
 
 /** Refit a session and tell the pty its new geometry. */
@@ -609,7 +646,41 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   )
   // The addon makes a link clickable and underlines it under the pointer; this
   // is what makes it LOOK like a link the rest of the time.
-  const links = attachLinkPaint(term, currentLinkColor)
+  // The folder this shell is in (#99): where it started, then the prompt's
+  // own report below. Paths on screen are read against it.
+  let cwdNow = root
+  const links = attachLinkPaint(term, currentLinkColor, (text) => linkRanges(text, cwdNow))
+  // A PATH IS A LINK TOO, when it exists (#99). The painter colours it; this
+  // makes it clickable, with the pointer and the underline of a link. A left
+  // click opens it; the right one is the menu's (Open, Show in Explorer, Copy
+  // path).
+  term.registerLinkProvider({
+    provideLinks: (y, done) => {
+      if (!termApi().termPathKinds) return done(undefined)
+      const line = logicalLine(term, y - 1)
+      const out = []
+      for (const c of pathCandidates(line.text)) {
+        const hit = knownPath(cwdNow, c.path)
+        if (!hit) continue
+        const from = line.index.indexOf(c.start)
+        const to = line.index.indexOf(c.end) - 1
+        if (from < 0 || to < from) continue
+        const target: TermPathAt = { ...hit, text: c.path }
+        out.push({
+          range: {
+            start: { x: (from % term.cols) + 1, y: line.first + Math.floor(from / term.cols) + 1 },
+            end: { x: (to % term.cols) + 1, y: line.first + Math.floor(to / term.cols) + 1 }
+          },
+          text: c.path,
+          decorations: { pointerCursor: true, underline: true },
+          activate: (e: MouseEvent) => {
+            if (e.button === 0) openTermPath(id, target, 'open')
+          }
+        })
+      }
+      done(out.length ? out : undefined)
+    }
+  })
 
   const el = document.createElement('div')
   el.className = 'h-full w-full'
@@ -637,6 +708,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   term.parser.registerOscHandler(9, (data) => {
     const p = parseOsc9(data)
     if (p) {
+      cwdNow = p
       markPrompt(id)
       reportCwd(id, p)
     }
@@ -689,6 +761,8 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   let agentHere = Boolean(resume)
   const unsub = [
     attachClickCaret(term, el, id),
+    // A path asked about turned out to exist: paint it now.
+    onPathsFound(() => links.repaint()),
     termApi().onTermAgent((forId, present) => {
       if (forId === id) agentHere = present
     }),
@@ -787,7 +861,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     return true
   })
 
-  const session: Session = { term, fit, search, links, el, unsub }
+  const session: Session = { term, fit, search, links, el, unsub, cwd: () => cwdNow }
   sessions.set(id, session)
 
   // A session restored over a Claude conversation launches straight into it:

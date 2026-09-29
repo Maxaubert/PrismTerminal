@@ -1188,6 +1188,124 @@ const scenarios = {
   },
 
   /** A printed link is painted as one, in a colour that follows the theme. */
+  // PATHS ARE LINKS WHEN THEY EXIST (#99; owner, 2026-09-29: "would it be
+  // possible to show these as clickable links that would open the file or
+  // folder"). Real files in the shell's folder, a sentence naming them the
+  // way Claude writes, and one that names nothing. Under --e2e main RECORDS
+  // what it would open (`__e2eOpenedPaths`); nothing opens on the desktop.
+  async pathLinks(ok) {
+    const w = world()
+    mkdirSync(join(w.alpha, 'docs', 'sign-off'), { recursive: true })
+    mkdirSync(join(w.alpha, 'docs', 'wireframes', 'png'), { recursive: true })
+    writeFileSync(join(w.alpha, 'docs', 'sign-off', 'rapport.pdf'), '%PDF-1.4')
+    writeFileSync(join(w.alpha, 'run.bat'), '@echo off')
+    const pdf = join(w.alpha, 'docs', 'sign-off', 'rapport.pdf')
+    const bat = join(w.alpha, 'run.bat')
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const clip = () => app.evaluate(({ clipboard }) => clipboard.readText())
+    const held = await clip()
+    const opened = () => app.evaluate(() => globalThis.__e2eOpenedPaths ?? [])
+    const INK = '121,167,216' // LINK_BLUE on the default theme
+    const inked = () =>
+      page.evaluate((want) => {
+        const norm = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).join(',')
+        return [...document.querySelectorAll('.xterm .xterm-rows > div')]
+          .map((row) =>
+            [...row.querySelectorAll('span')]
+              .filter((sp) => norm(getComputedStyle(sp).color) === want)
+              .map((sp) => sp.textContent ?? '')
+              .join('')
+          )
+          .join('\n')
+      }, INK)
+    const box = (needle, offset) =>
+      page.evaluate(
+        ([n, off]) => {
+          const rows = [...document.querySelectorAll('.xterm-rows > div')]
+          for (let i = rows.length - 1; i >= 0; i -= 1) {
+            const at = rows[i].textContent.lastIndexOf(n)
+            if (at < 0) continue
+            const walker = document.createTreeWalker(rows[i], NodeFilter.SHOW_TEXT)
+            let left = at + off
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+              if (left < node.textContent.length) {
+                const range = document.createRange()
+                range.setStart(node, left)
+                range.setEnd(node, left + 1)
+                const b = range.getBoundingClientRect()
+                return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+              }
+              left -= node.textContent.length
+            }
+          }
+          return null
+        },
+        [needle, offset]
+      )
+    // A click as a hand makes it: onto the text, a rest, then the press.
+    const clickOn = async (needle, button = 'left') => {
+      const at = await box(needle, 2)
+      await page.mouse.move(at.x + 30, at.y + 30)
+      await sleep(100)
+      await page.mouse.move(at.x, at.y)
+      await sleep(300)
+      await page.mouse.click(at.x, at.y, { button })
+    }
+    const menu = () =>
+      until(async () => {
+        const t = await page.locator('[role="menu"] [role="menuitem"]').allTextContents()
+        return t.length ? t : null
+      }, 4000)
+    try {
+      await typeLine(page, "cls; Write-Host 'Rapport: docs/sign-off/rapport.pdf, PNG i docs/wireframes/png/. Mangler: missing/file.txt og run.bat.'")
+      ok(
+        !!(await until(async () => {
+          const t = await inked()
+          return t.includes('docs/sign-off/rapport.pdf') && t.includes('docs/wireframes/png/') && t.includes('run.bat') ? t : null
+        }, 8000)),
+        'a file, a folder and a script that exist wear the link colour'
+      )
+      ok(!(await inked()).includes('missing/file.txt'), 'a path that names nothing does not')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/path-links.png') }).catch(() => {})
+      await clickOn('docs/sign-off/rapport.pdf')
+      ok(
+        !!(await until(async () => (await opened()).some((o) => o.how === 'open' && o.abs === pdf), 4000)),
+        'a click opens the file, resolved against the shell folder'
+      )
+      const png = join(w.alpha, 'docs', 'wireframes', 'png')
+      await clickOn('docs/wireframes/png/')
+      ok(!!(await until(async () => (await opened()).some((o) => o.how === 'open' && o.abs === png), 4000)), 'a folder opens (in Explorer)')
+      await clickOn('run.bat')
+      ok(!!(await until(async () => (await opened()).some((o) => o.abs === bat), 4000)), 'the script was clicked')
+      ok(
+        !(await opened()).some((o) => o.how === 'open' && o.abs === bat),
+        'and it is NEVER run: it is shown selected in Explorer instead'
+      )
+      const before = (await opened()).length
+      await clickOn('docs/sign-off/rapport.pdf', 'right')
+      await sleep(300)
+      ok((await opened()).length === before, 'a right-click opens nothing')
+      const rows = await menu()
+      ok(
+        !!rows && rows[0] === 'Open' && rows[1] === 'Show in Explorer' && rows[2] === 'Copy path',
+        `the menu leads with Open, Show in Explorer, Copy path (${JSON.stringify(rows)})`
+      )
+      const glyphs = await page.evaluate(() =>
+        [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((r) => r.querySelector('[data-menu-icon]')?.getAttribute('data-menu-icon') ?? null)
+      )
+      ok(glyphs.every(Boolean), `and every row has its icon (${JSON.stringify(glyphs)})`)
+      await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Show in Explorer' }).click()
+      ok(!!(await until(async () => (await opened()).some((o) => o.how === 'reveal' && o.abs === pdf), 4000)), 'Show in Explorer shows the file')
+      await clickOn('docs/sign-off/rapport.pdf', 'right')
+      await menu()
+      await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Copy path' }).click()
+      ok((await until(async () => (await clip()) === pdf, 4000)) === true, 'Copy path copies it whole and absolute')
+    } finally {
+      await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), held).catch(() => {})
+      await closeApp(app)
+    }
+  },
+
   async links(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })

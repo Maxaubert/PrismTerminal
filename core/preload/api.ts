@@ -66,6 +66,12 @@ export interface TermPreloadApi {
   writeClipboard(text: string): Promise<boolean>
   /** The web-links addon's click-through: external URLs go to the OS browser. */
   openExternal(url: string): void
+  /** Which of these texts name a file or a folder from `cwd` (#99). Main
+   *  resolves and checks; null for anything else. */
+  termPathKinds(cwd: string, texts: string[]): Promise<Array<{ kind: 'file' | 'dir'; abs: string } | null>>
+  /** Open, or show in Explorer, what `text` names from `cwd`. Main resolves
+   *  and checks it again, and never runs a program. */
+  termOpenPath(cwd: string, text: string, mode: 'open' | 'reveal'): void
 }
 
 export function createTermApi(ipc: IpcRendererLike): TermPreloadApi {
@@ -93,6 +99,9 @@ export function createTermApi(ipc: IpcRendererLike): TermPreloadApi {
     writeClipboard: (text) => ipc.invoke(CH.clipboardWrite, text) as Promise<boolean>,
     openExternal: (url) => {
       if (/^https?:/i.test(url)) ipc.send(CH.openExternal, url)
-    }
+    },
+    termPathKinds: (cwd, texts) =>
+      ipc.invoke(CH.pathKinds, cwd, texts) as Promise<Array<{ kind: 'file' | 'dir'; abs: string } | null>>,
+    termOpenPath: (cwd, text, mode) => ipc.send(CH.openPath, cwd, text, mode)
   }
 }
