@@ -264,7 +264,11 @@ so an update never silently changes what an existing user sees; the bridge to ma
   in tens; a saved size off that list reads as the nearest step. `themeSwitch` e2e holds it all.
 - **THE RESTORE LOOKS UP CLAUDE SESSIONS OFF MAIN'S THREAD** (2026-09-22, the "soft lock on first
   launch"): `claudeSessionsAsync` stats sixteen at a time; a home folder holds thousands of
-  transcripts. The theme wall caches each preset's resolved look, and its previews use installed
+  transcripts. **AND IT RESUMES ONLY YOUR OWN CONVERSATIONS** (#87; owner, 2026-09-28: "it
+  continued the wrong session... a message i hadnt sent... about a review"). A tool's Agent SDK
+  runs (the commit review hook) write into the same folder, MEASURED 25 of the 26 newest there;
+  `isInteractiveHead` reads each transcript's first 4 KB and drops a `queue-operation` first line
+  or an `entrypoint` other than `cli`. The theme wall caches each preset's resolved look, and its previews use installed
   monospace faces rather than Mac ones Windows must look up.
 - **THE HELP POPUP BLURS THE WINDOW BEHIND IT AND CASTS NO SHADOW** (owner, 2026-09-22: "remove the
   shadow behind this and make the bg blurred when it's open"): `backdrop-blur` on a lighter scrim; the
