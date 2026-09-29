@@ -23,6 +23,13 @@ import {
 } from '../lib/termSelectionEdit'
 import { attachLinkPaint, type LinkPainter } from '../lib/termLinkPaint'
 import { knownPath, linkRanges, onPathsFound, pathCandidates, type PathHit } from '../lib/termPathLinks'
+import {
+  initialCaretHold,
+  onCaretKey,
+  onCaretMove,
+  releaseCaretHold,
+  type CaretPos
+} from '../lib/termCaretHold'
 import { cellFrom, cellText, type CellInfo } from '../lib/termCells'
 import {
   onTermLookChange,
@@ -694,6 +701,47 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // heard on onKey, which only fires for a key; the rest of onData counts
   // only when it is plain text (an IME commit), never when it is a reply.
   term.onKey(() => markTouched(id))
+  // THE CARET FOLLOWS TYPING, NOT A STREAMING AGENT (#101). Magnifiers, screen
+  // readers and the IME window follow xterm's helper textarea, which xterm
+  // puts on the cursor after every write (`_syncTextArea` on onCursorMove).
+  // MEASURED: Claude Code's inline view ends every streaming frame with the
+  // cursor on the output row, ABOVE its input line, so that caret left where
+  // the user types for as long as an answer streamed. On the normal screen the
+  // textarea is held on the caret the last key produced while the program
+  // parks the cursor above it (`termCaretHold`); at or below, and on the
+  // alternate screen, xterm's placement stands. Registered after term.open, so
+  // this runs after xterm's own sync and has the last word.
+  let caretHold = initialCaretHold()
+  const holdTextarea = (at: CaretPos): void => {
+    const ta = term.textarea
+    const screen = term.element?.querySelector<HTMLElement>('.xterm-screen')
+    const row = at.line - term.buffer.active.baseY
+    if (!ta || !screen || row < 0 || row >= term.rows) {
+      caretHold = releaseCaretHold()
+      return
+    }
+    ta.style.left = `${(Math.min(at.x, term.cols - 1) * screen.clientWidth) / term.cols}px`
+    ta.style.top = `${(row * screen.clientHeight) / term.rows}px`
+  }
+  term.onKey(() => {
+    caretHold = onCaretKey(caretHold, performance.now())
+  })
+  term.onCursorMove(() => {
+    const b = term.buffer.active
+    if (b.type !== 'normal' || b.viewportY !== b.baseY) {
+      caretHold = releaseCaretHold()
+      return
+    }
+    const r = onCaretMove(caretHold, { line: b.baseY + b.cursorY, x: b.cursorX }, performance.now())
+    caretHold = r.state
+    if (r.hold) holdTextarea(r.hold)
+  })
+  term.onResize(() => {
+    caretHold = releaseCaretHold()
+  })
+  term.buffer.onBufferChange(() => {
+    caretHold = releaseCaretHold()
+  })
   term.onData((d) => {
     if (looksTyped(d)) markTouched(id)
     termApi().termInput(id, d)
