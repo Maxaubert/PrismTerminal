@@ -598,7 +598,15 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // a terminal that didn't bother.
   term.loadAddon(new Unicode11Addon())
   term.unicode.activeVersion = '11'
-  term.loadAddon(new WebLinksAddon((_e, url) => termApi().openExternal(url)))
+  // A LEFT click opens a link (owner, 2026-09-28: "right clicking a link opens
+  // the link instead of showing the right click menu"). The addon hands over a
+  // click of ANY button; the right one belongs to the menu, which offers Open
+  // link itself.
+  term.loadAddon(
+    new WebLinksAddon((e, url) => {
+      if (e.button === 0) termApi().openExternal(url)
+    })
+  )
   // The addon makes a link clickable and underlines it under the pointer; this
   // is what makes it LOOK like a link the rest of the time.
   const links = attachLinkPaint(term, currentLinkColor)
