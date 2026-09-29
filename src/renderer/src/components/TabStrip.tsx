@@ -317,7 +317,11 @@ export function TabStrip({
       // icon slot and an X, each with a cursor of its own, and letting them
       // answer for themselves made it flicker under the moving pointer.
       data-tab-strip
+<<<<<<< HEAD
       className={`${dragInFlight ? 'no-drag' : 'drag'} p-styled-font relative flex ${inTitleRow ? 'min-w-0 flex-1' : 'h-8 shrink-0 border-b border-[var(--p-divider)]'} items-stretch gap-0 overflow-x-auto bg-[var(--p-tabs)] pr-1 text-[12px] transition-[background-color,border-color] duration-[550ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
+=======
+      className={`${dragInFlight ? 'no-drag' : 'drag'} p-styled-font relative flex h-8 shrink-0 items-stretch gap-0 overflow-x-auto border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1 text-[12px] transition-[background-color,border-color] duration-[550ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
+>>>>>>> origin/main
         carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''
       }`}
     >

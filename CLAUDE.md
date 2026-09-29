@@ -156,13 +156,6 @@ so an update never silently changes what an existing user sees; the bridge to ma
   core takes over from the browser needs the same: returning false is not cancelling. The
   `paste` e2e counts what reached the shell for Ctrl+V, Ctrl+Shift+V and the right-click Paste
   (it failed with 2 copies before the fix).
-- **THE TITLE BAR CAN BE HIDDEN** (#91; owner, 2026-09-28: "add a no title bar option for pt in
-  appearance as well, not theme related", and of the shapes offered, "tabs in the top row").
-  Settings > Appearance > Title bar (`title-bar`, `prism.window.titleBar`, `lib/titleBarPrefs.ts`),
-  above the theme wall: **Shown** (the DEFAULT, the window as it was) or **Hidden**: one row, the
-  tab strip (`inTitleRow`) with `TitleButtons` (chip, help, cog, window buttons) at its end, the
-  strip's empty space the drag handle; with no tabs the row is the handle and the buttons. This
-  app's row. The `titleBar` e2e measures both and the start screen.
 - **EVERY TAB IS ONE WIDTH** (owner, 2026-09-21: "make tabs in both apps have a fixed size, and not
   dynamically adjust based on the content"). A tab was as wide as its label, up to 14rem, so a
   folder with a long name shoved every tab after it sideways and the close button was never in
@@ -279,7 +272,11 @@ so an update never silently changes what an existing user sees; the bridge to ma
   in tens; a saved size off that list reads as the nearest step. `themeSwitch` e2e holds it all.
 - **THE RESTORE LOOKS UP CLAUDE SESSIONS OFF MAIN'S THREAD** (2026-09-22, the "soft lock on first
   launch"): `claudeSessionsAsync` stats sixteen at a time; a home folder holds thousands of
-  transcripts. The theme wall caches each preset's resolved look, and its previews use installed
+  transcripts. **AND IT RESUMES ONLY YOUR OWN CONVERSATIONS** (#87; owner, 2026-09-28: "it
+  continued the wrong session... a message i hadnt sent... about a review"). A tool's Agent SDK
+  runs (the commit review hook) write into the same folder, MEASURED 25 of the 26 newest there;
+  `isInteractiveHead` reads each transcript's first 4 KB and drops a `queue-operation` first line
+  or an `entrypoint` other than `cli`. The theme wall caches each preset's resolved look, and its previews use installed
   monospace faces rather than Mac ones Windows must look up.
 - **THE HELP POPUP BLURS THE WINDOW BEHIND IT AND CASTS NO SHADOW** (owner, 2026-09-22: "remove the
   shadow behind this and make the bg blurred when it's open"): `backdrop-blur` on a lighter scrim; the
@@ -505,7 +502,9 @@ terminal theme, anything that reads or shows files.
   output arrives while idle; a rewording in a Claude update is a change there. In Minimal, two or
   more NEIGHBOURING working tabs draw ONE bar across them (`workingRuns`, `data-working-run`) at a
   single tab's length and speed; tabs apart keep their own. The taskbar button's overlay icon shows
-  how many tabs carry a mark (`taskbarBadge.ts`, `window:badge`, Settings > General switch, on).
+  how many tabs carry a mark (`taskbarBadge.ts`, `window:badge`, Settings > General switch, on):
+  a small grey disc with a white number, whatever the marks (owner, 2026-09-29: "too big and it's
+  green, it should be grey with white number").
   Tab names are centred in both widths, and a Dynamic tab is never under four characters wide.
   The `attention` e2e holds all of it.
 - **The indicator is MINIMAL by default and wears the THEME** (owner, 2026-09-18, #4; it was Full
@@ -728,11 +727,14 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
   missing mid-install). Launch only after setup has gone, and report the installed version.
 - **THE OWNER WORKS IN A STABLE COPY; NEVER CLOSE IT** (2026-09-28: "install prism terminal somewhere
   safe, a duplicate version, just so i can code with claude or codex in there without it closing").
-  `npm run install:stable` (`tools/install-stable.ps1`) copies the installed app to `%LOCALAPPDATA%\Programs\PrismTerminalStable`
+  `npm run install:stable` (`tools/install-stable.ps1`) copies the installed app to `%LOCALAPPDATA%\PrismTerminalStable`
   as `PrismTerminalStable.exe`, profile `%APPDATA%\PrismTerminalStable` (`--user-data-dir`, its own
   lock and tabs, `shell-verb-off` so it never writes the Explorer verbs), Start menu "Prism Terminal
   (Stable)". Install steps close processes named `PrismTerminal` ONLY: never `PrismTerminalStable`,
   never by path or window title. The copy moves to a new version only when the owner runs the script.
+  **NEVER UNDER `Programs\`** (#88): the NSIS installer also stops every process whose path STARTS
+  WITH its install folder, and `Programs\PrismTerminal` prefixes `Programs\PrismTerminalStable\`, so
+  every install killed the copy. No folder the copy lives in may start with an install folder.
 
 ## Style
 

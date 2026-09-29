@@ -1886,7 +1886,11 @@ const scenarios = {
     // 'window-edges' (#27) is the window's chrome, which in Prism belongs to
     // the app style and has a row of its own there: this app's, not the core's.
     // 'window-accent' is the same: the accent is the app style's in Prism.
+<<<<<<< HEAD
     const own = ['newtab-mode', 'explorer-verb', 'taskbar-badge', 'app-version', 'window-edges', 'window-accent', 'window-background', 'tab-width', 'title-bar']
+=======
+    const own = ['newtab-mode', 'explorer-verb', 'taskbar-badge', 'app-version', 'window-edges', 'window-accent', 'window-background', 'tab-width']
+>>>>>>> origin/main
     const extra = [...shown].filter((id) => !wanted.includes(id) && !own.includes(id))
     ok(extra.length === 0, `and nothing else claims to be a setting (extra: ${JSON.stringify(extra)})`)
     ok((await page.locator('[data-pref="confirm-close"]').count()) === 0, 'the close question is not a setting any more')
@@ -1995,7 +1999,11 @@ const scenarios = {
       // WHAT NO THEME OWNS SITS ABOVE THE WALL, WHAT A THEME SETS UNDER IT
       // (owner, 2026-09-28).
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
+<<<<<<< HEAD
       const want = ['tab-width', 'title-bar', 'window-edges', 'term-font-family', 'term-font', 'agent-indicator', 'agent-done-on', 'agent-question-on', 'term-theme', 'window-background', 'window-accent']
+=======
+      const want = ['tab-width', 'window-edges', 'term-font-family', 'term-font', 'agent-indicator', 'agent-done-on', 'agent-question-on', 'term-theme', 'window-background', 'window-accent']
+>>>>>>> origin/main
       ok(JSON.stringify(rows.slice(0, want.length)) === JSON.stringify(want), `the page runs ${want.join(' > ')} (${rows.slice(0, want.length).join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()
