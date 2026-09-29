@@ -1,3 +1,5 @@
+import { mkdirSync } from 'fs'
+import { join } from 'path'
 import { DCH } from '../shared/channels'
 import { CATALOG, catalogEntry } from '../shared/dictationCatalog'
 import type {
@@ -49,7 +51,22 @@ export function registerDictationIpc(deps: DictationIpcDeps): () => void {
   const store = deps.store ?? createDictationStore({ root: deps.sharedRoot, catalog: CATALOG })
   const engine =
     deps.engine ??
-    createDictationEngine({ cpuDir: deps.cpuEngineDir, store, hasNvidia: deps.hasNvidia })
+    createDictationEngine({
+      cpuDir: deps.cpuEngineDir,
+      store,
+      hasNvidia: deps.hasNvidia,
+      // The GPU engine's own kernel cache, beside the models both apps share
+      // (see DICTATION_CUDA_CACHE_BYTES): compiled once, kept for good.
+      cudaCacheDir: () => {
+        const dir = join(deps.sharedRoot, 'cuda-cache')
+        try {
+          mkdirSync(dir, { recursive: true })
+          return dir
+        } catch {
+          return null
+        }
+      }
+    })
   const media = deps.media ?? createMediaPause()
 
   ipcMain.handle(DCH.info, async (): Promise<EngineInfo> => {
@@ -96,6 +113,16 @@ export function registerDictationIpc(deps: DictationIpcDeps): () => void {
     )
       return { ok: false, reason: 'engine-failed', detail: 'bad request' }
     return engine.transcribe({ wav: r.wav, modelId: r.modelId, language: r.language, final: r.final === true })
+  })
+
+  // A warm-up the renderer asks for when dictation is armed, when its model or
+  // language changes, and at the start of each press (2026-09-28). The same
+  // checks as a pass; nothing is warmed for a model that is not installed.
+  ipcMain.on(DCH.warm, (_e: unknown, req: unknown) => {
+    const r = req as { modelId?: unknown; language?: unknown } | null
+    if (!r || typeof r.modelId !== 'string' || typeof r.language !== 'string' || !/^[a-z]{2,4}$/.test(r.language)) return
+    if (!store.modelPath(r.modelId)) return
+    void engine.warm({ modelId: r.modelId, language: r.language })
   })
 
   ipcMain.on(DCH.stop, () => engine.stop())

@@ -29,6 +29,9 @@ export interface DictationApi {
   dictationTranscribe(req: TranscribeRequest): Promise<TranscribeResult>
   /** Dictation was switched off: no server process may remain. */
   dictationStop(): void
+  /** Start the engine for this model and language and warm it, so the first
+   *  press is fast (2026-09-28). Fire and forget. */
+  dictationWarm(req: { modelId: string; language: string }): void
   dictationMediaPause(): Promise<MediaPauseToken>
   dictationMediaResume(token: MediaPauseToken): void
 }
@@ -49,6 +52,7 @@ export function createDictationApi(ipc: IpcRendererLike): DictationApi {
     },
     dictationTranscribe: (req) => ipc.invoke(DCH.transcribe, req) as Promise<TranscribeResult>,
     dictationStop: () => ipc.send(DCH.stop),
+    dictationWarm: (req) => ipc.send(DCH.warm, req),
     dictationMediaPause: () => ipc.invoke(DCH.mediaPause) as Promise<MediaPauseToken>,
     dictationMediaResume: (token) => ipc.send(DCH.mediaResume, token)
   }
