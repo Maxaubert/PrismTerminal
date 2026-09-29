@@ -548,6 +548,81 @@ const scenarios = {
    * letter came out where the click was. Then the refusals that matter most:
    * a click on old output above the prompt moves nothing.
    */
+  // THE CARET FOLLOWS TYPING, NOT A STREAMING AGENT (#101). Magnifiers and
+  // screen readers follow xterm's helper textarea, which xterm puts on the
+  // cursor at the end of every write. MEASURED: Claude Code's inline view ends
+  // every streaming frame with the cursor on the output row, ABOVE the input
+  // row. This stands-in for it: an input line at the bottom, echoed there, and
+  // a "stream" line eight rows up rewritten every 150 ms, leaving the cursor
+  // on it. The textarea must stay on the input line; at a plain prompt it
+  // follows xterm's cursor as before.
+  async caretHold(ok) {
+    const w = world()
+    const probe = join(w.alpha, 'inline-agent.cjs')
+    writeFileSync(
+      probe,
+      [
+        'process.stdin.setRawMode(true)',
+        'process.stdin.resume()',
+        "let text = ''",
+        'let parked = false',
+        'let n = 0',
+        "process.stdout.write('\\r\\n'.repeat(9) + 'INPUT> ')",
+        "const input = () => { if (parked) { process.stdout.write('\\x1b[8B'); parked = false } process.stdout.write('\\rINPUT> ' + text + '\\x1b[K') }",
+        "const frame = () => { if (!parked) { process.stdout.write('\\x1b[8A'); parked = true } process.stdout.write('\\rstream ' + (n += 1) + '\\x1b[K') }",
+        'const t = setInterval(frame, 150)',
+        "process.stdin.on('data', (b) => { const s = b.toString(); if (s === 'q') { clearInterval(t); input(); process.stdout.write('\\r\\n'); process.exit(0) } text += s; input() })"
+      ].join('\n')
+    )
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    // Where the textarea is, and which row holds `needle` (the LAST such row).
+    const where = (needle) =>
+      page.evaluate((n) => {
+        const ta = document.querySelector('.xterm-helper-textarea').getBoundingClientRect()
+        const rows = [...document.querySelectorAll('.xterm-rows > div')]
+        let row = null
+        for (let i = rows.length - 1; i >= 0; i -= 1)
+          if ((rows[i].textContent ?? '').includes(n)) {
+            row = rows[i].getBoundingClientRect()
+            break
+          }
+        return { ta: Math.round(ta.top), row: row ? Math.round(row.top) : null }
+      }, needle)
+    try {
+      await typeLine(page, `& '${process.execPath}' '${probe}'`)
+      ok(!!(await until(async () => (await termText(page)).includes('stream 3'), 15000)), 'the stand-in agent is streaming above its input line')
+      for (const ch of 'abc d') {
+        await page.keyboard.type(ch)
+        await sleep(220)
+      }
+      await sleep(600) // several frames, each parking the cursor eight rows up
+      const held = await where('INPUT> abc d')
+      const parkedRow = await where('stream ')
+      ok(held.row !== null && parkedRow.row !== null && parkedRow.row < held.row, `the program parks the cursor above the input line (${parkedRow.row} < ${held.row})`)
+      ok(Math.abs(held.ta - held.row) <= 2, `the textarea stays on the input line while it streams (textarea ${held.ta}, input ${held.row}, parked ${parkedRow.row})`)
+      await page.keyboard.type('e')
+      await sleep(400)
+      const again = await where('INPUT> abc de')
+      ok(Math.abs(again.ta - again.row) <= 2, `and after the next key, still there (textarea ${again.ta}, input ${again.row})`)
+      await page.keyboard.type('q')
+      await typeLine(page, 'echo caret-follows')
+      ok(!!(await until(async () => (await termText(page)).includes('caret-follows'), 8000)), 'back at a plain prompt')
+      await sleep(400)
+      await page.keyboard.type('xyz')
+      await sleep(400)
+      const plain = await page.evaluate(() => {
+        const ta = document.querySelector('.xterm-helper-textarea').getBoundingClientRect()
+        const rows = [...document.querySelectorAll('.xterm-rows > div')]
+        const row = rows.findLast((r) => /PS [^>]*> ?xyz/.test(r.textContent ?? ''))
+        return { ta: Math.round(ta.top), row: row ? Math.round(row.getBoundingClientRect().top) : null }
+      })
+      ok(plain.row !== null && Math.abs(plain.ta - plain.row) <= 2, `at a plain prompt the textarea is on xterm's cursor, as before (textarea ${plain.ta}, prompt ${plain.row})`)
+      await page.keyboard.press('Control+c')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async clickCaret(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })

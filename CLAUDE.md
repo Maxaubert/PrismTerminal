@@ -498,6 +498,15 @@ the owner's own call, #99.)
   rewrites the window background to white, so the colour is set AFTER the material.
 - **ConPTY sends nothing on a resize**, so `fitKeepingCursorLine` carries the prompt line across by
   hand, and `windowsPty` is declared WITH a build number (without one xterm turns reflow off).
+- **THE CARET FOLLOWS TYPING, NOT A STREAMING AGENT** (#101; owner via the Wind session, 2026-09-29;
+  spec `docs/superpowers/specs/2026-09-29-caret-follows-typing-design.md`). Magnifiers, screen readers
+  and the IME window follow xterm's helper textarea, which xterm puts on the cursor after every write.
+  MEASURED: Claude's INLINE view ends every streaming frame with the cursor on the output row, above
+  its input line (its fullscreen view does not; neither view hides the cursor or draws a caret). On the
+  normal screen `termCaretHold` holds the textarea on the caret the last key produced (the LOWEST
+  position its echo reached) while the cursor is parked above it; at or below, on the alternate
+  screen, scrolled back or after a resize, xterm's placement stands. Only the textarea moves. The
+  `caretHold` e2e holds it.
 - **Typing is heard on `onKey`**, never `onData`: xterm answers the pty on its own (focus reports,
   device attributes) and those replies must not count as the user typing.
 - **The indicator is the agent's own word.** Claude and Codex write their state into the terminal
