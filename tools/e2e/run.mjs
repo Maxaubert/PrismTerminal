@@ -717,9 +717,23 @@ const scenarios = {
       await page.keyboard.press('Enter')
       await prompt()
       const onLink = await box(url, 12)
+      const opened = async () => ((await app.evaluate(() => globalThis.__e2eOpenedLinks)) ?? []).filter((u) => u === url).length
       await page.mouse.click(onLink.left + 2, onLink.y, { button: 'right' })
       let rows = await menuRows()
+      // A RIGHT-CLICK ON A LINK OPENS NOTHING (owner, 2026-09-28: "right
+      // clicking a link opens the link instead of showing the right click
+      // menu"): xterm's link addon hands over ANY button's click.
+      await sleep(400)
+      ok((await opened()) === 0, 'a right-click on a link does not open it')
       ok(!!rows && rows[0].includes('Copy link') && !rows.some((r) => r.includes('Close tab')), `right-click on a link: Copy link first, no Close tab (${JSON.stringify(rows)})`)
+      ok(!!rows && rows[1]?.includes('Open link'), `and Open link beside it (${JSON.stringify(rows)})`)
+      // A GLYPH ON EVERY ROW, as in Prism's Explorer (owner, 2026-09-28).
+      const glyphs = await page.evaluate(() =>
+        [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((r) => r.querySelector('[data-menu-icon]')?.getAttribute('data-menu-icon') ?? null)
+      )
+      ok(glyphs.length > 0 && glyphs.every(Boolean), `every row of the menu has its icon (${JSON.stringify(glyphs)})`)
+      await sleep(250) // past the menu's fade-in, for the picture
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/term-menu-link.png') }).catch(() => {})
       await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Copy link' }).click()
       ok((await until(async () => (await clip()) === url, 4000)) === true, 'and it copies the whole link')
       // A CLICKED LINK NEVER REACHES THE OWNER'S BROWSER UNDER --e2e (#64;
@@ -727,9 +741,18 @@ const scenarios = {
       // browser"). Clicked for real: main records it and opens nothing.
       await page.keyboard.press('Escape')
       const linkAgain = await box(url, 12)
+      await page.mouse.click(linkAgain.left + 2, linkAgain.y, { button: 'right' })
+      await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Open link' }).click()
+      ok(!!(await until(async () => (await opened()) === 1, 4000)), 'Open link opens it (recorded under --e2e)')
+      // The menu took the pointer away; xterm finds a link only when the
+      // pointer comes onto it and rests, as a real hand's does.
+      await page.mouse.move(linkAgain.left + 40, linkAgain.y + 40)
+      await sleep(200)
+      await page.mouse.move(linkAgain.left + 2, linkAgain.y)
+      await sleep(300)
       await page.mouse.click(linkAgain.left + 2, linkAgain.y)
       ok(
-        !!(await until(async () => ((await app.evaluate(() => globalThis.__e2eOpenedLinks)) ?? []).includes(url), 4000)),
+        !!(await until(async () => (await opened()) === 2, 4000)),
         'a clicked link is recorded under --e2e, and no browser is opened'
       )
       // THE "COPIED" BADGE (owner, 2026-09-23): at the bottom centre, then gone.

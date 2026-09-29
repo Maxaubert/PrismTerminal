@@ -15,6 +15,7 @@ import { useAgentColors } from '@core/renderer/lib/agentColors'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
 import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from '@core/renderer/lib/recentRoots'
 import { ContextMenu } from './ContextMenu'
+import { MenuIcon } from './MenuIcon'
 import { useTabWidth } from '../lib/tabWidthPrefs'
 import { workingRuns } from '../lib/workingRuns'
 
@@ -583,7 +584,7 @@ export function TabStrip({
             // Every row acts on the tab you clicked. "New tab" was here and
             // went (2026-08-31): the + is one pixel away and its tooltip
             // already teaches its key.
-            { label: 'Close tab', hint: 'Ctrl+Shift+W', onPick: () => onClose(tabMenu.id) },
+            { label: 'Close tab', icon: <MenuIcon name="close" />, hint: 'Ctrl+Shift+W', onPick: () => onClose(tabMenu.id) },
             // Settings is a tab with no folder. Offering this there wrote an
             // EMPTY STRING over the clipboard, which is worse than doing
             // nothing.
@@ -591,6 +592,7 @@ export function TabStrip({
               ? [
                   {
                     label: 'Copy folder path',
+                    icon: <MenuIcon name="folder" />,
                     onPick: () => void navigator.clipboard.writeText(tabMenu.cwd)
                   }
                 ]
