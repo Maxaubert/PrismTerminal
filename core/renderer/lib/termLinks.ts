@@ -8,8 +8,10 @@ import { contrastRatio, ensureContrast, mixHex, normalizeColor } from './termAns
  */
 
 /** The link blue. It is what a link is on the dark grounds most themes have,
- *  and the starting point on every other. */
-export const LINK_BLUE = '#4ea1ff'
+ *  and the starting point on every other. A calm blue, not a vivid one
+ *  (owner, 2026-09-28: "make the link colours less blue ... too saturated"):
+ *  #4ea1ff at half its saturation, the same hue and lightness. */
+export const LINK_BLUE = '#79a7d8'
 
 /** Readable as TEXT, not merely visible: a link is something you read. */
 const FLOOR = 4.5

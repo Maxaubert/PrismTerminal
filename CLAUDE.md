@@ -660,7 +660,11 @@ terminal theme, anything that reads or shows files.
   links are painted once and ride a marker; the LIVE screen is redrawn in place by TUIs, so every
   pass throws away what it painted from the last finished line down and paints that again (a
   decoration left on a rewritten row is a blue smear over words that were never a link). Rebuilt
-  on a resize (reflow) and on a theme change; not on the alternate screen. Columns are counted in
+  on a resize (reflow) and on a theme change. **THE ALTERNATE SCREEN TOO** (#97; owner, 2026-09-28:
+  a link in Claude Code's fullscreen view "is not blue ... it seems to know it's a link"): markers,
+  so decorations, do not exist there, so each row xterm DRAWS there (`onRender`) has its link text
+  wrapped in a span of the link colour; xterm replaces a row's contents when it draws it, so a
+  rewritten row starts clean. Per row, since a TUI places its own text. Columns are counted in
   CELLS, since a wide character is one character and two cells. xterm splits a row into spans as
   it likes, so the e2e finds a link's span by POSITION, never by its text.
 - **A file dropped on the terminal types its quoted path, and the terminal answers a right-click**

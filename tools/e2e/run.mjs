@@ -1205,11 +1205,12 @@ const scenarios = {
           )
           .filter((t) => t.length)
       }, rgb)
-    const BLUE = '78,161,255' // LINK_BLUE, which reads as it is on the default theme
+    const BLUE = '121,167,216' // LINK_BLUE, which reads as it is on the default theme
     const url = 'https://go.microsoft.com/fwlink/?LinkID=108518'
     // Write-Host, so the OUTPUT row holds the sentence exactly as typed here.
     await typeLine(page, `cls; Write-Host 'online at ${url}. Then more.'`)
     ok(await until(async () => (await inked(BLUE)).includes(url), 8000), 'a printed link wears the link blue')
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/links.png') }).catch(() => {})
     const runs = await inked(BLUE)
     ok(runs.every((t) => !t.endsWith('.')), `and the sentence's full stop is not part of it (${JSON.stringify(runs)})`)
     // A link longer than the window is wide wraps; every row of it is the link.
@@ -1220,6 +1221,22 @@ const scenarios = {
       'a link that wraps over rows is painted on every one of them'
     )
     ok((await inked(BLUE)).length >= 2, 'and it really did wrap')
+    // ON THE ALTERNATE SCREEN TOO (owner, 2026-09-28: a link in Claude Code's
+    // fullscreen view "is not blue ... it seems to know it's a link since i can
+    // click it"). Markers, so decorations, do not exist there; the rows are
+    // inked as xterm draws them. And a row a TUI rewrites loses the colour.
+    const alt = 'https://example.org/alt/path?x=1'
+    await typeLine(page, `Write-Host -NoNewline "$([char]27)[?1049h$([char]27)[H"; Write-Host 'open ${alt} here'`)
+    ok(await until(async () => (await inked(BLUE)).includes(alt), 8000), 'on the alternate screen a printed link wears the link blue')
+    await typeLine(page, `Write-Host -NoNewline "$([char]27)[H$([char]27)[2Kplain words where the link was"`)
+    ok(
+      await until(async () => !(await inked(BLUE)).some((t) => t.includes('plain') || t.includes('words')), 8000),
+      'and a row rewritten in place keeps no link colour'
+    )
+    // Out again. Typed as it is: the prompt now sits at the top of the
+    // alternate screen, not at the end of its rows, which typeLine waits for.
+    await page.keyboard.type(`Write-Host -NoNewline "$([char]27)[?1049l"`)
+    await page.keyboard.press('Enter')
     // A light theme: the same blue would be unreadable, so it moves.
     await typeLine(page, `cls; Write-Host 'see ${url}'`)
     await until(async () => (await inked(BLUE)).includes(url), 8000)
@@ -1263,7 +1280,7 @@ const scenarios = {
           // two where the row is repainted and the link's decoration is not back yet:
           // the span then wears the plain text ink, which reads fine and is not a
           // link colour at all (MEASURED: 62,62,62 accepted two runs in three).
-          return ink.join(',') === '78,161,255' || ratio < 4.5 || !(ink[2] > ink[0])
+          return ink.join(',') === '121,167,216' || ratio < 4.5 || !(ink[2] > ink[0])
             ? null
             : { rgb: ink.join(','), ratio, blue: ink[2] > ink[0] }
         }),

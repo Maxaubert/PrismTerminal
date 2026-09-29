@@ -17,8 +17,15 @@ import { findLinks } from './termLinks'
  * last finished line down and paints that part again. A marker remembers where
  * "finished" was, which survives the buffer scrolling and trimming under it.
  *
- * Not on the alternate screen: vim and less own every cell there, markers do
- * not exist in it, and what is in it is not a log of printed output.
+ * THE ALTERNATE SCREEN IS INKED AS IT IS DRAWN (owner, 2026-09-28: a link in
+ * Claude Code's fullscreen view "is not blue ... it seems to know it's a link
+ * since i can click it"). Markers do not exist there, so neither do
+ * decorations. Instead, each time xterm draws rows there (`onRender`), the
+ * link text in those rows' elements is wrapped in a span of the link colour.
+ * xterm's DOM renderer REPLACES a row's contents when it draws it, so a row a
+ * TUI rewrites starts clean and is inked again only if it still holds a link:
+ * no smear to clean up. Per row: a program that owns the screen places its own
+ * text, and a link it breaks over two rows is two pieces of text there.
  */
 export interface LinkPainter extends IDisposable {
   /** The colour changed (a theme, a custom ground): paint everything again. */
@@ -114,6 +121,53 @@ export function attachLinkPaint(term: Terminal, color: () => string): LinkPainte
     }
   }
 
+  /** Ink the links in one drawn row of the alternate screen. */
+  const inkRow = (row: Element, ink: string): void => {
+    const text = row.textContent ?? ''
+    if (!text.includes('://')) return
+    const links = findLinks(text)
+    if (!links.length) return
+    // Where each text node starts in the row's text.
+    const nodes: Array<{ node: Text; at: number }> = []
+    const walk = document.createTreeWalker(row, NodeFilter.SHOW_TEXT)
+    let at = 0
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      nodes.push({ node: n as Text, at })
+      at += n.textContent?.length ?? 0
+    }
+    const pieces: Array<{ node: Text; from: number; to: number }> = []
+    for (const link of links)
+      for (const { node, at: start } of nodes) {
+        const from = Math.max(link.start, start)
+        const to = Math.min(link.end, start + (node.textContent?.length ?? 0))
+        if (from < to) pieces.push({ node, from: from - start, to: to - start })
+      }
+    // Last first: wrapping splits a text node, and the part BEFORE the split
+    // stays the node the earlier pieces point into.
+    for (const { node, from, to } of pieces.reverse()) {
+      const range = document.createRange()
+      range.setStart(node, from)
+      range.setEnd(node, to)
+      const span = document.createElement('span')
+      span.dataset.linkInk = ''
+      span.style.color = ink
+      span.style.textDecoration = 'underline'
+      span.style.textDecorationColor = `${ink}8c`
+      range.surroundContents(span)
+    }
+  }
+
+  const inkDrawn = (start: number, end: number): void => {
+    if (dead || term.buffer.active.type !== 'alternate') return
+    const rows = term.element?.querySelector('.xterm-rows')?.children
+    if (!rows) return
+    const ink = color()
+    for (let r = start; r <= end; r += 1) {
+      const row = rows[r]
+      if (row) inkRow(row, ink)
+    }
+  }
+
   const scan = (): void => {
     timer = undefined
     if (dead) return
@@ -146,6 +200,8 @@ export function attachLinkPaint(term: Terminal, color: () => string): LinkPainte
     finished?.dispose()
     finished = undefined
     soon()
+    // The alternate screen is inked as it is drawn: draw it all again.
+    if (term.buffer.active.type === 'alternate') term.refresh(0, term.rows - 1)
   }
 
   const subs: IDisposable[] = [
@@ -153,7 +209,8 @@ export function attachLinkPaint(term: Terminal, color: () => string): LinkPainte
     // A resize reflows every wrapped line: nothing painted is where it was.
     term.onResize(startOver),
     // Into the alternate screen and back out of it.
-    term.buffer.onBufferChange(startOver)
+    term.buffer.onBufferChange(startOver),
+    term.onRender(({ start, end }) => inkDrawn(start, end))
   ]
 
   return {
