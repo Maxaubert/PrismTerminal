@@ -2,10 +2,7 @@ import { useEffect, useState, useSyncExternalStore, type JSX, type ReactNode } f
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../lib/newTabPrefs'
 import { setWindowEdges, useWindowEdges } from '../lib/edgesPrefs'
 import { setTabWidth, useTabWidth, type TabWidth } from '../lib/tabWidthPrefs'
-<<<<<<< HEAD
 import { setTitleBarMode, useTitleBarMode, type TitleBarMode } from '../lib/titleBarPrefs'
-=======
->>>>>>> origin/main
 import { setTaskbarBadgeOn, useTaskbarBadgeOn } from '../lib/taskbarBadge'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
 import { HexSwatch, Pref, RESET_LINK, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
