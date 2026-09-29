@@ -48,8 +48,16 @@ export function DictationPill({ sessionId }: { sessionId: string | null }): JSX.
   const mine = view.phase === 'idle' ? view.message !== null : view.sessionId === sessionId
   if (!mine) return null
 
+  // The engine still starting is said as that, never as "Transcribing"
+  // (2026-09-28): the owner read half a minute of it as a hang.
   const label =
-    view.phase === 'listening' ? 'Listening…' : view.phase === 'transcribing' ? 'Transcribing…' : view.message
+    view.phase === 'listening'
+      ? 'Listening…'
+      : view.phase === 'transcribing'
+        ? view.starting
+          ? 'Starting speech engine…'
+          : 'Transcribing…'
+        : view.message
 
   return (
     <div
@@ -77,6 +85,11 @@ export function DictationPill({ sessionId }: { sessionId: string | null }): JSX.
           <span aria-hidden="true" className="block animate-spin h-3.5 w-3.5 shrink-0 rounded-full border-2 border-[color:var(--p-divider)] border-t-[color:var(--p-accent-hi)]" />
         ) : null}
         <span className="shrink-0 text-[12.5px] font-semibold text-[var(--p-text)]">{label}</span>
+        {listening && !view.liveText && view.starting && (
+          <span data-dictation-starting className="shrink-0 text-[12.5px] text-[var(--p-dim)]">
+            Starting speech engine
+          </span>
+        )}
         {listening && view.liveText && (
           // The NEWEST words matter: the line is clipped from the left, so what
           // you just said is always the part you can see.

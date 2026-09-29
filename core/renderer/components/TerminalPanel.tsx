@@ -6,7 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
 import { decidePaste, sanitizePaste, type PathShell } from '../lib/termPaste'
 import { shellOfShellId } from '../../shared/help/shells'
-import { registerPaste, reportCwd, reportTitle, setTextPaster } from '../lib/termBus'
+import { registerPaste, reportCwd, reportTitle, setScreenTail, setTextPaster } from '../lib/termBus'
 import { parseOsc9 } from '../../shared/termCwd'
 import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
 import { onGround } from '../lib/termGround'
@@ -341,6 +341,21 @@ function deleteSelection(term: Terminal, id: string): boolean {
  * says copy"): the selection's text, and the link under the point (whole, even
  * when it wraps). Read-only; a host that has no session by that id gets nothing.
  */
+// The last rows of a session's screen that hold text, for the question
+// indicator, which reads them through termBus rather than importing this
+// module. The LAST TEXT, not the bottom of the screen: in a fresh terminal, and
+// under Claude's inline renderer, what was drawn last sits above empty rows.
+setScreenTail((id, rows) => {
+  const s = sessions.get(id)
+  if (!s) return []
+  const b = s.term.buffer.active
+  let last = b.length - 1
+  while (last > 0 && !(b.getLine(last)?.translateToString(true) ?? '').trim()) last -= 1
+  const out: string[] = []
+  for (let y = Math.max(0, last - rows + 1); y <= last; y += 1) out.push(b.getLine(y)?.translateToString(true) ?? '')
+  return out
+})
+
 export function termContextAt(id: string, clientX: number, clientY: number): { selection: string; link: string | null } {
   const s = sessions.get(id)
   if (!s) return { selection: '', link: null }
@@ -583,7 +598,15 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // a terminal that didn't bother.
   term.loadAddon(new Unicode11Addon())
   term.unicode.activeVersion = '11'
-  term.loadAddon(new WebLinksAddon((_e, url) => termApi().openExternal(url)))
+  // A LEFT click opens a link (owner, 2026-09-28: "right clicking a link opens
+  // the link instead of showing the right click menu"). The addon hands over a
+  // click of ANY button; the right one belongs to the menu, which offers Open
+  // link itself.
+  term.loadAddon(
+    new WebLinksAddon((e, url) => {
+      if (e.button === 0) termApi().openExternal(url)
+    })
+  )
   // The addon makes a link clickable and underlines it under the pointer; this
   // is what makes it LOOK like a link the rest of the time.
   const links = attachLinkPaint(term, currentLinkColor)
