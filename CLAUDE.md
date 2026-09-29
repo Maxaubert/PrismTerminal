@@ -272,7 +272,11 @@ so an update never silently changes what an existing user sees; the bridge to ma
   in tens; a saved size off that list reads as the nearest step. `themeSwitch` e2e holds it all.
 - **THE RESTORE LOOKS UP CLAUDE SESSIONS OFF MAIN'S THREAD** (2026-09-22, the "soft lock on first
   launch"): `claudeSessionsAsync` stats sixteen at a time; a home folder holds thousands of
-  transcripts. The theme wall caches each preset's resolved look, and its previews use installed
+  transcripts. **AND IT RESUMES ONLY YOUR OWN CONVERSATIONS** (#87; owner, 2026-09-28: "it
+  continued the wrong session... a message i hadnt sent... about a review"). A tool's Agent SDK
+  runs (the commit review hook) write into the same folder, MEASURED 25 of the 26 newest there;
+  `isInteractiveHead` reads each transcript's first 4 KB and drops a `queue-operation` first line
+  or an `entrypoint` other than `cli`. The theme wall caches each preset's resolved look, and its previews use installed
   monospace faces rather than Mac ones Windows must look up.
 - **THE HELP POPUP BLURS THE WINDOW BEHIND IT AND CASTS NO SHADOW** (owner, 2026-09-22: "remove the
   shadow behind this and make the bg blurred when it's open"): `backdrop-blur` on a lighter scrim; the
@@ -723,11 +727,14 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
   missing mid-install). Launch only after setup has gone, and report the installed version.
 - **THE OWNER WORKS IN A STABLE COPY; NEVER CLOSE IT** (2026-09-28: "install prism terminal somewhere
   safe, a duplicate version, just so i can code with claude or codex in there without it closing").
-  `npm run install:stable` (`tools/install-stable.ps1`) copies the installed app to `%LOCALAPPDATA%\Programs\PrismTerminalStable`
+  `npm run install:stable` (`tools/install-stable.ps1`) copies the installed app to `%LOCALAPPDATA%\PrismTerminalStable`
   as `PrismTerminalStable.exe`, profile `%APPDATA%\PrismTerminalStable` (`--user-data-dir`, its own
   lock and tabs, `shell-verb-off` so it never writes the Explorer verbs), Start menu "Prism Terminal
   (Stable)". Install steps close processes named `PrismTerminal` ONLY: never `PrismTerminalStable`,
   never by path or window title. The copy moves to a new version only when the owner runs the script.
+  **NEVER UNDER `Programs\`** (#88): the NSIS installer also stops every process whose path STARTS
+  WITH its install folder, and `Programs\PrismTerminal` prefixes `Programs\PrismTerminalStable\`, so
+  every install killed the copy. No folder the copy lives in may start with an install folder.
 
 ## Style
 
