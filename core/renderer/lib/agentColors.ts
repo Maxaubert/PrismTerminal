@@ -3,6 +3,7 @@ import { termHost } from '../host'
 import {
   useAgentColorChoice,
   useAgentDoneColorChoice,
+  useAgentQuestionColorChoice,
   useCustomTermTheme,
   useTermThemeId
 } from './termLook'
@@ -24,17 +25,27 @@ const subscribeChrome = (cb: () => void): (() => void) =>
   }) ?? (() => {})
 const chromeSnapshot = (): number => chromeRev
 
-export function useAgentColors(): { working: string; finished: string } {
+/** The question mark's colour when neither the user nor the host names one:
+ *  a clear blue, the owner's word (2026-09-28: "a blue indicator"). A host
+ *  moves it to its ground's floor (`themedAgentColors().question`). */
+export const QUESTION_BLUE = '#3b82f6'
+
+export function useAgentColors(): { working: string; finished: string; question: string } {
   const rev = useSyncExternalStore(subscribeChrome, chromeSnapshot)
   const themeId = useTermThemeId()
   // A custom theme edited in place keeps its id; its palette is the dependency.
   const custom = useCustomTermTheme()
   const working = useAgentColorChoice()
   const finished = useAgentDoneColorChoice()
+  const question = useAgentQuestionColorChoice()
   return useMemo(() => {
     const themed = termHost().themedAgentColors(themeId)
-    return { working: working || themed.working, finished: finished || themed.finished }
+    return {
+      working: working || themed.working,
+      finished: finished || themed.finished,
+      question: question || themed.question || QUESTION_BLUE
+    }
     // `custom` is read by the host's resolver, not named in the body.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [themeId, custom, working, finished, rev])
+  }, [themeId, custom, working, finished, question, rev])
 }

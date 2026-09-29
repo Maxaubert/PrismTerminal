@@ -61,6 +61,14 @@ so an update never silently changes what an existing user sees; the bridge to ma
     signed by Microsoft, plus the MIT notice. The GPU pack finds them through PATH (the engine sets it).
   - **Shared files, per-app values.** Models and the GPU pack live in `%LOCALAPPDATA%\PrismDictation`
     (both apps; never removed by an uninstall); every setting VALUE is per app.
+  - **THE ENGINE IS WARM BEFORE YOU SPEAK** (owner, 2026-09-28: "it should work from the get-go").
+    MEASURED on an RTX 5090, Large v3 Turbo: the server answers in 1.1 s, but the FIRST pass took
+    31.8 s with no cached kernels (the pack has none for the card) and 0.26 s with them. So the GPU
+    engine has its own kernel cache (`%LOCALAPPDATA%\PrismDictation\cuda-cache`, 4 GB,
+    `CUDA_CACHE_PATH`), the renderer asks for a warm-up (`dictationWarm`, a silent pass) when
+    dictation is armed, when its model or language changes and at every press, a partial on a
+    cold engine answers `warming` at once instead of queueing, and the pill says "Starting speech
+    engine" rather than "Transcribing". After a failed warm-up partials go the ordinary way.
   - **GPU:** the official CUDA 12.4 pack (643 MB) is an optional download, offered only when an NVIDIA
     adapter is found. MEASURED on an RTX 5090: it runs (first run 9 s compiling kernels), Large-v3 then
     answers in 0.36-0.5 s. AMD/Intel stay on CPU (Base/Small) until there is an official build.
@@ -148,6 +156,13 @@ so an update never silently changes what an existing user sees; the bridge to ma
   core takes over from the browser needs the same: returning false is not cancelling. The
   `paste` e2e counts what reached the shell for Ctrl+V, Ctrl+Shift+V and the right-click Paste
   (it failed with 2 copies before the fix).
+- **THE TITLE BAR CAN BE HIDDEN** (#91; owner, 2026-09-28: "add a no title bar option for pt in
+  appearance as well, not theme related", and of the shapes offered, "tabs in the top row").
+  Settings > Appearance > Title bar (`title-bar`, `prism.window.titleBar`, `lib/titleBarPrefs.ts`),
+  above the theme wall: **Shown** (the DEFAULT, the window as it was) or **Hidden**: one row, the
+  tab strip (`inTitleRow`) with `TitleButtons` (chip, help, cog, window buttons) at its end, the
+  strip's empty space the drag handle; with no tabs the row is the handle and the buttons. This
+  app's row. The `titleBar` e2e measures both and the start screen.
 - **EVERY TAB IS ONE WIDTH** (owner, 2026-09-21: "make tabs in both apps have a fixed size, and not
   dynamically adjust based on the content"). A tab was as wide as its label, up to 14rem, so a
   folder with a long name shoved every tab after it sideways and the close button was never in
@@ -177,7 +192,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
   verify all themes look good, no invisible text, make some typical colour schemes like a green
   window, blue, and more fun ones ... don't make them ugly"). THE COUNT IS FORTY, the trailer's
   number, held by a test. Core `TERM_PRESETS`: the neutrals (PT Default, Prism, Pitch, Cinder,
-  Graphite, Ink, Paper, Mist); a dark and a light per colour (Umber and Fawn, the fan's brown and
+  Graphite, Volt, Paper, Mist); a dark and a light per colour (Umber and Fawn, the fan's brown and
   beige; Rosewood and Blossom; Moss and Sage); the classic looks (Phosphor, Amber, Marine,
   Retro, Campbell, High Contrast); more colours (Ocean, Garnet, Plum, Lavender, Sky, Peach,
   Butter, Mint); and well-known schemes in their real colours (Nord, Dracula, Solarized Dark,
@@ -185,6 +200,9 @@ so an update never silently changes what an existing user sees; the bridge to ma
   Horizon). NO INVISIBLE TEXT is a test (`termTheme.legible.test.ts`): text 4.5:1, cursor and
   accent 3:1, all sixteen 3:1 against the theme's own ground. It caught Catppuccin Latte's own
   cursor at 2.3:1, which is its mauve here. Original themes give base colours only.
+  **VOLT TOOK INK'S PLACE** (#93; owner, 2026-09-28, with a screenshot: "make one of the black
+  themes this colour scheme with black and that yellow greenish colour, kind of cyberpunk"):
+  `#d8ff26` on `#050706`; Ink, the blue-black next to Prism and Tokyo Night, retired to `prism`.
   A THEME ID IS A SAVED SETTING, so a retired one maps to its nearest kept one
   (`termThemeRetired.ts`, read in `termThemeId` and `resolveTermTheme`), never to the default;
   `termThemeRetired.test.ts` holds the map to the list. The e2e picks Paper and Fawn where it
@@ -244,8 +262,12 @@ so an update never silently changes what an existing user sees; the bridge to ma
 - **THE MENU FITS WHAT WAS CLICKED** (#44; owner, same day: "if i click it on a link it shows copy
   link, if i click it with text marked it says copy ... remove close tab from the right click
   menu"). `termContextAt` (core, read-only) answers what is under the point: the selection's text
-  and the link there (whole, across a wrap, by `findLinks`). App's menu leads with Copy link and
-  Copy, both copied exactly through main (`writeClipboard`); Close tab stays on the TAB's menu.
+  and the link there (whole, across a wrap, by `findLinks`). App's menu leads with Copy link, Open link and
+  Copy, both copies exact through main (`writeClipboard`); Close tab stays on the TAB's menu.
+  **A RIGHT-CLICK ON A LINK OPENS NOTHING** (#95; owner, 2026-09-28): the link addon hands over a
+  click of ANY button, so it opened the link and the menu at once; only a left click opens now. Every
+  row of both menus carries a glyph (`components/MenuIcon.tsx`, Prism's `FileMenuIcon` paths; owner: "the items
+  should have icons like in prism explorer").
   The `selectionEdit` e2e reads the clipboard back in main and puts the owner's back.
 - **SETTINGS DESCRIPTIONS ARE PLAIN WORDS, AND THE ROWS KEEP ONE ORDER** (owner, 2026-09-22: "no
   symbols other than comma and dot, no mentioning of specific keys or tips"; "the terminal
@@ -264,7 +286,11 @@ so an update never silently changes what an existing user sees; the bridge to ma
   in tens; a saved size off that list reads as the nearest step. `themeSwitch` e2e holds it all.
 - **THE RESTORE LOOKS UP CLAUDE SESSIONS OFF MAIN'S THREAD** (2026-09-22, the "soft lock on first
   launch"): `claudeSessionsAsync` stats sixteen at a time; a home folder holds thousands of
-  transcripts. The theme wall caches each preset's resolved look, and its previews use installed
+  transcripts. **AND IT RESUMES ONLY YOUR OWN CONVERSATIONS** (#87; owner, 2026-09-28: "it
+  continued the wrong session... a message i hadnt sent... about a review"). A tool's Agent SDK
+  runs (the commit review hook) write into the same folder, MEASURED 25 of the 26 newest there;
+  `isInteractiveHead` reads each transcript's first 4 KB and drops a `queue-operation` first line
+  or an `entrypoint` other than `cli`. The theme wall caches each preset's resolved look, and its previews use installed
   monospace faces rather than Mac ones Windows must look up.
 - **THE HELP POPUP BLURS THE WINDOW BEHIND IT AND CASTS NO SHADOW** (owner, 2026-09-22: "remove the
   shadow behind this and make the bg blurred when it's open"): `backdrop-blur` on a lighter scrim; the
@@ -425,7 +451,8 @@ confirmation, Explorer verbs, the update chip and its window, command help (#12)
 
 Out, each a fresh owner decision and not a natural next step: split panes, several shells per tab,
 per-shell profiles, a tray icon, multiple windows, SSH management, app styles separate from the
-terminal theme, anything that reads or shows files.
+terminal theme, anything that reads or shows files. (OPENING a path in the app Windows gives it is in:
+the owner's own call, #99.)
 
 ## Rules that must not regress (all measured in Prism, not assumed)
 
@@ -487,6 +514,23 @@ terminal theme, anything that reads or shows files.
   first idle title is the agent STARTING, not working. Output scoring (`termActivity`) is only the
   fallback, and an agent's startup paint is not work (`markBorn` / `startupOutput`). The rules live in
   `lib/useAgentIndicator.ts`; change them there, with Prism's reasoning in hand.
+- **FINISHED AND QUESTION ARE LINES, EACH OPTIONAL; A RUN OF WORKERS SHARES ONE BAR; THE TASKBAR
+  COUNTS** (owner, 2026-09-28; spec `docs/superpowers/specs/2026-09-28-attention-and-warm-dictation-design.md`).
+  A tab whose agent finished, or waits on you, while you were NOT LOOKING (another tab in front, or
+  the window unfocused) gets a static 3 px line along its bottom: Finished colour, or Question
+  colour (default blue) which outranks it; each behind its own switch (`agent-done-on`,
+  `agent-question-on`, both on). Opening the tab clears it. Full's fill is for working alone now.
+  CLAUDE GIVES NO SIGNAL FOR A QUESTION (MEASURED in a pty: the title is `✳` exactly as when done, no
+  bell, no OSC 9), so `agentQuestion.looksLikeQuestion` reads the last text rows of the screen
+  (through termBus, never by importing the panel) for its footer when the title goes idle and as
+  output arrives while idle; a rewording in a Claude update is a change there. In Minimal, two or
+  more NEIGHBOURING working tabs draw ONE bar across them (`workingRuns`, `data-working-run`) at a
+  single tab's length and speed; tabs apart keep their own. The taskbar button's overlay icon shows
+  how many tabs carry a mark (`taskbarBadge.ts`, `window:badge`, Settings > General switch, on):
+  a small grey disc with a white number, whatever the marks (owner, 2026-09-29: "too big and it's
+  green, it should be grey with white number").
+  Tab names are centred in both widths, and a Dynamic tab is never under four characters wide.
+  The `attention` e2e holds all of it.
 - **The indicator is MINIMAL by default and wears the THEME** (owner, 2026-09-18, #4; it was Full
   and a fixed orange in Prism and the first build). `termLook` stores the two colours as CHOICES,
   `''` meaning "follow the theme"; `lib/agentColors.ts` resolves what is in force: working = the
@@ -626,9 +670,25 @@ terminal theme, anything that reads or shows files.
   links are painted once and ride a marker; the LIVE screen is redrawn in place by TUIs, so every
   pass throws away what it painted from the last finished line down and paints that again (a
   decoration left on a rewritten row is a blue smear over words that were never a link). Rebuilt
-  on a resize (reflow) and on a theme change; not on the alternate screen. Columns are counted in
+  on a resize (reflow) and on a theme change. **THE ALTERNATE SCREEN TOO** (#97; owner, 2026-09-28:
+  a link in Claude Code's fullscreen view "is not blue ... it seems to know it's a link"): markers,
+  so decorations, do not exist there, so each row xterm DRAWS there (`onRender`) has its link text
+  wrapped in a span of the link colour; xterm replaces a row's contents when it draws it, so a
+  rewritten row starts clean. Per row, since a TUI places its own text. Columns are counted in
   CELLS, since a wide character is one character and two cells. xterm splits a row into spans as
   it likes, so the e2e finds a link's span by POSITION, never by its text.
+- **A PATH ON SCREEN IS A LINK WHEN IT EXISTS** (#99; owner, 2026-09-29: "clickable links that would
+  open the file or folder", then "go ahead"). `lib/termPaths` finds what COULD be a path (relative or
+  absolute, sentence punctuation and `:12` taken off); main's `termPathOpen` answers which exist from
+  the shell's folder (`cwd` tracks the prompt's OSC 9;9), and ONLY those are painted and clickable
+  (`lib/termPathLinks`: batched, cached per folder, a "no" forgotten after 15 s). A left click opens
+  a file in its own app and a folder in Explorer; ANYTHING RUNNABLE (exe, scripts, shortcuts,
+  installers: `isRunnable`) is only SHOWN in Explorer, never run. Main never trusts the page with
+  a path: it gets the TEXT back and resolves and checks it again. No UNC paths (a share can stall a
+  stat). A prompt (`PS C:\x>`, `C:\x>`) is not a link. Menu: Open, Show in Explorer, Copy path.
+  Under `--e2e` main records (`__e2eOpenedPaths`) and opens nothing. A host without `paths` in its
+  main deps (Prism, until wired) paints no paths at all; `TermHostConfig.openPath` is where Prism
+  opens them inside Prism. The `pathLinks` e2e holds it.
 - **A file dropped on the terminal types its quoted path, and the terminal answers a right-click**
   (2026-09-19, #16). Both lived in Prism's `TermDock.tsx`, the split dock, and went with it when
   the dock was stripped, while the README, the spec and PR #3 went on listing the drop as shipped
@@ -707,11 +767,14 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
   missing mid-install). Launch only after setup has gone, and report the installed version.
 - **THE OWNER WORKS IN A STABLE COPY; NEVER CLOSE IT** (2026-09-28: "install prism terminal somewhere
   safe, a duplicate version, just so i can code with claude or codex in there without it closing").
-  `npm run install:stable` (`tools/install-stable.ps1`) copies the installed app to `%LOCALAPPDATA%\Programs\PrismTerminalStable`
+  `npm run install:stable` (`tools/install-stable.ps1`) copies the installed app to `%LOCALAPPDATA%\PrismTerminalStable`
   as `PrismTerminalStable.exe`, profile `%APPDATA%\PrismTerminalStable` (`--user-data-dir`, its own
   lock and tabs, `shell-verb-off` so it never writes the Explorer verbs), Start menu "Prism Terminal
   (Stable)". Install steps close processes named `PrismTerminal` ONLY: never `PrismTerminalStable`,
   never by path or window title. The copy moves to a new version only when the owner runs the script.
+  **NEVER UNDER `Programs\`** (#88): the NSIS installer also stops every process whose path STARTS
+  WITH its install folder, and `Programs\PrismTerminal` prefixes `Programs\PrismTerminalStable\`, so
+  every install killed the copy. No folder the copy lives in may start with an install folder.
 
 ## Style
 

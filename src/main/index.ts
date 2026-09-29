@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, session, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, session, shell } from 'electron'
 import pkg from '../../package.json'
 import { existsSync } from 'fs'
 import { stat } from 'fs/promises'
@@ -69,6 +69,24 @@ function openLink(url: string): void {
     return
   }
   void shell.openExternal(url)
+}
+
+/**
+ * A PATH CLICKED IN THE TERMINAL (#99): the core has resolved it and checked it
+ * exists, and decided open or show. Under --e2e it is RECORDED, like a link:
+ * a test run never opens a file or an Explorer window on the owner's desktop.
+ */
+const e2eOpenedPaths: Array<{ how: 'open' | 'reveal'; abs: string }> = []
+if (E2E) Object.assign(globalThis, { __e2eOpenedPaths: e2eOpenedPaths })
+const pathOpeners = {
+  openPath: (abs: string): void => {
+    if (E2E) e2eOpenedPaths.push({ how: 'open', abs })
+    else void shell.openPath(abs)
+  },
+  revealPath: (abs: string): void => {
+    if (E2E) e2eOpenedPaths.push({ how: 'reveal', abs })
+    else shell.showItemInFolder(abs)
+  }
 }
 
 // userData is `%APPDATA%\PrismTerminal`, whatever the product name's spacing
@@ -424,7 +442,8 @@ function wireIpc(): void {
     // Not while the strip is still being rebuilt from tabs.json.
     mayPrewarm: async (cwd) => !awaitingRestore && (await isDir(cwd)),
     // Prism's reroot. This app never moves a shell it did not start there.
-    mayCd: () => false
+    mayCd: () => false,
+    paths: pathOpeners
   })
   // DICTATION (#13) is the core's too. What is this app's own: where ITS
   // installer put the CPU engine, the folder it shares with Prism, and the GPU
@@ -627,6 +646,26 @@ function wireIpc(): void {
   })
   // The DWM border itself is off under --e2e, so the suite asks what main HEARD.
   if (E2E) ipcMain.handle('e2e:window-edges', () => windowEdges)
+  // THE TASKBAR BADGE (2026-09-28): the page draws the disc, main puts it on
+  // the window's taskbar button as its overlay icon. Only a small PNG data url
+  // is taken; anything else, or null, clears it.
+  let badgeSaid = ''
+  ipcMain.on('window:badge', (_e, png: unknown, description: unknown) => {
+    const win = mainWindow
+    if (!win || win.isDestroyed()) return
+    const text = typeof description === 'string' ? description.slice(0, 120) : ''
+    if (typeof png === 'string' && png.startsWith('data:image/png;base64,') && png.length < 100_000) {
+      const img = nativeImage.createFromDataURL(png)
+      if (!img.isEmpty()) {
+        win.setOverlayIcon(img, text)
+        badgeSaid = text
+        return
+      }
+    }
+    win.setOverlayIcon(null, '')
+    badgeSaid = ''
+  })
+  if (E2E) ipcMain.handle('e2e:taskbar-badge', () => badgeSaid)
 }
 
 // Single instance: a second launch (the verb, a shortcut, a command line)

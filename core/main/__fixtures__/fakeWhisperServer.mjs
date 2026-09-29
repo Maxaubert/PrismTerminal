@@ -111,7 +111,9 @@ if (exitNow) {
           host,
           port,
           pid: process.pid,
-          cwd: process.cwd()
+          cwd: process.cwd(),
+          cudaCache: process.env.CUDA_CACHE_PATH ?? null,
+          cudaMax: process.env.CUDA_CACHE_MAXSIZE ?? null
         }
         active -= 1
         res.writeHead(200, { 'content-type': 'application/json' })

@@ -48,9 +48,23 @@ export interface DictationView {
   message: string | null
   /** The session being dictated into, for the mic mark on its tab. */
   sessionId: string | null
+  /** The speech engine is still starting (model loading, and on the GPU the
+   *  first compile), so there is no live text yet and a final waits for it. */
+  starting: boolean
 }
 
-const IDLE: DictationView = { phase: 'idle', liveText: '', message: null, sessionId: null }
+const IDLE: DictationView = { phase: 'idle', liveText: '', message: null, sessionId: null, starting: false }
+
+/** Ask main to have the engine ready for the current model and language
+ *  (2026-09-28): the first pass after a cold start compiled GPU kernels for
+ *  half a minute, MEASURED, while the pill said "Transcribing". Idempotent in
+ *  main, so it is asked freely. */
+function warmEngine(): void {
+  const host = dictationHost()
+  const modelId = dictationModel()
+  if (!host || !modelId) return
+  host.api.dictationWarm?.({ modelId, language: dictationLanguage() })
+}
 let view: DictationView = IDLE
 const viewListeners = new Set<() => void>()
 const levelListeners = new Set<(level: number) => void>()
@@ -153,7 +167,10 @@ async function begin(sessionId: string): Promise<void> {
   }
   rec = r
   if (messageTimer !== null) clearTimeout(messageTimer)
-  setView({ phase: 'listening', liveText: '', message: null, sessionId })
+  setView({ phase: 'listening', liveText: '', message: null, sessionId, starting: false })
+  // The engine may have stood down after its idle minutes: it warms while you
+  // speak, so the words are not waiting on it when you let go.
+  warmEngine()
   if (dictationSounds()) void startCue()
 
   try {
@@ -184,7 +201,9 @@ async function begin(sessionId: string): Promise<void> {
       .then((res) => {
         // Only while THIS recording is still listening: a partial that lands
         // after the final would overwrite the pill with older words.
-        if (res.ok && rec === r && view.phase === 'listening') setView({ liveText: cleanTranscript(res.text) })
+        if (rec !== r || view.phase !== 'listening') return
+        if (res.ok) setView({ liveText: cleanTranscript(res.text), starting: false })
+        else if (res.reason === 'warming') setView({ starting: true })
       })
       .catch(() => {})
       .finally(() => {
@@ -312,8 +331,17 @@ export function armDictation(activeSession: () => string | null): () => void {
     )
   const onBlur = (): void => feed({ type: 'blur', at: performance.now() })
 
+  let warmTimer: number | null = null
   const sync = (): void => {
     const want = dictationEnabled() && dictationHost() !== null
+    // Warm the engine a moment after dictation is armed (the app has just
+    // opened), and again when its model or language changes; off means off,
+    // so nothing is warmed while it is off.
+    if (warmTimer !== null) clearTimeout(warmTimer)
+    warmTimer = want ? window.setTimeout(() => {
+      warmTimer = null
+      warmEngine()
+    }, armed ? 500 : 3000) : null
     if (want === armed) return
     armed = want
     if (want) {
@@ -335,6 +363,7 @@ export function armDictation(activeSession: () => string | null): () => void {
   return () => {
     unsub()
     if (tick !== null) clearTimeout(tick)
+    if (warmTimer !== null) clearTimeout(warmTimer)
     if (armed) {
       window.removeEventListener('keydown', onKey, true)
       window.removeEventListener('keyup', onKey, true)

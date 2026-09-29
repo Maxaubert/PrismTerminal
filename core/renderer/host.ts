@@ -49,6 +49,10 @@ export interface TermApi {
    *  host that has none still builds, and `copyText` then reports a failure. */
   writeClipboard?(text: string): Promise<boolean>
   openExternal(url: string): void
+  /** Paths (#99). Optional so a host bridge without them still builds; the
+   *  terminal then paints and opens no paths. */
+  termPathKinds?(cwd: string, texts: string[]): Promise<Array<{ kind: 'file' | 'dir'; abs: string } | null>>
+  termOpenPath?(cwd: string, text: string, mode: 'open' | 'reveal'): void
 }
 
 export type AgentIndicator = 'off' | 'minimal' | 'full'
@@ -97,7 +101,7 @@ export interface TermHostConfig {
    * host's to name: Prism Terminal derives its chrome from the terminal theme,
    * Prism takes it from the app style.
    */
-  themedAgentColors(themeId: string): { working: string; finished: string }
+  themedAgentColors(themeId: string): { working: string; finished: string; question?: string }
 
   /**
    * The colour the terminal is really painted on, where the host lets somebody
@@ -146,6 +150,15 @@ export interface TermHostConfig {
     api: DictationApi
     canDictate(): boolean
   }
+
+  /**
+   * A PATH CLICKED IN THE TERMINAL (#99), for a host that opens files itself.
+   * Prism has a viewer and an explorer of its own, so a click there should
+   * land in Prism (owner, 2026-09-29). Answer true when the host took it;
+   * false, or absent, and main opens it the Windows way (the app Windows
+   * gives a file, Explorer for a folder, never a program run).
+   */
+  openPath?(target: { abs: string; kind: 'file' | 'dir'; mode: 'open' | 'reveal' }): boolean
 }
 
 let host: TermHostConfig | null = null

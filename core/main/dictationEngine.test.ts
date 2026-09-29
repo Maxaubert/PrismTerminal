@@ -37,6 +37,8 @@ interface Seen {
   port: number
   pid: number
   cwd: string
+  cudaCache: string | null
+  cudaMax: string | null
 }
 
 interface World {
@@ -196,10 +198,11 @@ describe('the server', () => {
 
   it('is reused from one pass to the next', async () => {
     const w = world()
+    await w.engine.warm({ modelId: 'base', language: 'auto' })
     const a = seen(await w.engine.transcribe(req({ final: false })))
     const b = seen(await w.engine.transcribe(req()))
     expect(b.pid).toBe(a.pid)
-    expect(b.n).toBe(2)
+    expect(b.n).toBe(3)
     expect(w.launched).toHaveLength(1)
   })
 
@@ -280,19 +283,21 @@ describe('a CPU engine that will not start', () => {
 describe('passes are serialised to one in flight', () => {
   it('drops a waiting partial for a newer one, and never sends two at once', async () => {
     const w = world({ cpuFlags: ['--fake-delay', '120'] })
+    await w.engine.warm({ modelId: 'base', language: 'auto' })
     const a = w.engine.transcribe(req({ final: false }))
     const b = w.engine.transcribe(req({ final: false }))
     const c = w.engine.transcribe(req({ final: false }))
     // b never reaches the server: it answers as soon as c takes its place.
     expect(await b).toEqual({ ok: false, reason: 'superseded' })
-    expect(seen(await a).n).toBe(1)
+    expect(seen(await a).n).toBe(2)
     const last = seen(await c)
-    expect(last.n).toBe(2)
+    expect(last.n).toBe(3)
     expect(last.maxActive).toBe(1)
   })
 
   it('never drops a final, and lets it jump ahead of a waiting partial', async () => {
     const w = world({ cpuFlags: ['--fake-delay', '120'] })
+    await w.engine.warm({ modelId: 'base', language: 'auto' })
     const inFlight = w.engine.transcribe(req({ final: false }))
     const waiting = w.engine.transcribe(req({ final: false }))
     const final1 = w.engine.transcribe(req({ final: true }))
@@ -304,12 +309,65 @@ describe('passes are serialised to one in flight', () => {
     // A partial waiting when a final arrives is for a clip the final covers whole.
     expect(await waiting).toEqual({ ok: false, reason: 'superseded' })
     expect(await nextPartial).toEqual({ ok: false, reason: 'superseded' })
-    expect(seen(await inFlight).n).toBe(1)
-    expect(seen(await final1).n).toBe(2)
-    expect(seen(await final2).n).toBe(3)
+    expect(seen(await inFlight).n).toBe(2)
+    expect(seen(await final1).n).toBe(3)
+    expect(seen(await final2).n).toBe(4)
     const end = seen(await newest)
-    expect(end.n).toBe(4)
+    expect(end.n).toBe(5)
     expect(end.maxActive).toBe(1)
+  })
+})
+
+// THE ENGINE IS WARM BEFORE ANYBODY SPEAKS (2026-09-28; MEASURED on an RTX
+// 5090: the first pass of a cold GPU engine compiled kernels for 31.8 s, and
+// the partials queued behind it showed nothing for as long).
+describe('warming up', () => {
+  it('answers a partial on a cold engine at once with warming, and warms it', async () => {
+    const w = world()
+    expect(await w.engine.transcribe(req({ final: false }))).toEqual({ ok: false, reason: 'warming' })
+    await until(() => w.engine.info().running)
+    // The warm-up pass lands; the next partial is served by the same server.
+    await until(() => w.launched.length === 1)
+    let served: TranscribeResult | null = null
+    await until(() => {
+      void w.engine.transcribe(req({ final: false })).then((r) => (served = r))
+      return served !== null && (served as TranscribeResult).ok
+    }, 6000)
+    expect(w.launched).toHaveLength(1)
+  })
+
+  it('is asked for freely: one server and one silent pass however often', async () => {
+    const w = world({ cpuFlags: ['--fake-delay', '100'] })
+    const first = w.engine.warm({ modelId: 'base', language: 'auto' })
+    expect(await w.engine.warm({ modelId: 'base', language: 'auto' })).toEqual({ ok: false, reason: 'warming' })
+    expect((await first).ok).toBe(true)
+    expect((await w.engine.warm({ modelId: 'base', language: 'auto' })).ok).toBe(true)
+    // The final is the SECOND pass the server ever saw: the warm-up was the first.
+    expect(seen(await w.engine.transcribe(req())).n).toBe(2)
+    expect(w.launched).toHaveLength(1)
+  })
+
+  it('a final is never refused while warming: it waits for the warm server', async () => {
+    const w = world({ cpuFlags: ['--fake-delay', '100'] })
+    void w.engine.warm({ modelId: 'base', language: 'auto' })
+    const final = seen(await w.engine.transcribe(req()))
+    expect(final.n).toBe(2)
+    expect(final.maxActive).toBe(1)
+  })
+
+  it('gives the GPU engine its own kernel cache, with room, and the CPU one nothing', async () => {
+    const g = world({ gpu: true, nvidia: true }, { cudaCacheDir: () => 'C:\\Prism Dictation\\cuda-cache' })
+    const gpu = seen(await g.engine.transcribe(req()))
+    expect(gpu.cudaCache).toBe('C:\\Prism Dictation\\cuda-cache')
+    expect(Number(gpu.cudaMax)).toBeGreaterThanOrEqual(4 * 1024 * 1024 * 1024)
+    const c = world({}, { cudaCacheDir: () => 'C:\\Prism Dictation\\cuda-cache' })
+    expect(seen(await c.engine.transcribe(req())).cudaCache).toBeNull()
+  })
+
+  it('after a failed warm-up, a partial goes the ordinary way and says what failed', async () => {
+    const w = world({ cpuFlags: ['--fake-exit'] })
+    expect((await w.engine.warm({ modelId: 'base', language: 'auto' })).ok).toBe(false)
+    expect(await w.engine.transcribe(req({ final: false }))).toMatchObject({ ok: false, reason: 'engine-failed' })
   })
 })
 
@@ -347,11 +405,11 @@ describe('standing down', () => {
 describe('stop()', () => {
   it('kills the server at once and fails what was in flight and what was waiting', async () => {
     const w = world({ cpuFlags: ['--fake-delay', '2000'] })
+    await w.engine.warm({ modelId: 'base', language: 'auto' })
     const inFlight = w.engine.transcribe(req({ final: true }))
     const waitingFinal = w.engine.transcribe(req({ final: true }))
     const waitingPartial = w.engine.transcribe(req({ final: false }))
-    // Long enough for the server to be up and holding the first pass.
-    await until(() => w.children.length === 1)
+    // Long enough for the server to be holding the first pass.
     await sleep(250)
     w.engine.stop()
     expect(w.engine.info().running).toBe(false)

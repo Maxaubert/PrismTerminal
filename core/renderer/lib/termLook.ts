@@ -141,6 +141,31 @@ export function setAgentIndicator(v: AgentIndicator): void {
 
 const AGENT_COLOR_KEY = 'prism.term.agentColor'
 const AGENT_DONE_KEY = 'prism.term.agentDoneColor'
+const AGENT_QUESTION_KEY = 'prism.term.agentQuestionColor'
+const DONE_ON_KEY = 'prism.term.agentDoneOn'
+const QUESTION_ON_KEY = 'prism.term.agentQuestionOn'
+
+/**
+ * THE TWO ATTENTION MARKS, each optional (2026-09-28; owner: "an optional
+ * completion indicator ... a green border on the bottom", and "a question
+ * indicator ... a blue indicator, also optional"). ON by default: they are how
+ * a tab that needs you says so. Switches, not theme settings, so a theme
+ * never turns them on or off.
+ */
+export function agentDoneOn(): boolean {
+  return localStorage.getItem(DONE_ON_KEY) !== '0'
+}
+export function setAgentDoneOn(on: boolean): void {
+  localStorage.setItem(DONE_ON_KEY, on ? '1' : '0')
+  notify()
+}
+export function agentQuestionOn(): boolean {
+  return localStorage.getItem(QUESTION_ON_KEY) !== '0'
+}
+export function setAgentQuestionOn(on: boolean): void {
+  localStorage.setItem(QUESTION_ON_KEY, on ? '1' : '0')
+  notify()
+}
 const HEX = /^#[0-9a-f]{6}$/i
 
 /**
@@ -159,6 +184,18 @@ export function agentColorChoice(): string {
 export function setAgentColor(hex: string): void {
   if (HEX.test(hex)) localStorage.setItem(AGENT_COLOR_KEY, hex)
   else localStorage.removeItem(AGENT_COLOR_KEY)
+  notify()
+}
+
+/** The question colour's choice ('' = the default blue, moved to the ground's
+ *  floor by lib/agentColors), like the other two. */
+export function agentQuestionColorChoice(): string {
+  const v = localStorage.getItem(AGENT_QUESTION_KEY)
+  return v && HEX.test(v) ? v : ''
+}
+export function setAgentQuestionColor(hex: string): void {
+  if (HEX.test(hex)) localStorage.setItem(AGENT_QUESTION_KEY, hex)
+  else localStorage.removeItem(AGENT_QUESTION_KEY)
   notify()
 }
 
@@ -192,6 +229,7 @@ export interface CustomTermTheme {
   indicator?: AgentIndicator
   indicatorColor?: string
   doneColor?: string
+  questionColor?: string
   acrylic?: boolean
   opacity?: number
 }
@@ -203,6 +241,7 @@ export function termExtraDefaults(): {
   indicator: AgentIndicator
   indicatorColor: string
   doneColor: string
+  questionColor: string
   acrylic: boolean
   opacity: number
 } {
@@ -212,6 +251,7 @@ export function termExtraDefaults(): {
     // '' = the theme's own (see agentColorChoice).
     indicatorColor: d.agentColor,
     doneColor: d.agentDoneColor,
+    questionColor: '',
     acrylic: d.acrylic,
     opacity: 100
   }
@@ -223,6 +263,7 @@ export function resetTermExtras(): void {
   localStorage.removeItem(AGENT_IND_KEY)
   localStorage.removeItem(AGENT_COLOR_KEY)
   localStorage.removeItem(AGENT_DONE_KEY)
+  localStorage.removeItem(AGENT_QUESTION_KEY)
   localStorage.removeItem(ACRYLIC_KEY)
   localStorage.removeItem(OPACITY_KEY)
   notify()
@@ -239,6 +280,8 @@ export function applyCustomExtras(t: CustomTermTheme | null): void {
   else localStorage.removeItem(AGENT_COLOR_KEY)
   if (t.doneColor) localStorage.setItem(AGENT_DONE_KEY, t.doneColor)
   else localStorage.removeItem(AGENT_DONE_KEY)
+  if (t.questionColor) localStorage.setItem(AGENT_QUESTION_KEY, t.questionColor)
+  else localStorage.removeItem(AGENT_QUESTION_KEY)
   if (t.acrylic !== undefined) localStorage.setItem(ACRYLIC_KEY, t.acrylic ? '1' : '0')
   if (t.opacity !== undefined) localStorage.setItem(OPACITY_KEY, String(t.opacity))
   notify()
@@ -294,6 +337,15 @@ export function useAgentColorChoice(): string {
 }
 export function useAgentDoneColorChoice(): string {
   return useSyncExternalStore(sub, agentDoneColorChoice)
+}
+export function useAgentQuestionColorChoice(): string {
+  return useSyncExternalStore(sub, agentQuestionColorChoice)
+}
+export function useAgentDoneOn(): boolean {
+  return useSyncExternalStore(sub, agentDoneOn)
+}
+export function useAgentQuestionOn(): boolean {
+  return useSyncExternalStore(sub, agentQuestionOn)
 }
 export function useCustomTermTheme(): CustomTermTheme | null {
   // Cache per notify tick: useSyncExternalStore needs a stable snapshot.

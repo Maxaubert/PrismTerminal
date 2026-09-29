@@ -1,4 +1,5 @@
 import { chromeTokens } from './chromeTheme'
+import { QUESTION_BLUE } from '@core/renderer/lib/agentColors'
 import { windowAccent } from './accentPrefs'
 import { windowBackground } from './backgroundPrefs'
 import { contrastRatio, ensureContrast, normalizeColor } from '@core/renderer/lib/termAnsi'
@@ -20,7 +21,7 @@ import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 const FALLBACK_DONE = '#22c55e'
 const FLOOR = 3
 
-export function themeAgentColors(themeId: string): { working: string; finished: string } {
+export function themeAgentColors(themeId: string): { working: string; finished: string; question: string } {
   // What the chrome REALLY wears (2026-09-28): the picked background and
   // accent, where there are any, exactly as paintChrome derives the window. An
   // unpicked indicator follows "the accent you see", which is the pick.
@@ -34,5 +35,7 @@ export function themeAgentColors(themeId: string): { working: string; finished: 
   // Near-identical colours measure about 1:1 against each other.
   const finished =
     contrastRatio(green, working) < 1.15 ? ensureContrast(FALLBACK_DONE, bg, FLOOR) : green
-  return { working, finished }
+  // The question mark's blue, moved only as far as this ground needs.
+  const question = ensureContrast(QUESTION_BLUE, bg, FLOOR)
+  return { working, finished, question }
 }
