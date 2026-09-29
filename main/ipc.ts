@@ -3,6 +3,7 @@ import { validResume } from './agentResume'
 import { pollAgentsNow, pollAgentsSoon, startAgentPoll } from './agentPoll'
 import { detectShells } from './shells'
 import { cdTerm, killTerm, prewarmShell, resizeTerm, spawnTerm, writeTerm } from './terminal'
+import { openTermPath, pathKinds, PATHS_MAX, type PathOpeners } from './termPathOpen'
 
 /**
  * The main half of the terminal's bridge, for both hosts.
@@ -57,6 +58,13 @@ export interface TermIpcDeps {
   /** May a running shell be moved to this folder (Prism's reroot)? A host with
    *  no such feature answers false, and the channel does nothing. */
   mayCd(path: string): boolean
+  /**
+   * How a path clicked in the terminal is opened (#99): the app Windows gives
+   * it, or Explorer with it selected. A host without them has no clickable
+   * paths at all: the kinds channel then answers null for everything, so
+   * nothing is painted that a click could not open.
+   */
+  paths?: PathOpeners
 }
 
 /** Registers every terminal channel and starts the agent poll. Returns the
@@ -151,6 +159,19 @@ export function registerTermIpc(deps: TermIpcDeps): () => void {
   // A link clicked in the terminal. The page is never trusted with a scheme.
   ipcMain.on(CH.openExternal, (_e: unknown, url: unknown) => {
     if (typeof url === 'string' && /^https?:\/\//i.test(url)) deps.openExternal(url)
+  })
+
+  // PATHS (#99). The page asks which texts on screen name a file or a folder;
+  // a click hands the TEXT back and main resolves and checks it again.
+  ipcMain.handle(CH.pathKinds, async (_e: unknown, cwd: unknown, texts: unknown) => {
+    if (!deps.paths || typeof cwd !== 'string' || !Array.isArray(texts)) return []
+    const list = texts.slice(0, PATHS_MAX).map((t) => (typeof t === 'string' ? t : ''))
+    return pathKinds(cwd, list)
+  })
+  ipcMain.on(CH.openPath, (_e: unknown, cwd: unknown, text: unknown, mode: unknown) => {
+    const openers = deps.paths
+    if (!openers || typeof cwd !== 'string' || typeof text !== 'string') return
+    void openTermPath(cwd, text, mode === 'reveal' ? 'reveal' : 'open', openers)
   })
 
   return startAgentPoll((id, has, kind) => send(CH.agent, id, has, kind))
