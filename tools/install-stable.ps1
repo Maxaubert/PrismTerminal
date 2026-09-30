@@ -18,8 +18,9 @@
 #    it runs beside the installed app with its own tabs and its own restore.
 #  - `shell-verb-off` in that profile: it never writes Explorer's "Open
 #    terminal here" entries, which belong to the installed app.
-# Its update chip will still offer releases: ignore it there, and run this
-# script again to move the copy to whatever is installed now. Settings
+# Its update chip works (#104): Install updates the installed app, then mirrors
+# it into this copy and restarts it on its own profile (src/main/updateHandoff).
+# Running this script again does the same by hand. Settings
 # (theme, font) are copied from the installed app's profile on the FIRST
 # setup only; a refresh keeps the copy's own.
 #
