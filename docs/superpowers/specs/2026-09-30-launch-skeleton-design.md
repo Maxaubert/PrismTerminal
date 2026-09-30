@@ -28,10 +28,7 @@ Owner, 2026-09-30. On opening the app with three Claude tabs:
 - **A placeholder draws the skeleton if its saved agent is claude or codex.** A plain-shell placeholder draws the empty ground, since its prompt arrives in well under a second.
 
 ### 2. A skeleton while the agent comes back (core, so Prism's resumed terminals get it too)
-- **`ResumeSkeleton`** is a new core component. It is Claude's own layout drawn as placeholders, as mockup C shows:
-  - three short bars for the logo block;
-  - a prompt bar, and two or three message bars of varied length;
-  - the outline of the input box.
+- **`ResumeSkeleton`** is a new core component: the logo block at the top, then a whole page of lines in paragraphs, filling the window to its bottom edge. The owner reviewed the first build on 2026-09-30: "it's too small, it should cover much more of the window ... not that bottom claude input bar thing, only the lines". So there is no input box and no footer.
 - **Look:** the bars are `color-mix(var(--p-text) 7%)` on the panel's own ground, with a slow sheen. Under reduced motion there is no sheen. It follows every theme, since everything is drawn from tokens.
 - **Placement:** TerminalPanel mounts it OVER the terminal element for a session marked resume. It replaces today's text spinner, which goes.
 - **The shell's words never show.**
