@@ -1159,6 +1159,101 @@ const scenarios = {
     await closeApp(app)
   },
 
+  // LAUNCH WITH RESTORED AGENT TABS (#106; spec
+  // docs/superpowers/specs/2026-09-30-launch-skeleton-design.md; owner,
+  // 2026-09-30: "you see the no tab screen (false, there are three tabs
+  // actually) -> ... then you see the path in the terminal then it
+  // disappears"). Three saved claude tabs, a HOME of our own holding a
+  // transcript for each (never the owner's), and a stand-in `claude` first on
+  // PATH that titles the console `claude`, waits, then titles it the way
+  // Claude does and prints a banner.
+  async launchSkeleton(ok) {
+    const w = world()
+    const gamma = join(w.alpha, '..', 'gamma')
+    mkdirSync(gamma)
+    const home = join(w.alpha, '..', 'home')
+    const bin = join(w.alpha, '..', 'bin')
+    mkdirSync(bin)
+    for (const cwd of [w.alpha, w.beta, gamma]) {
+      const dir = join(home, '.claude', 'projects', cwd.replace(/[^A-Za-z0-9]/g, '-'))
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, '5a1d0c2e-1111-4222-8333-94445555a666.jsonl'), '{"type":"user","entrypoint":"cli"}\n')
+    }
+    writeFileSync(
+      join(bin, 'fake-claude.cjs'),
+      [
+        "process.stdout.write('\\x1b]0;claude\\x07~\\\\agent-banner-path\\r\\n')",
+        "setTimeout(() => process.stdout.write('\\x1b]0;\\u2733 Claude Code\\x07FAKE CLAUDE READY ' + process.argv.slice(2).join(' ') + '\\r\\n'), 1500)",
+        'setInterval(() => {}, 1000)'
+      ].join('\n')
+    )
+    // Words before the agent takes the console, as a shell's prompt would be:
+    // the clear must wipe them. Then the agent, whose own banner line may show.
+    writeFileSync(join(bin, 'claude.cmd'), `@echo NOISE-BEFORE C:\\noise\r\n@"${process.execPath}" "%~dp0fake-claude.cjs" %*\r\n`)
+    writeFileSync(
+      join(w.profile, 'tabs.json'),
+      JSON.stringify({ tabs: [w.alpha, w.beta, gamma].map((cwd) => ({ cwd, agent: 'claude' })), active: 0 })
+    )
+    const env = { USERPROFILE: home, HOME: home, PATH: `${bin};${process.env.PATH}` }
+    const app = await electron.launch({
+      ...(PACKAGED ? { executablePath: PACKAGED } : {}),
+      args: [...(PACKAGED ? [] : [MAIN]), `--user-data-dir=${w.profile}`, '--e2e'],
+      env: { ...process.env, ...env }
+    })
+    try {
+      const page = await app.firstWindow()
+      // From the first frame the page draws: what did it show FIRST, tabs or
+      // the start screen? Polled as fast as the page answers.
+      let first = null
+      const t0 = Date.now()
+      while (!first && Date.now() - t0 < 15000) {
+        first = await page
+          .evaluate(() => {
+            const tabs = document.querySelectorAll('[data-tab]').length
+            if (document.querySelector('[data-empty-state]')) return { empty: true, tabs }
+            return tabs ? { empty: false, tabs } : null
+          })
+          .catch(() => null)
+        if (!first) await sleep(10)
+      }
+      await app.evaluate(park)
+      ok(!!first && !first.empty && first.tabs === 3, `the first frame already holds the three tabs, and no start screen (${JSON.stringify(first)})`)
+      // While it comes back: the skeleton, a ring on every tab, and never the
+      // shell's own words showing uncovered.
+      const look = () =>
+        page.evaluate(() => {
+          const rows = [...document.querySelectorAll('.xterm-rows')].map((r) => r.textContent ?? '').join('\n')
+          return {
+            skeleton: !!document.querySelector('[data-resume-skeleton="shown"]'),
+            rings: document.querySelectorAll('[data-tab-loading]').length,
+            prompt: rows.includes('NOISE-BEFORE'),
+            ready: rows.includes('FAKE CLAUDE READY')
+          }
+        })
+      const early = await look()
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/launch-skeleton.png') }).catch(() => {})
+      ok(early.skeleton, 'the tab in front wears the skeleton while its conversation comes back')
+      ok(early.rings === 3, `every tab shows the loading ring (${early.rings})`)
+      let bare = false
+      const settle = await until(async () => {
+        const l = await look()
+        if (l.prompt && !l.skeleton) bare = true
+        return l.ready && !l.skeleton && l.rings === 0 ? l : null
+      }, 30000, 40)
+      ok(!!settle, `the agent appears, and the skeleton and every ring go (${JSON.stringify(await look())})`)
+      ok(!bare, 'what the shell said before the agent was never shown uncovered')
+      ok(!(await look()).prompt, 'and it is not left in the terminal above the agent')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/launch-ready.png') }).catch(() => {})
+      // A tab behind, clicked after its own agent was ready: no skeleton.
+      await page.locator('[data-tab]').nth(2).locator('[role="tab"]').click()
+      await sleep(300)
+      const behind = await look()
+      ok(!behind.skeleton && behind.ready, 'a tab behind, opened after it was ready, shows its agent at once')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async restore(ok) {
     const w = world()
     let { app, page } = await launch(w, { args: [w.alpha, w.beta] })

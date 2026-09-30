@@ -41,6 +41,10 @@ const api = {
    *  resume resolved. The first call of a launch also carries the folders the
    *  app was launched with. Call it on mount. */
   restoreTabs: (): Promise<Restored> => ipcRenderer.invoke('tabs:restore'),
+  /** The saved strip exactly as saved, at once (#106): what the first frame
+   *  draws while restoreTabs settles each tab. Synchronous, and only a draw:
+   *  nothing is spawned from it. */
+  peekTabs: (): SavedTabs => ipcRenderer.sendSync('tabs:peek') as SavedTabs,
   /** Report the strip so main can persist it. Ignored until restoreTabs has
    *  answered. */
   tabsChanged: (s: SavedTabs): void => ipcRenderer.send('tabs:changed', s),

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type JSX } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type JSX } from 'react'
 import type { AgentKind, DetectedAgent } from '@shared/types'
 import TerminalPanel, {
   disposeTermSession,
@@ -16,7 +16,6 @@ import { useTitleBarMode } from './lib/titleBarPrefs'
 import EmptyState from './components/EmptyState'
 import { Dialog } from './components/Dialog'
 import {
-  EMPTY,
   addTab,
   closeTab,
   openSettings,
@@ -38,7 +37,9 @@ import UpdateDialog from '@core/renderer/components/UpdateDialog'
 import { useUpdateFlow } from '@core/renderer/lib/useUpdateFlow'
 import { humanFor, workingFor } from '@core/renderer/lib/agentClock'
 import { forgetSession, markResume, markTouched } from '@core/renderer/lib/termActivity'
-import { onCwd, pasteInto } from '@core/renderer/lib/termBus'
+import { onCwd, onResumingChange, pasteInto, resumingIds } from '@core/renderer/lib/termBus'
+import { ResumeSkeleton } from '@core/renderer/components/ResumeSkeleton'
+import { peekState, settleRestore } from './lib/restorePlan'
 import { quotePaths } from '@core/renderer/lib/termPaste'
 import { ContextMenu } from './components/ContextMenu'
 import { MenuIcon } from './components/MenuIcon'
@@ -116,7 +117,12 @@ function paintChrome(): void {
 }
 
 export default function App(): JSX.Element {
-  const [state, setState] = useState<TabState>(EMPTY)
+  // TABS FROM THE FIRST FRAME (#106): the saved strip, read at once, drawn as
+  // placeholders; the restore settles each when it answers (lib/restorePlan).
+  const [boot] = useState(() => peekState(window.prism.peekTabs(), nextId))
+  const [state, setState] = useState<TabState>(boot.state)
+  /** The restore has answered: only then can "no tabs" be true. */
+  const [restoreDone, setRestoreDone] = useState(false)
   /** The shell the find bar was opened over; it belongs to that shell alone. */
   const [findFor, setFindFor] = useState<string | null>(null)
   const [ask, setAsk] = useState<Ask | null>(null)
@@ -147,7 +153,15 @@ export default function App(): JSX.Element {
   const shellIds = useRef(new Map<string, string | undefined>())
   const { tabs, activeId } = state
   const active = tabs.find((t) => t.id === activeId) ?? null
-  const activeShell = active && active.kind !== 'settings' ? active : null
+  // A placeholder has no shell yet (#106): nothing that needs one may see it.
+  const activeShell = active && active.kind !== 'settings' && !active.pending ? active : null
+  // Tabs still coming back to an agent wear a ring in the strip (#106): the
+  // placeholders, then the sessions resuming until their agent has drawn.
+  const resumingNow = useSyncExternalStore(onResumingChange, resumingIds)
+  const loadingIds = useMemo(
+    () => new Set([...tabs.filter((t) => t.pending === 'agent').map((t) => t.id), ...resumingNow]),
+    [tabs, resumingNow]
+  )
   // A tab change puts the terminal's menu away for good (#32), so coming back
   // to the tab it was opened on does not bring it back at the old spot.
   const [menuFront, setMenuFront] = useState(activeId)
@@ -180,8 +194,8 @@ export default function App(): JSX.Element {
     }
   }, [])
 
-  const openTab = useCallback((cwd: string, resume?: string): string => {
-    const id = nextId()
+  /** Start the shell for a tab that has (or is about to have) its place. */
+  const spawnSession = useCallback((id: string, cwd: string, resume?: string): void => {
     // A shell restored over an agent conversation launches straight into it:
     // the id rides the spawn, nothing is ever visibly typed.
     if (resume) markResume(id, resume)
@@ -189,9 +203,17 @@ export default function App(): JSX.Element {
     const shellId = savedShellId()
     shellIds.current.set(id, shellId)
     ensureTermSession(id, cwd, shellId)
-    setState((s) => addTab(s, id, cwd))
-    return id
   }, [])
+
+  const openTab = useCallback(
+    (cwd: string, resume?: string): string => {
+      const id = nextId()
+      spawnSession(id, cwd, resume)
+      setState((s) => addTab(s, id, cwd))
+      return id
+    },
+    [spawnSession]
+  )
 
   /** The user's own folder: where a new tab opens when Settings names none.
    *  Asked once; main is the one that knows. */
@@ -224,12 +246,14 @@ export default function App(): JSX.Element {
     if (restored.current) return
     restored.current = true
     void window.prism.restoreTabs().then((r) => {
-      const ids = r.tabs.map((t) => openTab(t.cwd, t.resume))
-      const front = ids[r.active]
-      if (front) setState((s) => pickTab(s, front))
+      // Each placeholder drawn from the peek is settled in place (#106).
+      const settled = settleRestore(live.current.state, boot.slots, r, nextId)
+      setState(settled.state)
+      for (const t of settled.spawn) spawnSession(t.id, t.cwd, t.resume)
+      setRestoreDone(true)
       prewarm()
     })
-  }, [openTab, prewarm])
+  }, [boot.slots, spawnSession, prewarm])
 
   useEffect(() => {
     void window.prism.homeDir().then((dir) => {
@@ -546,6 +570,7 @@ export default function App(): JSX.Element {
       doneIds={doneIds}
       questionIds={questionIds}
       agentIds={agentIds}
+      loadingIds={loadingIds}
       onPick={(id) => setState((s) => pickTab(s, id))}
       onClose={requestClose}
       onNew={() => void newTab()}
@@ -612,6 +637,14 @@ export default function App(): JSX.Element {
           setTermMenu({ id: activeShell.id, x: e.clientX, y: e.clientY, ...termContextAt(activeShell.id, e.clientX, e.clientY) })
         }}
       >
+        {/* A placeholder (#106): the skeleton for a tab coming back to an agent,
+            the bare ground for a plain shell, until the restore settles it. */}
+        {active?.pending === 'agent' && (
+          <div className="relative h-full w-full bg-[var(--p-bg)]">
+            <ResumeSkeleton />
+          </div>
+        )}
+        {active?.pending === 'shell' && <div className="h-full w-full bg-[var(--p-bg)]" />}
         {activeShell && (
           <TerminalPanel
             key={activeShell.id}
@@ -636,7 +669,7 @@ export default function App(): JSX.Element {
             </Suspense>
           </div>
         )}
-        {!active && (
+        {!active && restoreDone && (
           <div className="h-full w-full bg-[var(--p-bg)]">
             <EmptyState
               onNew={() => void newTab()}

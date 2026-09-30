@@ -10,7 +10,7 @@ describe('planRestore', () => {
       (p) => p !== 'C:\\gone',
       () => []
     )
-    expect(r).toEqual({ tabs: [{ cwd: 'C:\\a' }, { cwd: 'C:\\b' }], active: 1 })
+    expect(r).toEqual({ tabs: [{ cwd: 'C:\\a', from: 1 }, { cwd: 'C:\\b', from: 2 }], active: 1 })
   })
   it('falls back to the first tab when the active one is the folder that went', () => {
     const r = planRestore(
@@ -18,7 +18,7 @@ describe('planRestore', () => {
       (p) => p !== 'C:\\gone',
       () => []
     )
-    expect(r).toEqual({ tabs: [{ cwd: 'C:\\a' }], active: 0 })
+    expect(r).toEqual({ tabs: [{ cwd: 'C:\\a', from: 0 }], active: 0 })
   })
   it('answers an empty strip for an empty save, or one whose folders have all gone', () => {
     expect(planRestore({ tabs: [], active: 0 }, all, () => [])).toEqual({ tabs: [], active: 0 })
@@ -50,11 +50,12 @@ describe('planRestore', () => {
   it('resumes nothing when claude recorded no session', () => {
     expect(
       planRestore({ tabs: [{ cwd: 'C:\\a', agent: 'claude' }], active: 0 }, all, () => []).tabs[0]
-    ).toEqual({ cwd: 'C:\\a' })
+    ).toEqual({ cwd: 'C:\\a', from: 0 })
   })
   it('resumes nothing for a tab that hosted no agent, sessions on disk or not', () => {
     expect(planRestore({ tabs: [{ cwd: 'C:\\a' }], active: 0 }, all, () => ['new-id']).tabs[0]).toEqual({
-      cwd: 'C:\\a'
+      cwd: 'C:\\a',
+      from: 0
     })
   })
   it('gives codex its own resume', () => {

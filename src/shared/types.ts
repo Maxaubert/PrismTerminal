@@ -26,6 +26,10 @@ export interface SavedTabs {
 export interface RestoredTab {
   cwd: string
   resume?: string
+  /** Its place in the saved list, so the tab the page drew from the peek
+   *  (#106) is the one this restores. Absent for a folder the launch handed
+   *  over, which was never saved. */
+  from?: number
 }
 
 export interface Restored {

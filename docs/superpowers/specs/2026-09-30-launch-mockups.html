@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Launch with three Claude tabs</title>
+<style>
+  :root {
+    --page: #1a1b1d;
+    --page-ink: #d9d7d0;
+    --page-dim: #8b8a86;
+    --page-line: #2c2d30;
+    /* Prism Terminal, PT Default theme */
+    --pt-bg: #121212;
+    --pt-title: #0d0d0d;
+    --pt-tabs: #161616;
+    --pt-text: #dedacf;
+    --pt-dim: #8f8c84;
+    --pt-line: #262626;
+    --pt-accent: #fe8f34;
+    --claude: #d77757;
+    --mono: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
+    --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--page-ink); font: 14px/1.5 var(--ui); }
+  main { max-width: 1320px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.top { display: flex; align-items: end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  h1 { font: 600 26px/1.15 var(--display); margin: 0; letter-spacing: -0.01em; }
+  .lede { margin: 6px 0 0; color: var(--page-dim); max-width: 64ch; }
+
+  /* The shared transport: one playhead for all four films. */
+  .transport { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--page) 92%, transparent);
+    backdrop-filter: blur(6px); margin: 20px -24px 0; padding: 12px 24px; border-bottom: 1px solid var(--page-line);
+    display: grid; grid-template-columns: auto auto 1fr auto; gap: 14px; align-items: center; }
+  .transport button { font: 500 13px var(--ui); color: var(--page-ink); background: #26272a; border: 1px solid #34353a;
+    border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  .transport button:hover { background: #2e2f33; }
+  .transport button:focus-visible, input[type=range]:focus-visible { outline: 2px solid var(--pt-accent); outline-offset: 2px; }
+  .transport button[aria-pressed="true"] { background: #34353a; }
+  .clock { font: 500 13px var(--mono); color: var(--page-ink); min-width: 5.5ch; text-align: right; }
+  input[type=range] { width: 100%; accent-color: var(--pt-accent); }
+  .speeds { display: flex; gap: 4px; }
+
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 28px; margin-top: 24px; }
+  @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+
+  figure { margin: 0; }
+  figcaption { margin-bottom: 10px; }
+  .name { font: 600 16px/1.3 var(--display); display: flex; gap: 10px; align-items: baseline; }
+  .name .tag { font: 500 11px var(--mono); color: var(--page-dim); letter-spacing: 0.04em; text-transform: uppercase; }
+  .what { color: var(--page-dim); margin: 2px 0 0; font-size: 13px; }
+
+  /* ---------- the window ---------- */
+  .win { position: relative; aspect-ratio: 16 / 10; background: var(--pt-bg); border: 1px solid #2a2a2a; border-radius: 8px;
+    overflow: hidden; box-shadow: 0 18px 40px rgba(0,0,0,.35); display: flex; flex-direction: column; font-family: var(--ui); }
+  .win.hidden-win { opacity: 0; }
+  .titlebar { height: 28px; flex: none; display: flex; align-items: center; gap: 7px; padding: 0 8px; background: var(--pt-title);
+    border-bottom: 1px solid var(--pt-line); font-size: 11px; color: var(--pt-accent); font-weight: 600; }
+  .titlebar .sp { flex: 1; }
+  .titlebar .btns { display: flex; gap: 14px; color: #8a8a8a; font-weight: 400; font-size: 11px; padding-right: 4px; }
+  .mark { width: 12px; height: 12px; border: 1.6px solid var(--pt-accent); border-radius: 3px; position: relative; flex: none; }
+  .mark::after { content: ""; position: absolute; left: 2px; top: 2.5px; width: 3px; height: 3px; border-right: 1.5px solid var(--pt-accent);
+    border-bottom: 1.5px solid var(--pt-accent); transform: rotate(-45deg); }
+  .strip { height: 26px; flex: none; display: flex; background: var(--pt-tabs); border-bottom: 1px solid var(--pt-line); font-size: 11px; }
+  .tab { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; min-width: 94px;
+    color: var(--pt-dim); border-right: 1px solid var(--pt-line); transition: opacity .2s; }
+  .tab.on { color: var(--pt-text); background: var(--pt-bg); }
+  .tab.on::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--pt-accent); }
+  .tab .ring { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--pt-text) 22%, transparent);
+    border-top-color: var(--pt-accent); animation: spin .9s linear infinite; flex: none; transition: opacity .25s, width .25s, margin .25s; }
+  .tab .ring.done { opacity: 0; width: 0; margin-left: -6px; border-width: 0; }
+  .plus { color: #7d7d7d; padding: 0 10px; display: flex; align-items: center; }
+  .body { position: relative; flex: 1; overflow: hidden; }
+  .layer { position: absolute; inset: 0; padding: 8px 10px; transition: opacity .18s ease; }
+  .layer.off { opacity: 0; pointer-events: none; }
+  .term { font: 10.5px/1.45 var(--mono); color: var(--pt-text); white-space: pre; }
+  .dim { color: var(--pt-dim); }
+  .cl { color: var(--claude); }
+  .wh { color: #fff; }
+  .rule { color: #3a3a3a; }
+
+  /* today's start screen */
+  .empty { display: grid; place-items: center; text-align: center; }
+  .empty .big { width: 34px; height: 34px; border: 2.5px solid var(--pt-accent); border-radius: 8px; margin: 0 auto 10px; position: relative; }
+  .empty .big::after { content: ""; position: absolute; left: 8px; top: 9px; width: 8px; height: 8px; border-right: 2.5px solid var(--pt-accent);
+    border-bottom: 2.5px solid var(--pt-accent); transform: rotate(-45deg); }
+  .empty h3 { font: 600 14px var(--ui); margin: 0 0 12px; color: var(--pt-text); }
+  .empty .btn { display: inline-block; font-size: 11px; padding: 5px 12px; border: 1px solid #333; border-radius: 5px; color: var(--pt-text); }
+  .empty .recent { margin-top: 12px; font-size: 10.5px; color: var(--pt-dim); line-height: 1.8; }
+
+  /* A: the resume card */
+  .card { display: grid; place-items: center; }
+  .card .in { width: min(78%, 360px); }
+  .card .eyebrow { font: 500 10px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--pt-dim); display: flex; align-items: center; gap: 7px; }
+  .card .eyebrow .ring { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--pt-text) 22%, transparent);
+    border-top-color: var(--pt-accent); animation: spin .9s linear infinite; }
+  .card .ttl { font: 600 15px/1.3 var(--display); color: var(--pt-text); margin: 7px 0 4px; }
+  .card .meta { font: 11px var(--mono); color: var(--pt-dim); }
+  .card .bar { margin-top: 14px; height: 2px; background: #222; border-radius: 2px; overflow: hidden; }
+  .card .bar i { display: block; height: 100%; width: 0; background: var(--pt-accent); border-radius: 2px; }
+
+  /* B: last screen, reconnecting */
+  .ghost { filter: saturate(.4); }
+  .pill { position: absolute; right: 10px; top: 8px; font: 500 10px var(--ui); color: var(--pt-text); background: #1d1d1d;
+    border: 1px solid #2d2d2d; border-radius: 20px; padding: 3px 9px 3px 7px; display: flex; gap: 6px; align-items: center; transition: opacity .25s; }
+  .pill.off { opacity: 0; }
+  .pill.live .ring { animation: none; border-color: #6fbf8a; background: #6fbf8a; }
+  .pill .ring { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #444; border-top-color: var(--pt-accent); animation: spin .9s linear infinite; }
+
+  /* C: skeleton of Claude's own layout */
+  .sk { display: block; background: #212121; border-radius: 3px; height: 9px; margin: 6px 0; position: relative; overflow: hidden; }
+  .sk::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.05), transparent);
+    animation: sheen 1.4s ease-in-out infinite; }
+  .skbox { border: 1px solid #2a2a2a; border-radius: 4px; height: 22px; margin-top: 10px; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes sheen { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+  @media (prefers-reduced-motion: reduce) { .ring, .sk::after { animation: none; } }
+
+  /* ---------- the film strip under each window ---------- */
+  .film { position: relative; margin-top: 10px; height: 34px; }
+  .seg { position: absolute; top: 0; height: 18px; border-radius: 3px; font: 500 10px/18px var(--ui); color: #d9d7d0; padding: 0 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .seg.bad { background: #3a2a24; color: #e9b9a4; }
+  .seg.meh { background: #2d2b25; color: #cfc6ad; }
+  .seg.good { background: #232d27; color: #b4d6bf; }
+  .ticks { position: absolute; top: 21px; left: 0; right: 0; font: 10px var(--mono); color: #6e6d69; }
+  .ticks span { position: absolute; transform: translateX(-50%); }
+  .head { position: absolute; top: -3px; width: 2px; height: 24px; background: var(--pt-accent); border-radius: 1px; }
+
+  .notes { margin-top: 36px; border-top: 1px solid var(--page-line); padding-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  @media (max-width: 980px) { .notes { grid-template-columns: 1fr; } }
+  .notes h2 { font: 600 13px var(--display); margin: 0 0 4px; }
+  .notes p { margin: 0; color: var(--page-dim); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div>
+      <h1>Opening Prism Terminal with three Claude tabs</h1>
+      <p class="lede">The same launch, four ways, on one clock. Scrub the bar to compare any moment. Claude takes about three seconds to come back in every version; what changes is what you see while it does.</p>
+    </div>
+  </header>
+
+  <div class="transport" role="group" aria-label="Playback">
+    <button id="play" aria-pressed="true">Pause</button>
+    <button id="again">Replay</button>
+    <input id="scrub" type="range" min="0" max="6000" step="10" value="0" aria-label="Time">
+    <div style="display:flex;gap:12px;align-items:center">
+      <div class="speeds" role="group" aria-label="Speed">
+        <button data-speed="0.25">¼×</button><button data-speed="0.5">½×</button><button data-speed="1" aria-pressed="true">1×</button>
+      </div>
+      <span class="clock" id="clock">0.00 s</span>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <section class="notes">
+    <div><h2>What they share</h2><p>The window opens with the tabs already in it, read from the saved tabs before the first frame. No start screen, no shell prompt and no half-typed command are ever shown on a tab that is coming back to Claude.</p></div>
+    <div><h2>What it takes</h2><p>A, card: the tab list sent with the window, and the shell's output held back until Claude's first paint. B, last screen: the same, plus each tab's screen saved when the app closes. C, skeleton: the same as A, with a drawn stand-in instead of a card.</p></div>
+    <div><h2>Every tab, not just the one in front</h2><p>Tabs in the background resume at the same time. Their spinner in the tab strip turns into the usual indicator when each is ready, so a click on one never lands on a loading screen that has already finished.</p></div>
+  </section>
+</main>
+
+<script>
+const END = 6000
+const TABS = ['PrismTerminal', 'Prism', 'web-application…']
+const CLAUDE_AT = 3000            // when Claude's first paint lands, every version
+const READY = [3000, 3350, 3700]  // each tab's session live
+
+// Claude's own screen for the tab in front, as it paints after a resume.
+const CLAUDE = `<span class="cl"> ▐▛███▛█</span>   <span class="wh">Claude Code</span> <span class="dim">v2.1.285</span>
+<span class="cl">▝▜██████▀</span>  <span class="dim">Opus 5.5 · Claude Max</span>
+<span class="cl"> ▝▝   ▝▝</span>   <span class="dim">~\\Documents\\Claude\\Github\\PrismTerminal</span>
+
+<span class="dim">&gt;</span> fix the stable copy update so it reopens itself
+
+<span class="wh">●</span> Found it: the restart after an install drops the
+  profile, so the stable copy came back on the wrong one.
+  <span class="dim">⎿  Read src/main/update.ts (220 lines)</span>
+
+<span class="wh">●</span> Opened PR #105.
+<span class="rule">────────────────────────────────────────────────────</span>
+<span class="wh">❯</span> <span style="background:#dedacf;color:#121212"> </span>
+<span class="rule">────────────────────────────────────────────────────</span>
+  <span class="dim">⏵⏵ auto mode on (shift+tab to cycle)</span>`
+
+const PROMPT = `<span class="dim">PS C:\\Users\\Admin\\Documents\\Claude\\Github\\PrismTerminal&gt;</span> <span class="dim">⠋</span>`
+
+const VARIANTS = [
+  {
+    key: 'today', name: 'Today', tag: 'as reported',
+    what: 'A start screen that says no tabs are open, then the tabs, then each shell\'s path, then a blank, then Claude.',
+    film: [[0, 250, 'blank window', 'bad'], [250, 1000, 'start screen', 'bad'], [1000, 1400, 'tabs, empty', 'bad'],
+           [1400, 2500, 'shell path', 'bad'], [2500, CLAUDE_AT, 'blank', 'bad'], [CLAUDE_AT, END, 'Claude', 'good']],
+    layers: ['empty', 'prompt', 'claude'],
+  },
+  {
+    key: 'card', name: 'A. Resume card', tag: 'recommended',
+    what: 'Tabs from the first frame. Each tab says which conversation is coming back, then Claude fades in over it.',
+    film: [[0, CLAUDE_AT, 'tabs + resume card', 'meh'], [CLAUDE_AT, END, 'Claude', 'good']],
+    layers: ['card', 'claude'],
+  },
+  {
+    key: 'ghost', name: 'B. Last screen', tag: 'most seamless',
+    what: 'Each tab opens on a dimmed copy of where you left it. When Claude is back, it comes alive in place.',
+    film: [[0, CLAUDE_AT, 'last screen, reconnecting', 'meh'], [CLAUDE_AT, END, 'Claude, live', 'good']],
+    layers: ['claude'],
+  },
+  {
+    key: 'skeleton', name: 'C. Skeleton', tag: 'quietest',
+    what: 'Tabs from the first frame, with Claude\'s layout drawn as placeholders. The real text fills them in.',
+    film: [[0, CLAUDE_AT, 'tabs + outline', 'meh'], [CLAUDE_AT, END, 'Claude', 'good']],
+    layers: ['skeleton', 'claude'],
+  },
+]
+
+const grid = document.getElementById('grid')
+const els = {}
+for (const v of VARIANTS) {
+  const fig = document.createElement('figure')
+  fig.innerHTML = `
+    <figcaption><div class="name">${v.name}<span class="tag">${v.tag}</span></div><p class="what">${v.what}</p></figcaption>
+    <div class="win" data-win>
+      <div class="titlebar"><span class="mark"></span>Prism Terminal<span class="sp"></span><span class="btns"><span>?</span><span>⚙</span><span>–</span><span>□</span><span>✕</span></span></div>
+      <div class="strip" data-strip>${TABS.map((t, i) => `<div class="tab ${i === 0 ? 'on' : ''}"><span class="ring" data-ring="${i}"></span>${t}</div>`).join('')}<div class="plus">+</div></div>
+      <div class="body">
+        <div class="layer empty off" data-layer="empty"><div><div class="big"></div><h3>Prism Terminal</h3><span class="btn">New terminal</span>
+          <div class="recent">PrismTerminal<br>Prism<br>web-application-project</div></div></div>
+        <div class="layer term off" data-layer="prompt">${PROMPT}</div>
+        <div class="layer card off" data-layer="card"><div class="in">
+          <div class="eyebrow"><span class="ring"></span>Resuming conversation</div>
+          <div class="ttl">Fix the stable copy update so it reopens itself</div>
+          <div class="meta">PrismTerminal · last reply 2 h ago</div>
+          <div class="bar"><i data-bar></i></div></div></div>
+        <div class="layer off" data-layer="skeleton">
+          <span class="sk" style="width:38%"></span><span class="sk" style="width:30%"></span><span class="sk" style="width:46%"></span>
+          <span class="sk" style="width:62%;margin-top:18px"></span><span class="sk" style="width:74%;margin-top:14px"></span><span class="sk" style="width:58%"></span>
+          <span class="sk" style="width:22%;margin-top:14px"></span><div class="skbox"></div></div>
+        <div class="layer term off" data-layer="claude">${CLAUDE}</div>
+        <div class="pill off" data-pill><span class="ring"></span><span data-pilltext>Reconnecting to Claude</span></div>
+      </div>
+    </div>
+    <div class="film" data-film>
+      ${v.film.map(([a, b, label, kind]) => `<div class="seg ${kind}" style="left:${(a / END) * 100}%;width:calc(${((b - a) / END) * 100}% - 3px)" title="${label}">${label}</div>`).join('')}
+      <div class="ticks">${[0, 1, 2, 3, 4, 5, 6].map((s) => `<span style="left:${(s / 6) * 100}%">${s}s</span>`).join('')}</div>
+      <div class="head" data-head></div>
+    </div>`
+  grid.appendChild(fig)
+  const q = (s) => fig.querySelector(s)
+  els[v.key] = {
+    win: q('[data-win]'), strip: q('[data-strip]'), head: q('[data-head]'), bar: q('[data-bar]'),
+    pill: q('[data-pill]'), pillText: q('[data-pilltext]'),
+    rings: [...fig.querySelectorAll('[data-ring]')],
+    layer: Object.fromEntries([...fig.querySelectorAll('[data-layer]')].map((n) => [n.dataset.layer, n])),
+  }
+}
+
+const show = (e, name, on) => e.layer[name].classList.toggle('off', !on)
+
+function frame(t) {
+  for (const v of VARIANTS) {
+    const e = els[v.key]
+    e.head.style.left = `calc(${(t / END) * 100}% - 1px)`
+    Object.keys(e.layer).forEach((k) => show(e, k, false))
+    e.pill.classList.add('off')
+    e.layer.claude.style.opacity = ''
+    e.layer.claude.classList.remove('ghost')
+    const live = t >= CLAUDE_AT
+    if (v.key === 'today') {
+      e.win.classList.toggle('hidden-win', t < 60)
+      e.strip.style.visibility = t >= 1000 ? 'visible' : 'hidden'
+      e.rings.forEach((r) => r.classList.add('done')) // today: no per-tab sign of loading
+      show(e, 'empty', t >= 250 && t < 1000)
+      show(e, 'prompt', t >= 1400 && t < 2500)
+      show(e, 'claude', live)
+      continue
+    }
+    e.win.classList.toggle('hidden-win', t < 60)
+    e.strip.style.visibility = 'visible'
+    e.rings.forEach((r, i) => r.classList.toggle('done', t >= READY[i]))
+    if (v.key === 'card') {
+      show(e, 'card', !live)
+      show(e, 'claude', live)
+      // Eased toward, never reaching, the end: it cannot know the exact moment.
+      e.bar.style.width = `${Math.min(92, 100 * (1 - Math.exp(-t / 1100)))}%`
+    } else if (v.key === 'ghost') {
+      show(e, 'claude', true)
+      e.layer.claude.classList.toggle('ghost', !live)
+      e.layer.claude.style.opacity = live ? '1' : '0.42'
+      e.pill.classList.toggle('off', t >= CLAUDE_AT + 900)
+      e.pillText.textContent = live ? 'Live' : 'Reconnecting to Claude'
+      e.pill.classList.toggle('live', live)
+    } else if (v.key === 'skeleton') {
+      show(e, 'skeleton', !live)
+      show(e, 'claude', live)
+    }
+  }
+  scrub.value = String(Math.round(t))
+  clock.textContent = `${(t / 1000).toFixed(2)} s`
+}
+
+// ---- transport ----
+const scrub = document.getElementById('scrub')
+const clock = document.getElementById('clock')
+const playBtn = document.getElementById('play')
+let t = 0, playing = true, speed = 1, last = performance.now()
+const HOLD = 1200 // a beat on the finished frame before the loop starts again
+function tick(now) {
+  const dt = now - last
+  last = now
+  if (playing) {
+    t += dt * speed
+    if (t > END + HOLD) t = 0
+  }
+  frame(Math.min(t, END))
+  requestAnimationFrame(tick)
+}
+playBtn.onclick = () => {
+  playing = !playing
+  playBtn.textContent = playing ? 'Pause' : 'Play'
+  playBtn.setAttribute('aria-pressed', String(playing))
+}
+document.getElementById('again').onclick = () => { t = 0; if (!playing) playBtn.click() }
+scrub.oninput = () => { t = Number(scrub.value); if (playing) playBtn.click() }
+document.querySelectorAll('[data-speed]').forEach((b) => (b.onclick = () => {
+  speed = Number(b.dataset.speed)
+  document.querySelectorAll('[data-speed]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)))
+}))
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) { speed = 0.5 }
+requestAnimationFrame(tick)
+</script>
+</body>
+</html>
