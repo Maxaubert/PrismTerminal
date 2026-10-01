@@ -254,12 +254,16 @@ function createWindow(): void {
     // screen. 'hidden' drops the caption but keeps the frame DWM needs, and
     // the custom title bar still draws over it.
     titleBarStyle: 'hidden',
-    // Explicit, rather than inherited from the executable: Windows caches the
-    // exe's icon per path, so a new build can keep showing the old one in the
-    // taskbar. A window icon set here is not cached by anything.
-    icon: app.isPackaged
-      ? join(process.resourcesPath, 'icon.ico')
-      : join(__dirname, '../../build/icon.ico'),
+    // THE INSTALLED APP WEARS THE EXE'S OWN ICON (#108; owner, 2026-10-01,
+    // beside ChatGPT's: "its app icon is more high res than ours"). Set here,
+    // the window icon was the .ico's 256px frame shrunk by Chromium to the big
+    // icon size and again by Windows to the taskbar's, softer than the frame
+    // drawn for that size (MEASURED, 48px at 225%, side by side). Left to
+    // Windows, it picks the .ico frame drawn for the size it needs, as every
+    // crisp icon on the taskbar does. Set explicitly once so a new build would
+    // not show a cached old icon; the icon is final now. A dev build has no
+    // icon of its own in electron.exe, so it still gets one.
+    ...(app.isPackaged ? {} : { icon: join(__dirname, '../../build/icon.ico') }),
     backgroundColor: material.bg(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

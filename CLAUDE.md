@@ -549,7 +549,9 @@ the owner's own call, #99.)
   green, it should be grey with white number"; 2026-10-01, beside ChatGPT's: "so much clearer and high
   res, fix that", #108). Drawn at the display's PHYSICAL size (`badgePixels`, 36 at 225%) and handed
   to main with that scale (`createFromBuffer` scaleFactor), so Windows never stretches it; the
-  reference's own near-black `#25242c`, filling the overlay.
+  reference's own near-black `#25242c`, filling the overlay. The installed app's WINDOW icon is the exe's own (no `icon:`
+  in a packaged build): Windows then picks the .ico frame drawn for the size it needs, where the
+  explicit 256px frame was shrunk twice and came out soft (MEASURED, side by side at 48px).
   Tab names are centred in both widths, and a Dynamic tab is never under four characters wide.
   The `attention` e2e holds all of it.
 - **The indicator is MINIMAL by default and wears the THEME** (owner, 2026-09-18, #4; it was Full
