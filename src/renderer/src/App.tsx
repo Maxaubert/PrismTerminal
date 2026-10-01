@@ -464,7 +464,8 @@ export default function App(): JSX.Element {
       return
     }
     const said = `${need.count} ${need.count === 1 ? 'tab needs' : 'tabs need'} a look`
-    window.prism.setTaskbarBadge(drawBadge(need.count) || null, said)
+    const scale = window.devicePixelRatio || 1
+    window.prism.setTaskbarBadge(drawBadge(need.count, scale) || null, said, scale)
   }, [badgeOn, need.count])
 
   // Whatever a tab interaction did to DOM focus, the shell in front gets the

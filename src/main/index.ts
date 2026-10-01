@@ -658,22 +658,32 @@ function wireIpc(): void {
   // the window's taskbar button as its overlay icon. Only a small PNG data url
   // is taken; anything else, or null, clears it.
   let badgeSaid = ''
-  ipcMain.on('window:badge', (_e, png: unknown, description: unknown) => {
+  /** What was last set, for the e2e to measure and look at (#108). */
+  let badgeImage: { png: string; scale: number; width: number } | null = null
+  ipcMain.on('window:badge', (_e, png: unknown, description: unknown, scale: unknown) => {
     const win = mainWindow
     if (!win || win.isDestroyed()) return
     const text = typeof description === 'string' ? description.slice(0, 120) : ''
     if (typeof png === 'string' && png.startsWith('data:image/png;base64,') && png.length < 100_000) {
-      const img = nativeImage.createFromDataURL(png)
+      // The page drew it at the display's physical size (#108): saying so
+      // makes it that scale's own picture, which Windows shows unstretched.
+      const factor = typeof scale === 'number' && scale >= 1 && scale <= 4 ? scale : 1
+      const img = nativeImage.createFromBuffer(Buffer.from(png.slice('data:image/png;base64,'.length), 'base64'), {
+        scaleFactor: factor
+      })
       if (!img.isEmpty()) {
         win.setOverlayIcon(img, text)
         badgeSaid = text
+        badgeImage = { png, scale: factor, width: Math.round(img.getSize(factor).width * factor) }
         return
       }
     }
     win.setOverlayIcon(null, '')
     badgeSaid = ''
+    badgeImage = null
   })
   if (E2E) ipcMain.handle('e2e:taskbar-badge', () => badgeSaid)
+  if (E2E) ipcMain.handle('e2e:taskbar-badge-image', () => badgeImage)
 }
 
 // Single instance: a second launch (the verb, a shortcut, a command line)

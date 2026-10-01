@@ -545,8 +545,11 @@ the owner's own call, #99.)
   more NEIGHBOURING working tabs draw ONE bar across them (`workingRuns`, `data-working-run`) at a
   single tab's length and speed; tabs apart keep their own. The taskbar button's overlay icon shows
   how many tabs carry a mark (`taskbarBadge.ts`, `window:badge`, Settings > General switch, on):
-  a small grey disc with a white number, whatever the marks (owner, 2026-09-29: "too big and it's
-  green, it should be grey with white number").
+  a dark disc with a white number, whatever the marks (owner, 2026-09-29: "too big and it's
+  green, it should be grey with white number"; 2026-10-01, beside ChatGPT's: "so much clearer and high
+  res, fix that", #108). Drawn at the display's PHYSICAL size (`badgePixels`, 36 at 225%) and handed
+  to main with that scale (`createFromBuffer` scaleFactor), so Windows never stretches it; the
+  reference's own near-black `#25242c`, filling the overlay.
   Tab names are centred in both widths, and a Dynamic tab is never under four characters wide.
   The `attention` e2e holds all of it.
 - **The indicator is MINIMAL by default and wears the THEME** (owner, 2026-09-18, #4; it was Full

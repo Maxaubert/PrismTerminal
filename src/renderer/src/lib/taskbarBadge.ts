@@ -61,34 +61,46 @@ export function badgeText(count: number): string {
   return count > 9 ? '9+' : String(count)
 }
 
-/** A QUIET GREY DISC WITH A WHITE NUMBER (owner, 2026-09-29, of the first
- *  one: "it's a bit too big and it's green, it should be grey with white
- *  number"). One look whatever the marks are: the tab lines carry the colour;
- *  the taskbar only counts. White on this grey is 7:1. */
-export const BADGE_FILL = '#5c5c5c'
+/** A DARK DISC WITH A WHITE NUMBER, AS CRISP AS THE OTHER APPS' (owner,
+ *  2026-09-29: "it should be grey with white number"; then 2026-10-01, beside
+ *  ChatGPT's: "its so much clearer and high res fix that"). One look whatever
+ *  the marks are: the tab lines carry the colour; the taskbar only counts.
+ *  The fill is the reference's own near-black (sampled from the owner's
+ *  screenshot), and white on it is over 15:1. */
+export const BADGE_FILL = '#25242c'
 export const BADGE_INK = '#ffffff'
 
-/** The disc as a PNG data url, drawn on a 32px canvas (Windows scales it to
- *  the overlay's 16 logical pixels). The disc takes 24 of the 32, in the
- *  bottom-right corner, so it sits smaller on the icon than a full overlay. */
-export function drawBadge(count: number): string {
-  const size = 32
-  const d = 24
+/** The overlay is 16 logical pixels, drawn at this many physical ones. */
+export function badgePixels(scale: number): number {
+  const s = Number.isFinite(scale) && scale > 0 ? Math.min(scale, 4) : 1
+  return Math.round(16 * s)
+}
+
+/**
+ * The disc as a PNG data url, drawn at the display's REAL pixel size (36 at
+ * 225%), so Windows shows it as drawn: a fixed 32px canvas handed over as a
+ * 1x image was stretched, which is what made it soft. Main is told the scale
+ * with it (`setTaskbarBadge`), so the image is that scale's own picture. The
+ * disc fills the overlay, as the reference does.
+ */
+export function drawBadge(count: number, scale: number): string {
+  const size = badgePixels(scale)
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
   const g = canvas.getContext('2d')
   if (!g) return ''
-  const c = size - d / 2
+  const c = size / 2
   g.fillStyle = BADGE_FILL
   g.beginPath()
-  g.arc(c, c, d / 2, 0, Math.PI * 2)
+  g.arc(c, c, c, 0, Math.PI * 2)
   g.fill()
   const text = badgeText(count)
   g.fillStyle = BADGE_INK
-  g.font = `600 ${text.length > 1 ? 13 : 16}px Segoe UI, system-ui, sans-serif`
+  g.font = `600 ${Math.round(size * (text.length > 1 ? 0.5 : 0.66))}px "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif`
   g.textAlign = 'center'
   g.textBaseline = 'middle'
-  g.fillText(text, c, c + 1)
+  // Segoe's figures sit a touch high on the middle line: a nudge down centres them.
+  g.fillText(text, c, c + size * 0.04)
   return canvas.toDataURL('image/png')
 }
