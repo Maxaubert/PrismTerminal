@@ -771,7 +771,10 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
   as `PrismTerminalStable.exe`, profile `%APPDATA%\PrismTerminalStable` (`--user-data-dir`, its own
   lock and tabs, `shell-verb-off` so it never writes the Explorer verbs), Start menu "Prism Terminal
   (Stable)". Install steps close processes named `PrismTerminal` ONLY: never `PrismTerminalStable`,
-  never by path or window title. The copy moves to a new version only when the owner runs the script.
+  never by path or window title. The copy moves to a new version only when the owner runs the script
+  or clicks its OWN update chip (#104): run as `PrismTerminalStable.exe`, the update handoff
+  (`src/main/updateHandoff.ts`) installs, waits for the copy to exit, mirrors the installed app into
+  the copy's folder and restarts it with its `--user-data-dir`; every restart keeps the profile it had.
   **NEVER UNDER `Programs\`** (#88): the NSIS installer also stops every process whose path STARTS
   WITH its install folder, and `Programs\PrismTerminal` prefixes `Programs\PrismTerminalStable\`, so
   every install killed the copy. No folder the copy lives in may start with an install folder.
