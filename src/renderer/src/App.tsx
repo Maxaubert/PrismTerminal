@@ -66,7 +66,8 @@ import { applyChrome, chromeTokens } from './lib/chromeTheme'
 import { onWindowEdgesChange, windowEdges } from './lib/edgesPrefs'
 import { onWindowAccentChange, windowAccent } from './lib/accentPrefs'
 import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPrefs'
-import { attentionCount, drawBadge, useTaskbarBadgeOn } from './lib/taskbarBadge'
+import { appIcon, attentionCount, drawBadgedIcon, useTaskbarBadgeOn } from './lib/taskbarBadge'
+import appIconUrl from './assets/icon-256.png'
 import { useAgentDoneOn, useAgentQuestionOn } from '@core/renderer/lib/termLook'
 
 const Settings = lazy(() => import('./components/Settings'))
@@ -452,8 +453,8 @@ export default function App(): JSX.Element {
     window.prism.setAgentBusy(holdsWindowClose(workingIds.size))
   }, [workingIds])
 
-  // THE TASKBAR BADGE (2026-09-28): how many tabs show a mark, as a small grey
-  // disc with a white number (2026-09-29, the owner's look).
+  // THE TASKBAR BADGE (2026-09-28): how many tabs show a mark, as a dark disc
+  // with a white number drawn onto the app icon (#108).
   const badgeOn = useTaskbarBadgeOn()
   const doneOn = useAgentDoneOn()
   const questionOn = useAgentQuestionOn()
@@ -464,8 +465,17 @@ export default function App(): JSX.Element {
       return
     }
     const said = `${need.count} ${need.count === 1 ? 'tab needs' : 'tabs need'} a look`
-    const scale = window.devicePixelRatio || 1
-    window.prism.setTaskbarBadge(drawBadge(need.count, scale) || null, said, scale)
+    let live = true
+    appIcon(appIconUrl)
+      .then((icon) => {
+        if (live) window.prism.setTaskbarBadge(drawBadgedIcon(need.count, icon) || null, said)
+      })
+      .catch(() => {
+        /* no icon to draw on: no badge, the tab lines still say it */
+      })
+    return () => {
+      live = false
+    }
   }, [badgeOn, need.count])
 
   // Whatever a tab interaction did to DOM focus, the shell in front gets the

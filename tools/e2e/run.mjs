@@ -414,14 +414,10 @@ const scenarios = {
       await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/attention-question.png') }).catch(() => {})
       ok(!!(await until(async () => (await badge()) === '1 tab needs a look', 4000, 50)), `and the taskbar badge counts it (${await badge()})`)
       // AS CRISP AS THE OTHER APPS' (#108; owner, 2026-10-01, beside
-      // ChatGPT's): drawn at the display's physical size and handed over as
-      // that scale's picture, so Windows never stretches it.
-      const pic = await page.evaluate(async () => ({ img: await window.prism.e2eTaskbarBadgeImage(), dpr: window.devicePixelRatio }))
-      const want = Math.round(16 * Math.min(Math.max(pic.dpr || 1, 1), 4))
-      ok(
-        !!pic.img && pic.img.width === want && Math.abs(pic.img.scale - (pic.dpr || 1)) < 0.01,
-        `the badge is ${want}px at scale ${pic.dpr}, not a stretched small image (${pic.img ? `${pic.img.width}px at ${pic.img.scale}` : 'none'})`
-      )
+      // ChatGPT's): the badge is drawn ONTO the 256px app icon, set as the
+      // window icon, since Windows stretches an overlay from a small picture.
+      const pic = await page.evaluate(async () => ({ img: await window.prism.e2eTaskbarBadgeImage() }))
+      ok(!!pic.img && pic.img.width === 256, `the badge rides the 256px window icon (${pic.img ? `${pic.img.width}px` : 'none'})`)
       if (pic.img) writeFileSync(resolve(process.cwd(), '.e2e-shots/taskbar-badge.png'), Buffer.from(pic.img.png.split(',')[1], 'base64'))
       await page.evaluate(() => window.dispatchEvent(new Event('focus')))
       await tab(0).click()

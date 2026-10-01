@@ -658,30 +658,40 @@ function wireIpc(): void {
   })
   // The DWM border itself is off under --e2e, so the suite asks what main HEARD.
   if (E2E) ipcMain.handle('e2e:window-edges', () => windowEdges)
-  // THE TASKBAR BADGE (2026-09-28): the page draws the disc, main puts it on
-  // the window's taskbar button as its overlay icon. Only a small PNG data url
-  // is taken; anything else, or null, clears it.
+  // THE TASKBAR BADGE (2026-09-28): the page draws the disc onto the app icon
+  // and main sets that as the WINDOW icon (#108): an overlay icon is drawn by
+  // Windows from a small picture and stretched, MEASURED soft at 225% however
+  // it was handed over, where the window icon is drawn sharp. Only a PNG data
+  // url of the 256px icon is taken; anything else, or null, clears it.
   let badgeSaid = ''
-  /** What was last set, for the e2e to measure and look at (#108). */
-  let badgeImage: { png: string; scale: number; width: number } | null = null
-  ipcMain.on('window:badge', (_e, png: unknown, description: unknown, scale: unknown) => {
+  /** What was last set, for the e2e to measure and look at. */
+  let badgeImage: { png: string; width: number } | null = null
+  let badged = false
+  // The overlay stays, CLEAR, for what it says: Windows reads its description
+  // out with the taskbar button, and the picture is the icon's now.
+  const clearOverlay = nativeImage.createFromBitmap(Buffer.alloc(16 * 16 * 4), { width: 16, height: 16 })
+  const plainIcon = (): string =>
+    app.isPackaged ? join(process.resourcesPath, 'icon.ico') : join(__dirname, '../../build/icon.ico')
+  ipcMain.on('window:badge', (_e, png: unknown, description: unknown) => {
     const win = mainWindow
     if (!win || win.isDestroyed()) return
     const text = typeof description === 'string' ? description.slice(0, 120) : ''
-    if (typeof png === 'string' && png.startsWith('data:image/png;base64,') && png.length < 100_000) {
-      // The page drew it at the display's physical size (#108): saying so
-      // makes it that scale's own picture, which Windows shows unstretched.
-      const factor = typeof scale === 'number' && scale >= 1 && scale <= 4 ? scale : 1
-      const img = nativeImage.createFromBuffer(Buffer.from(png.slice('data:image/png;base64,'.length), 'base64'), {
-        scaleFactor: factor
-      })
-      if (!img.isEmpty()) {
-        win.setOverlayIcon(img, text)
+    if (typeof png === 'string' && png.startsWith('data:image/png;base64,') && png.length < 600_000) {
+      const img = nativeImage.createFromBuffer(Buffer.from(png.slice('data:image/png;base64,'.length), 'base64'))
+      const { width, height } = img.getSize()
+      if (!img.isEmpty() && width === 256 && height === 256) {
+        win.setIcon(img)
+        win.setOverlayIcon(clearOverlay, text)
+        badged = true
         badgeSaid = text
-        badgeImage = { png, scale: factor, width: Math.round(img.getSize(factor).width * factor) }
+        badgeImage = { png, width }
         return
       }
     }
+    // Back to the plain icon only after a badge: a window never badged keeps
+    // the exe's own icon, whose frames Windows picks per size.
+    if (badged) win.setIcon(plainIcon())
+    badged = false
     win.setOverlayIcon(null, '')
     badgeSaid = ''
     badgeImage = null
