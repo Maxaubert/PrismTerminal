@@ -10,6 +10,9 @@ export interface Tab {
   kind?: 'settings'
   /** Where the shell was opened, then whatever it last reported (OSC 9;9). */
   cwd: string
+  /** Drawn from the saved list before the restore settled it (#106): no shell
+   *  yet. 'agent' wears the resume skeleton, 'shell' the bare ground. */
+  pending?: 'agent' | 'shell'
 }
 
 export interface TabState {

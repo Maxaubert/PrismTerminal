@@ -38,7 +38,7 @@ export function planRestore(
       resume = sessions(t.cwd)[n]
       if (resume) taken.set(key, n + 1)
     }
-    tabs.push(resume ? { cwd: t.cwd, resume } : { cwd: t.cwd })
+    tabs.push(resume ? { cwd: t.cwd, resume, from: i } : { cwd: t.cwd, from: i })
   })
   return { tabs, active: Math.min(active, Math.max(0, tabs.length - 1)) }
 }

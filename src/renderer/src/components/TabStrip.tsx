@@ -67,6 +67,7 @@ export function TabStrip({
   doneIds,
   questionIds,
   agentIds,
+  loadingIds,
   onPick,
   onClose,
   onNew,
@@ -87,6 +88,9 @@ export function TabStrip({
   questionIds: ReadonlySet<string>
   /** Sessions whose shell currently hosts an AI CLI (Claude Code, codex). */
   agentIds: ReadonlySet<string>
+  /** Tabs still coming back to an agent (#106): a ring before the name,
+   *  until the agent has drawn itself. */
+  loadingIds?: ReadonlySet<string>
   onPick: (id: string) => void
   onClose: (id: string) => void
   /** The + at the end ADDS a tab. Where it opens is App's to decide (a
@@ -489,6 +493,13 @@ export function TabStrip({
             </span>
             )}
             {t.kind !== 'settings' && <DictationTabMark sessionId={t.id} />}
+            {loadingIds?.has(t.id) && (
+              <span
+                data-tab-loading
+                aria-hidden
+                className="no-drag pointer-events-none -mr-0.5 ml-2 inline-block h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--p-text)_22%,transparent)] border-t-[var(--p-accent)] motion-safe:animate-spin"
+              />
+            )}
             <button
               role="tab"
               aria-selected={on}

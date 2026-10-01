@@ -1,4 +1,4 @@
-import { useEffect, useRef, type JSX } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type JSX } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -6,7 +6,27 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
 import { decidePaste, sanitizePaste, type PathShell } from '../lib/termPaste'
 import { shellOfShellId } from '../../shared/help/shells'
-import { registerPaste, reportCwd, reportTitle, setScreenTail, setTextPaster } from '../lib/termBus'
+import {
+  onResumingChange,
+  registerPaste,
+  reportCwd,
+  reportTitle,
+  resumingIds,
+  setResuming,
+  setScreenTail,
+  setTextPaster
+} from '../lib/termBus'
+import {
+  CLEAR,
+  agentOfResume,
+  onAlternate,
+  onChunk,
+  onTick,
+  revealNow,
+  startReveal,
+  type RevealState
+} from '../lib/resumeReveal'
+import { ResumeSkeleton } from './ResumeSkeleton'
 import { parseOsc9 } from '../../shared/termCwd'
 import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
 import { onGround } from '../lib/termGround'
@@ -762,26 +782,49 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     }
     return true
   })
-  // A resuming session shows a quiet spinner until claude's first paint:
-  // the ~4s between an empty terminal and the conversation appearing read
-  // as broken without one. Claude's own screen setup then paints over it.
+  // A RESUMING TAB WEARS A SKELETON (#106), not a text spinner: the shell's
+  // own words (its prompt, the resume command) are cleared the moment the
+  // agent takes the console, and the terminal is shown once the agent has
+  // drawn itself (`resumeReveal`, which says when). The overlay is the
+  // component's; this says which sessions still wear it (termBus).
   const resume = takeResume(id)
-  let spin: ReturnType<typeof setInterval> | null = null
+  let reveal: RevealState | null = null
+  let revealClock: ReturnType<typeof setInterval> | null = null
+  const finishReveal = (): void => {
+    if (!reveal) return
+    reveal = revealNow(reveal)
+    if (revealClock) clearInterval(revealClock)
+    revealClock = null
+    setResuming(id, false)
+  }
+  const tickReveal = (): void => {
+    if (!reveal || reveal.revealed) return
+    reveal = onTick(reveal, performance.now())
+    if (reveal.revealed) finishReveal()
+  }
   if (resume) {
     markTouched(id) // a claude session from the first moment
-    const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-    let i = 0
-    term.write('\x1b[2m⠋ Resuming Claude session…\x1b[0m')
-    spin = setInterval(() => {
-      term.write(`\r\x1b[2m${frames[(i += 1) % frames.length]} Resuming Claude session…\x1b[0m`)
-    }, 120)
+    reveal = startReveal(agentOfResume(resume), performance.now())
+    setResuming(id, true)
+    revealClock = setInterval(tickReveal, 50)
+    // A key is the user wanting the terminal: they see what they type.
+    term.onKey(() => finishReveal())
+    // A full-screen agent (Claude's fullscreen view) draws on the alternate screen.
+    term.buffer.onBufferChange((b) => {
+      if (reveal && b.type === 'alternate') reveal = onAlternate(reveal, performance.now())
+    })
   }
-  const stopSpin = (): void => {
-    if (spin) {
-      clearInterval(spin)
-      spin = null
-      term.write('\r\x1b[2K')
+  /** Pty output, with the clear written in front of the agent's own title
+   *  while the session is still coming back. */
+  const writeOutput = (data: string): void => {
+    if (!reveal || reveal.revealed) {
+      term.write(data)
+      return
     }
+    const r = onChunk(reveal, data, performance.now())
+    reveal = r.state
+    if (r.clearAt < 0) term.write(data)
+    else term.write(data.slice(0, r.clearAt) + CLEAR + data.slice(r.clearAt))
   }
   /**
    * The one paste. Bracketed for text - without that framing a multi-line
@@ -815,12 +858,13 @@ function createSession(id: string, root: string, shellId: string | undefined): S
       if (forId === id) agentHere = present
     }),
     termApi().onTermData((forId, data) => {
-      if (forId === id) {
-        stopSpin()
-        term.write(data)
-      }
+      if (forId === id) writeOutput(data)
     }),
-    stopSpin,
+    // The shell ended: whatever it said must be seen.
+    termApi().onTermExit((forId) => {
+      if (forId === id) finishReveal()
+    }),
+    finishReveal,
     // A menu reaches this session's paste through lib/termBus while it is
     // alive; dropping the entry is part of disposing the session.
     registerPaste(id, pasteHere)
@@ -919,7 +963,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     if (!ok && sessions.has(id)) {
       // The resume spinner would go on writing over the error for the tab's
       // whole life (code review 2026-09-24, #24): no pty data will ever stop it.
-      stopSpin()
+      finishReveal()
       term.write('\x1b[31mCould not start the shell.\x1b[0m\r\n')
       return
     }
@@ -1001,11 +1045,35 @@ export default function TerminalPanel({
   // under the last row are one surface in one coat (see currentTermTheme).
   // Where the host paints behind it, the panel adds nothing: a second
   // translucent coat is a visibly darker panel than the rest of the window.
+  // The skeleton while this session is coming back (#106), kept a beat
+  // longer as it fades, so the agent appears under it rather than after it.
+  const resumingNow = useSyncExternalStore(onResumingChange, resumingIds).has(sessionId)
+  const [leaving, setLeaving] = useState(false)
+  useEffect(() => {
+    let was = resumingIds().has(sessionId)
+    let t: ReturnType<typeof setTimeout> | undefined
+    const off = onResumingChange(() => {
+      const now = resumingIds().has(sessionId)
+      if (was && !now) {
+        setLeaving(true)
+        t = setTimeout(() => setLeaving(false), 200)
+      }
+      was = now
+    })
+    return () => {
+      off()
+      if (t) clearTimeout(t)
+    }
+  }, [sessionId])
+
   return (
-    <div
-      ref={box}
-      data-term-region
-      className={`h-full w-full min-h-0 min-w-0 p-1 ${paintsGround() ? 'bg-[var(--p-bg)]' : ''}`}
-    />
+    <div className="relative h-full w-full min-h-0 min-w-0">
+      <div
+        ref={box}
+        data-term-region
+        className={`h-full w-full min-h-0 min-w-0 p-1 ${paintsGround() ? 'bg-[var(--p-bg)]' : ''}`}
+      />
+      {(resumingNow || leaving) && <ResumeSkeleton leaving={!resumingNow} />}
+    </div>
   )
 }

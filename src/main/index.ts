@@ -383,6 +383,14 @@ function wireIpc(): void {
   // the folders this launch was handed (the verb, argv), as plain tabs with the
   // last one in front; later ones (the window shown again, a reload) are the
   // saved tabs alone, and folders that arrived meanwhile follow as events.
+  // THE STRIP AT ONCE (#106): the saved list as it is, read synchronously from
+  // a small file, so the page's FIRST frame already has its tabs. No stat and
+  // no session scan: those are tabs:restore's, which follows and settles each
+  // tab. Nothing here is spawned from; it only draws.
+  ipcMain.on('tabs:peek', (e) => {
+    e.returnValue = tabs.load()
+  })
+
   ipcMain.handle('tabs:restore', async (): Promise<Restored> => {
     const saved = tabs.load()
     // Looked up off main's thread, and only then handed to the pure planner: a

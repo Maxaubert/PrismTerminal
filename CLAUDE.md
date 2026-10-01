@@ -292,6 +292,24 @@ so an update never silently changes what an existing user sees; the bridge to ma
   `isInteractiveHead` reads each transcript's first 4 KB and drops a `queue-operation` first line
   or an `entrypoint` other than `cli`. The theme wall caches each preset's resolved look, and its previews use installed
   monospace faces rather than Mac ones Windows must look up.
+- **A LAUNCH SHOWS ITS TABS FROM THE FIRST FRAME, AND A SKELETON WHILE THE AGENT COMES BACK** (#106;
+  owner, 2026-09-30, of the start screen, then the tabs, then the path: "a loading screen on each tab
+  ... it looks like it's meant to be this way"; of four mockups, "C is good"; spec
+  `docs/superpowers/specs/2026-09-30-launch-skeleton-design.md`, mockups beside it).
+  - **Tabs first.** `tabs:peek` (a sync read of tabs.json, no stat, no scan) draws the saved strip as
+    placeholders (`Tab.pending`) before the restore answers. `lib/restorePlan` then settles each one
+    in place by `RestoredTab.from`. A placeholder whose folder has gone, or that was closed meanwhile,
+    goes. `EmptyState` shows only after a restore that came back EMPTY.
+  - **The skeleton is core.** `ResumeSkeleton` covers a resuming session, so Prism's resumed terminals
+    get it too. `resumeReveal` says when, MEASURED: the first title is exactly the agent's name
+    (`claude`), then its own (`✳ Claude Code`), then the alternate screen. A local clear (screen and
+    scrollback) is written just BEFORE the name title, so nothing the shell said is ever seen. The
+    skeleton lifts on the agent's next title or the alternate screen plus 150 ms, on a key, an exit,
+    a failed spawn, or 12 s.
+  - **A folder path is not the program.** A folder called Claude is not `claude.exe`: a path counts
+    only when it ends in the exe.
+  - Tabs still coming back wear a ring in the strip (`resumingIds` in termBus). The text spinner is
+    gone. The `launchSkeleton` e2e holds it all, with a stand-in claude and a temp HOME.
 - **THE HELP POPUP BLURS THE WINDOW BEHIND IT AND CASTS NO SHADOW** (owner, 2026-09-22: "remove the
   shadow behind this and make the bg blurred when it's open"): `backdrop-blur` on a lighter scrim; the
   blur already lifts the panel off the page, and a shadow on top of it read as a dark halo.

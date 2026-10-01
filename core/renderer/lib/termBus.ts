@@ -93,3 +93,29 @@ export function onTitle(fn: (sessionId: string, title: string) => void): () => v
     titleListeners.delete(fn)
   }
 }
+
+// WHICH SESSIONS ARE STILL COMING BACK (#106): a tab resuming Claude or Codex
+// wears a skeleton until the agent has drawn itself. TerminalPanel says when a
+// session starts and stops resuming; its own overlay and a host's tab strip
+// (a ring before the name) read it here. A fresh Set on every change, so
+// `useSyncExternalStore` sees a new snapshot.
+let resuming: ReadonlySet<string> = new Set()
+const resumingListeners = new Set<() => void>()
+
+export function setResuming(sessionId: string, on: boolean): void {
+  if (resuming.has(sessionId) === on) return
+  const next = new Set(resuming)
+  if (on) next.add(sessionId)
+  else next.delete(sessionId)
+  resuming = next
+  resumingListeners.forEach((fn) => fn())
+}
+
+export const resumingIds = (): ReadonlySet<string> => resuming
+
+export function onResumingChange(fn: () => void): () => void {
+  resumingListeners.add(fn)
+  return () => {
+    resumingListeners.delete(fn)
+  }
+}
