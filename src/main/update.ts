@@ -9,6 +9,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { MAX_BODY_CHARS } from '@core/shared/releaseNotes'
 import type { UpdateInfo } from '@shared/types'
+import { handoffCommand } from './updateHandoff'
 
 // The in-app update check. Releases publish themselves on every push to main
 // (release.yml), so the app's half is small: notice a newer v<version> on
@@ -161,9 +162,6 @@ export async function installUpdate(
     // spawned yet, and the user asked for nothing to be.
     if (signal?.aborted) throw new Error('cancelled')
     onPct(100)
-    // Single-quoted with quotes doubled, PowerShell's own escaping; both
-    // paths are ours (temp dir, execPath) but interpolation stays safe anyway.
-    const q = (s: string): string => `'${s.replace(/'/g, "''")}'`
     // The handoff (code review 2026-09-24, #19): the installer runs, the app
     // starts again, and the temp folder holding the installer is REMOVED
     // after it (it used to stay, about 100 MB per update). A PowerShell that
@@ -176,9 +174,18 @@ export async function installUpdate(
         '-WindowStyle',
         'Hidden',
         '-Command',
-        `Start-Process -Wait -FilePath ${q(file)} -ArgumentList '/S'; ` +
-          `Start-Process -FilePath ${q(process.execPath)}; ` +
-          `Remove-Item -LiteralPath ${q(dir)} -Recurse -Force -ErrorAction SilentlyContinue`
+        // What runs is `updateHandoff`'s (#104): the same profile on the way
+        // back, and the stable copy mirrors the new install into itself.
+        handoffCommand({
+          installer: file,
+          tempDir: dir,
+          execPath: process.execPath,
+          pid: process.pid,
+          userDataDir: app.commandLine.hasSwitch('user-data-dir')
+            ? app.commandLine.getSwitchValue('user-data-dir')
+            : null,
+          installedDir: join(process.env.LOCALAPPDATA ?? '', 'Programs', 'PrismTerminal')
+        })
       ],
       { detached: true, stdio: 'ignore' }
     )
