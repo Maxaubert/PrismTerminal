@@ -97,7 +97,7 @@ export function drawBadge(count: number, scale: number): string {
   g.fill()
   const text = badgeText(count)
   g.fillStyle = BADGE_INK
-  g.font = `600 ${Math.round(size * (text.length > 1 ? 0.5 : 0.66))}px "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif`
+  g.font = `400 ${Math.round(size * (text.length > 1 ? 0.56 : 0.8))}px "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif`
   g.textAlign = 'center'
   g.textBaseline = 'middle'
   // Segoe's figures sit a touch high on the middle line: a nudge down centres them.

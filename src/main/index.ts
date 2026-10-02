@@ -669,16 +669,20 @@ function wireIpc(): void {
     if (!win || win.isDestroyed()) return
     const text = typeof description === 'string' ? description.slice(0, 120) : ''
     if (typeof png === 'string' && png.startsWith('data:image/png;base64,') && png.length < 100_000) {
-      // The page drew it at the display's physical size (#108): saying so
-      // makes it that scale's own picture, which Windows shows unstretched.
+      // The page drew it at the display's physical size (#108), and it goes
+      // to Windows as a PLAIN picture of that size: Electron builds the
+      // overlay from an image's 1x picture, so one marked 2.25x was shrunk to
+      // 16 px and stretched back (MEASURED side by side on the taskbar). It
+      // stays an OVERLAY: drawn onto the window icon it was crisp in a bare
+      // window, but the installed app's taskbar button wears its Start menu
+      // shortcut's icon (the same app id) and never showed it (MEASURED in the
+      // installed build, 2026-10-03).
       const factor = typeof scale === 'number' && scale >= 1 && scale <= 4 ? scale : 1
-      const img = nativeImage.createFromBuffer(Buffer.from(png.slice('data:image/png;base64,'.length), 'base64'), {
-        scaleFactor: factor
-      })
+      const img = nativeImage.createFromBuffer(Buffer.from(png.slice('data:image/png;base64,'.length), 'base64'))
       if (!img.isEmpty()) {
         win.setOverlayIcon(img, text)
         badgeSaid = text
-        badgeImage = { png, scale: factor, width: Math.round(img.getSize(factor).width * factor) }
+        badgeImage = { png, scale: factor, width: img.getSize().width }
         return
       }
     }

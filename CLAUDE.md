@@ -548,8 +548,11 @@ the owner's own call, #99.)
   a dark disc with a white number, whatever the marks (owner, 2026-09-29: "too big and it's
   green, it should be grey with white number"; 2026-10-01, beside ChatGPT's: "so much clearer and high
   res, fix that", #108). Drawn at the display's PHYSICAL size (`badgePixels`, 36 at 225%) and handed
-  to main with that scale (`createFromBuffer` scaleFactor), so Windows never stretches it; the
-  reference's own near-black `#25242c`, filling the overlay. The installed app's WINDOW icon is the exe's own (no `icon:`
+  to main as a PLAIN picture (a 2.25x-marked one was shrunk to 16 px), the reference's own
+  near-black `#25242c` filling the overlay, a large regular-weight number. IT STAYS AN OVERLAY:
+  drawn onto the window icon it was crisp in a bare window, but the INSTALLED app's taskbar button
+  wears its Start menu shortcut's icon (same app id) and showed nothing (MEASURED 2026-10-03); a
+  window icon only shows with an app id no shortcut has, which breaks pinning. The installed app's WINDOW icon is the exe's own (no `icon:`
   in a packaged build): Windows then picks the .ico frame drawn for the size it needs, where the
   explicit 256px frame was shrunk twice and came out soft (MEASURED, side by side at 48px).
   Tab names are centred in both widths, and a Dynamic tab is never under four characters wide.
