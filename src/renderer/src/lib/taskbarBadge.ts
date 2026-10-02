@@ -6,7 +6,7 @@ import { useSyncExternalStore } from 'react'
  * them yet"). The number is every tab showing an attention mark (finished or
  * a question, each only while its own switch is on), since both are sessions
  * that need a look. Windows has no numeric badge for a desktop app, so it is
- * a disc drawn ONTO the app icon here, set by main as the window icon. This
+ * the window's OVERLAY icon: a small disc drawn here and set by main. This
  * app's own setting, on by default (`prism.window.taskbarBadge`).
  */
 const KEY = 'prism.window.taskbarBadge'
@@ -70,65 +70,37 @@ export function badgeText(count: number): string {
 export const BADGE_FILL = '#25242c'
 export const BADGE_INK = '#ffffff'
 
-/** The app icon is drawn at this size, and the badge on it. */
-export const ICON_PX = 256
-/** The disc's radius on the 256px icon, and the clear ring round it that
- *  keeps it off the orange. The disc touches the icon's top right corner. */
-export const BADGE_R = 70
-export const BADGE_GAP = 8
+/** The overlay is 16 logical pixels, drawn at this many physical ones. */
+export function badgePixels(scale: number): number {
+  const s = Number.isFinite(scale) && scale > 0 ? Math.min(scale, 4) : 1
+  return Math.round(16 * s)
+}
 
 /**
- * THE BADGE IS PART OF THE ICON, NOT AN OVERLAY (#108; owner, 2026-10-01:
- * "the badge is very low res compared to gpts"). Windows draws a desktop
- * app's overlay icon from a small picture and STRETCHES it: MEASURED on the
- * real taskbar at 225%, a 36px overlay, plain or marked 2.25x, came out soft
- * either way. ChatGPT's crisp badge is the badge API of a packaged (MSIX)
- * app, which this app is not. The taskbar draws the WINDOW icon sharp, so the
- * disc is drawn onto the app icon at 256px and main sets that as the window
- * icon (MEASURED side by side: as crisp as ChatGPT's). Returns a PNG data url,
- * or '' when there is no canvas.
+ * The disc as a PNG data url, drawn at the display's REAL pixel size (36 at
+ * 225%), so Windows shows it as drawn: a fixed 32px canvas handed over as a
+ * 1x image was stretched, which is what made it soft. Main is told the scale
+ * with it (`setTaskbarBadge`), so the image is that scale's own picture. The
+ * disc fills the overlay, as the reference does.
  */
-export function drawBadgedIcon(count: number, icon: CanvasImageSource): string {
+export function drawBadge(count: number, scale: number): string {
+  const size = badgePixels(scale)
   const canvas = document.createElement('canvas')
-  canvas.width = ICON_PX
-  canvas.height = ICON_PX
+  canvas.width = size
+  canvas.height = size
   const g = canvas.getContext('2d')
   if (!g) return ''
-  g.drawImage(icon, 0, 0, ICON_PX, ICON_PX)
-  const cx = ICON_PX - BADGE_R
-  const cy = BADGE_R
-  g.globalCompositeOperation = 'destination-out'
-  g.beginPath()
-  g.arc(cx, cy, BADGE_R + BADGE_GAP, 0, Math.PI * 2)
-  g.fill()
-  g.globalCompositeOperation = 'source-over'
+  const c = size / 2
   g.fillStyle = BADGE_FILL
   g.beginPath()
-  g.arc(cx, cy, BADGE_R, 0, Math.PI * 2)
+  g.arc(c, c, c, 0, Math.PI * 2)
   g.fill()
   const text = badgeText(count)
-  const d = BADGE_R * 2
   g.fillStyle = BADGE_INK
-  g.font = `400 ${Math.round(d * (text.length > 1 ? 0.5 : 0.66))}px "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif`
+  g.font = `600 ${Math.round(size * (text.length > 1 ? 0.5 : 0.66))}px "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif`
   g.textAlign = 'center'
   g.textBaseline = 'middle'
   // Segoe's figures sit a touch high on the middle line: a nudge down centres them.
-  g.fillText(text, cx, cy + d * 0.04)
+  g.fillText(text, c, c + size * 0.04)
   return canvas.toDataURL('image/png')
 }
-
-let iconLoad: Promise<HTMLImageElement> | null = null
-/** The app icon as an image, loaded once. */
-export function appIcon(url: string): Promise<HTMLImageElement> {
-  iconLoad ??= new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = () => {
-      iconLoad = null
-      reject(new Error('app icon did not load'))
-    }
-    img.src = url
-  })
-  return iconLoad
-}
-

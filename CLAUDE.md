@@ -547,11 +547,9 @@ the owner's own call, #99.)
   how many tabs carry a mark (`taskbarBadge.ts`, `window:badge`, Settings > General switch, on):
   a dark disc with a white number, whatever the marks (owner, 2026-09-29: "too big and it's
   green, it should be grey with white number"; 2026-10-01, beside ChatGPT's: "so much clearer and high
-  res, fix that", #108). NOT AN OVERLAY ICON: Windows draws
-  those from a small picture and stretches it (MEASURED soft at 225% however it was handed over;
-  ChatGPT's is the MSIX badge API, not ours). The disc, the reference's near-black `#25242c`, is
-  drawn ONTO the 256px app icon (`drawBadgedIcon`) and main sets that as the window icon, the
-  overlay kept clear for its spoken description; at 0 main puts the .ico back. The installed app's WINDOW icon is the exe's own (no `icon:`
+  res, fix that", #108). Drawn at the display's PHYSICAL size (`badgePixels`, 36 at 225%) and handed
+  to main with that scale (`createFromBuffer` scaleFactor), so Windows never stretches it; the
+  reference's own near-black `#25242c`, filling the overlay. The installed app's WINDOW icon is the exe's own (no `icon:`
   in a packaged build): Windows then picks the .ico frame drawn for the size it needs, where the
   explicit 256px frame was shrunk twice and came out soft (MEASURED, side by side at 48px).
   Tab names are centred in both widths, and a Dynamic tab is never under four characters wide.

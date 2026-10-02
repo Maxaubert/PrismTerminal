@@ -82,11 +82,10 @@ const api = {
    *  follows the lines inside it. Not persisted in main: say it at launch and
    *  on a change. Main reads anything it does not know as the default. */
   setWindowEdges: (edges: WindowEdges): void => ipcRenderer.send('window:edges', edges),
-  /** The taskbar badge (2026-09-28): the app icon with the badge drawn on it,
-   *  as a PNG data url, and what it says; or null for none. Main sets it as
-   *  the window icon (#108). */
-  setTaskbarBadge: (png: string | null, description: string): void =>
-    ipcRenderer.send('window:badge', png, description),
+  /** The taskbar badge (2026-09-28): a PNG data url and what it says, or null
+   *  for none. Main sets it as the window's overlay icon. */
+  setTaskbarBadge: (png: string | null, description: string, scale = 1): void =>
+    ipcRenderer.send('window:badge', png, description, scale),
   windowMinimize: (): void => ipcRenderer.send('window:minimize'),
   windowToggleMaximize: (): void => ipcRenderer.send('window:toggle-maximize'),
   /** Closes the window, which quits (after the agent question, if one is due). */
@@ -128,7 +127,7 @@ const api = {
   e2eTaskbarBadge: (): Promise<string> => ipcRenderer.invoke('e2e:taskbar-badge'),
   /** The e2e's: the badge picture main last set, its scale and its width in
    *  physical pixels (#108). */
-  e2eTaskbarBadgeImage: (): Promise<{ png: string; width: number } | null> =>
+  e2eTaskbarBadgeImage: (): Promise<{ png: string; scale: number; width: number } | null> =>
     ipcRenderer.invoke('e2e:taskbar-badge-image'),
   /** The e2e's: release checks sent and installs attempted this session. A
    *  preview, fake install included, must leave both at 0. */

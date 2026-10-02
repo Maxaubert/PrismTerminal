@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BADGE_GAP, BADGE_R, ICON_PX, attentionCount, badgeText } from './taskbarBadge'
+import { attentionCount, badgePixels, badgeText } from './taskbarBadge'
 
 const set = (...ids: string[]): ReadonlySet<string> => new Set(ids)
 
@@ -32,10 +32,15 @@ describe('badgeText', () => {
   })
 })
 
-describe('the badge on the icon', () => {
-  it('sits in the top right corner, inside the icon, with its clear ring', () => {
-    expect(BADGE_R * 2).toBeGreaterThan(ICON_PX * 0.5)
-    expect(BADGE_R * 2).toBeLessThan(ICON_PX * 0.6)
-    expect(BADGE_GAP).toBeGreaterThan(0)
+describe('badgePixels', () => {
+  it("draws at the display's physical size: 16 logical pixels times the scale", () => {
+    expect(badgePixels(1)).toBe(16)
+    expect(badgePixels(1.5)).toBe(24)
+    expect(badgePixels(2.25)).toBe(36)
+  })
+  it('reads a nonsense scale as 1, and caps a huge one', () => {
+    expect(badgePixels(0)).toBe(16)
+    expect(badgePixels(Number.NaN)).toBe(16)
+    expect(badgePixels(9)).toBe(64)
   })
 })
