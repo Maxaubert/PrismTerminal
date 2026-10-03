@@ -121,11 +121,13 @@ export interface TermHostConfig {
 
   /**
    * What "Acrylic" means as a TERMINAL setting. 'window': the terminal setting
-   * switches the window's own material on, for any theme, with an opacity
-   * slider (Prism Terminal, where nothing else owns the window). 'style': the
+   * switches the window's own material on, for any theme, and the theme
+   * Background's alpha is how much of it shows (Prism Terminal, where nothing
+   * else owns the window; it was an Opacity slider until #114). 'style': the
    * window material belongs to the host's STYLE, and the row only decides
-   * whether the terminal lets it show through; no slider, since two alphas
-   * over one sheet of glass would fight (Prism; owner, 2026-09-19).
+   * whether the terminal lets it show through; the theme Background has no
+   * alpha, since two alphas over one sheet of glass would fight (Prism; owner,
+   * 2026-09-19).
    */
   acrylic: { kind: 'window'; supported(): Promise<boolean> } | { kind: 'style' }
 
@@ -197,6 +199,13 @@ export const paintsGround = (): boolean => host?.paintsGround ?? true
 /** The host's picked ground (`terminalGround`), null where there is none or no
  *  host has spoken. */
 export const hostGround = (): string | null => host?.terminalGround?.() ?? null
+/** The terminal setting switches the WINDOW's material (Prism Terminal), so
+ *  the theme Background's alpha is the window's see-through (#114). False
+ *  where the style owns the glass (Prism), or no host has spoken. */
+export const hostOwnsWindowAcrylic = (): boolean => host?.acrylic.kind === 'window'
+/** Hear the host's window colours change (`onChromeChange`); a no-op where the
+ *  host has none, or none has spoken. */
+export const onHostChromeChange = (cb: () => void): (() => void) => host?.onChromeChange?.(cb) ?? (() => {})
 
 /** For tests, and for a host that tears down. */
 export function resetTermCore(): void {
