@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_TERM_THEME, TERM_PRESETS, resolveTermTheme } from './termTheme'
+import { saveCustomTermTheme } from './termLook'
+import { onGround } from './termGround'
+import { contrastRatio } from './termAnsi'
+import { xtermTheme } from './termXterm'
 
 describe('resolveTermTheme', () => {
   it("keeps the core's own default, prism, in the list (PT Default now leads it)", () => {
@@ -30,5 +34,58 @@ describe('resolveTermTheme', () => {
   it("'custom' with nothing saved falls back the same way", () => {
     localStorage.clear()
     expect(resolveTermTheme('custom')).toEqual(resolveTermTheme('prism'))
+  })
+})
+
+describe('a Custom with alpha (#112)', () => {
+  it('a hex8 cursor derives a 9-character selection from the opaque cursor', () => {
+    localStorage.clear()
+    saveCustomTermTheme({ bg: '#101010', fg: '#eeeeee', cursor: '#ff800080', ansi: {} })
+    const t = resolveTermTheme('custom')
+    expect(t.selectionBackground).toHaveLength(9)
+    expect(t.cursor).toMatch(/^#[0-9a-f]{6}$/)
+    expect(t.selectionBackground).toBe(`${t.cursor}55`)
+  })
+  it('a chosen selection is honoured, and survives a picked ground', () => {
+    localStorage.clear()
+    saveCustomTermTheme({ bg: '#101010', fg: '#eeeeee', cursor: '#ff8000', selection: '#3355ff80', ansi: {} })
+    expect(resolveTermTheme('custom').selectionBackground).toBe('#3355ff80')
+    expect(onGround(resolveTermTheme('custom'), '#f4f1e8').selectionBackground).toBe('#3355ff80')
+  })
+  it('a derived selection follows the floored cursor on a picked ground, as before', () => {
+    const t = onGround(resolveTermTheme('dracula'), '#f4f1e8')
+    expect(t.selectionBackground).toBe(`${t.cursor}55`)
+  })
+  it('foreground, cursor and the sixteen are composited against the ground in force', () => {
+    localStorage.clear()
+    saveCustomTermTheme({ bg: '#000000', fg: '#ffffff80', cursor: '#ffffff', ansi: { red: '#ff000080' } })
+    const own = resolveTermTheme('custom')
+    expect(own.foreground).toBe('#808080')
+    expect(own.red).toMatch(/^#[0-9a-f]{6}$/)
+    expect(contrastRatio(own.red as string, '#000000')).toBeGreaterThanOrEqual(3)
+    // On a picked white ground, half-white text is laid on WHITE first.
+    expect(resolveTermTheme('custom', '#ffffff').foreground).not.toBe(own.foreground)
+  })
+})
+
+describe('what xterm is handed (#112)', () => {
+  // xterm 6 parses #rrggbb[aa] and comma rgba() only; anything else goes to a
+  // canvas path that throws on a colour that is not opaque.
+  const HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/
+  it('every value, over every preset and an alpha Custom, painted or not, on any ground', () => {
+    localStorage.clear()
+    saveCustomTermTheme({
+      bg: '#10101080',
+      fg: '#EEEEEE99',
+      cursor: '#ff800040',
+      selection: '#3355ff80',
+      ansi: { red: '#ff000080', green: '#00ff00', blue: 'rgba(0, 0, 255, 0.5)' }
+    })
+    for (const id of [...TERM_PRESETS.map((p) => p.id), 'custom'])
+      for (const ground of [null, '#f4f1e8', '#20304080'])
+        for (const paints of [true, false]) {
+          const t = xtermTheme(onGround(resolveTermTheme(id, ground), ground), { paintsGround: paints, clearGround: !paints })
+          for (const [k, v] of Object.entries(t)) if (typeof v === 'string') expect(v, `${id} ${k}`).toMatch(HEX)
+        }
   })
 })

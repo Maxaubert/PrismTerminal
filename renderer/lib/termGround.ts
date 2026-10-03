@@ -28,13 +28,17 @@ export function onGround(theme: TermTheme, ground: string | null | undefined): T
   const own = normalizeColor(theme.background, '#0b0b0f').slice(0, 7).toLowerCase()
   const bg = normalizeColor(ground, own).slice(0, 7).toLowerCase()
   if (bg === own) return theme
-  const cursor = ensureContrast(normalizeColor(theme.cursor, '#5b5bd6').slice(0, 7), bg, MARK_FLOOR)
+  const ownCursor = normalizeColor(theme.cursor, '#5b5bd6').slice(0, 7)
+  const cursor = ensureContrast(ownCursor, bg, MARK_FLOOR)
+  // A selection the theme CHOSE keeps its colour and alpha (#112); only the
+  // derived one (`<cursor>55`) follows the floored cursor, as it always did.
+  const derived = theme.selectionBackground.toLowerCase() === `${ownCursor.toLowerCase()}55`
   const out: TermTheme = {
     ...theme,
     background: bg,
     foreground: ensureContrast(normalizeColor(theme.foreground, '#d7dae1').slice(0, 7), bg, TEXT_FLOOR),
     cursor,
-    selectionBackground: `${cursor}55`
+    selectionBackground: derived ? `${cursor}55` : theme.selectionBackground
   }
   for (const k of ANSI_KEYS) {
     const v = theme[k]
