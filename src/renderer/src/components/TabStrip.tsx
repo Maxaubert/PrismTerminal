@@ -500,7 +500,7 @@ export function TabStrip({
               <span
                 data-tab-loading
                 aria-hidden
-                className="no-drag pointer-events-none -mr-0.5 ml-2 inline-block h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--p-text)_22%,transparent)] border-t-[var(--p-accent)] motion-safe:animate-spin"
+                className="no-drag pointer-events-none -mr-0.5 ml-2 inline-block h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--p-text)_22%,transparent)] border-t-[var(--p-accent-solid)] motion-safe:animate-spin"
               />
             )}
             <button

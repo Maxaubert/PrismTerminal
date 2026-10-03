@@ -5,7 +5,9 @@ import { setTabWidth, useTabWidth, type TabWidth } from '../lib/tabWidthPrefs'
 import { setTitleBarMode, useTitleBarMode, type TitleBarMode } from '../lib/titleBarPrefs'
 import { setTaskbarBadgeOn, useTaskbarBadgeOn } from '../lib/taskbarBadge'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
-import { HexSwatch, Pref, RESET_LINK, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
+import { Pref, RESET_LINK, ROWS, ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
+import { ColourField } from '@core/renderer/settings/ColourPicker'
+import { alphaOf, withAlpha, type AlphaRange } from '@core/renderer/lib/colour'
 import { setWindowAccent, useWindowAccent } from '../lib/accentPrefs'
 import {
   onWindowBackgroundChange,
@@ -14,7 +16,7 @@ import {
   windowBackground
 } from '../lib/backgroundPrefs'
 import { chromeTokens } from '../lib/chromeTheme'
-import { onTermLookChange, termThemeId } from '@core/renderer/lib/termLook'
+import { customTermTheme, onTermLookChange, termThemeId, useTermAcrylic } from '@core/renderer/lib/termLook'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { DictationSettings } from '@core/renderer/settings/Dictation'
 import { HelpSetting } from '@core/renderer/settings/Help'
@@ -195,9 +197,13 @@ const themeColours = (): string => {
   const id = termThemeId()
   const theme = resolveTermTheme(id)
   const bg = windowBackground()
-  const vars = chromeTokens(bg ? { ...theme, background: bg } : theme, 100, presetAccent(id)).vars
-  const themeBg = chromeTokens(theme, 100, presetAccent(id)).vars['--p-bg-solid']
-  return `${vars['--p-accent']}|${themeBg}`
+  const vars = chromeTokens(bg ? { ...theme, background: bg } : theme, 1, presetAccent(id)).vars
+  const themeBg = chromeTokens(theme, 1, presetAccent(id)).vars['--p-bg-solid']
+  // The theme's ground AS THE WINDOW PAINTS IT (#114): its solid colour at the
+  // theme's own alpha (a Custom may carry one), so the row shows the
+  // see-through that is in force while nothing is picked.
+  const own = id === 'custom' ? customTermTheme() : null
+  return `${vars['--p-accent']}|${withAlpha(themeBg, own ? alphaOf(own.bg) : 1)}`
 }
 const onColoursChange = (cb: () => void): (() => void) => {
   const offs = [onTermLookChange(cb), onWindowBackgroundChange(cb)]
@@ -219,7 +225,8 @@ function WindowColour({
   what,
   chosen,
   fromTheme,
-  onPick
+  onPick,
+  range
 }: {
   id: string
   label: string
@@ -227,6 +234,8 @@ function WindowColour({
   chosen: string | null
   fromTheme: string
   onPick: (hex: string | null) => void
+  /** The alpha this colour may carry (#114). */
+  range: AlphaRange & { alphaDisabled?: boolean }
 }): JSX.Element {
   return (
     <Pref id={id} label={label} hint={chosen ? `${what} Uses your own colour.` : `${what} Follows the theme.`}>
@@ -238,7 +247,13 @@ function WindowColour({
         )}
         {/* Escape in the picker puts back what was chosen when it opened, a
             row that followed the theme included (#112). */}
-        <HexSwatch label={label} value={chosen ?? fromTheme} onChange={onPick} onRevert={() => onPick(chosen)} />
+        <ColourField
+          label={label}
+          value={chosen ?? fromTheme}
+          onChange={onPick}
+          onRevert={() => onPick(chosen)}
+          {...range}
+        />
       </div>
     </Pref>
   )
@@ -248,16 +263,28 @@ function WindowColours(): JSX.Element {
   const accent = useWindowAccent()
   const background = useWindowBackground()
   const [themeAccent, themeBg] = useSyncExternalStore(onColoursChange, themeColours).split('|')
+  const acrylic = useTermAcrylic()
   return (
     <>
+      {/* THE BACKGROUND'S ALPHA IS THE WINDOW'S SEE-THROUGH (#114; owner,
+          2026-10-03: alpha "should be built into the colour pickers ... it
+          should not be a separate opacity setting"). It replaced the Opacity
+          slider: at least 30% as the slider was, and inert while acrylic is
+          off, when the desktop does not show through at all. */}
       <WindowColour
         id="window-background"
         label="Background colour"
-        what="The colour behind the text in the window and terminal."
+        what={
+          acrylic
+            ? 'The colour behind the text in the window and terminal, and how much of the desktop shows through it.'
+            : 'The colour behind the text in the window and terminal.'
+        }
         chosen={background}
         fromTheme={themeBg}
         onPick={setWindowBackground}
+        range={{ alphaMin: 0.3, alphaDisabled: !acrylic }}
       />
+      {/* The accent's alpha is for its FILLS; its lines stay solid. */}
       <WindowColour
         id="window-accent"
         label="Accent colour"
@@ -265,6 +292,7 @@ function WindowColours(): JSX.Element {
         chosen={accent}
         fromTheme={themeAccent}
         onPick={setWindowAccent}
+        range={{ alphaMin: 0.1 }}
       />
     </>
   )

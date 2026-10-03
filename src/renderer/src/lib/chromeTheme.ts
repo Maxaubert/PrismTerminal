@@ -1,5 +1,6 @@
 import type { TermTheme } from '@core/renderer/lib/termTheme'
 import { contrastRatio, ensureContrast, luminance, mixHex, normalizeColor } from '@core/renderer/lib/termAnsi'
+import { alphaHex, alphaOf, composite, selectionFor } from '@core/renderer/lib/colour'
 import { EDGE_ALPHA, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 
 // The window wears the terminal's theme. Every chrome colour is derived from
@@ -40,6 +41,7 @@ export const CHROME_COLOUR_TOKENS = [
   '--p-dim',
   '--p-dim2',
   '--p-accent',
+  '--p-accent-solid',
   '--p-accent-hi',
   '--p-on-accent',
   '--p-icon',
@@ -59,17 +61,19 @@ export interface ChromeTokens {
   vars: Record<string, string>
 }
 
-/** 0-100 as the two hex digits of an alpha channel. Shared with the terminal
- *  panel, whose canvas has to carry the very same alpha as the chrome. */
-export const alphaHex = (pct: number): string =>
-  Math.round((Math.min(100, Math.max(0, pct)) / 100) * 255)
-    .toString(16)
-    .padStart(2, '0')
+/** A percentage of the mode's ink as the two hex digits of an alpha: the
+ *  hover and edge strengths are written in percent. The one `alphaHex` is the
+ *  core's (#114), which takes 0..1. */
+const pctHex = (pct: number): string => alphaHex(Math.min(100, Math.max(0, pct)) / 100)
 
 /**
- * Pure: a terminal theme in, the chrome's custom properties out. `opacityPct`
- * below 100 makes the window's surfaces translucent (#rrggbbaa) for an acrylic
- * window; `--p-bg-solid` and `--p-side-flat` are always flat, which is what
+ * Pure: a terminal theme in, the chrome's custom properties out. `groundAlpha`
+ * below 1 makes the window's surfaces translucent (#rrggbbaa) for an acrylic
+ * window. It is the ALPHA of the ground in force (#114: the Background
+ * colour's alpha replaced the Opacity slider), handed over as its byte's
+ * fraction and never through a percentage, so the field and the window name
+ * the same alpha; a saved Opacity N was migrated to the byte
+ * round(N / 100 * 255), which is exactly what N painted here before. `--p-bg-solid` and `--p-side-flat` are always flat, which is what
  * everything here is measured against and what a menu or a dialog paints,
  * since a panel you can read the terminal through is a smear rather than a
  * layer. Every value is #rrggbb or #rrggbbaa, never rgba(): xterm's search
@@ -84,10 +88,11 @@ export const alphaHex = (pct: number): string =>
  */
 export function chromeTokens(
   theme: TermTheme,
-  opacityPct = 100,
+  groundAlpha = 1,
   wantedAccent?: string,
   edges: WindowEdges = 'hairline',
-  /** The accent the USER chose (accentPrefs), or nothing to follow the theme. */
+  /** The accent the USER chose (accentPrefs), or nothing to follow the theme.
+   *  It may carry an alpha (#114). */
   chosenAccent?: string | null
 ): ChromeTokens {
   // Flattened before any maths: a theme may publish rgba() or #rrggbbaa, which
@@ -123,23 +128,53 @@ export function chromeTokens(
   // by hand is only MOVED, as far as the floor and no further, so it stays the
   // colour that was chosen on every ground that can show it.
   const chosen = chosenAccent ? normalizeColor(chosenAccent, INDIGO) : null
-  const accent = chosen
+  // The accent as a LINE: rings, rules, progress, the spinner. Never
+  // see-through (#114); a picked alpha belongs to the fills below.
+  const solid = chosen
     ? visible(chosen)
       ? chosen
       : floorOn(chosen, QUIET_FLOOR)
     : (candidates.find(visible) ?? floorOn(candidates[0], QUIET_FLOOR))
-  // What sits on the accent is white or near-black, whichever reads better:
-  // the better of two, not a midpoint test, since both can be poor at a midpoint.
-  const onAccent =
-    contrastRatio('#ffffff', accent) >= contrastRatio(FALLBACK_BG, accent) ? '#ffffff' : FALLBACK_BG
-  // A selected row carries TEXT, so its fill is the accent moved until that ink
-  // clears the text floor on it (Prism's selectionBg): away from the ink.
-  let selBg = accent
-  const away = onAccent === '#ffffff' ? '#000000' : '#ffffff'
-  for (let i = 0; i < 15 && contrastRatio(onAccent, selBg) < TEXT_FLOOR; i += 1) {
-    selBg = mixHex(selBg, away, 0.04)
+  const glass = groundAlpha < 1
+  let accent = solid
+  let onAccent: string
+  let selBg: string
+  // A SEE-THROUGH ACCENT (#114) is a FILL, painted with its alpha. The text on
+  // it is chosen on what the eye sees, the fill composited over each ground it
+  // sits on (the ground and the flat panel), at 4.5:1 on the worse of the two,
+  // by the core's `selectionFor` (Prism's #251 rule, moved to the core). So
+  // the fill may be nudged off the pick, as the opaque path's selected row
+  // always was; the line above keeps the pick itself.
+  const fillAlpha = chosenAccent ? alphaOf(chosenAccent) : 1
+  if (fillAlpha < 1) {
+    const a = alphaHex(fillAlpha)
+    const sel = selectionFor(solid + a, [bg, flat])
+    onAccent = sel.ink
+    accent = sel.fill + a
+    selBg = accent
+  } else {
+    // What sits on the accent is white or near-black, whichever reads better:
+    // the better of two, not a midpoint test, since both can be poor at a midpoint.
+    onAccent =
+      contrastRatio('#ffffff', accent) >= contrastRatio(FALLBACK_BG, accent) ? '#ffffff' : FALLBACK_BG
+    // A selected row carries TEXT, so its fill is the accent moved until that ink
+    // clears the text floor on it (Prism's selectionBg): away from the ink.
+    selBg = accent
+    const away = onAccent === '#ffffff' ? '#000000' : '#ffffff'
+    for (let i = 0; i < 15 && contrastRatio(onAccent, selBg) < TEXT_FLOOR; i += 1) {
+      selBg = mixHex(selBg, away, 0.04)
+    }
   }
-  const accentHi = floorOn(mixHex(accent, fg, 0.25), QUIET_FLOOR)
+  // FILLS UNDER GLASS (#114, owner decision 5). Over a see-through ground a
+  // see-through fill lies on the unknown desktop, where no ink can be held to
+  // 4.5:1, so the fills that carry text (the update chip, Save, Install, the
+  // theme-switch ask, a selected row) are flattened over the solid ground they
+  // were chosen on. An opaque accent composites to itself: nothing moves.
+  if (glass && fillAlpha < 1) {
+    accent = composite(accent, bg)
+    selBg = composite(selBg, bg)
+  }
+  const accentHi = floorOn(mixHex(solid, fg, 0.25), QUIET_FLOOR)
   const dim = floorOn(mixHex(fg, bg, 0.38), QUIET_FLOOR)
   // A raised stage rather than a sunken one: a true-black ground has nothing
   // darker to go to, so this always steps towards the text colour.
@@ -156,8 +191,7 @@ export function chromeTokens(
   // 00 and still a colour, so a border keeps its pixel and nothing moves.
   const edgeAlpha = EDGE_ALPHA[validWindowEdges(edges)]
   const shade = light ? 'light' : 'dark'
-  const glass = opacityPct < 100
-  const sheet = glass ? bg + alphaHex(opacityPct) : bg
+  const sheet = glass ? bg + alphaHex(groundAlpha) : bg
   const vars: Record<string, string> = {
     '--p-bg-solid': bg,
     '--p-bg': sheet,
@@ -174,13 +208,14 @@ export function chromeTokens(
     '--p-dim': dim,
     '--p-dim2': floorOn(mixHex(fg, bg, 0.55), QUIET_FLOOR),
     '--p-accent': accent,
+    '--p-accent-solid': solid,
     '--p-accent-hi': accentHi,
     '--p-on-accent': onAccent,
     '--p-icon': dim,
-    '--p-hover': ink + alphaHex(light ? 7 : 6),
-    '--p-hover-hi': ink + alphaHex(light ? 12 : 11),
-    '--p-divider': ink + alphaHex(edgeAlpha.divider[shade]),
-    '--p-line': ink + alphaHex(edgeAlpha.line[shade]),
+    '--p-hover': ink + pctHex(light ? 7 : 6),
+    '--p-hover-hi': ink + pctHex(light ? 12 : 11),
+    '--p-divider': ink + pctHex(edgeAlpha.divider[shade]),
+    '--p-line': ink + pctHex(edgeAlpha.line[shade]),
     '--p-preview': stage,
     // Form controls sit INTO the page, not on a platform: quieter than the stage.
     '--p-control': mixHex(bg, fg, light ? 0.09 : 0.035),

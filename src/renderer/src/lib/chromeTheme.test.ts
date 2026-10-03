@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CHROME_COLOUR_TOKENS, chromeTokens } from './chromeTheme'
 import { TERM_PRESETS, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
+import { composite } from '@core/renderer/lib/colour'
 import { WINDOW_EDGES } from '@shared/windowEdges'
 
 describe('chromeTokens', () => {
@@ -28,7 +29,7 @@ describe('chromeTokens', () => {
   )
   it('wears a chosen accent exactly when the ground can show it', () => {
     const theme = resolveTermTheme('prism')
-    const { vars } = chromeTokens(theme, 100, undefined, 'hairline', '#e07a2f')
+    const { vars } = chromeTokens(theme, 1, undefined, 'hairline', '#e07a2f')
     expect(vars['--p-accent']).toBe('#e07a2f')
     // Everything derived from the accent follows it, and still reads.
     expect(contrastRatio(vars['--p-on-accent'], vars['--p-accent'])).toBeGreaterThanOrEqual(3)
@@ -40,7 +41,7 @@ describe('chromeTokens', () => {
     (id) => {
       // Near-black and near-white: one of them is invisible on every theme.
       for (const pick of ['#0a0a0a', '#f7f7f7']) {
-        const { vars } = chromeTokens(resolveTermTheme(id), 100, undefined, 'hairline', pick)
+        const { vars } = chromeTokens(resolveTermTheme(id), 1, undefined, 'hairline', pick)
         for (const ground of [vars['--p-bg-solid'], vars['--p-side-flat']]) {
           expect(contrastRatio(vars['--p-accent'], ground), `${pick} on ${ground}`).toBeGreaterThanOrEqual(3)
         }
@@ -53,7 +54,7 @@ describe('chromeTokens', () => {
     // replaced; the mode is MEASURED, so a white ground on a dark theme turns
     // the window light, and every ink is floored against the new ground.
     const theme = resolveTermTheme('pt-default')
-    const { vars, mode } = chromeTokens({ ...theme, background: '#f4f1ea' }, 100, '#fe8f34')
+    const { vars, mode } = chromeTokens({ ...theme, background: '#f4f1ea' }, 1, '#fe8f34')
     expect(mode).toBe('light')
     expect(vars['--p-bg-solid']).toBe('#f4f1ea')
     expect(contrastRatio(vars['--p-text'], vars['--p-bg-solid'])).toBeGreaterThanOrEqual(4.5)
@@ -61,13 +62,13 @@ describe('chromeTokens', () => {
   })
   it('follows the theme when nothing is chosen', () => {
     const theme = resolveTermTheme('prism')
-    expect(chromeTokens(theme, 100, undefined, 'hairline', null).vars).toEqual(chromeTokens(theme).vars)
+    expect(chromeTokens(theme, 1, undefined, 'hairline', null).vars).toEqual(chromeTokens(theme).vars)
   })
   it('publishes every colour token the components read', () => {
     // The components were transplanted from Prism and read Prism's token names.
     // A name missing here is a surface painted by the stylesheet's fallback,
     // which is the default theme's colour under somebody else's theme.
-    for (const opacity of [100, 60]) {
+    for (const opacity of [1, 153 / 255]) {
       const { vars } = chromeTokens(resolveTermTheme('prism'), opacity)
       for (const name of CHROME_COLOUR_TOKENS) {
         expect(vars[name], name).toMatch(/^#[0-9a-f]{6}([0-9a-f]{2})?$/i)
@@ -80,7 +81,7 @@ describe('chromeTokens', () => {
   })
   it('paints a translucent ground only when asked', () => {
     expect(chromeTokens(resolveTermTheme('prism')).vars['--p-bg']).toMatch(/^#[0-9a-f]{6}$/i)
-    const glass = chromeTokens(resolveTermTheme('prism'), 60).vars
+    const glass = chromeTokens(resolveTermTheme('prism'), 153 / 255).vars
     // One sheet: the ground, the title bar and the strip carry the same alpha.
     for (const name of ['--p-bg', '--p-side', '--p-title', '--p-tabs']) {
       expect(glass[name], name).toMatch(/^#[0-9a-f]{6}99$/i)
@@ -142,13 +143,13 @@ describe('the window edges', () => {
     expect(light['--p-line']).toBe('#0000001f')
     for (const id of ['prism', 'github']) {
       const t = resolveTermTheme(id)
-      expect(chromeTokens(t, 100, undefined, 'hairline').vars).toEqual(chromeTokens(t).vars)
+      expect(chromeTokens(t, 1, undefined, 'hairline').vars).toEqual(chromeTokens(t).vars)
     }
   })
 
   it.each(['prism', 'github'])('%s: none < faint < hairline < solid, on both line tokens', (id) => {
     const of = (e: (typeof WINDOW_EDGES)[number]): Record<string, string> =>
-      chromeTokens(resolveTermTheme(id), 100, undefined, e).vars
+      chromeTokens(resolveTermTheme(id), 1, undefined, e).vars
     for (const name of LINES) {
       expect(alpha(of('none')[name]), name).toBe(0)
       expect(alpha(of('faint')[name]), name).toBeGreaterThan(0)
@@ -161,7 +162,7 @@ describe('the window edges', () => {
     // A border keeps its pixel of layout, so nothing in the window moves when
     // the edges go; and every token stays hex, which the rest of this file
     // already demands of the whole table.
-    const { vars } = chromeTokens(resolveTermTheme('prism'), 100, undefined, 'none')
+    const { vars } = chromeTokens(resolveTermTheme('prism'), 1, undefined, 'none')
     expect(vars['--p-divider']).toBe('#ffffff00')
     expect(vars['--p-line']).toBe('#ffffff00')
   })
@@ -171,7 +172,7 @@ describe('the window edges', () => {
     // those would be a second theme picker.
     const base = chromeTokens(resolveTermTheme('dracula')).vars
     for (const e of WINDOW_EDGES) {
-      const v = chromeTokens(resolveTermTheme('dracula'), 100, undefined, e).vars
+      const v = chromeTokens(resolveTermTheme('dracula'), 1, undefined, e).vars
       for (const name of CHROME_COLOUR_TOKENS) {
         if ((LINES as readonly string[]).includes(name)) continue
         expect(v[name], `${e} ${name}`).toBe(base[name])
@@ -181,6 +182,64 @@ describe('the window edges', () => {
 
   it('reads anything it does not know as the default', () => {
     const t = resolveTermTheme('prism')
-    expect(chromeTokens(t, 100, undefined, 'dotted' as never).vars).toEqual(chromeTokens(t).vars)
+    expect(chromeTokens(t, 1, undefined, 'dotted' as never).vars).toEqual(chromeTokens(t).vars)
+  })
+})
+
+// #114: the accent may be see-through. A FILL wears the alpha, a LINE never
+// does (`--p-accent-solid`), and text on a fill is chosen on what the eye
+// sees: the fill composited over each ground it sits on. Under a see-through
+// window, the text-bearing fills are flattened over the solid ground, since
+// 4.5:1 cannot be held over an unknown desktop (owner decision 5).
+describe('a see-through accent', () => {
+  const HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/
+  const alphaByte = (hex: string): number => (hex.length === 9 ? parseInt(hex.slice(7), 16) : 255)
+  it.each(TERM_PRESETS.map((p) => p.id))('%s: fills see-through, lines solid, text 4.5:1 on the composite', (id) => {
+    for (const pick of ['#e07a2f80', '#3b82f633', '#f7f7f7cc', '#0a0a0a99']) {
+      const { vars } = chromeTokens(resolveTermTheme(id), 1, undefined, 'hairline', pick)
+      for (const v of Object.values(vars)) expect(v).toMatch(HEX)
+      expect(vars['--p-accent'], pick).toMatch(/^#[0-9a-f]{8}$/)
+      expect(alphaByte(vars['--p-accent'])).toBe(alphaByte(pick))
+      expect(vars['--p-sel-bg']).toMatch(/^#[0-9a-f]{8}$/)
+      expect(vars['--p-accent-solid']).toMatch(/^#[0-9a-f]{6}$/)
+      expect(vars['--p-accent-hi']).toMatch(/^#[0-9a-f]{6}$/)
+      for (const ground of [vars['--p-bg-solid'], vars['--p-side-flat']]) {
+        // The line is held to the non-text floor, as an opaque accent is.
+        expect(contrastRatio(vars['--p-accent-solid'], ground), `${pick} line on ${ground}`).toBeGreaterThanOrEqual(3)
+        for (const fill of ['--p-accent', '--p-sel-bg']) {
+          const seen = composite(vars[fill], ground)
+          expect(contrastRatio(vars['--p-on-accent'], seen), `${pick} ${fill} text on ${ground}`).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+    }
+  })
+  it('keeps the picked colour where the ground can show it', () => {
+    const { vars } = chromeTokens(resolveTermTheme('pt-default'), 1, undefined, 'hairline', '#e07a2f80')
+    expect(vars['--p-accent-solid']).toBe('#e07a2f')
+  })
+  it('an opaque accent publishes its solid as itself', () => {
+    for (const id of TERM_PRESETS.map((p) => p.id)) {
+      const { vars } = chromeTokens(resolveTermTheme(id))
+      expect(vars['--p-accent-solid']).toBe(vars['--p-accent'])
+      const picked = chromeTokens(resolveTermTheme(id), 1, undefined, 'hairline', '#e07a2f').vars
+      expect(picked['--p-accent-solid']).toBe(picked['--p-accent'])
+    }
+  })
+  it.each(TERM_PRESETS.map((p) => p.id))('%s: under a see-through ground the text fills are flattened', (id) => {
+    const { vars } = chromeTokens(resolveTermTheme(id), 153 / 255, undefined, 'hairline', '#e07a2f80')
+    expect(vars['--p-bg']).toMatch(/^#[0-9a-f]{6}99$/)
+    expect(vars['--p-accent']).toMatch(/^#[0-9a-f]{6}$/)
+    expect(vars['--p-sel-bg']).toMatch(/^#[0-9a-f]{6}$/)
+    expect(contrastRatio(vars['--p-on-accent'], vars['--p-accent'])).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(vars['--p-on-accent'], vars['--p-sel-bg'])).toBeGreaterThanOrEqual(4.5)
+    // What the fill showed over the solid ground is what it shows now.
+    const open = chromeTokens(resolveTermTheme(id), 1, undefined, 'hairline', '#e07a2f80').vars
+    expect(vars['--p-sel-bg']).toBe(composite(open['--p-sel-bg'], vars['--p-bg-solid']))
+  })
+  it('--p-bg-solid is always flat, whatever the ground alpha (main is only ever sent it)', () => {
+    for (const a of [0.3, 0.5, 153 / 255, 1]) {
+      expect(chromeTokens(resolveTermTheme('prism'), a).vars['--p-bg-solid']).toMatch(/^#[0-9a-f]{6}$/)
+      expect(chromeTokens({ ...resolveTermTheme('prism'), background: '#10203099' }, a).vars['--p-bg-solid']).toBe('#102030')
+    }
   })
 })
