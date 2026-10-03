@@ -106,6 +106,24 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
    `ipcRenderer` / `ipcMain` / clipboard; the core imports nothing from
    `electron`.
 
+**THE COLOUR PICKER (#112)** is the third, under the same bar (owner,
+2026-10-03: "the colour pickers should be the same for both apps, i need an
+input field for a color code and an alpha per colour on every colour setting").
+`renderer/settings/ColourPicker.tsx` (`ColourField`, `ColourPopover`, props
+only), `renderer/lib/colour.ts` (parse, the one stored form `#rrggbb` or
+`#rrggbbaa`, `composite`, `legibleOn`, `inkOn`, `selectionFor`,
+`colourCommit`) and `renderer/lib/colourFormat.ts` (HEX, RGBA or HSLA, per
+viewer, display only). A host passes `onRevert` on every row that can follow
+the theme, so Escape gives it back unset. The popover is a portal, so the core
+needs `react-dom` as a peer. Its DOM contract (both apps' e2e read it): the
+code field is the row's only `<input>` with no `type`, `aria-label` = the
+label; the swatch is `button[data-colour-swatch]` "Pick <label>"; the popover
+is `[data-colour-popover][role="dialog"]`; the sliders are named "Saturation
+and brightness", "Hue" and "Alpha"; `button[data-colour-format]` and
+`button[data-colour-eyedropper]`. A host's own window-level key listener must
+leave events from inside `[data-colour-popover]` alone. Spec:
+`docs/superpowers/specs/2026-10-03-colour-picker-alpha-design.md`.
+
 ## Rules for code in here (lint-enforced in Prism Terminal's `eslint.config.js`)
 
 - **Relative imports only.** No `@shared` / `@renderer` / `@core` aliases: a
