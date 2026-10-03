@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom'
 import {
   alphaPct,
+  snapAlphaStep,
   colourCommit,
   fitAlpha,
   format,
@@ -411,6 +412,7 @@ export function ColourPopover({
           min={alphaMin}
           max={alphaMax}
           disabled={!!alphaDisabled}
+          snap={snapAlpha}
           onChange={set}
         />
       )}
@@ -652,12 +654,16 @@ export function AlphaBar({
   min = 0,
   max = 1,
   disabled,
+  snap,
   onChange
 }: {
   hsv: Hsva
   min?: number
   max?: number
   disabled?: boolean
+  /** The host's own steps (Prism's glass levels): the bar shows and says the
+   *  alpha that will be STORED, and a key press always reaches the next one. */
+  snap?: (a: number) => number
   onChange: SetHsv
 }): JSX.Element {
   const colour = solid(hsvToRgb(hsv))
@@ -673,7 +679,7 @@ export function AlphaBar({
       disabled={disabled}
       checker
       background={`linear-gradient(to right, ${colour}00, ${colour})`}
-      onValue={(v, now) => onChange({ ...hsv, a: clamp(v / 100, min, max) }, now)}
+      onValue={(v, now) => onChange({ ...hsv, a: snapAlphaStep(v / 100, hsv.a, now, { min, max, snap }) }, now)}
     />
   )
 }
