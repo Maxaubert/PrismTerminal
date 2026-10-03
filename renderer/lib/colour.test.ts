@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   alphaHex,
   alphaPct,
+  saysAlpha,
   snapAlphaStep,
   alphaOf,
   colourCommit,
@@ -220,6 +221,21 @@ describe('colourCommit', () => {
   it('alpha:false drops a typed alpha', () => {
     expect(colourCommit('#11223380', '#aabbcc', { alpha: false })).toBe('#112233')
     expect(colourCommit('#aabbcc80', '#aabbcc', { alpha: false })).toBeNull()
+  })
+  it('a code with no alpha keeps the alpha in force (owner, 2026-10-03)', () => {
+    expect(colourCommit('#203040', '#0b0d12cb')).toBe('#203040cb')
+    expect(colourCommit('203040', '#0b0d12cb')).toBe('#203040cb')
+    expect(colourCommit('rgb(32, 48, 64)', '#0b0d1280')).toBe('#20304080')
+    expect(colourCommit('hsl(210, 33%, 19%)', '#0b0d1280')).toBe(toStored({ ...parseColour('hsl(210, 33%, 19%)')!, a: 128 / 255 }))
+  })
+  it('a code that says an alpha sets it, solid included', () => {
+    expect(colourCommit('#203040ff', '#0b0d12cb')).toBe('#203040')
+    expect(colourCommit('#20304080', '#0b0d12cb')).toBe('#20304080')
+    expect(colourCommit('rgba(32, 48, 64, 1)', '#0b0d1280')).toBe('#203040')
+  })
+  it('saysAlpha reads the code, not the colour', () => {
+    expect([saysAlpha('#abc'), saysAlpha('#abcd'), saysAlpha('aabbcc'), saysAlpha('#aabbcc80')]).toEqual([false, true, false, true])
+    expect([saysAlpha('rgb(1,2,3)'), saysAlpha('rgba(1,2,3,0.5)'), saysAlpha('hsl(1 2% 3% / 50%)')]).toEqual([false, true, true])
   })
   it('clamps to alphaMin and alphaMax', () => {
     expect(colourCommit('#11223300', '#aabbcc', { alphaMin: 0.3 })).toBe('#1122334d')
