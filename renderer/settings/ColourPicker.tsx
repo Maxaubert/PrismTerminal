@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  alphaPct,
   colourCommit,
   fitAlpha,
   format,
@@ -291,7 +292,9 @@ export function ColourPopover({
   }
 
   // Under the swatch, or above it when there is no room below; inside the
-  // window either way.
+  // window either way. Placed again when the format changes: every code field
+  // widens with it (76px to 172px), and in the theme editor's grid that moves
+  // every swatch, this one included (#113 review).
   useLayoutEffect(() => {
     const place = (): void => {
       const box = root.current
@@ -311,7 +314,7 @@ export function ColourPopover({
       window.removeEventListener('resize', place)
       window.removeEventListener('scroll', place, true)
     }
-  }, [anchor])
+  }, [anchor, fmt])
 
   // The keyboard goes in with it, to the square.
   useEffect(() => {
@@ -534,6 +537,7 @@ const HUES = 'linear-gradient(to right, #f00 0%, #ff0 16.67%, #0f0 33.33%, #0ff 
 function Bar({
   label,
   value,
+  now,
   min,
   max,
   text,
@@ -544,6 +548,8 @@ function Bar({
 }: {
   label: string
   value: number
+  /** What aria-valuenow says, in whole steps. */
+  now: number
   min: number
   max: number
   text: string
@@ -560,7 +566,7 @@ function Bar({
       aria-label={label}
       aria-valuemin={min}
       aria-valuemax={max}
-      aria-valuenow={Math.round(value)}
+      aria-valuenow={now}
       aria-valuetext={text}
       aria-disabled={disabled || undefined}
       {...drag}
@@ -660,9 +666,10 @@ export function AlphaBar({
     <Bar
       label="Alpha"
       value={pct}
-      min={Math.round(min * 100)}
-      max={Math.round(max * 100)}
-      text={`${Math.round(pct)} percent opaque`}
+      now={alphaPct(hsv.a)}
+      min={alphaPct(min)}
+      max={alphaPct(max)}
+      text={`${alphaPct(hsv.a)} percent opaque`}
       disabled={disabled}
       checker
       background={`linear-gradient(to right, ${colour}00, ${colour})`}

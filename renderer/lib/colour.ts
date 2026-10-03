@@ -206,6 +206,14 @@ export function alphaHex(a: number): string {
   return Math.round(a * 255).toString(16).padStart(2, '0')
 }
 
+/** An alpha in whole percent, where only opaque reads 100 and only clear
+ *  reads 0. The Selection's cap of 254/255 rounds to 100, and a screen reader
+ *  told "100 percent opaque" of a selection xterm draws see-through is told
+ *  wrong (#113 review). */
+export function alphaPct(a: number): number {
+  return a >= 1 ? 100 : a <= 0 ? 0 : clamp(Math.round(a * 100), 1, 99)
+}
+
 /** `#rrggbb` of any parseable colour, its alpha dropped; `fallback` else. */
 export function opaque(c: string, fallback = '#000000'): string {
   const p = parseColour(c)

@@ -1,6 +1,6 @@
 import { deriveAnsi, legiblePalette, normalizeColor, type Ansi16 } from './termAnsi'
 import { liveThemeId } from './termThemeRetired'
-import { customTermTheme } from './termLook'
+import { customTermTheme, type CustomTermTheme } from './termLook'
 import { composite, legibleOn, opaque, parseColour } from './colour'
 import { followsHostStyle, hostDefaults } from '../host'
 
@@ -351,6 +351,30 @@ export function presetAccent(themeId: string): string | undefined {
 }
 
 /**
+ * A Custom palette as the terminal draws it (see `resolveTermTheme`), from the
+ * palette itself rather than the store: the theme editor's preview and its
+ * derived Selection read a DRAFT, and the wall's Custom card reads the saved
+ * one, and both must show what the terminal shows (#113 review: raw alphas
+ * drew a 30% foreground the terminal floors to 4.5:1).
+ */
+export function resolveCustomTheme(c: CustomTermTheme, ground?: string | null): TermTheme {
+  const own = opaque(c.bg, '#0b0b0f')
+  const g = ground && parseColour(ground) ? opaque(ground) : own
+  const cursor = legibleOn(c.cursor, g, 3)
+  const ansi: Record<string, string> = {}
+  for (const [k, v] of Object.entries(c.ansi)) ansi[k] = composite(v, g)
+  return {
+    background: c.bg,
+    foreground: legibleOn(c.fg, g, 4.5),
+    cursor,
+    // A chosen selection keeps its alpha; else the cursor's, derived as it
+    // always was (from the OPAQUE cursor: a hex8 one gave ten digits).
+    selectionBackground: c.selection ?? `${cursor}55`,
+    ...legiblePalette(ansi, own)
+  }
+}
+
+/**
  * `ground`: the colour the terminal is really painted on, where the host lets
  * somebody pick one (`terminalGround`); absent, the theme's own background.
  *
@@ -367,22 +391,7 @@ export function resolveTermTheme(themeId: string, ground?: string | null): TermT
   if (themeId === 'style' && followsHostStyle()) return readTermTheme()
   if (themeId === 'custom') {
     const c = customTermTheme()
-    if (c) {
-      const own = opaque(c.bg, '#0b0b0f')
-      const g = ground && parseColour(ground) ? opaque(ground) : own
-      const cursor = legibleOn(c.cursor, g, 3)
-      const ansi: Record<string, string> = {}
-      for (const [k, v] of Object.entries(c.ansi)) ansi[k] = composite(v, g)
-      return {
-        background: c.bg,
-        foreground: legibleOn(c.fg, g, 4.5),
-        cursor,
-        // A chosen selection keeps its alpha; else the cursor's, derived as it
-        // always was (from the OPAQUE cursor: a hex8 one gave ten digits).
-        selectionBackground: c.selection ?? `${cursor}55`,
-        ...legiblePalette(ansi, own)
-      }
-    }
+    if (c) return resolveCustomTheme(c, ground)
   }
   // DEFAULT_TERM_THEME is in the list; that find cannot miss, the last fallback is for the type.
   const p =

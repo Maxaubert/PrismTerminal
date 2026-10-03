@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   alphaHex,
+  alphaPct,
   alphaOf,
   colourCommit,
   composite,
@@ -222,5 +223,20 @@ describe('colourCommit', () => {
   it('clamps to alphaMin and alphaMax', () => {
     expect(colourCommit('#11223300', '#aabbcc', { alphaMin: 0.3 })).toBe('#1122334d')
     expect(colourCommit('#112233', '#aabbcc', { alphaMax: 254 / 255 })).toBe('#112233fe')
+  })
+})
+
+describe('alphaPct (#113 review)', () => {
+  it('only opaque reads 100 and only clear reads 0', () => {
+    expect(alphaPct(1)).toBe(100)
+    expect(alphaPct(254 / 255)).toBe(99)
+    expect(alphaPct(0.995)).toBe(99)
+    expect(alphaPct(0)).toBe(0)
+    expect(alphaPct(1 / 255)).toBe(1)
+  })
+  it('is the whole percent everywhere else', () => {
+    expect(alphaPct(0.5)).toBe(50)
+    expect(alphaPct(0.3)).toBe(30)
+    expect(alphaPct(128 / 255)).toBe(50)
   })
 })

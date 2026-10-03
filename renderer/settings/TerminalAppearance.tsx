@@ -30,12 +30,11 @@ import {
   useTermThemeId,
   type CustomTermTheme
 } from '../lib/termLook'
-import { resolveTermTheme, watchTermTheme, TERM_PRESETS } from '../lib/termTheme'
+import { resolveCustomTheme, resolveTermTheme, watchTermTheme, TERM_PRESETS } from '../lib/termTheme'
 import { useAgentColors } from '../lib/agentColors'
 import { luminance, normalizeColor } from '../lib/termAnsi'
 import { Pref, RESET_LINK, ROWS, SaveButton, Select, Switch, ThemeHead } from './fields'
 import { ColourField } from './ColourPicker'
-import { opaque } from '../lib/colour'
 import { AgentIndicatorSetting, AttentionSettings } from './TerminalBehaviour'
 import ThemeSwitchAsk from '../components/ThemeSwitchAsk'
 
@@ -234,11 +233,16 @@ function TermThemeEditor({
       <ColourField label={label} value={value} onChange={(v) => set(key, v)} {...more} />
     </div>
   )
-  // The selection shows what is drawn until one is chosen: the cursor's
-  // colour at 55. Its alpha stops at 254/255, since xterm draws an OPAQUE
-  // selection at 0.3 (ThemeService, issue 2737) and what is picked must be
-  // what is drawn. Escape on a selection never chosen leaves it unchosen.
+  // The selection shows what is drawn until one is chosen: the cursor AS
+  // DRAWN (composited and floored, which a see-through cursor is) at 55, the
+  // terminal's own derivation, so a nudge starts from what was on screen.
+  // Its alpha stops at 254/255, since xterm draws an OPAQUE selection at 0.3
+  // (ThemeService, issue 2737) and what is picked must be what is drawn.
+  // Escape on a selection never chosen leaves it unchosen. The preview card
+  // draws the same resolution: raw alphas would show a 30% foreground the
+  // terminal floors to 4.5:1.
   const chosenSelection = draft.selection
+  const drawn = useMemo(() => resolveCustomTheme(draft), [draft])
   return (
     // A popup, not an inline section: below the card grid the editor sat out
     // of view. data-owns-escape keeps App's window Escape away; the backdrop
@@ -262,7 +266,7 @@ function TermThemeEditor({
             {well('Background', 'bg', draft.bg, { alpha: false })}
             {well('Foreground', 'fg', draft.fg)}
             {well('Cursor', 'cursor', draft.cursor)}
-            {well('Selection', 'selection', chosenSelection ?? `${opaque(draft.cursor)}55`, {
+            {well('Selection', 'selection', chosenSelection ?? drawn.selectionBackground, {
               alphaMax: 254 / 255,
               onRevert: () => set('selection', chosenSelection)
             })}
@@ -272,10 +276,10 @@ function TermThemeEditor({
             id="custom-preview"
             name="Custom"
             on
-            bg={draft.bg}
-            fg={draft.fg}
-            cursor={draft.cursor}
-            ansi={cardAnsi(draft.ansi)}
+            bg={drawn.background}
+            fg={drawn.foreground}
+            cursor={drawn.cursor}
+            ansi={cardAnsi(drawn as unknown as Record<string, string>)}
             onPick={() => {}}
           />
         </div>
@@ -400,6 +404,9 @@ export function TerminalAppearanceSettings({
   const questionCol = useAgentQuestionColorChoice()
   const inForce = useAgentColors()
   const custom = useCustomTermTheme()
+  // The Custom card draws what the terminal draws (#113 review), not the raw
+  // alphas; resolved once per saved Custom, which the store already caches.
+  const customDrawn = useMemo(() => (custom ? resolveCustomTheme(custom) : null), [custom])
   // What the HOST's style looks like right now, for its card; re-read when the
   // style repaints :root. Only a host WITH styles has one (Prism).
   const [styleTheme, setStyleTheme] = useState(() => resolveTermTheme(followsHostStyle() ? 'style' : termThemeId()))
@@ -593,10 +600,10 @@ export function TerminalAppearanceSettings({
                 id="custom"
                 name="Custom"
                 on={themeId === 'custom'}
-                bg={custom.bg}
-                fg={custom.fg}
-                cursor={custom.cursor}
-                ansi={cardAnsi(custom.ansi)}
+                bg={customDrawn!.background}
+                fg={customDrawn!.foreground}
+                cursor={customDrawn!.cursor}
+                ansi={cardAnsi(customDrawn as unknown as Record<string, string>)}
                 onPick={() => pick('custom')}
                 onEdit={() => setEditing(paletteOf('custom'))}
               />
