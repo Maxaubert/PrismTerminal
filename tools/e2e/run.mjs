@@ -379,7 +379,7 @@ const scenarios = {
       ok(label.align === 'center', `tab names are centred (${label.align})`)
       ok(label.width >= label.four - 1, `a one-letter tab is at least four characters wide (${label.width.toFixed(1)} vs ${label.four.toFixed(1)})`)
 
-      // Three Claudes side by side, all working: ONE bar across them.
+      // Three Claudes side by side, all working.
       for (const i of [0, 1, 2]) {
         await tab(i).click()
         await polled(page)
@@ -387,19 +387,17 @@ const scenarios = {
       }
       for (const i of [0, 1, 2]) await at(i, WORK)
       await until(async () => (await state(0)) === 'working' && (await state(1)) === 'working' && (await state(2)) === 'working', 8000, 50)
-      const joined = await page.evaluate(() => {
-        const runs = [...document.querySelectorAll('[data-working-run]')].map((r) => r.getBoundingClientRect())
-        const tabs = [...document.querySelectorAll('[data-tab]')].slice(0, 3).map((t) => t.getBoundingClientRect())
-        return { runs: runs.map((r) => [Math.round(r.left), Math.round(r.width)]), span: [Math.round(tabs[0].left), Math.round(tabs[2].right - tabs[0].left)], single: document.querySelectorAll('[data-tab] .p-agent-run').length }
-      })
-      ok(joined.runs.length === 1 && Math.abs(joined.runs[0][0] - joined.span[0]) <= 1 && Math.abs(joined.runs[0][1] - joined.span[1]) <= 2, `three working neighbours draw one bar across all three (${JSON.stringify(joined)})`)
-      ok(joined.single === 0, 'and none of their own')
+      // ONE BAR PER TAB (owner, 2026-10-03: "if multiple tabs in a row are
+      // working they share one working indicator ... i want that to be one for
+      // each tab, like it was before"): three working neighbours, three bars.
+      const bars = await page.evaluate(() => [...document.querySelectorAll('[data-tab]')].slice(0, 3).map((t) => t.querySelectorAll('.p-agent-run').length))
+      ok(bars.join(',') === '1,1,1', `three working neighbours each draw their own bar (${bars.join(',')})`)
+      ok(await page.evaluate(() => document.querySelectorAll('[data-working-run]').length === 0), 'and no shared bar across them')
       await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/attention-run.png') }).catch(() => {})
-      // The middle one stops: 1 and 3 are not neighbours, so each has its own.
       await at(1, IDLE)
       ok(
-        !!(await until(() => page.evaluate(() => document.querySelectorAll('[data-working-run]').length === 0 && document.querySelectorAll('[data-tab] .p-agent-run').length === 2), 5000, 50)),
-        'with the middle one idle, the two apart each draw their own'
+        !!(await until(() => page.evaluate(() => document.querySelectorAll('[data-tab] .p-agent-run').length === 2), 5000, 50)),
+        'with the middle one idle, the other two keep theirs'
       )
 
       // A QUESTION on a background tab: Claude's footer on screen, title idle.

@@ -1,9 +1,7 @@
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
-  type CSSProperties,
   type JSX,
   type MouseEvent,
   type PointerEvent
@@ -17,7 +15,6 @@ import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from 
 import { ContextMenu } from './ContextMenu'
 import { MenuIcon } from './MenuIcon'
 import { useTabWidth } from '../lib/tabWidthPrefs'
-import { workingRuns } from '../lib/workingRuns'
 
 /**
  * The open shells, as a row under the title bar.
@@ -115,37 +112,6 @@ export function TabStrip({
   const { working: agentColor, finished: doneColor, question: questionColor } = useAgentColors()
   const doneOn = useAgentDoneOn()
   const questionOn = useAgentQuestionOn()
-  // Which tabs are WORKING, in strip order, for the joined bar below.
-  const workingAt = tabs.map((t) => indicator === 'minimal' && agentIds.has(t.id) && workingIds.has(t.id))
-  const runs = workingRuns(workingAt)
-  const inRun = new Set(runs.flatMap((r) => Array.from({ length: r.end - r.start + 1 }, (_, k) => r.start + k)))
-  const [runBars, setRunBars] = useState<Array<{ key: string; left: number; width: number; one: number }>>([])
-  const runKey = runs.map((r) => `${tabs[r.start].id}:${tabs[r.end].id}`).join('|')
-  useLayoutEffect(() => {
-    const box = strip.current
-    if (!box || !runs.length) {
-      setRunBars((prev) => (prev.length ? [] : prev))
-      return
-    }
-    const measure = (): void => {
-      const boxes = [...box.querySelectorAll<HTMLElement>('[data-tab]')]
-      setRunBars(
-        runs.map((r) => {
-          const a = boxes[r.start]
-          const b = boxes[r.end]
-          const left = a?.offsetLeft ?? 0
-          const width = b ? b.offsetLeft + b.offsetWidth - left : 0
-          return { key: `${tabs[r.start].id}:${tabs[r.end].id}`, left, width, one: width / (r.end - r.start + 1) }
-        })
-      )
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(box)
-    return () => ro.disconnect()
-    // runKey stands for `runs` and `tabs`, which are new arrays every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runKey, width, tabs.map((t) => t.cwd).join('\n')])
   // Full mode fills the tab with the colour. Text biases WHITE: strict
   // contrast maths picks black on a mid orange or indigo, but white on a
   // saturated fill is the look; black only wins on genuinely light fills
@@ -453,7 +419,7 @@ export function TabStrip({
                 aria-hidden
               />
             )}
-            {working && indicator === 'minimal' && !inRun.has(i) && (
+            {working && indicator === 'minimal' && (
               <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] overflow-hidden" aria-hidden>
                 <span
                   className="p-agent-run absolute inset-y-0 w-[42%] rounded-full"
@@ -542,33 +508,6 @@ export function TabStrip({
           </div>
         )
       })}
-      {/* ONE BAR ACROSS NEIGHBOURING WORKING TABS (owner, 2026-09-28: "when
-          tabs 1, 2 and 3 are all working ... there should be one single working
-          indicator that moves across all the tabs and not 3 separate"). A run
-          of two or more draws one bar over their combined width; its length
-          and speed are a single tab's, so a wide run is not a blur. Tabs apart
-          keep their own. Measured from the tabs, so it follows every resize. */}
-      {runBars.map((b) => (
-        <span
-          key={b.key}
-          data-working-run
-          className="pointer-events-none absolute bottom-0 z-[6] h-[3px] overflow-hidden"
-          style={{ left: b.left, width: b.width }}
-          aria-hidden
-        >
-          <span
-            className="p-agent-run-span absolute inset-y-0 rounded-full"
-            style={
-              {
-                background: agentColor,
-                width: b.one * 0.42,
-                '--run-bar': `${b.one * 0.42}px`,
-                animationDuration: `${(1.25 * (b.width + b.one * 0.42)) / (b.one * 1.42)}s`
-              } as CSSProperties
-            }
-          />
-        </span>
-      ))}
       <button
         className="no-drag my-1 grid w-7 shrink-0 place-items-center rounded text-[var(--p-icon)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)]"
         title="New tab (Ctrl+T). Right-click for recent folders"
