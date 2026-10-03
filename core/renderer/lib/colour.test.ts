@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   alphaHex,
   alphaPct,
+  snapAlphaStep,
   alphaOf,
   colourCommit,
   composite,
@@ -238,5 +239,25 @@ describe('alphaPct (#113 review)', () => {
     expect(alphaPct(0.5)).toBe(50)
     expect(alphaPct(0.3)).toBe(30)
     expect(alphaPct(128 / 255)).toBe(50)
+  })
+})
+
+describe('snapAlphaStep', () => {
+  // Prism's glass: 100% is solid, anything from 95% up to it is 95%.
+  const snap = (a: number): number => (a >= 1 ? 1 : Math.min(a, 0.95))
+  it('without host steps, the value as it is', () => {
+    expect(snapAlphaStep(0.42, 1, true)).toBe(0.42)
+  })
+  it('shows the stored step, not the pointer value', () => {
+    expect(snapAlphaStep(0.98, 1, false, { snap })).toBe(0.95)
+  })
+  it('one key press down from solid lands on 95', () => {
+    expect(snapAlphaStep(0.99, 1, true, { snap })).toBe(0.95)
+  })
+  it('one key press up from 95 reaches solid, never a dead press', () => {
+    expect(snapAlphaStep(0.96, 0.95, true, { snap })).toBe(1)
+  })
+  it('below the steps a key press moves one percent', () => {
+    expect(snapAlphaStep(0.6, 0.61, true, { snap })).toBe(0.6)
   })
 })

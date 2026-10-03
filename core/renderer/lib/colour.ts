@@ -374,3 +374,30 @@ export function colourCommit(draft: string | null, value: string, range: AlphaRa
   const next = toStored(fitAlpha(typed, range))
   return was && next === toStored(fitAlpha(was, range)) ? null : next
 }
+
+/**
+ * Where the alpha bar lands for a pointer or key value `a` when the host has
+ * steps of its own (Prism's glass levels). The SNAPPED alpha is what is drawn
+ * and announced (#251 review: the bar said 99, 98, 97, 96 while 95 was
+ * stored), and a KEY press that would land on the step already held walks on
+ * to the next distinct one, so no press is dead. A drag simply snaps.
+ */
+export function snapAlphaStep(
+  a: number,
+  held: number,
+  key: boolean,
+  { min = 0, max = 1, snap }: { min?: number; max?: number; snap?: (a: number) => number } = {}
+): number {
+  const fit = (n: number): number => Math.min(max, Math.max(min, n))
+  const want = fit(a)
+  if (!snap) return want
+  const at = snap(want)
+  const was = snap(held)
+  if (!key || at !== was || Math.abs(want - held) > 0.011) return at
+  const dir = want > held ? 1 : -1
+  for (let p = Math.round(want * 100) + dir; p >= Math.round(min * 100) && p <= Math.round(max * 100); p += dir) {
+    const next = snap(fit(p / 100))
+    if (next !== was) return next
+  }
+  return was
+}
