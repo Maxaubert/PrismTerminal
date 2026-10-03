@@ -194,6 +194,9 @@ const NEUTRAL: TermHostConfig['defaults'] = {
 export const hostDefaults = (): TermHostConfig['defaults'] => host?.defaults ?? NEUTRAL
 export const followsHostStyle = (): boolean => host?.followsHostStyle ?? false
 export const paintsGround = (): boolean => host?.paintsGround ?? true
+/** The host's picked ground (`terminalGround`), null where there is none or no
+ *  host has spoken. */
+export const hostGround = (): string | null => host?.terminalGround?.() ?? null
 
 /** For tests, and for a host that tears down. */
 export function resetTermCore(): void {

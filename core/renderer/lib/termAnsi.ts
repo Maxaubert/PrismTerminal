@@ -167,7 +167,12 @@ export function deriveAnsi(rawBg: string, rawFg: string): Ansi16 {
  * can, so a scheme that already reads keeps its exact colours.
  */
 export function legiblePalette<T extends Ansi16 | Record<string, string>>(ansi: T, bg: string): T {
+  // Inputs normalised first (#112): a colour that is not plain #rrggbb (an
+  // rgba(), a hex8 with its alpha) must never reach hexToRgb, which reads it
+  // as NaN. A plain #rrggbb passes through as it is, case and all.
+  const plain = (c: string, fallback: string): string => (/^#[0-9a-f]{6}$/i.test(c) ? c : normalizeColor(c, fallback))
+  const ground = plain(bg, '#101215')
   const out: Record<string, string> = { ...ansi }
-  for (const k of Object.keys(out)) out[k] = ensureContrast(out[k], bg)
+  for (const k of Object.keys(out)) out[k] = ensureContrast(plain(out[k], '#888888'), ground)
   return out as T
 }
