@@ -348,8 +348,20 @@ function stored(c: unknown): string | null {
  * background, 1 for a preset (presets are opaque). The same order as the
  * window paints in. Since #114 this IS the window's see-through under
  * acrylic, in place of the Opacity slider.
+ *
+ * Where it is the window's see-through it is FLOORED on the way out, as the
+ * slider's reader clamped to 30-100 (review of #115): the pickers clamp what
+ * they write, but a stored or hand-edited `#12121205` must not paint an all
+ * but invisible window. The floor is the byte 30% gives (0x4d), so every
+ * value a picker or the migration writes reads unchanged.
  */
 export function termGroundAlpha(): number {
+  const a = rawGroundAlpha()
+  return hostOwnsWindowAcrylic() ? Math.max(GROUND_ALPHA_MIN, a) : a
+}
+/** The lowest window see-through: Opacity 30's byte, round(0.3 * 255). */
+export const GROUND_ALPHA_MIN = 0x4d / 255
+function rawGroundAlpha(): number {
   const picked = hostGround()
   if (picked) return alphaOf(picked)
   if (termThemeId() === 'custom') {

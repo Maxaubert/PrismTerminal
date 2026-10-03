@@ -263,7 +263,22 @@ function WindowColours(): JSX.Element {
   const accent = useWindowAccent()
   const background = useWindowBackground()
   const [themeAccent, themeBg] = useSyncExternalStore(onColoursChange, themeColours).split('|')
-  const acrylic = useTermAcrylic()
+  const acrylicOn = useTermAcrylic()
+  // The material is Windows 11's (1809 has none): where main says it cannot
+  // be had, the window never shows the desktop, so the alpha is as inert as
+  // with the switch off, the rule the theme editor's Background follows.
+  // Null until main answers reads as supported, so the row does not flash.
+  const [acrylicOk, setAcrylicOk] = useState<boolean | null>(null)
+  useEffect(() => {
+    let live = true
+    void window.prism.acrylicSupported().then((ok) => {
+      if (live) setAcrylicOk(ok)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+  const acrylic = acrylicOn && acrylicOk !== false
   return (
     <>
       {/* THE BACKGROUND'S ALPHA IS THE WINDOW'S SEE-THROUGH (#114; owner,

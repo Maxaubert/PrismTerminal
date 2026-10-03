@@ -131,7 +131,9 @@ export function SaveButton({ dirty, onClick, title }: { dirty: boolean; onClick:
       title={dirty ? title : 'Nothing to save yet'}
       className={`shrink-0 rounded-[var(--p-radius-sm)] border px-3 py-1 text-[11.5px] font-semibold transition ${
         dirty
-          ? 'border-[var(--p-accent)] bg-[var(--p-accent)] text-[var(--p-on-accent)] hover:brightness-110'
+          ? // The edge is transparent over the fill: a see-through accent (#114)
+            // painted on both would lay its alpha twice there, a darker ring.
+            'border-transparent bg-[var(--p-accent)] text-[var(--p-on-accent)] hover:brightness-110'
           : 'cursor-default border-[color:var(--p-line)] bg-[var(--p-hover)] text-[var(--p-dim2)]'
       }`}
     >

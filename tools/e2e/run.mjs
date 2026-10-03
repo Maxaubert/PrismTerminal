@@ -3260,6 +3260,17 @@ const scenarios = {
         )
         return {
           accent: root.getPropertyValue('--p-accent').trim().toLowerCase(),
+          solid: root.getPropertyValue('--p-accent-solid').trim().toLowerCase(),
+          // The tab spinner's ring, drawn with its own classes: the line
+          // that reads --p-accent-solid (#114) needs no loading tab to sample.
+          spinner: (() => {
+            const span = document.createElement('span')
+            span.className = 'inline-block border-[1.5px] border-t-[var(--p-accent-solid)]'
+            document.body.appendChild(span)
+            const c = getComputedStyle(span).borderTopColor
+            span.remove()
+            return c
+          })(),
           hi: colour(root.getPropertyValue('--p-accent-hi').trim()),
           rule: rule ? getComputedStyle(rule).backgroundColor : null,
           stored: localStorage.getItem('prism.window.accent'),
@@ -3321,6 +3332,12 @@ const scenarios = {
     }, 8000)
     ok(!!glassAccent, `a hex8 accent publishes a see-through fill (${glassAccent?.accent}, stored ${glassAccent?.stored})`)
     ok(!!glassAccent && glassAccent.rule === glassAccent.hi && !/rgba/.test(glassAccent.rule ?? ''), `and the active tab's rule stays solid (${glassAccent?.rule})`)
+    // The rule reads --p-accent-hi, which never carried the alpha, so the
+    // check above alone proves nothing about the lines that read the accent
+    // (review of #115): the line token is the exact pick, opaque, and the
+    // spinner's ring drawn from it has no alpha.
+    ok(glassAccent?.solid === '#e07a2f', `the accent's line token is the pick, opaque (${glassAccent?.solid})`)
+    ok(glassAccent?.spinner === 'rgb(224, 122, 47)', `and the tab spinner's ring drawn from it is solid (${glassAccent?.spinner})`)
     const save = page.locator('[data-save-term]')
     const saveLook = () =>
       save.evaluate((el) => {

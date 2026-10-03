@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { followsHostStyle, hostDefaults, termHost } from '../host'
+import { followsHostStyle, hostDefaults, hostOwnsWindowAcrylic, termHost } from '../host'
 import {
   FONT_PCTS,
   TERM_FONTS,
@@ -358,9 +358,6 @@ function paletteOf(id: string): Pick<CustomTermTheme, 'bg' | 'fg' | 'cursor' | '
   }
 }
 
-/** The theme Background's alpha is the window's see-through here (#114). */
-const windowAcrylicOwned = (): boolean => termHost().acrylic.kind === 'window'
-
 /** Picking a theme returns the LOOK to its defaults: the theme is the whole
  *  setup. The indicator's volume is carried across, because it is a General
  *  setting here (how loudly a tab speaks, not what the terminal looks like)
@@ -431,7 +428,8 @@ export function TerminalAppearanceSettings({
   // material belongs to the app style and the row only lets it show through
   // the terminal ('style'), with no slider.
   const acrylic = termHost().acrylic
-  const windowAcrylic = acrylic.kind === 'window'
+  // The theme Background's alpha is the window's see-through here (#114).
+  const windowAcrylic = hostOwnsWindowAcrylic()
   useEffect(() => {
     if (acrylic.kind !== 'window') return
     let live = true
@@ -516,7 +514,7 @@ export function TerminalAppearanceSettings({
   // Only where that alpha is the window's (Prism has no such alpha).
   const ownByte = src ? Math.round(alphaOf(src.bg) * 255) : 255
   const termDirty =
-    JSON.stringify(extras) !== JSON.stringify(baseline) || (windowAcrylicOwned() && groundByte !== ownByte)
+    JSON.stringify(extras) !== JSON.stringify(baseline) || (windowAcrylic && groundByte !== ownByte)
   const saveTermSetup = (): void => {
     saveCustomTermTheme({ ...withGroundAlpha(paletteOf(termThemeId())), ...extras })
     setTermThemeId('custom')

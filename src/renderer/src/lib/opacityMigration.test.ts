@@ -87,6 +87,41 @@ describe('migrateOpacity', () => {
     expect(termGroundAlpha()).toBe(0x99 / 255)
   })
 
+  // Review of #115: step 1 gave Custom.bg the saved alpha, and a live 100 was
+  // skipped as "nothing to do", so an opaque window turned see-through.
+  it('a Custom saved at 60, left at a live 100 with acrylic on, stays opaque', () => {
+    localStorage.setItem(THEME, 'custom')
+    localStorage.setItem(ACRYLIC, '1')
+    localStorage.setItem(LIVE, '100')
+    localStorage.setItem(CUSTOM, custom({ acrylic: true, opacity: 60 }))
+    migrateOpacity()
+    expect(termGroundAlpha()).toBe(1)
+    expect(windowBackground()).toBe('#1d1f21')
+    // Picking Custom again still restores the SAVED see-through.
+    expect(customTermTheme()?.bg).toBe('#1d1f21' + byte(60))
+    expect(localStorage.getItem(LIVE)).toBeNull()
+  })
+
+  it('a Custom saved at 60 with no live value stored (read as 100) stays opaque', () => {
+    localStorage.setItem(THEME, 'custom')
+    localStorage.setItem(ACRYLIC, '1')
+    localStorage.setItem(CUSTOM, custom({ acrylic: true, opacity: 60 }))
+    migrateOpacity()
+    expect(termGroundAlpha()).toBe(1)
+    const once = JSON.stringify({ ...localStorage })
+    migrateOpacity()
+    expect(JSON.stringify({ ...localStorage })).toBe(once)
+  })
+
+  it('a Custom saved at 60 under a preset leaves the preset alone', () => {
+    localStorage.setItem(THEME, 'dracula')
+    localStorage.setItem(ACRYLIC, '1')
+    localStorage.setItem(CUSTOM, custom({ acrylic: true, opacity: 60 }))
+    migrateOpacity()
+    expect(windowBackground()).toBeNull()
+    expect(termGroundAlpha()).toBe(1)
+  })
+
   it('a Custom with a picked Background: the picked one takes the live value', () => {
     localStorage.setItem(THEME, 'custom')
     localStorage.setItem(ACRYLIC, '1')

@@ -25,8 +25,7 @@ const sameByte = (a: number, b: number): boolean => Math.round(a * 255) === Math
 
 export function migrateOpacity(): void {
   try {
-    foldSavedCustom()
-    foldLive()
+    foldLive(foldSavedCustom())
   } catch {
     /* a blocked store migrates nothing, and the window is opaque as before */
   }
@@ -38,44 +37,59 @@ export function migrateOpacity(): void {
  *    The saved slot never takes the live value, so picking Custom again
  *    restores the SAVED see-through, as it did. The field then goes (it is
  *    read by nothing, as `font` and `fontPct` are not).
+ *    Answers whether it gave `bg` an alpha, which the live step must then
+ *    weigh even when no live value was stored (that read as 100).
  */
-function foldSavedCustom(): void {
+function foldSavedCustom(): boolean {
   const raw = localStorage.getItem(CUSTOM_KEY)
-  if (!raw) return
+  if (!raw) return false
   let c: Record<string, unknown>
   try {
     c = JSON.parse(raw) as Record<string, unknown>
   } catch {
-    return // Corrupt: its own reader reads it as no Custom; not ours to fix.
+    return false // Corrupt: its own reader reads it as no Custom; not ours to fix.
   }
-  if (!c || typeof c !== 'object' || !('opacity' in c)) return
+  if (!c || typeof c !== 'object' || !('opacity' in c)) return false
   const { opacity, ...rest } = c
   const n = opacityPct(opacity)
+  let folded = false
   if (n < 100 && c.acrylic !== false && typeof c.bg === 'string' && parseColour(c.bg)) {
     rest.bg = withAlpha(c.bg, alphaFor(n))
+    folded = true
   }
   localStorage.setItem(CUSTOM_KEY, JSON.stringify(rest))
+  return folded
 }
 
 /**
- * 2. THE LIVE VALUE, which is what was painting. Only with acrylic on did it
- *    show; then it goes, in the order the window reads its ground:
- *    - onto the picked Background, when one is picked;
- *    - nowhere, when the theme is the Custom whose own bg already carries it;
+ * 2. THE LIVE VALUE, which is what was painting (100 when never stored, as the
+ *    old window read it). Only with acrylic on did it show; then it goes, in
+ *    the order the window reads its ground:
+ *    - onto the picked Background, when one is picked (at 100 the picked one
+ *      is already opaque and stays as it is);
+ *    - nowhere, when the theme is the Custom whose own bg now carries the
+ *      same alpha;
  *    - else onto a picked Background that is the theme's own opaque ground,
- *      at that alpha (a preset, or a Custom whose live value was not saved).
- *    Either way the old key is removed.
+ *      at that alpha: a preset below 100, or a Custom whose live value was
+ *      not the saved one. THAT INCLUDES A LIVE 100 over a Custom saved
+ *      see-through (review of #115): the window was opaque, and with step 1
+ *      alone it would have painted the saved alpha after the update.
+ *    The old key is removed. Runs only when there was something to migrate:
+ *    a live key, or a saved Custom step 1 just folded.
  */
-function foldLive(): void {
-  if (localStorage.getItem(LEGACY_OPACITY_KEY) === null) return
+function foldLive(customFolded: boolean): void {
+  const hasLive = localStorage.getItem(LEGACY_OPACITY_KEY) !== null
+  if (!hasLive && !customFolded) return
   const n = legacyTermOpacity()
-  if (termAcrylic() && n < 100) {
+  if (termAcrylic()) {
     const a = alphaFor(n)
     const picked = windowBackground()
     const own = termThemeId() === 'custom' ? customTermTheme() : null
-    if (picked) setWindowBackground(withAlpha(picked, a))
-    else if (!(own && sameByte(alphaOf(own.bg), a)))
+    if (picked) {
+      if (n < 100) setWindowBackground(withAlpha(picked, a))
+    } else if (own ? !sameByte(alphaOf(own.bg), a) : n < 100) {
       setWindowBackground(withAlpha(opaque(resolveTermTheme(termThemeId()).background, '#0b0b0f'), a))
+    }
   }
-  localStorage.removeItem(LEGACY_OPACITY_KEY)
+  if (hasLive) localStorage.removeItem(LEGACY_OPACITY_KEY)
 }
