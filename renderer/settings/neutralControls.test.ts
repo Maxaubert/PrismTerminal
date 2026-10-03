@@ -25,6 +25,16 @@ describe('settings controls', () => {
     }
   })
 
+  // #112: the colour picker's controls are settings controls too. Its buttons
+  // are ROW_BUTTON, its thumbs ink on a ring of the ground, and the accent is
+  // only ever a focus ring.
+  it("the colour picker's controls carry no accent", () => {
+    const src = readFileSync(resolve(__dirname, 'ColourPicker.tsx'), 'utf8')
+    const lines = src.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*\*)/.test(l))
+    for (const l of lines) expect(l.replace(/focus-visible:\S+/g, '').replace(/const FOCUS =.*/, ''), l).not.toMatch(ACCENT)
+    expect(src).toMatch(/\$\{ROW_BUTTON\}/)
+  })
+
   it('the save button still does', () => {
     const src = readFileSync(resolve(__dirname, 'fields.tsx'), 'utf8')
     const save = src.slice(src.indexOf('export function SaveButton'), src.indexOf('export function ThemeHead'))

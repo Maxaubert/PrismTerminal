@@ -30,8 +30,8 @@ import { ResumeSkeleton } from './ResumeSkeleton'
 import { parseOsc9 } from '../../shared/termCwd'
 import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
 import { onGround } from '../lib/termGround'
+import { xtermTheme, type XtermTheme } from '../lib/termXterm'
 import { followsHostStyle, paintsGround, termApi, termHost } from '../host'
-import { normalizeColor } from '../lib/termAnsi'
 import { findLinks, linkColor } from '../lib/termLinks'
 import { copyText } from '../lib/copyNotice'
 import { arrowKeys, caretClickAllowed, caretDelta, type ClickGate } from '../lib/termClickCaret'
@@ -92,65 +92,29 @@ interface Session {
 
 const sessions = new Map<string, Session>()
 
+/** The theme on the ground the panel really paints (the host's pick, if any).
+ *  A Custom's see-through colours are composited against that ground (#112). */
+const groundedTheme = (): ReturnType<typeof resolveTermTheme> => {
+  const ground = termHost().terminalGround?.()
+  return onGround(resolveTermTheme(termThemeId(), ground), ground)
+}
+
 /** What a link wears on the theme in force: blue, moved as far as this
  *  ground (a preset's, or one the user picked) needs for it to read. */
-/** The theme on the ground the panel really paints (the host's pick, if any). */
-const groundedTheme = (): ReturnType<typeof resolveTermTheme> =>
-  onGround(resolveTermTheme(termThemeId()), termHost().terminalGround?.())
-
 function currentLinkColor(): string {
   const theme = groundedTheme()
   return linkColor(theme.background, theme.foreground)
 }
 
-/**
- * The theme as painted. Where the PANEL paints the ground (`paintsGround`,
- * the host's word), it is the theme's colours on a TRANSPARENT canvas:
- *
- * THE PANEL PAINTS THE GROUND, NOT XTERM (2026-09-19, owner screenshot: a grey
- * bar along the bottom of a black terminal). xterm sizes itself in whole rows,
- * MEASURED at 604px in a 611px box, so a few pixels under the last row are
- * never xterm's to paint. While the canvas carried the ground and the box
- * around it was transparent, that strip showed the native window background
- * instead of the theme. So the ground is `--p-bg` on the panel (the chrome's
- * own colour, at the window's alpha when it is acrylic, see lib/chromeTheme)
- * and the canvas over it is clear: every pixel of the panel, rows, frame and
- * leftover strip alike, gets exactly ONE coat. One and not two is the other
- * half of it: two translucent coats are a visibly darker panel than the rest
- * of an acrylic window.
- *
- * The block cursor draws the character under it in `cursorAccent`, which
- * defaults to the background; on a clear background that would be a hole, so
- * it is named.
- */
-function currentTermTheme(): ReturnType<typeof resolveTermTheme> & {
-  cursorAccent?: string
-  scrollbarSliderBackground?: string
-  scrollbarSliderHoverBackground?: string
-  scrollbarSliderActiveBackground?: string
-} {
-  const base = groundedTheme()
-  // THE SCROLLBAR WEARS THE THEME (owner, 2026-09-23: "make the scrollbar more
-  // minimalistic and make sure it follows the theme"). xterm 6 draws its own
-  // slider, coloured from these three; left unset they are a fixed grey on
-  // every theme. The text ink at 40%, 65% under the pointer or a drag, which
-  // is Prism's scrollbar rule; its size and shape are in the hosts' CSS.
-  const ink = normalizeColor(base.foreground, '#cccccc').slice(0, 7)
-  const theme = {
-    ...base,
-    scrollbarSliderBackground: `${ink}66`,
-    scrollbarSliderHoverBackground: `${ink}a6`,
-    scrollbarSliderActiveBackground: `${ink}a6`
-  }
-  if (!paintsGround()) {
+/** The theme as painted, in the form xterm takes (lib/termXterm). */
+function currentTermTheme(): XtermTheme {
+  return xtermTheme(groundedTheme(), {
+    paintsGround: paintsGround(),
     // The HOST paints behind the panel (Prism's dock does), so the canvas
     // carries the ground as it always did there: clear only when the terminal
     // is following an acrylic style, so the window's material shows through.
-    return termThemeId() === 'style' && termAcrylic() ? { ...theme, background: '#00000000' } : theme
-  }
-  // Flattened first: a custom theme may hold #rgb or an rgba().
-  const solid = normalizeColor(theme.background, '#0b0b0f')
-  return { ...theme, background: '#00000000', cursorAccent: solid }
+    clearGround: termThemeId() === 'style' && termAcrylic()
+  })
 }
 
 /**

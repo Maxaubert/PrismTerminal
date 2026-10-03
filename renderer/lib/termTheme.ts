@@ -1,6 +1,7 @@
 import { deriveAnsi, legiblePalette, normalizeColor, type Ansi16 } from './termAnsi'
 import { liveThemeId } from './termThemeRetired'
-import { customTermTheme } from './termLook'
+import { customTermTheme, type CustomTermTheme } from './termLook'
+import { composite, legibleOn, opaque, parseColour } from './colour'
 import { followsHostStyle, hostDefaults } from '../host'
 
 // The terminal owns its colours. Inside Prism it could also WEAR THE APP STYLE
@@ -349,19 +350,48 @@ export function presetAccent(themeId: string): string | undefined {
   return TERM_PRESETS.find((x) => x.id === liveThemeId(themeId))?.accent
 }
 
-export function resolveTermTheme(themeId: string): TermTheme {
+/**
+ * A Custom palette as the terminal draws it (see `resolveTermTheme`), from the
+ * palette itself rather than the store: the theme editor's preview and its
+ * derived Selection read a DRAFT, and the wall's Custom card reads the saved
+ * one, and both must show what the terminal shows (#113 review: raw alphas
+ * drew a 30% foreground the terminal floors to 4.5:1).
+ */
+export function resolveCustomTheme(c: CustomTermTheme, ground?: string | null): TermTheme {
+  const own = opaque(c.bg, '#0b0b0f')
+  const g = ground && parseColour(ground) ? opaque(ground) : own
+  const cursor = legibleOn(c.cursor, g, 3)
+  const ansi: Record<string, string> = {}
+  for (const [k, v] of Object.entries(c.ansi)) ansi[k] = composite(v, g)
+  return {
+    background: c.bg,
+    foreground: legibleOn(c.fg, g, 4.5),
+    cursor,
+    // A chosen selection keeps its alpha; else the cursor's, derived as it
+    // always was (from the OPAQUE cursor: a hex8 one gave ten digits).
+    selectionBackground: c.selection ?? `${cursor}55`,
+    ...legiblePalette(ansi, own)
+  }
+}
+
+/**
+ * `ground`: the colour the terminal is really painted on, where the host lets
+ * somebody pick one (`terminalGround`); absent, the theme's own background.
+ *
+ * A CUSTOM COLOUR MAY CARRY AN ALPHA (#112). Its text, cursor and sixteen are
+ * composited ONCE against the ground in force and handed on opaque, because
+ * xterm blends its text against a canvas that is clear here. The text is held
+ * to 4.5:1 and the cursor to 3:1, but never above the contrast of the user's
+ * own opaque pick (`legibleOn`): at alpha 1 nothing moves, so an opaque Custom
+ * resolves byte for byte as it always did, a failing cursor included. The
+ * sixteen are floored by `legiblePalette` as before, on the composites.
+ */
+export function resolveTermTheme(themeId: string, ground?: string | null): TermTheme {
   // The host's own style, where it has one to follow.
   if (themeId === 'style' && followsHostStyle()) return readTermTheme()
   if (themeId === 'custom') {
     const c = customTermTheme()
-    if (c)
-      return {
-        background: c.bg,
-        foreground: c.fg,
-        cursor: c.cursor,
-        selectionBackground: `${c.cursor}55`,
-        ...legiblePalette(c.ansi, c.bg)
-      }
+    if (c) return resolveCustomTheme(c, ground)
   }
   // DEFAULT_TERM_THEME is in the list; that find cannot miss, the last fallback is for the type.
   const p =
