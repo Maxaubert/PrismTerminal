@@ -101,8 +101,11 @@ How the popover behaves:
   theme follows it again, with no Reset showing). A caller with no unset state may omit
   `onRevert`, and then the opening value is written back in one `onChange`. Every row that can
   follow the theme passes `onRevert`; the plan lists each.
-- Pressing outside or Tab-ing out of the last control keeps the colour and closes it. The focus
-  goes back to the swatch.
+- Pressing outside keeps the colour and closes it. The focus stays where the press put it (the
+  user chose something else); only Escape gives it back to the swatch. Tab never leaves the
+  popover (see below). (Amended in the review of PT #113, which built it this way: the earlier
+  wording, "Tab-ing out of the last control" closing it and the focus always going back to the
+  swatch, contradicted the Tab rule below and the plan.)
 - **It closes when the focus leaves it** for anything but its own swatch. Settings is a TAB in PT
   and stays mounted under the update window, Command help (F1) and a close question, so "it
   closes when its anchor unmounts" is not enough: each of those takes the focus as it opens, and

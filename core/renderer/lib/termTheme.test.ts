@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_TERM_THEME, TERM_PRESETS, resolveTermTheme } from './termTheme'
+import { DEFAULT_TERM_THEME, TERM_PRESETS, resolveCustomTheme, resolveTermTheme } from './termTheme'
 import { saveCustomTermTheme } from './termLook'
 import { onGround } from './termGround'
 import { contrastRatio } from './termAnsi'
@@ -65,6 +65,31 @@ describe('a Custom with alpha (#112)', () => {
     expect(contrastRatio(own.red as string, '#000000')).toBeGreaterThanOrEqual(3)
     // On a picked white ground, half-white text is laid on WHITE first.
     expect(resolveTermTheme('custom', '#ffffff').foreground).not.toBe(own.foreground)
+  })
+})
+
+describe('resolveCustomTheme: the editor and the wall draw what the terminal draws (#113 review)', () => {
+  const c = {
+    bg: '#000000',
+    fg: '#ffffff4d',
+    cursor: '#ff800080',
+    ansi: { red: '#ff000066', green: '#00ff00', blue: '#3355ff80' }
+  }
+  it('is exactly what the terminal resolves for the same saved Custom', () => {
+    localStorage.clear()
+    saveCustomTermTheme(c)
+    expect(resolveCustomTheme(c)).toEqual(resolveTermTheme('custom'))
+    expect(resolveCustomTheme(c, '#f4f1e8')).toEqual(resolveTermTheme('custom', '#f4f1e8'))
+  })
+  it('a 30% foreground is drawn floored, never at its raw alpha', () => {
+    const t = resolveCustomTheme(c)
+    expect(t.foreground).toMatch(/^#[0-9a-f]{6}$/)
+    expect(contrastRatio(t.foreground, '#000000')).toBeGreaterThanOrEqual(4.5)
+  })
+  it('the derived selection is the drawn cursor at 55, not the raw opaque cursor', () => {
+    const t = resolveCustomTheme(c)
+    expect(t.selectionBackground).toBe(`${t.cursor}55`)
+    expect(t.selectionBackground).not.toBe('#ff800055')
   })
 })
 

@@ -2465,14 +2465,14 @@ const scenarios = {
       // #112: an Escape aimed at a picker inside the editor is the picker's.
       await pencil.click()
       await page.locator('[data-theme-editor]').waitFor({ timeout: 3000 })
-      await page.locator('[data-theme-editor] [data-colour-swatch][aria-label="Pick Cursor"]').click()
+      await page.locator('[data-theme-editor] [data-colour-swatch][aria-label="Pick Foreground"]').click()
       const pop = page.locator('[data-colour-popover]')
       ok(!!(await until(async () => (await pop.count()) === 1, 3000, 50)), 'a well in the editor opens the picker')
       ok(await page.evaluate(() => !!document.activeElement?.closest('[data-colour-popover]')), 'which takes the focus')
       await page.keyboard.press('Escape')
       ok(!!(await until(async () => (await pop.count()) === 0, 3000, 50)), 'Escape closes the picker')
       ok(!(await until(async () => (await page.locator('[data-theme-editor]').count()) === 0, 600, 50)), 'and only the picker: the editor stays open')
-      ok(await page.evaluate(() => document.activeElement?.matches('[data-colour-swatch][aria-label="Pick Cursor"]')), 'with the focus back on the swatch')
+      ok(await page.evaluate(() => document.activeElement?.matches('[data-colour-swatch][aria-label="Pick Foreground"]')), 'with the focus back on the swatch')
       await page.keyboard.press('Escape')
       await until(async () => (await page.locator('[data-theme-editor]').count()) === 0, 3000, 50)
 
@@ -2706,6 +2706,49 @@ const scenarios = {
         return got
       }
       ok((await walk('red', 40)) === 40 && (await walk('Foreground', 30)) === 30, 'red walks to 40 percent and the text to 30')
+      // The preview card draws what the terminal draws (#113 review): the 30
+      // percent text composited and floored to 4.5:1, not painted at 30.
+      const card = async (id) =>
+        page.evaluate((cardId) => {
+          const box = document.querySelector(`[data-term-card="${cardId}"] > div`)
+          if (!box) return null
+          const rgb = (c) => (c.match(/[\d.]+/g) ?? []).map(Number)
+          const cs = getComputedStyle(box)
+          return { fg: rgb(cs.color), bg: rgb(cs.backgroundColor) }
+        }, id)
+      const cardRatio = (c) => (c ? ratio(c.fg.slice(0, 3), c.bg.slice(0, 3)) : 0)
+      const preview = await card('custom-preview')
+      ok(!!preview && (preview.fg[3] ?? 1) === 1 && cardRatio(preview) >= 4.5, `the editor's preview draws the 30 percent text as the terminal does (${cardRatio(preview).toFixed(2)}:1, ${preview?.fg})`)
+      // The Selection's cap is 254/255: never announced as 100 percent opaque.
+      await editor.locator('[data-colour-swatch][aria-label="Pick Selection"]').click()
+      await until(async () => (await pop.count()) === 1, 3000, 50)
+      const selAlpha = pop.locator('[role="slider"][aria-label="Alpha"]')
+      ok((await selAlpha.getAttribute('aria-valuemax')) === '99', `the Selection's alpha tops out at 99 percent, not 100 (${await selAlpha.getAttribute('aria-valuemax')})`)
+      await page.keyboard.press('Escape')
+      await popGone()
+      // The format toggle widens every code field, which moves the swatches in
+      // the editor's grid: the open picker follows its own (#113 review).
+      await editor.locator('[data-colour-swatch][aria-label="Pick Foreground"]').click()
+      await until(async () => (await pop.count()) === 1, 3000, 50)
+      const beside = async () => {
+        await sleep(100)
+        return page.evaluate(() => {
+          const sw = document.querySelector('[data-colour-swatch][aria-label="Pick Foreground"]').getBoundingClientRect()
+          const p = document.querySelector('[data-colour-popover]').getBoundingClientRect()
+          const under = Math.abs(p.top - (sw.bottom + 6)) <= 1.5 || Math.abs(p.bottom - (sw.top - 6)) <= 1.5
+          return { ok: Math.abs(p.right - sw.right) <= 1.5 && under, sw: Math.round(sw.right), pop: Math.round(p.right) }
+        })
+      }
+      const atHex = await beside()
+      await pop.locator('button[data-colour-format]').click()
+      const atRgba = await beside()
+      ok(atHex.ok && atRgba.ok && atHex.sw !== atRgba.sw, `the picker stays on its swatch as RGBA widens the fields (swatch ${atHex.sw} to ${atRgba.sw}, picker ${atHex.pop} to ${atRgba.pop})`)
+      await shot('editor-rgba')
+      await pop.locator('button[data-colour-format]').click()
+      await pop.locator('button[data-colour-format]').click()
+      ok((await pop.locator('button[data-colour-format]').textContent()) === 'HEX', 'and back to HEX')
+      await page.keyboard.press('Escape')
+      await popGone()
       ok((await editor.locator('[data-colour-swatch][aria-label="Pick Background"]').count()) === 1, 'the Background well is there')
       await editor.locator('[data-colour-swatch][aria-label="Pick Background"]').click()
       await until(async () => (await pop.count()) === 1, 3000, 50)
@@ -2716,6 +2759,8 @@ const scenarios = {
       await editor.locator('[data-save-custom]').click()
       const custom = JSON.parse((await get('prism.term.custom')) ?? '{}')
       ok(/^#[0-9a-f]{6}66$/.test(custom.ansi?.red ?? '') && /^#[0-9a-f]{6}4d$/.test(custom.fg ?? ''), `the saved Custom keeps both alphas (red ${custom.ansi?.red}, text ${custom.fg})`)
+      const wallCard = await card('custom')
+      ok(!!wallCard && (wallCard.fg[3] ?? 1) === 1 && cardRatio(wallCard) >= 4.5, `the wall's Custom card draws the text as the terminal does (${cardRatio(wallCard).toFixed(2)}:1)`)
       await page.locator('[data-tab]').first().click()
       await typeLine(page, 'cls; Write-Host REDTEXT -ForegroundColor DarkRed')
       const seen = await until(async () => {
