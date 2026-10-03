@@ -33,10 +33,11 @@ describe('the terminal options list', () => {
     for (const k of keys) expect(k.startsWith('prism.term.')).toBe(true)
   })
 
-  it('drops only the opacity slider where the host style owns the window material', () => {
-    const all = terminalOptionIds({ windowAcrylic: true })
-    const prism = terminalOptionIds({ windowAcrylic: false })
-    expect(all.filter((id) => !prism.includes(id))).toEqual(['term-opacity'])
+  it('shows the same list in every host, with no Opacity row any more (#114)', () => {
+    // The one row that differed was the Opacity slider, Prism Terminal only;
+    // the theme Background's alpha took its place.
+    expect(terminalOptionIds({ windowAcrylic: true })).toEqual(terminalOptionIds({ windowAcrylic: false }))
+    expect(TERMINAL_OPTIONS.some((o) => o.id === 'term-opacity' || o.key === 'prism.term.opacity')).toBe(false)
   })
 
   it('gives dictation one key per option, under prism.dictation, and only the GPU row none', () => {

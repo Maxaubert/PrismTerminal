@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { FONT_PCTS, agentColorChoice, agentDoneColorChoice, agentQuestionColorChoice, setAgentDoneColor, setAgentQuestionColor, termGroundAlpha, applyCustomExtras, resetTermExtras, agentIndicator, customTermTheme, setAgentColor, saveCustomTermTheme, setAgentIndicator, setTermAcrylic, setTermFontPct, setTermOpacity, setTermThemeId, termAcrylic, termBaseFontPx, termFontPct, termOpacity, termThemeId } from './termLook'
+import { FONT_PCTS, agentColorChoice, agentDoneColorChoice, agentQuestionColorChoice, setAgentDoneColor, setAgentQuestionColor, termGroundAlpha, applyCustomExtras, resetTermExtras, agentIndicator, customTermTheme, setAgentColor, saveCustomTermTheme, setAgentIndicator, setTermAcrylic, setTermFontPct, setTermThemeId, termAcrylic, termBaseFontPx, termExtraDefaults, termFontPct, legacyTermOpacity, termThemeId } from './termLook'
+import * as termLook from './termLook'
 
 beforeEach(() => localStorage.clear())
 
@@ -90,19 +91,32 @@ describe('the working colour', () => {
   })
 })
 
-describe('acrylic and its opacity', () => {
+describe('acrylic, and the opacity it no longer has', () => {
   it('acrylic is off until asked for', () => {
     expect(termAcrylic()).toBe(false)
     setTermAcrylic(true)
     expect(termAcrylic()).toBe(true)
   })
-  it('reads a never-set opacity as opaque, not transparent', () => {
-    localStorage.clear()
-    expect(termOpacity()).toBe(100)
+  // #114: the Background colour's alpha replaced the Opacity slider. The old
+  // value is READ ONCE, by the migration, as the window read it: defensively,
+  // since Number(null) and Number('') are 0, and clamped 30-100.
+  it('the legacy opacity reads never-set as opaque and clamps as the window did', () => {
+    expect(legacyTermOpacity()).toBe(100)
     localStorage.setItem('prism.term.opacity', '')
-    expect(termOpacity()).toBe(100)
-    setTermOpacity(5)
-    expect(termOpacity()).toBe(30)
+    expect(legacyTermOpacity()).toBe(100)
+    localStorage.setItem('prism.term.opacity', '5')
+    expect(legacyTermOpacity()).toBe(30)
+    localStorage.setItem('prism.term.opacity', '62.4')
+    expect(legacyTermOpacity()).toBe(62)
+    localStorage.setItem('prism.term.opacity', 'soup')
+    expect(legacyTermOpacity()).toBe(100)
+  })
+  it('nothing writes an opacity any more, and no theme carries one', () => {
+    expect('setTermOpacity' in termLook).toBe(false)
+    expect('termOpacity' in termLook).toBe(false)
+    expect('opacity' in termExtraDefaults()).toBe(false)
+    applyCustomExtras({ bg: '#000000', fg: '#ffffff', cursor: '#ff0000', ansi: {}, acrylic: true, opacity: 60 } as never)
+    expect(localStorage.getItem('prism.term.opacity')).toBeNull()
   })
 })
 

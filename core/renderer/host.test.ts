@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { configureTermCore, resetTermCore, termHost, type TermApi, type TermHostConfig } from './host'
-import { agentColorChoice, agentIndicator, termAcrylic, termExtraDefaults, termThemeId } from './lib/termLook'
+import { agentColorChoice, agentIndicator, saveCustomTermTheme, setTermThemeId, termAcrylic, termExtraDefaults, termGroundAlpha, termThemeId, withGroundAlpha } from './lib/termLook'
 import { CH } from '../shared/channels'
 
 // The seam is what lets ONE terminal serve two apps. These tests are the two
@@ -78,5 +78,42 @@ describe('the channel table', () => {
     expect(new Set(names).size).toBe(names.length)
     // main's terminal.ts sends these two by their literal names.
     expect([CH.data, CH.exit]).toEqual(['term:data', 'term:exit'])
+  })
+})
+
+// #114: the Background's alpha is the window's see-through where the terminal
+// owns the window's acrylic. Save as Custom carries the alpha IN FORCE onto
+// Custom.bg (a picked Background's first, else the Custom's own), and only
+// there: in Prism the style owns the glass and a palette stays as it is.
+describe('the ground alpha a saved setup carries', () => {
+  afterEach(() => resetTermCore())
+  beforeEach(() => localStorage.clear())
+  const palette = { bg: '#202020', fg: '#eeeeee', cursor: '#ff0000', ansi: {} }
+
+  it('a preset carries no alpha, and a picked see-through background carries its own', () => {
+    let picked: string | null = null
+    configureTermCore({ ...PRISM_TERMINAL, terminalGround: () => picked })
+    setTermThemeId('dracula')
+    expect(withGroundAlpha(palette).bg).toBe('#202020')
+    picked = '#33333399'
+    expect(termGroundAlpha()).toBeCloseTo(0x99 / 255)
+    expect(withGroundAlpha(palette).bg).toBe('#20202099')
+  })
+  it('a Custom carries its own background alpha, unless a picked one is in force', () => {
+    let picked: string | null = null
+    configureTermCore({ ...PRISM_TERMINAL, terminalGround: () => picked })
+    saveCustomTermTheme({ ...palette, bg: '#11111180' })
+    setTermThemeId('custom')
+    expect(withGroundAlpha(palette).bg).toBe('#20202080')
+    picked = '#123456cc'
+    expect(withGroundAlpha(palette).bg).toBe('#202020cc')
+    picked = '#123456'
+    expect(withGroundAlpha({ ...palette, bg: '#20202080' }).bg).toBe('#202020')
+  })
+  it('in Prism, where the style owns the glass, the palette is left alone', () => {
+    configureTermCore(PRISM)
+    saveCustomTermTheme({ ...palette, bg: '#11111180' })
+    setTermThemeId('custom')
+    expect(withGroundAlpha(palette)).toEqual(palette)
   })
 })

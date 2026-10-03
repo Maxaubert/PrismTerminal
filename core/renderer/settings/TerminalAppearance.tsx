@@ -16,7 +16,6 @@ import {
   setTermAcrylic,
   setTermFontId,
   setTermFontPct,
-  setTermOpacity,
   setTermThemeId,
   termThemeId,
   useAgentColorChoice,
@@ -26,13 +25,15 @@ import {
   useTermAcrylic,
   useTermFontId,
   useTermFontPct,
-  useTermOpacity,
+  useTermGroundAlpha,
   useTermThemeId,
+  withGroundAlpha,
   type CustomTermTheme
 } from '../lib/termLook'
 import { resolveCustomTheme, resolveTermTheme, watchTermTheme, TERM_PRESETS } from '../lib/termTheme'
 import { useAgentColors } from '../lib/agentColors'
 import { luminance, normalizeColor } from '../lib/termAnsi'
+import { alphaOf, type AlphaRange } from '../lib/colour'
 import { Pref, RESET_LINK, ROWS, SaveButton, Select, Switch, ThemeHead } from './fields'
 import { ColourField } from './ColourPicker'
 import { AgentIndicatorSetting, AttentionSettings } from './TerminalBehaviour'
@@ -162,10 +163,14 @@ const cardAnsi = (
  *  live preview beside them. Save lands in the single Custom slot. */
 function TermThemeEditor({
   seed,
+  bgAlpha,
   onSave,
   onCancel
 }: {
   seed: CustomTermTheme
+  /** What the Background's alpha may be: the window's see-through where the
+   *  terminal owns the window acrylic, nothing where the style does (#114). */
+  bgAlpha: AlphaRange & { alphaDisabled?: boolean }
   onSave: (t: CustomTermTheme) => void
   onCancel: () => void
 }): JSX.Element {
@@ -218,15 +223,17 @@ function TermThemeEditor({
         ? { ...d, [k]: v }
         : { ...d, ansi: { ...d.ansi, [k]: v ?? '#888888' } }
     )
-  // EVERY COLOUR CARRIES AN ALPHA (#112), but the Background: until the
-  // window's see-through is the background's alpha (PR 2), a background alpha
-  // would have nothing to drive. Escape in a picker puts the draft back
-  // (no onRevert: the well's opening value is written back).
+  // EVERY COLOUR CARRIES AN ALPHA (#112). The Background's IS the window's
+  // see-through where the terminal owns the window acrylic (#114, in place of
+  // the Opacity slider), at least 30% as the slider was, and inert while
+  // acrylic is off; where the style owns the glass (Prism) it has none.
+  // Escape in a picker puts the draft back (no onRevert: the well's opening
+  // value is written back).
   const well = (
     label: string,
     key: string,
     value: string,
-    more: { alpha?: boolean; alphaMax?: number; onRevert?: () => void } = {}
+    more: AlphaRange & { alphaDisabled?: boolean; onRevert?: () => void } = {}
   ): JSX.Element => (
     <div key={key} className="flex items-center justify-between gap-2 text-[11px] text-[var(--p-dim)]">
       <span className="w-[86px] truncate">{label}</span>
@@ -263,7 +270,7 @@ function TermThemeEditor({
         <div className="mb-3 text-[13px] font-bold text-[var(--p-text)]">Edit colours</div>
         <div className="flex flex-wrap items-start gap-6">
           <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-            {well('Background', 'bg', draft.bg, { alpha: false })}
+            {well('Background', 'bg', draft.bg, bgAlpha)}
             {well('Foreground', 'fg', draft.fg)}
             {well('Cursor', 'cursor', draft.cursor)}
             {well('Selection', 'selection', chosenSelection ?? drawn.selectionBackground, {
@@ -351,6 +358,9 @@ function paletteOf(id: string): Pick<CustomTermTheme, 'bg' | 'fg' | 'cursor' | '
   }
 }
 
+/** The theme Background's alpha is the window's see-through here (#114). */
+const windowAcrylicOwned = (): boolean => termHost().acrylic.kind === 'window'
+
 /** Picking a theme returns the LOOK to its defaults: the theme is the whole
  *  setup. The indicator's volume is carried across, because it is a General
  *  setting here (how loudly a tab speaks, not what the terminal looks like)
@@ -396,7 +406,9 @@ export function TerminalAppearanceSettings({
   const fontPct = useTermFontPct()
   const fontId = useTermFontId()
   const acrylicOn = useTermAcrylic()
-  const opacity = useTermOpacity()
+  // The window's see-through (#114): the alpha of the ground in force, the
+  // picked Background's first. A byte, so the comparison below is exact.
+  const groundByte = Math.round(useTermGroundAlpha() * 255)
   // The CHOICES ('' = follow the theme) are what is saved and compared; the
   // colours in force are what the swatches show.
   const agentCol = useAgentColorChoice()
@@ -469,20 +481,20 @@ export function TerminalAppearanceSettings({
           red: t.red ?? ''
         }}
         onPick={() => pick(p.id)}
-        onEdit={() => setEditing(paletteOf(p.id))}
+        onEdit={() => setEditing(withGroundAlpha(paletteOf(p.id)))}
       />
     )
   }
   // "Save changes": the theme's WHOLE look - palette of the selected theme,
-  // agent colours, acrylic and its opacity - lands in the Custom slot,
-  // reselectable after any theme switch. The font, its size and the
-  // indicator's style belong to no theme and are not part of it (2026-09-28).
+  // agent colours, acrylic and how see-through the ground is - lands in the
+  // Custom slot, reselectable after any theme switch. The font, its size and
+  // the indicator's style belong to no theme and are not part of it
+  // (2026-09-28). The see-through rides on the palette's own `bg` (#114).
   const extras = {
     indicatorColor: agentCol,
     doneColor: doneCol,
     questionColor: questionCol,
-    acrylic: acrylicOn,
-    opacity
+    acrylic: acrylicOn
   }
   // Dirty = the SETTINGS deviate from the selected theme's stock: any theme
   // arrives with the defaults, a Custom arrives with what it saved. Comparing
@@ -494,12 +506,19 @@ export function TerminalAppearanceSettings({
     indicatorColor: src?.indicatorColor ?? termExtraDefaults().indicatorColor,
     doneColor: src?.doneColor ?? termExtraDefaults().doneColor,
     questionColor: src?.questionColor ?? termExtraDefaults().questionColor,
-    acrylic: src?.acrylic ?? termExtraDefaults().acrylic,
-    opacity: src?.opacity ?? termExtraDefaults().opacity
+    acrylic: src?.acrylic ?? termExtraDefaults().acrylic
   }
-  const termDirty = JSON.stringify(extras) !== JSON.stringify(baseline)
+  // THE UNSAVED-CHANGES QUESTION SURVIVES THE SLIDER (#114, #60). Opacity was
+  // one of the extras, so a changed one lit Save changes and a theme pick
+  // asked before forgetting it. Its place is taken by the ground's alpha in
+  // force against the theme's own (a preset is opaque, a Custom has its bg's):
+  // a see-through picked Background lights Save changes in the same way.
+  // Only where that alpha is the window's (Prism has no such alpha).
+  const ownByte = src ? Math.round(alphaOf(src.bg) * 255) : 255
+  const termDirty =
+    JSON.stringify(extras) !== JSON.stringify(baseline) || (windowAcrylicOwned() && groundByte !== ownByte)
   const saveTermSetup = (): void => {
-    saveCustomTermTheme({ ...paletteOf(termThemeId()), ...extras })
+    saveCustomTermTheme({ ...withGroundAlpha(paletteOf(termThemeId())), ...extras })
     setTermThemeId('custom')
   }
   // A THEME PICK, Custom included. It lands at once when nothing is unsaved;
@@ -605,7 +624,7 @@ export function TerminalAppearanceSettings({
                 cursor={customDrawn!.cursor}
                 ansi={cardAnsi(customDrawn as unknown as Record<string, string>)}
                 onPick={() => pick('custom')}
-                onEdit={() => setEditing(paletteOf('custom'))}
+                onEdit={() => setEditing(withGroundAlpha(paletteOf('custom')))}
               />
             )}
             {defaultPreset && presetCard(defaultPreset)}
@@ -658,6 +677,7 @@ export function TerminalAppearanceSettings({
         {editing && (
           <TermThemeEditor
             seed={editing}
+            bgAlpha={windowAcrylic ? { alphaMin: 0.3, alphaDisabled: !acrylicOn || noAcrylic } : { alpha: false }}
             onSave={(t) => {
               // The Custom slot is the WHOLE setup (code review 2026-09-24,
               // #8): saved as a bare palette, the agent colours and
@@ -684,7 +704,7 @@ export function TerminalAppearanceSettings({
           noAcrylic
             ? 'Needs Windows 11.'
             : windowAcrylic
-              ? 'Lets the desktop show through the window and terminal.'
+              ? 'Lets the desktop show through the window and terminal. The background colour sets how much.'
               : 'Gives the terminal the same see through surface as the app. When off, the terminal has a solid background.'
         }
       >
@@ -695,32 +715,6 @@ export function TerminalAppearanceSettings({
           disabled={noAcrylic}
         />
       </Pref>
-      {windowAcrylic && (
-        <Pref
-          id="term-opacity"
-          label="Opacity"
-          off={noAcrylic || !acrylicOn}
-          hint={noAcrylic ? 'Needs Windows 11.' : 'How much of the theme background covers the acrylic.'}
-        >
-          <div className="flex items-center gap-3">
-            <span className="w-[34px] text-right font-[Consolas,'Cascadia_Mono',monospace] text-[11.5px] text-[var(--p-dim)]">
-              {opacity}%
-            </span>
-            <input
-              id="term-opacity"
-              type="range"
-              min={30}
-              max={100}
-              step={5}
-              value={opacity}
-              disabled={noAcrylic || !acrylicOn}
-              onChange={(e) => setTermOpacity(Number(e.target.value))}
-              className="h-1.5 w-[180px] cursor-pointer appearance-none rounded-full bg-[var(--p-track)] disabled:cursor-default"
-              style={{ accentColor: 'var(--p-accent-solid, var(--p-accent))' }}
-            />
-          </div>
-        </Pref>
-      )}
       <Pref
         id="agent-color"
         label="Working colour"

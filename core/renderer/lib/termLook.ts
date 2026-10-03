@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
-import { followsHostStyle, hostDefaults, hostGround, type AgentIndicator } from '../host'
+import { followsHostStyle, hostDefaults, hostGround, hostOwnsWindowAcrylic, onHostChromeChange, type AgentIndicator } from '../host'
 import { liveThemeId } from './termThemeRetired'
-import { alphaOf, parseColour, toStored } from './colour'
+import { alphaOf, parseColour, toStored, withAlpha } from './colour'
 
 export type { AgentIndicator }
 
@@ -97,10 +97,10 @@ export function termBaseFontPx(): number {
 const ACRYLIC_KEY = 'prism.term.acrylic'
 const OPACITY_KEY = 'prism.term.opacity'
 
-/** Whether the window is acrylic: the theme's background is painted at
- *  termOpacity() and the desktop shows through. Inside Prism this belonged to
- *  the follow-style terminal alone and was on by default; here it works with
- *  any theme and is OFF until asked for. */
+/** Whether the window is acrylic: the theme's background is painted at the
+ *  ground's alpha (`termGroundAlpha`) and the desktop shows through. Inside
+ *  Prism this belonged to the follow-style terminal alone and was on by
+ *  default; here it works with any theme and is OFF until asked for. */
 export function termAcrylic(): boolean {
   const v = localStorage.getItem(ACRYLIC_KEY)
   // Never touched: the host's default (on in Prism, off in Prism Terminal).
@@ -110,17 +110,27 @@ export function setTermAcrylic(on: boolean): void {
   localStorage.setItem(ACRYLIC_KEY, on ? '1' : '0')
   notify()
 }
-/** 30-100. Read defensively: Number(null) and Number('') are 0, which would
- *  read "never set" as fully transparent. */
-export function termOpacity(): number {
-  const raw = localStorage.getItem(OPACITY_KEY)
-  const n = raw === null || raw === '' ? NaN : Number(raw)
+/**
+ * THE OPACITY SLIDER IS GONE (#114; owner, 2026-10-03: alpha "should be built
+ * into the colour pickers ... it should not be a separate opacity setting").
+ * The window's see-through is the ALPHA of the ground in force now
+ * (`termGroundAlpha`). This reads what the slider left behind, ONCE, for the
+ * host's migration, exactly as the window read it: 30-100, defensively, since
+ * Number(null) and Number('') are 0, which would read "never set" as fully
+ * transparent. Nothing writes the key any more.
+ */
+export function legacyTermOpacity(): number {
+  return opacityPct(localStorage.getItem(OPACITY_KEY))
+}
+
+/** A stored opacity as the window read it, 30-100; 100 for anything else. */
+export function opacityPct(raw: unknown): number {
+  const n = raw === null || raw === undefined || raw === '' ? NaN : Number(raw)
   return Number.isFinite(n) ? Math.min(100, Math.max(30, Math.round(n))) : 100
 }
-export function setTermOpacity(pct: number): void {
-  localStorage.setItem(OPACITY_KEY, String(Math.min(100, Math.max(30, Math.round(pct)))))
-  notify()
-}
+
+/** The legacy key, for the migration that removes it. */
+export const LEGACY_OPACITY_KEY = OPACITY_KEY
 
 const AGENT_IND_KEY = 'prism.term.agentIndicator'
 
@@ -244,7 +254,6 @@ export interface CustomTermTheme {
   doneColor?: string
   questionColor?: string
   acrylic?: boolean
-  opacity?: number
 }
 
 /** What every theme-bound non-colour setting is out of the box. Picking any
@@ -256,7 +265,6 @@ export function termExtraDefaults(): {
   doneColor: string
   questionColor: string
   acrylic: boolean
-  opacity: number
 } {
   const d = hostDefaults()
   return {
@@ -265,8 +273,7 @@ export function termExtraDefaults(): {
     indicatorColor: d.agentColor,
     doneColor: d.agentDoneColor,
     questionColor: '',
-    acrylic: d.acrylic,
-    opacity: 100
+    acrylic: d.acrylic
   }
 }
 
@@ -278,7 +285,6 @@ export function resetTermExtras(): void {
   localStorage.removeItem(AGENT_DONE_KEY)
   localStorage.removeItem(AGENT_QUESTION_KEY)
   localStorage.removeItem(ACRYLIC_KEY)
-  localStorage.removeItem(OPACITY_KEY)
   notify()
 }
 
@@ -295,7 +301,7 @@ export function applyCustomExtras(t: CustomTermTheme | null): void {
   writeChoice(AGENT_DONE_KEY, t.doneColor)
   writeChoice(AGENT_QUESTION_KEY, t.questionColor)
   if (t.acrylic !== undefined) localStorage.setItem(ACRYLIC_KEY, t.acrylic ? '1' : '0')
-  if (t.opacity !== undefined) localStorage.setItem(OPACITY_KEY, String(t.opacity))
+  // No opacity (#114): a saved see-through is the alpha of the saved `bg`.
   notify()
 }
 
@@ -340,7 +346,8 @@ function stored(c: unknown): string | null {
  * The alpha of the ground in force (#112): the host's picked ground where it
  * has one (Prism Terminal's Background colour), else the Custom theme's own
  * background, 1 for a preset (presets are opaque). The same order as the
- * window paints in.
+ * window paints in. Since #114 this IS the window's see-through under
+ * acrylic, in place of the Opacity slider.
  */
 export function termGroundAlpha(): number {
   const picked = hostGround()
@@ -350,6 +357,18 @@ export function termGroundAlpha(): number {
     if (c) return alphaOf(c.bg)
   }
   return 1
+}
+
+/**
+ * A palette with the ground alpha IN FORCE on its background (#114), where
+ * that alpha is the window's see-through: what Save as Custom saves and what
+ * the colour editor opens on, so a see-through window stays see-through
+ * through a save (the Opacity slider was carried in the setup the same way).
+ * Where the host's style owns the glass (Prism), the palette as it is.
+ */
+export function withGroundAlpha<T extends { bg: string }>(palette: T): T {
+  if (!hostOwnsWindowAcrylic()) return palette
+  return { ...palette, bg: withAlpha(palette.bg, termGroundAlpha()) }
 }
 
 export function saveCustomTermTheme(theme: CustomTermTheme): void {
@@ -378,8 +397,18 @@ export function useTermFontId(): string {
 export function useTermAcrylic(): boolean {
   return useSyncExternalStore(sub, termAcrylic)
 }
-export function useTermOpacity(): number {
-  return useSyncExternalStore(sub, termOpacity)
+/** The ground's alpha, re-read when the look OR the host's window colours
+ *  change (a picked background is the host's, not this store's). */
+export function useTermGroundAlpha(): number {
+  return useSyncExternalStore(subGround, termGroundAlpha)
+}
+function subGround(cb: () => void): () => void {
+  const offLook = onTermLookChange(cb)
+  const offChrome = onHostChromeChange(cb)
+  return () => {
+    offLook()
+    offChrome()
+  }
 }
 export function useAgentIndicator(): AgentIndicator {
   return useSyncExternalStore(sub, agentIndicator)
