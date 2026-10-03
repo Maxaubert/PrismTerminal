@@ -310,6 +310,19 @@ so an update never silently changes what an existing user sees; the bridge to ma
     only when it ends in the exe.
   - Tabs still coming back wear a ring in the strip (`resumingIds` in termBus). The text spinner is
     gone. The `launchSkeleton` e2e holds it all, with a stand-in claude and a temp HOME.
+- **ONE COLOUR PICKER, ALPHA ON EVERY COLOUR** (#112; owner, 2026-10-03: "the colour pickers should
+  be the same for both apps, i need an input field for a color code and an alpha per colour on every
+  colour setting"; spec `docs/superpowers/specs/2026-10-03-colour-picker-alpha-design.md`, plan
+  beside it in `plans/`). The core's `ColourField` (`settings/ColourPicker.tsx`) replaces the
+  native `<input type=color>` everywhere; `HexSwatch` is it with `alpha={false}`, for rows not yet
+  moved (this app's Background and Accent until PR 2). Stored form `#rrggbb`, or `#rrggbbaa` with an
+  alpha; every reader takes both. ALPHA 1 CHANGES NOTHING: a snapshot holds every preset and an
+  opaque Custom byte for byte. A see-through Custom colour is composited against the ground in
+  force, floored to `min(floor, contrast of the opaque pick)`; everything handed to xterm is 6 or 8
+  digit hex (xterm throws on others). Opening and shutting writes nothing; Escape after a write
+  calls the row's `onRevert`. The theme's Background has no alpha yet: PR 2 makes it the window's
+  see-through, in place of Opacity. The `colourPicker` e2e holds it; Prism's `termColourPicker`
+  gates the bump.
 - **THE HELP POPUP BLURS THE WINDOW BEHIND IT AND CASTS NO SHADOW** (owner, 2026-09-22: "remove the
   shadow behind this and make the bg blurred when it's open"): `backdrop-blur` on a lighter scrim; the
   blur already lifts the panel off the page, and a shadow on top of it read as a dark halo.

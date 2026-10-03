@@ -30,10 +30,11 @@ import {
   useTermThemeId,
   type CustomTermTheme
 } from '../lib/termLook'
-import { resolveTermTheme, watchTermTheme, TERM_PRESETS } from '../lib/termTheme'
+import { resolveCustomTheme, resolveTermTheme, watchTermTheme, TERM_PRESETS } from '../lib/termTheme'
 import { useAgentColors } from '../lib/agentColors'
 import { luminance, normalizeColor } from '../lib/termAnsi'
-import { HexSwatch, Pref, RESET_LINK, ROWS, SaveButton, Select, Switch, ThemeHead } from './fields'
+import { Pref, RESET_LINK, ROWS, SaveButton, Select, Switch, ThemeHead } from './fields'
+import { ColourField } from './ColourPicker'
 import { AgentIndicatorSetting, AttentionSettings } from './TerminalBehaviour'
 import ThemeSwitchAsk from '../components/ThemeSwitchAsk'
 
@@ -83,7 +84,7 @@ function TermThemeCard({
         onClick={onPick}
         className={`group flex w-[196px] flex-col overflow-hidden rounded-md border text-left transition-colors ${
           on
-            ? 'border-[color:var(--p-accent-hi)] ring-1 ring-[var(--p-accent)]/45'
+            ? 'border-[color:var(--p-accent-hi)] ring-1 ring-[var(--p-accent-solid,var(--p-accent))]/45'
             : 'border-[color:var(--p-line)] hover:border-[color:var(--p-divider)]'
         }`}
       >
@@ -185,6 +186,10 @@ function TermThemeEditor({
     panel.current?.querySelector<HTMLElement>('input, button')?.focus()
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
+      // An Escape aimed at a colour picker inside the editor is the picker's
+      // (#112): this listener is native and on the window, so it hears the key
+      // before the picker does, and would close the editor behind it.
+      if ((e.target as Element | null)?.closest?.('[data-colour-popover]')) return
       e.preventDefault()
       e.stopPropagation()
       cancel.current()
@@ -197,6 +202,7 @@ function TermThemeEditor({
   }, [])
   const trapTab = (e: ReactKeyboardEvent): void => {
     if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey) return
+    if ((e.target as Element | null)?.closest?.('[data-colour-popover]')) return
     const all = [...(panel.current?.querySelectorAll<HTMLElement>('input, button, [tabindex="0"]') ?? [])].filter(
       (el) => !el.hasAttribute('disabled')
     )
@@ -206,18 +212,37 @@ function TermThemeEditor({
     e.preventDefault()
     all[next].focus()
   }
-  const set = (k: string, v: string): void =>
+  const set = (k: string, v: string | undefined): void =>
     setDraft((d) =>
-      k === 'bg' || k === 'fg' || k === 'cursor'
+      k === 'bg' || k === 'fg' || k === 'cursor' || k === 'selection'
         ? { ...d, [k]: v }
-        : { ...d, ansi: { ...d.ansi, [k]: v } }
+        : { ...d, ansi: { ...d.ansi, [k]: v ?? '#888888' } }
     )
-  const well = (label: string, key: string, value: string): JSX.Element => (
-    <label key={key} className="flex items-center justify-between gap-2 text-[11px] text-[var(--p-dim)]">
+  // EVERY COLOUR CARRIES AN ALPHA (#112), but the Background: until the
+  // window's see-through is the background's alpha (PR 2), a background alpha
+  // would have nothing to drive. Escape in a picker puts the draft back
+  // (no onRevert: the well's opening value is written back).
+  const well = (
+    label: string,
+    key: string,
+    value: string,
+    more: { alpha?: boolean; alphaMax?: number; onRevert?: () => void } = {}
+  ): JSX.Element => (
+    <div key={key} className="flex items-center justify-between gap-2 text-[11px] text-[var(--p-dim)]">
       <span className="w-[86px] truncate">{label}</span>
-      <HexSwatch label={label} value={value} onChange={(v) => set(key, v)} />
-    </label>
+      <ColourField label={label} value={value} onChange={(v) => set(key, v)} {...more} />
+    </div>
   )
+  // The selection shows what is drawn until one is chosen: the cursor AS
+  // DRAWN (composited and floored, which a see-through cursor is) at 55, the
+  // terminal's own derivation, so a nudge starts from what was on screen.
+  // Its alpha stops at 254/255, since xterm draws an OPAQUE selection at 0.3
+  // (ThemeService, issue 2737) and what is picked must be what is drawn.
+  // Escape on a selection never chosen leaves it unchosen. The preview card
+  // draws the same resolution: raw alphas would show a 30% foreground the
+  // terminal floors to 4.5:1.
+  const chosenSelection = draft.selection
+  const drawn = useMemo(() => resolveCustomTheme(draft), [draft])
   return (
     // A popup, not an inline section: below the card grid the editor sat out
     // of view. data-owns-escape keeps App's window Escape away; the backdrop
@@ -238,19 +263,23 @@ function TermThemeEditor({
         <div className="mb-3 text-[13px] font-bold text-[var(--p-text)]">Edit colours</div>
         <div className="flex flex-wrap items-start gap-6">
           <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-            {well('Background', 'bg', draft.bg)}
+            {well('Background', 'bg', draft.bg, { alpha: false })}
             {well('Foreground', 'fg', draft.fg)}
             {well('Cursor', 'cursor', draft.cursor)}
+            {well('Selection', 'selection', chosenSelection ?? drawn.selectionBackground, {
+              alphaMax: 254 / 255,
+              onRevert: () => set('selection', chosenSelection)
+            })}
             {ANSI_KEYS.map((k) => well(k, k, draft.ansi[k] ?? '#888888'))}
           </div>
           <TermThemeCard
             id="custom-preview"
             name="Custom"
             on
-            bg={draft.bg}
-            fg={draft.fg}
-            cursor={draft.cursor}
-            ansi={cardAnsi(draft.ansi)}
+            bg={drawn.background}
+            fg={drawn.foreground}
+            cursor={drawn.cursor}
+            ansi={cardAnsi(drawn as unknown as Record<string, string>)}
             onPick={() => {}}
           />
         </div>
@@ -291,7 +320,23 @@ function presetLook(id: string): ReturnType<typeof resolveTermTheme> {
   return look
 }
 
-function paletteOf(id: string): Pick<CustomTermTheme, 'bg' | 'fg' | 'cursor' | 'ansi'> {
+function paletteOf(id: string): Pick<CustomTermTheme, 'bg' | 'fg' | 'cursor' | 'ansi' | 'selection'> {
+  // THE EDITOR EDITS WHAT IS STORED (#112). A Custom is handed over raw, its
+  // alphas and chosen selection included: resolved, it would be the floored
+  // composites, and Save changes would turn every see-through colour into an
+  // opaque one. Presets and the host's style keep normalising (Prism's
+  // e2e holds the follow-style Background to six digits).
+  const raw = id === 'custom' ? customTermTheme() : null
+  if (raw) {
+    const out: Pick<CustomTermTheme, 'bg' | 'fg' | 'cursor' | 'ansi' | 'selection'> = {
+      bg: raw.bg,
+      fg: raw.fg,
+      cursor: raw.cursor,
+      ansi: { ...raw.ansi }
+    }
+    if (raw.selection) out.selection = raw.selection
+    return out
+  }
   const t = resolveTermTheme(id)
   const ansi: Record<string, string> = {}
   for (const k of ANSI_KEYS) {
@@ -359,6 +404,9 @@ export function TerminalAppearanceSettings({
   const questionCol = useAgentQuestionColorChoice()
   const inForce = useAgentColors()
   const custom = useCustomTermTheme()
+  // The Custom card draws what the terminal draws (#113 review), not the raw
+  // alphas; resolved once per saved Custom, which the store already caches.
+  const customDrawn = useMemo(() => (custom ? resolveCustomTheme(custom) : null), [custom])
   // What the HOST's style looks like right now, for its card; re-read when the
   // style repaints :root. Only a host WITH styles has one (Prism).
   const [styleTheme, setStyleTheme] = useState(() => resolveTermTheme(followsHostStyle() ? 'style' : termThemeId()))
@@ -552,10 +600,10 @@ export function TerminalAppearanceSettings({
                 id="custom"
                 name="Custom"
                 on={themeId === 'custom'}
-                bg={custom.bg}
-                fg={custom.fg}
-                cursor={custom.cursor}
-                ansi={cardAnsi(custom.ansi)}
+                bg={customDrawn!.background}
+                fg={customDrawn!.foreground}
+                cursor={customDrawn!.cursor}
+                ansi={cardAnsi(customDrawn as unknown as Record<string, string>)}
                 onPick={() => pick('custom')}
                 onEdit={() => setEditing(paletteOf('custom'))}
               />
@@ -668,7 +716,7 @@ export function TerminalAppearanceSettings({
               disabled={noAcrylic || !acrylicOn}
               onChange={(e) => setTermOpacity(Number(e.target.value))}
               className="h-1.5 w-[180px] cursor-pointer appearance-none rounded-full bg-[var(--p-track)] disabled:cursor-default"
-              style={{ accentColor: 'var(--p-accent)' }}
+              style={{ accentColor: 'var(--p-accent-solid, var(--p-accent))' }}
             />
           </div>
         </Pref>
@@ -688,7 +736,7 @@ export function TerminalAppearanceSettings({
               Reset
             </button>
           )}
-          <HexSwatch label="Working colour" value={inForce.working} onChange={setAgentColor} />
+          <ColourField label="Working colour" value={inForce.working} onChange={setAgentColor} onRevert={() => setAgentColor(agentCol)} />
         </div>
       </Pref>
       <Pref
@@ -706,7 +754,7 @@ export function TerminalAppearanceSettings({
               Reset
             </button>
           )}
-          <HexSwatch label="Finished colour" value={inForce.finished} onChange={setAgentDoneColor} />
+          <ColourField label="Finished colour" value={inForce.finished} onChange={setAgentDoneColor} onRevert={() => setAgentDoneColor(doneCol)} />
         </div>
       </Pref>
       <Pref
@@ -724,7 +772,7 @@ export function TerminalAppearanceSettings({
               Reset
             </button>
           )}
-          <HexSwatch label="Question colour" value={inForce.question} onChange={setAgentQuestionColor} />
+          <ColourField label="Question colour" value={inForce.question} onChange={setAgentQuestionColor} onRevert={() => setAgentQuestionColor(questionCol)} />
         </div>
       </Pref>
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type JSX, type ReactNode } from 'react'
+import { ColourField } from './ColourPicker'
 
 // THE SETTINGS FIELDS, shared by both hosts (#15). The owner's rule: the two
 // apps' terminal settings are the same settings, "the setting names, types, how
@@ -39,14 +40,6 @@ export function Switch({
   )
 }
 
-/**
- * A colour well: type a hex, or open the system picker.
- *
- * The hex is a field rather than a readout - a colour you already know is
- * quicker typed than hunted for in a picker, and it is how a colour arrives
- * from anywhere else. It is held as text while you edit and only applied when
- * it parses, so half-typed values don't repaint the app on every keystroke.
- */
 /** "#abc", "abc", "#aabbcc" → "#aabbcc"; anything else → null. */
 export function parseHexInput(raw: string): string | null {
   const hex = '#' + raw.trim().replace(/^#/, '')
@@ -74,57 +67,23 @@ export function hexCommit(draft: string | null, value: string): string | null {
   return full && full !== parseHexInput(value) ? full : null
 }
 
-/** The compact colour control: a hex field and a swatch. Every place a colour
- *  is chosen carries the field - a picker without one strands anyone pasting
- *  a code from elsewhere. */
+/** The compact colour control, with no alpha: the core's ColourField
+ *  (`ColourPicker.tsx`, #112) with its alpha bar off and a typed alpha dropped,
+ *  for a caller not yet moved to alpha. Every place a colour is chosen carries
+ *  the code field: a picker without one strands anyone pasting a code. */
 export function HexSwatch({
   label,
   value,
-  onChange
+  onChange,
+  onRevert
 }: {
   label: string
   value: string
   onChange: (v: string) => void
+  /** Escape after the picker wrote: put the row's prior state back. */
+  onRevert?: () => void
 }): JSX.Element {
-  // While you are typing the field holds the draft; the rest of the time it is
-  // simply the colour. No effect syncing the two, which is a render loop
-  // waiting to happen.
-  const [draft, setDraft] = useState<string | null>(null)
-  const text = draft ?? value
-  const commit = (): void => {
-    setDraft(null) // either it took, or the field goes back to the colour
-    const full = hexCommit(draft, value)
-    if (full) onChange(full)
-  }
-  return (
-    <span className="flex items-center gap-1.5">
-      <input
-        value={text}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') commit()
-          else if (e.key === 'Escape') setDraft(null)
-        }}
-        spellCheck={false}
-        aria-label={`${label} hex value`}
-        className="w-[64px] rounded-[var(--p-radius-sm)] border border-[color:var(--p-line)] bg-[var(--p-control)] px-1 py-0.5 text-center font-[Consolas,'Cascadia_Mono',monospace] text-[10.5px] uppercase text-[var(--p-text)] focus-visible:border-[var(--p-accent-hi)] focus-visible:outline-none"
-      />
-      <label
-        className="relative block h-6 w-9 cursor-pointer overflow-hidden rounded-[var(--p-radius-sm)] border border-[color:var(--p-line)]"
-        style={{ background: value }}
-        title="Pick a colour"
-      >
-        <input
-          type="color"
-          aria-label={label}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        />
-      </label>
-    </span>
-  )
+  return <ColourField label={label} value={value} onChange={onChange} onRevert={onRevert} alpha={false} />
 }
 
 /** Two or three exclusive choices as one control rather than a row of buttons. */

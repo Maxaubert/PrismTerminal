@@ -236,7 +236,9 @@ function WindowColour({
             Reset
           </button>
         )}
-        <HexSwatch label={label} value={chosen ?? fromTheme} onChange={onPick} />
+        {/* Escape in the picker puts back what was chosen when it opened, a
+            row that followed the theme included (#112). */}
+        <HexSwatch label={label} value={chosen ?? fromTheme} onChange={onPick} onRevert={() => onPick(chosen)} />
       </div>
     </Pref>
   )

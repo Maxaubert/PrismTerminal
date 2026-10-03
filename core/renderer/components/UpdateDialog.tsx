@@ -260,7 +260,7 @@ export default function UpdateDialog({
                 an install running backwards. */}
             <div
               data-update-fill
-              className={`h-full rounded-full bg-[var(--p-accent)] ${running ? 'transition-[width] duration-300 ease-out' : ''}`}
+              className={`h-full rounded-full bg-[var(--p-accent-solid,var(--p-accent))] ${running ? 'transition-[width] duration-300 ease-out' : ''}`}
               style={{ width: `${running ? pct : 0}%` }}
             />
           </div>

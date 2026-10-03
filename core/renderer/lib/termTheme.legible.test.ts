@@ -1,11 +1,45 @@
 import { describe, expect, it } from 'vitest'
 import { TERM_PRESETS, resolveTermTheme } from './termTheme'
 import { ANSI_CONTRAST_FLOOR, contrastRatio, legiblePalette, type Ansi16 } from './termAnsi'
+import { saveCustomTermTheme } from './termLook'
+import { withAlpha } from './colour'
 
 const KEYS: Array<keyof Ansi16> = [
   'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
   'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite'
 ]
+
+// ALPHA NEVER MAKES A THEME LESS LEGIBLE (#112). Every preset, saved as a
+// Custom with its text, cursor and sixteen at alpha 0.1 to 0.9: the text and
+// cursor read at least as well as their opaque pick, up to the floor; the
+// sixteen clear 3:1 on the composite, as `legiblePalette` floors them opaque.
+describe('a Custom at every alpha reads', () => {
+  it('text 4.5:1 and cursor 3:1 (or the opaque pick), the sixteen 3:1', () => {
+    for (const p of TERM_PRESETS) {
+      const base = resolveTermTheme(p.id)
+      const ansi = Object.fromEntries(KEYS.map((k) => [k, base[k] as string]))
+      for (let i = 1; i <= 9; i += 1) {
+        const a = i / 10
+        localStorage.clear()
+        saveCustomTermTheme({
+          bg: p.bg,
+          fg: withAlpha(p.fg, a),
+          cursor: withAlpha(p.cursor, a),
+          ansi: Object.fromEntries(Object.entries(ansi).map(([k, v]) => [k, withAlpha(v, a)]))
+        })
+        const t = resolveTermTheme('custom')
+        const at = `${p.id} at ${a}`
+        // Measured on what is drawn: the composite, opaque. A hex8 measured
+        // as it stands is judged on its first six digits, as if solid.
+        for (const v of [t.foreground, t.cursor, ...KEYS.map((k) => t[k] as string)]) expect(v, at).toMatch(/^#[0-9a-f]{6}$/)
+        expect(contrastRatio(t.foreground, p.bg), `${at} text`).toBeGreaterThanOrEqual(Math.min(4.5, contrastRatio(p.fg, p.bg)) - 0.02)
+        expect(contrastRatio(t.cursor, p.bg), `${at} cursor`).toBeGreaterThanOrEqual(Math.min(3, contrastRatio(p.cursor, p.bg)) - 0.02)
+        for (const k of KEYS) expect(contrastRatio(t[k] as string, p.bg), `${at} ${k}`).toBeGreaterThanOrEqual(ANSI_CONTRAST_FLOOR - 0.01)
+      }
+    }
+    localStorage.clear()
+  })
+})
 
 describe('every terminal theme reads (#99 follow-up, 2026-09-04)', () => {
   it('all sixteen colours of every preset clear the floor against its background', () => {

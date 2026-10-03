@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
-import { followsHostStyle, hostDefaults, type AgentIndicator } from '../host'
+import { followsHostStyle, hostDefaults, hostGround, type AgentIndicator } from '../host'
 import { liveThemeId } from './termThemeRetired'
+import { alphaOf, parseColour, toStored } from './colour'
 
 export type { AgentIndicator }
 
@@ -166,7 +167,20 @@ export function setAgentQuestionOn(on: boolean): void {
   localStorage.setItem(QUESTION_ON_KEY, on ? '1' : '0')
   notify()
 }
-const HEX = /^#[0-9a-f]{6}$/i
+/** Six digits, or eight with an alpha (#112): every reader takes both. */
+const HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i
+
+/** A stored agent colour: the canonical form of a 6 or 8 digit hex, or null. */
+const agentHex = (v: string | null | undefined): string | null =>
+  v && HEX.test(v) ? toStored(parseColour(v)!) : null
+
+/** Write a choice, or forget it: anything but a 6 or 8 digit hex gives the
+ *  choice back to the theme. */
+function writeChoice(key: string, hex: string | null | undefined): void {
+  const v = agentHex(hex)
+  if (v) localStorage.setItem(key, v)
+  else localStorage.removeItem(key)
+}
 
 /**
  * The two agent colours, as CHOICES. '' means "follow the theme" and is the
@@ -176,48 +190,47 @@ const HEX = /^#[0-9a-f]{6}$/i
  * this file only remembers whether the user has an opinion.
  */
 export function agentColorChoice(): string {
-  const v = localStorage.getItem(AGENT_COLOR_KEY)
-  return v && HEX.test(v) ? v : hostDefaults().agentColor
+  return agentHex(localStorage.getItem(AGENT_COLOR_KEY)) ?? hostDefaults().agentColor
 }
 
 /** A hex picks a colour; '' gives the choice back to the theme. */
 export function setAgentColor(hex: string): void {
-  if (HEX.test(hex)) localStorage.setItem(AGENT_COLOR_KEY, hex)
-  else localStorage.removeItem(AGENT_COLOR_KEY)
+  writeChoice(AGENT_COLOR_KEY, hex)
   notify()
 }
 
 /** The question colour's choice ('' = the default blue, moved to the ground's
  *  floor by lib/agentColors), like the other two. */
 export function agentQuestionColorChoice(): string {
-  const v = localStorage.getItem(AGENT_QUESTION_KEY)
-  return v && HEX.test(v) ? v : ''
+  return agentHex(localStorage.getItem(AGENT_QUESTION_KEY)) ?? ''
 }
 export function setAgentQuestionColor(hex: string): void {
-  if (HEX.test(hex)) localStorage.setItem(AGENT_QUESTION_KEY, hex)
-  else localStorage.removeItem(AGENT_QUESTION_KEY)
+  writeChoice(AGENT_QUESTION_KEY, hex)
   notify()
 }
 
 /** The finished-while-away colour's choice: an agent that stopped working on
  *  a BACKGROUND tab wears it until the tab is visited. */
 export function agentDoneColorChoice(): string {
-  const v = localStorage.getItem(AGENT_DONE_KEY)
-  return v && HEX.test(v) ? v : hostDefaults().agentDoneColor
+  return agentHex(localStorage.getItem(AGENT_DONE_KEY)) ?? hostDefaults().agentDoneColor
 }
 
 export function setAgentDoneColor(hex: string): void {
-  if (HEX.test(hex)) localStorage.setItem(AGENT_DONE_KEY, hex)
-  else localStorage.removeItem(AGENT_DONE_KEY)
+  writeChoice(AGENT_DONE_KEY, hex)
   notify()
 }
 
 const CUSTOM_KEY = 'prism.term.custom'
 
 export interface CustomTermTheme {
+  /** Every colour is the stored form: `#rrggbb`, or `#rrggbbaa` with an
+   *  alpha (#112). */
   bg: string
   fg: string
   cursor: string
+  /** The selection's fill, with its alpha. Absent: derived from the cursor,
+   *  as it always was (`<cursor>55`). */
+  selection?: string
   ansi: Record<string, string>
   /** The rest of the terminal setup, captured by "Save changes": the look is
    *  more than the palette. All optional - older saves carry colours only.
@@ -276,12 +289,11 @@ export function applyCustomExtras(t: CustomTermTheme | null): void {
   // carries them does not put them back.
   if (t.indicator) localStorage.setItem(AGENT_IND_KEY, t.indicator)
   // A saved setup that followed the theme goes back to following it.
-  if (t.indicatorColor) localStorage.setItem(AGENT_COLOR_KEY, t.indicatorColor)
-  else localStorage.removeItem(AGENT_COLOR_KEY)
-  if (t.doneColor) localStorage.setItem(AGENT_DONE_KEY, t.doneColor)
-  else localStorage.removeItem(AGENT_DONE_KEY)
-  if (t.questionColor) localStorage.setItem(AGENT_QUESTION_KEY, t.questionColor)
-  else localStorage.removeItem(AGENT_QUESTION_KEY)
+  // Validated as every other writer is: a colour that is not one follows the
+  // theme rather than landing in storage unchecked (#112).
+  writeChoice(AGENT_COLOR_KEY, t.indicatorColor)
+  writeChoice(AGENT_DONE_KEY, t.doneColor)
+  writeChoice(AGENT_QUESTION_KEY, t.questionColor)
   if (t.acrylic !== undefined) localStorage.setItem(ACRYLIC_KEY, t.acrylic ? '1' : '0')
   if (t.opacity !== undefined) localStorage.setItem(OPACITY_KEY, String(t.opacity))
   notify()
@@ -294,10 +306,50 @@ export function customTermTheme(): CustomTermTheme | null {
     const raw = localStorage.getItem(CUSTOM_KEY)
     if (!raw) return null
     const v = JSON.parse(raw) as CustomTermTheme
-    return typeof v.bg === 'string' && typeof v.fg === 'string' ? v : null
+    // Every colour read through the one parser and kept in the one stored form
+    // (#112). A background or foreground that is not a colour is no Custom, as
+    // it always was; a bad cursor is the text colour, a bad selection is
+    // derived, and a bad one of the sixteen is simply absent.
+    const bg = stored(v.bg)
+    const fg = stored(v.fg)
+    if (!bg || !fg) return null
+    const ansi: Record<string, string> = {}
+    if (v.ansi && typeof v.ansi === 'object')
+      for (const [k, c] of Object.entries(v.ansi)) {
+        const ok = stored(c)
+        if (ok) ansi[k] = ok
+      }
+    const selection = stored(v.selection)
+    const out: CustomTermTheme = { ...v, bg, fg, cursor: stored(v.cursor) ?? fg, ansi }
+    if (selection) out.selection = selection
+    else delete out.selection
+    return out
   } catch {
     return null
   }
+}
+
+/** A colour in its stored form, or null for anything that is not one. */
+function stored(c: unknown): string | null {
+  if (typeof c !== 'string') return null
+  const p = parseColour(c)
+  return p ? toStored(p) : null
+}
+
+/**
+ * The alpha of the ground in force (#112): the host's picked ground where it
+ * has one (Prism Terminal's Background colour), else the Custom theme's own
+ * background, 1 for a preset (presets are opaque). The same order as the
+ * window paints in.
+ */
+export function termGroundAlpha(): number {
+  const picked = hostGround()
+  if (picked) return alphaOf(picked)
+  if (termThemeId() === 'custom') {
+    const c = customTermTheme()
+    if (c) return alphaOf(c.bg)
+  }
+  return 1
 }
 
 export function saveCustomTermTheme(theme: CustomTermTheme): void {
