@@ -12,7 +12,7 @@ import { tabLabels, type Tab } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
 import { useAgentDoneOn, useAgentIndicator, useAgentQuestionOn } from '@core/renderer/lib/termLook'
 import { useAgentColors } from '@core/renderer/lib/agentColors'
-import { contrastRatio } from '@core/renderer/lib/termAnsi'
+import { inkOn } from '@core/renderer/lib/colour'
 import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from '@core/renderer/lib/recentRoots'
 import { ContextMenu } from './ContextMenu'
 import { MenuIcon } from './MenuIcon'
@@ -149,8 +149,11 @@ export function TabStrip({
   // Full mode fills the tab with the colour. Text biases WHITE: strict
   // contrast maths picks black on a mid orange or indigo, but white on a
   // saturated fill is the look; black only wins on genuinely light fills
-  // (contrast vs black of 12 is a ~0.55 luminance threshold).
-  const onTint = (c: string): string => (contrastRatio('#000000', c) < 12 ? '#ffffff' : '#000000')
+  // (contrast vs black of 12 is a ~0.55 luminance threshold). A SEE-THROUGH
+  // working colour (#112) is judged as laid on the strip's own opaque ground,
+  // where it takes whichever of the two reads better (the core's `inkOn`).
+  const onTint = (c: string): string =>
+    inkOn(c, getComputedStyle(document.documentElement).getPropertyValue('--p-bg-solid').trim())
   // A tab being carried (#71 follow-up): the strip animates it rather than
   // drawing a hairline - the tab lifts out and its neighbours slide across to
   // open the gap it would drop into, which is what "picked up" looks like.

@@ -2435,6 +2435,20 @@ const scenarios = {
       await sleep(200)
       ok((await get('prism.term.agentColor')) === null && (await get('prism.window.accent')) === null, 'tabbing through a colour that follows the theme leaves it following')
       ok((await page.locator('[data-follow-theme="working"]').count()) === 0, 'and offers no Reset')
+      // #112: the row is now a code field AND a swatch; Tab walks both with the
+      // picker shut, and still pins nothing.
+      for (const pref of ['agent-color', 'agent-done-color', 'window-background']) {
+        await page.locator(`[data-pref="${pref}"] input:not([type])`).focus()
+        await page.keyboard.press('Tab')
+        ok(await page.evaluate((p) => document.activeElement?.matches(`[data-pref="${p}"] [data-colour-swatch]`), pref), `Tab goes from ${pref}'s code field to its swatch`)
+        await page.keyboard.press('Tab')
+      }
+      await sleep(200)
+      ok(
+        (await get('prism.term.agentColor')) === null && (await get('prism.term.agentDoneColor')) === null && (await get('prism.window.background')) === null,
+        'tabbing through a shut picker stores nothing'
+      )
+      ok((await page.locator('[data-colour-popover]').count()) === 0, 'and opens none')
 
       // #28
       await page.locator('[data-term-card="pitch"]').first().click()
@@ -2448,6 +2462,20 @@ const scenarios = {
       ok(!!(await until(async () => (await page.locator('[data-theme-editor]').count()) === 0, 3000, 50)), 'Escape closes it')
       ok(await pencil.evaluate((el) => el === document.activeElement), 'and the focus is back on the pencil')
 
+      // #112: an Escape aimed at a picker inside the editor is the picker's.
+      await pencil.click()
+      await page.locator('[data-theme-editor]').waitFor({ timeout: 3000 })
+      await page.locator('[data-theme-editor] [data-colour-swatch][aria-label="Pick Cursor"]').click()
+      const pop = page.locator('[data-colour-popover]')
+      ok(!!(await until(async () => (await pop.count()) === 1, 3000, 50)), 'a well in the editor opens the picker')
+      ok(await page.evaluate(() => !!document.activeElement?.closest('[data-colour-popover]')), 'which takes the focus')
+      await page.keyboard.press('Escape')
+      ok(!!(await until(async () => (await pop.count()) === 0, 3000, 50)), 'Escape closes the picker')
+      ok(!(await until(async () => (await page.locator('[data-theme-editor]').count()) === 0, 600, 50)), 'and only the picker: the editor stays open')
+      ok(await page.evaluate(() => document.activeElement?.matches('[data-colour-swatch][aria-label="Pick Cursor"]')), 'with the focus back on the swatch')
+      await page.keyboard.press('Escape')
+      await until(async () => (await page.locator('[data-theme-editor]').count()) === 0, 3000, 50)
+
       // #8, #29: a saved Custom with an agent colour, a picked background, then
       // an edit. (A font size until 2026-09-28, when the font left the theme.)
       const agent = page.locator('[data-pref="agent-color"] input:not([type])')
@@ -2460,7 +2488,7 @@ const scenarios = {
       await bgField.press('Enter')
       ok(!!(await until(async () => (await get('prism.window.background')) !== null, 3000, 50)), 'a background is picked')
       await page.locator('[data-edit-theme="custom"]').click()
-      const editBg = page.locator('[data-theme-editor] input[aria-label="Background hex value"]')
+      const editBg = page.locator('[data-theme-editor] input[aria-label="Background"]')
       await editBg.fill('#101820')
       await editBg.press('Enter')
       await page.locator('[data-save-custom]').click()
@@ -2481,6 +2509,251 @@ const scenarios = {
       await page.mouse.click(40, 300)
       ok(!!(await until(async () => (await capture.getAttribute('data-hotkey-capture')) === 'off', 2000, 50)), 'a press elsewhere ends the capture')
       await page.evaluate(() => localStorage.setItem('prism.dictation.enabled', '0'))
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * ONE COLOUR PICKER, WITH ALPHA, FOR EVERY COLOUR (#112; owner, 2026-10-03:
+   * "an input field for a color code and an alpha per colour on every colour
+   * setting colour picker"). Driven through the DOM contract the spec fixes
+   * (Prism's gate is written against the same names):
+   *  - the Working colour at half alpha: hex8 stored and shown, a see-through
+   *    Full tab whose text reads on the composite;
+   *  - opened and shut with no change stores nothing; a change then Escape
+   *    gives the row back to the theme, with no Reset;
+   *  - the format toggle (HEX, RGBA, HSLA), and a typed hsla() stores hex8;
+   *  - the eyedropper, stubbed, keeps the alpha;
+   *  - the theme editor: red at 40% and the text at 30%, saved as Custom, still
+   *    read on the ground, come back with their alphas, and Save changes keeps
+   *    them;
+   *  - Command help (F1) and the update window each put the picker away.
+   */
+  async colourPicker(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: ['--preview-update', w.alpha] })
+    const shot = (name) => page.screenshot({ path: resolve(process.cwd(), `.e2e-shots/colour-picker-${name}.png`) }).catch(() => {})
+    const get = (k) => page.evaluate((key) => localStorage.getItem(key), k)
+    const pop = page.locator('[data-colour-popover][role="dialog"]')
+    const popGone = async () => !!(await until(async () => (await pop.count()) === 0, 3000, 50))
+    const rgba = (c) => {
+      const n = (c.match(/[\d.]+/g) ?? []).map(Number)
+      return { rgb: n.slice(0, 3), a: n.length > 3 ? n[3] : 1 }
+    }
+    const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.trim().slice(i, i + 2), 16))
+    const lin = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+    const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+    const ratio = (x, y) => {
+      const [a, b] = [lum(x), lum(y)]
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+    }
+    try {
+      // A shell stands in for Claude, mid-answer, as in `indicator`.
+      await page.waitForFunction(
+        () => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()),
+        null,
+        { timeout: 45000 }
+      )
+      await polled(page)
+      await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
+      await until(() => page.evaluate(() => !!document.querySelector('[data-agent-present]')), 8000, 50)
+      await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x25D0 + ' Claude Code'")
+      ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-agent-state="working"]')), 8000, 50)), 'a working stand-in agent is on the strip')
+
+      await page.locator('[data-title-settings]').click()
+      await page.locator('[data-settings-tab="appearance"]').click()
+      await page.locator('[data-pref="agent-indicator"] [data-seg="full"]').click()
+      const row = page.locator('[data-pref="agent-color"]')
+      const swatch = row.locator('[data-colour-swatch]')
+      const field = row.locator('input:not([type])')
+      const reset = row.locator('[data-follow-theme]')
+      ok((await get('prism.term.agentColor')) === null, 'the working colour follows the theme to begin with')
+      ok((await swatch.getAttribute('aria-label')) === 'Pick Working colour', 'the row has a swatch named for it')
+      ok((await page.locator('input[type="color"]').count()) === 0, 'and no native colour input is left on the page')
+
+      // Opened and shut with no change: nothing stored, no Reset.
+      await swatch.click()
+      ok(!!(await until(async () => (await pop.count()) === 1, 3000, 50)), 'the swatch opens the picker')
+      ok((await pop.getAttribute('aria-label')) === 'Working colour', "named for the row's colour")
+      const sliders = await pop.locator('[role="slider"]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
+      ok(JSON.stringify(sliders) === JSON.stringify(['Saturation and brightness', 'Hue', 'Alpha']), `with its three sliders (${sliders.join(', ')})`)
+      ok((await pop.locator('button[data-colour-format]').textContent()) === 'HEX', 'and the format reads HEX')
+      await shot('open')
+      await page.keyboard.press('Escape')
+      ok(await popGone(), 'Escape closes it')
+      ok((await get('prism.term.agentColor')) === null && (await reset.count()) === 0, 'an open and close with no change stores nothing and shows no Reset')
+      ok(await swatch.evaluate((el) => el === document.activeElement), 'and the focus is back on the swatch')
+
+      // Half alpha, on the keyboard.
+      await swatch.click()
+      await until(async () => (await pop.count()) === 1, 3000, 50)
+      const alpha = pop.locator('[role="slider"][aria-label="Alpha"]')
+      await alpha.focus()
+      const now = async () => Number(await alpha.getAttribute('aria-valuenow'))
+      for (let i = 0; i < 40 && (await now()) > 50; i++) await page.keyboard.press((await now()) - 50 >= 10 ? 'Shift+ArrowLeft' : 'ArrowLeft')
+      ok((await now()) === 50, `Shift+Left walks the alpha to 50 percent (${await now()})`)
+      const stored = await until(async () => {
+        const v = await get('prism.term.agentColor')
+        return /^#[0-9a-f]{8}$/.test(v ?? '') ? v : null
+      }, 3000, 50)
+      ok(!!stored && stored.endsWith('80'), `the working colour is stored as hex8 (${stored})`)
+      ok(/^#[0-9a-f]{8}$/.test(await field.inputValue()), `and the code field shows the eight digits (${await field.inputValue()})`)
+      const tab = await until(async () => {
+        const l = await page.evaluate(() => {
+          const el = document.querySelector('[data-agent-state="working"]')
+          if (!el) return null
+          const cs = getComputedStyle(el)
+          return { bg: cs.backgroundColor, ink: cs.color, ground: getComputedStyle(document.documentElement).getPropertyValue('--p-bg-solid') }
+        })
+        // Settled, not mid-transition: the fill eases between colours.
+        return l && Math.abs(rgba(l.bg).a - 128 / 255) < 0.01 ? l : null
+      }, 4000, 50)
+      ok(!!tab, `the Full tab's fill carries the alpha (${tab?.bg})`)
+      if (tab) {
+        const f = rgba(tab.bg)
+        const g = hexRgb(tab.ground)
+        const seen = f.rgb.map((v, i) => g[i] + (v - g[i]) * f.a)
+        const r = ratio(rgba(tab.ink).rgb, seen)
+        ok(r >= 4.5, `the Full tab's text reads on the composite (${r.toFixed(1)}:1, ${tab.ink} on ${tab.bg} over ${tab.ground.trim()})`)
+      }
+      await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/colour-picker-full-tab.png') }).catch(() => {})
+      await shot('alpha')
+
+      // Escape after a write: the row follows the theme again.
+      await page.keyboard.press('Escape')
+      ok(await popGone(), 'Escape closes the changed picker')
+      ok(!!(await until(async () => (await get('prism.term.agentColor')) === null, 3000, 50)), 'and puts back a row that follows the theme')
+      ok((await reset.count()) === 0, 'with no Reset showing')
+
+      // The format toggle, and a typed hsla().
+      await swatch.click()
+      await until(async () => (await pop.count()) === 1, 3000, 50)
+      const fmt = pop.locator('button[data-colour-format]')
+      await fmt.click()
+      ok((await fmt.textContent()) === 'RGBA' && /^rgba\(\d+, \d+, \d+, 1\)$/.test(await field.inputValue()), `RGBA shows rgba() (${await field.inputValue()})`)
+      await fmt.click()
+      ok((await fmt.textContent()) === 'HSLA' && /^hsla\(\d+, \d+%, \d+%, 1\)$/.test(await field.inputValue()), `HSLA shows hsla() (${await field.inputValue()})`)
+      ok((await get('prism.term.colourFormat')) === 'hsla' && (await get('prism.term.agentColor')) === null, 'the toggle is remembered and stores no colour')
+      await shot('hsla')
+      await field.fill('hsla(200, 50%, 40%, 0.5)')
+      await field.press('Enter')
+      ok(!!(await until(async () => (await get('prism.term.agentColor')) === '#33779980', 3000, 50)), `a typed hsla() stores the same hex8 (${await get('prism.term.agentColor')})`)
+      ok((await reset.count()) === 1, 'and the row offers Reset')
+      await swatch.click()
+      await until(async () => (await pop.count()) === 1, 3000, 50)
+      await fmt.click()
+      ok((await fmt.textContent()) === 'HEX' && (await field.inputValue()) === '#33779980', `back to HEX, the field is the stored form (${await field.inputValue()})`)
+
+      // The eyedropper, stubbed: the screen's RGB, the colour's own alpha.
+      await page.keyboard.press('Escape')
+      await popGone()
+      await page.evaluate(() => {
+        window.EyeDropper = class {
+          open() {
+            return Promise.resolve({ sRGBHex: '#ff0000' })
+          }
+        }
+      })
+      await swatch.click()
+      await until(async () => (await pop.count()) === 1, 3000, 50)
+      const dropper = pop.locator('button[data-colour-eyedropper]')
+      ok((await dropper.count()) === 1, 'the eyedropper is offered where the browser has one')
+      await dropper.click()
+      ok(!!(await until(async () => (await get('prism.term.agentColor')) === '#ff000080', 3000, 50)), `a dropped colour keeps the alpha (${await get('prism.term.agentColor')})`)
+      await page.keyboard.press('Escape')
+      await popGone()
+      ok((await get('prism.term.agentColor')) === '#33779980', 'and Escape takes the drop back to what the picker opened with')
+
+      // Command help and the update window each put the picker away.
+      await swatch.click()
+      await until(async () => (await pop.count()) === 1, 3000, 50)
+      await page.keyboard.press('F1')
+      ok(!!(await until(async () => (await page.locator('[data-help-panel], [role="dialog"][aria-label*="help" i]').count()) > 0, 4000, 50)), 'F1 opens Command help over the picker')
+      ok(await popGone(), 'and the picker is gone')
+      await page.keyboard.press('Escape')
+      await sleep(300)
+      await swatch.click()
+      await until(async () => (await pop.count()) === 1, 3000, 50)
+      // A click with no pointer press: only the update window taking the focus
+      // can close the picker here.
+      await page.evaluate(() => document.querySelector('[data-update-chip]')?.click())
+      ok(!!(await until(async () => (await page.locator('[data-update-dialog]').count()) === 1, 4000, 50)), 'the update window opens')
+      ok(await popGone(), 'and the picker is gone')
+      ok((await get('prism.term.agentColor')) === '#33779980', 'neither layer changed the colour')
+      await page.keyboard.press('Escape')
+      await until(async () => (await page.locator('[data-update-dialog]').count()) === 0, 3000, 50)
+      await row.locator('[data-follow-theme]').click()
+
+      // The theme editor: red at 40%, the text at 30%, saved as Custom.
+      await page.locator('[data-term-card="pitch"]').first().click()
+      await page.locator('[data-edit-theme="pitch"]').click()
+      const editor = page.locator('[data-theme-editor]')
+      await editor.waitFor({ timeout: 4000 })
+      const walk = async (well, to) => {
+        await editor.locator(`[data-colour-swatch][aria-label="Pick ${well}"]`).click()
+        await until(async () => (await pop.count()) === 1, 3000, 50)
+        const a = pop.locator('[role="slider"][aria-label="Alpha"]')
+        await a.focus()
+        const v = async () => Number(await a.getAttribute('aria-valuenow'))
+        for (let i = 0; i < 40 && (await v()) > to; i++) await page.keyboard.press((await v()) - to >= 10 ? 'Shift+ArrowLeft' : 'ArrowLeft')
+        const got = await v()
+        await page.keyboard.press('Tab') // stays inside, keeps the colour
+        // A press outside the picker (on the editor's own title, not its
+        // backdrop, which cancels the editor) keeps the colour and closes it.
+        await editor.locator('text=Edit colours').click()
+        await popGone()
+        return got
+      }
+      ok((await walk('red', 40)) === 40 && (await walk('Foreground', 30)) === 30, 'red walks to 40 percent and the text to 30')
+      ok((await editor.locator('[data-colour-swatch][aria-label="Pick Background"]').count()) === 1, 'the Background well is there')
+      await editor.locator('[data-colour-swatch][aria-label="Pick Background"]').click()
+      await until(async () => (await pop.count()) === 1, 3000, 50)
+      ok((await pop.locator('[role="slider"][aria-label="Alpha"]').count()) === 0, "the theme's Background has no alpha yet (it drives nothing until the window's see-through moves to it)")
+      await page.keyboard.press('Escape')
+      await popGone()
+      await shot('editor')
+      await editor.locator('[data-save-custom]').click()
+      const custom = JSON.parse((await get('prism.term.custom')) ?? '{}')
+      ok(/^#[0-9a-f]{6}66$/.test(custom.ansi?.red ?? '') && /^#[0-9a-f]{6}4d$/.test(custom.fg ?? ''), `the saved Custom keeps both alphas (red ${custom.ansi?.red}, text ${custom.fg})`)
+      await page.locator('[data-tab]').first().click()
+      await typeLine(page, 'cls; Write-Host REDTEXT -ForegroundColor DarkRed')
+      const seen = await until(async () => {
+        const m = await page.evaluate(() => {
+          const rgb = (s) => (s.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
+          const ground = rgb(getComputedStyle(document.querySelector('[data-term-region]')).backgroundColor)
+          // The OUTPUT line, alone on its row: the typed command above it
+          // holds the same word in PSReadLine's own colours.
+          const line = [...document.querySelectorAll('.xterm-rows > div')].find((r) => (r.textContent ?? '').trim() === 'REDTEXT')
+          const red = line ? [...line.querySelectorAll('span')].find((s) => (s.textContent ?? '').includes('REDTEXT')) : null
+          const text = getComputedStyle(document.querySelector('.xterm-rows')).color
+          return red ? { ground, red: rgb(getComputedStyle(red).color), text: rgb(text) } : null
+        })
+        return m
+      }, 8000, 150)
+      ok(!!seen, 'the red line is on screen')
+      if (seen) {
+        ok(ratio(seen.red, seen.ground) >= 3, `the applied red reads at 3:1 on the ground (${ratio(seen.red, seen.ground).toFixed(2)}:1, ${seen.red})`)
+        ok(ratio(seen.text, seen.ground) >= 4.5, `and the 30 percent text at 4.5:1 (${ratio(seen.text, seen.ground).toFixed(2)}:1, ${seen.text})`)
+      }
+      await page.locator('[data-title-settings]').click()
+      await page.locator('[data-settings-tab="appearance"]').click()
+      await page.locator('[data-edit-theme="custom"]').click()
+      await editor.waitFor({ timeout: 4000 })
+      const shown = async (label) => editor.locator(`input[aria-label="${label}"]`).inputValue()
+      ok((await shown('red')).endsWith('66') && (await shown('Foreground')).endsWith('4d'), `reopening Custom shows the 40 and 30 percent alphas (${await shown('red')}, ${await shown('Foreground')})`)
+      await editor.locator('button:has-text("Cancel")').click()
+      await until(async () => (await editor.count()) === 0, 3000, 50)
+      // Save changes: lit by an agent colour, it keeps the palette's alphas.
+      await field.fill('#3da9fc')
+      await field.press('Enter')
+      await page.locator('[data-save-term]').click()
+      const again = JSON.parse((await get('prism.term.custom')) ?? '{}')
+      ok(again.ansi?.red === custom.ansi?.red && again.fg === custom.fg, `Save changes keeps them (red ${again.ansi?.red}, text ${again.fg})`)
+      // End idle, so the close is not held on the agent question.
+      await page.locator('[data-tab]').first().click()
+      await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'")
+      await sleep(300)
     } finally {
       await closeApp(app)
     }
