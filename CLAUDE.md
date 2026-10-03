@@ -557,7 +557,7 @@ the owner's own call, #99.)
   first idle title is the agent STARTING, not working. Output scoring (`termActivity`) is only the
   fallback, and an agent's startup paint is not work (`markBorn` / `startupOutput`). The rules live in
   `lib/useAgentIndicator.ts`; change them there, with Prism's reasoning in hand.
-- **FINISHED AND QUESTION ARE LINES, EACH OPTIONAL; A RUN OF WORKERS SHARES ONE BAR; THE TASKBAR
+- **FINISHED AND QUESTION ARE LINES, EACH OPTIONAL; EVERY WORKING TAB HAS ITS OWN BAR; THE TASKBAR
   COUNTS** (owner, 2026-09-28; spec `docs/superpowers/specs/2026-09-28-attention-and-warm-dictation-design.md`).
   A tab whose agent finished, or waits on you, while you were NOT LOOKING (another tab in front, or
   the window unfocused) gets a static 3 px line along its bottom: Finished colour, or Question
@@ -566,12 +566,20 @@ the owner's own call, #99.)
   CLAUDE GIVES NO SIGNAL FOR A QUESTION (MEASURED in a pty: the title is `✳` exactly as when done, no
   bell, no OSC 9), so `agentQuestion.looksLikeQuestion` reads the last text rows of the screen
   (through termBus, never by importing the panel) for its footer when the title goes idle and as
-  output arrives while idle; a rewording in a Claude update is a change there. In Minimal, two or
-  more NEIGHBOURING working tabs draw ONE bar across them (`workingRuns`, `data-working-run`) at a
-  single tab's length and speed; tabs apart keep their own. The taskbar button's overlay icon shows
+  output arrives while idle; a rewording in a Claude update is a change there. In Minimal, EVERY working tab draws its OWN bar (owner, 2026-10-03, reverting the
+  2026-09-28 shared bar across neighbours: "i want that to be one for each tab, like it was
+  before"). The taskbar button's overlay icon shows
   how many tabs carry a mark (`taskbarBadge.ts`, `window:badge`, Settings > General switch, on):
-  a small grey disc with a white number, whatever the marks (owner, 2026-09-29: "too big and it's
-  green, it should be grey with white number").
+  a dark disc with a white number, whatever the marks (owner, 2026-09-29: "too big and it's
+  green, it should be grey with white number"; 2026-10-01, beside ChatGPT's: "so much clearer and high
+  res, fix that", #108). Drawn at the display's PHYSICAL size (`badgePixels`, 36 at 225%) and handed
+  to main as a PLAIN picture (a 2.25x-marked one was shrunk to 16 px), the reference's own
+  near-black `#25242c` filling the overlay, a large regular-weight number. IT STAYS AN OVERLAY:
+  drawn onto the window icon it was crisp in a bare window, but the INSTALLED app's taskbar button
+  wears its Start menu shortcut's icon (same app id) and showed nothing (MEASURED 2026-10-03); a
+  window icon only shows with an app id no shortcut has, which breaks pinning. The installed app's WINDOW icon is the exe's own (no `icon:`
+  in a packaged build): Windows then picks the .ico frame drawn for the size it needs, where the
+  explicit 256px frame was shrunk twice and came out soft (MEASURED, side by side at 48px).
   Tab names are centred in both widths, and a Dynamic tab is never under four characters wide.
   The `attention` e2e holds all of it.
 - **The indicator is MINIMAL by default and wears the THEME** (owner, 2026-09-18, #4; it was Full

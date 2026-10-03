@@ -379,7 +379,7 @@ const scenarios = {
       ok(label.align === 'center', `tab names are centred (${label.align})`)
       ok(label.width >= label.four - 1, `a one-letter tab is at least four characters wide (${label.width.toFixed(1)} vs ${label.four.toFixed(1)})`)
 
-      // Three Claudes side by side, all working: ONE bar across them.
+      // Three Claudes side by side, all working.
       for (const i of [0, 1, 2]) {
         await tab(i).click()
         await polled(page)
@@ -387,19 +387,17 @@ const scenarios = {
       }
       for (const i of [0, 1, 2]) await at(i, WORK)
       await until(async () => (await state(0)) === 'working' && (await state(1)) === 'working' && (await state(2)) === 'working', 8000, 50)
-      const joined = await page.evaluate(() => {
-        const runs = [...document.querySelectorAll('[data-working-run]')].map((r) => r.getBoundingClientRect())
-        const tabs = [...document.querySelectorAll('[data-tab]')].slice(0, 3).map((t) => t.getBoundingClientRect())
-        return { runs: runs.map((r) => [Math.round(r.left), Math.round(r.width)]), span: [Math.round(tabs[0].left), Math.round(tabs[2].right - tabs[0].left)], single: document.querySelectorAll('[data-tab] .p-agent-run').length }
-      })
-      ok(joined.runs.length === 1 && Math.abs(joined.runs[0][0] - joined.span[0]) <= 1 && Math.abs(joined.runs[0][1] - joined.span[1]) <= 2, `three working neighbours draw one bar across all three (${JSON.stringify(joined)})`)
-      ok(joined.single === 0, 'and none of their own')
+      // ONE BAR PER TAB (owner, 2026-10-03: "if multiple tabs in a row are
+      // working they share one working indicator ... i want that to be one for
+      // each tab, like it was before"): three working neighbours, three bars.
+      const bars = await page.evaluate(() => [...document.querySelectorAll('[data-tab]')].slice(0, 3).map((t) => t.querySelectorAll('.p-agent-run').length))
+      ok(bars.join(',') === '1,1,1', `three working neighbours each draw their own bar (${bars.join(',')})`)
+      ok(await page.evaluate(() => document.querySelectorAll('[data-working-run]').length === 0), 'and no shared bar across them')
       await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/attention-run.png') }).catch(() => {})
-      // The middle one stops: 1 and 3 are not neighbours, so each has its own.
       await at(1, IDLE)
       ok(
-        !!(await until(() => page.evaluate(() => document.querySelectorAll('[data-working-run]').length === 0 && document.querySelectorAll('[data-tab] .p-agent-run').length === 2), 5000, 50)),
-        'with the middle one idle, the two apart each draw their own'
+        !!(await until(() => page.evaluate(() => document.querySelectorAll('[data-tab] .p-agent-run').length === 2), 5000, 50)),
+        'with the middle one idle, the other two keep theirs'
       )
 
       // A QUESTION on a background tab: Claude's footer on screen, title idle.
@@ -413,6 +411,16 @@ const scenarios = {
       ok(q.kind === 'question' && q.height === 3, `as a line along the bottom (${JSON.stringify(q)})`)
       await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/attention-question.png') }).catch(() => {})
       ok(!!(await until(async () => (await badge()) === '1 tab needs a look', 4000, 50)), `and the taskbar badge counts it (${await badge()})`)
+      // AS CRISP AS THE OTHER APPS' (#108; owner, 2026-10-01, beside
+      // ChatGPT's): drawn at the display's physical size and handed over as
+      // that scale's picture, so Windows never stretches it.
+      const pic = await page.evaluate(async () => ({ img: await window.prism.e2eTaskbarBadgeImage(), dpr: window.devicePixelRatio }))
+      const want = Math.round(16 * Math.min(Math.max(pic.dpr || 1, 1), 4))
+      ok(
+        !!pic.img && pic.img.width === want && Math.abs(pic.img.scale - (pic.dpr || 1)) < 0.01,
+        `the badge is ${want}px at scale ${pic.dpr}, not a stretched small image (${pic.img ? `${pic.img.width}px at ${pic.img.scale}` : 'none'})`
+      )
+      if (pic.img) writeFileSync(resolve(process.cwd(), '.e2e-shots/taskbar-badge.png'), Buffer.from(pic.img.png.split(',')[1], 'base64'))
       await page.evaluate(() => window.dispatchEvent(new Event('focus')))
       await tab(0).click()
       ok(!!(await until(async () => (await state(0)) === null, 4000, 50)), 'opening the tab clears it')

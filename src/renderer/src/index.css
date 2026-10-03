@@ -25,18 +25,6 @@
      carries the colour instead. */
   .p-agent-run { left: 0; width: 100%; animation: none }
 }
-/* The same bar across a RUN of working tabs (2026-09-28): a single tab's
-   length (`--run-bar`, in px) travelling the whole run at a single tab's speed
-   (the duration is set per run). */
-@keyframes p-agent-run-span {
-  0% { left: calc(-1 * var(--run-bar)) }
-  100% { left: 100% }
-}
-.p-agent-run-span { animation: p-agent-run-span 1.25s ease-in-out infinite }
-@media (prefers-reduced-motion: reduce) {
-  .p-agent-run-span { left: 0; width: 100% !important; animation: none }
-}
-
 html,
 body,
 #root {
