@@ -254,12 +254,16 @@ function createWindow(): void {
     // screen. 'hidden' drops the caption but keeps the frame DWM needs, and
     // the custom title bar still draws over it.
     titleBarStyle: 'hidden',
-    // Explicit, rather than inherited from the executable: Windows caches the
-    // exe's icon per path, so a new build can keep showing the old one in the
-    // taskbar. A window icon set here is not cached by anything.
-    icon: app.isPackaged
-      ? join(process.resourcesPath, 'icon.ico')
-      : join(__dirname, '../../build/icon.ico'),
+    // THE INSTALLED APP WEARS THE EXE'S OWN ICON (#108; owner, 2026-10-01,
+    // beside ChatGPT's: "its app icon is more high res than ours"). Set here,
+    // the window icon was the .ico's 256px frame shrunk by Chromium to the big
+    // icon size and again by Windows to the taskbar's, softer than the frame
+    // drawn for that size (MEASURED, 48px at 225%, side by side). Left to
+    // Windows, it picks the .ico frame drawn for the size it needs, as every
+    // crisp icon on the taskbar does. Set explicitly once so a new build would
+    // not show a cached old icon; the icon is final now. A dev build has no
+    // icon of its own in electron.exe, so it still gets one.
+    ...(app.isPackaged ? {} : { icon: join(__dirname, '../../build/icon.ico') }),
     backgroundColor: material.bg(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -658,22 +662,36 @@ function wireIpc(): void {
   // the window's taskbar button as its overlay icon. Only a small PNG data url
   // is taken; anything else, or null, clears it.
   let badgeSaid = ''
-  ipcMain.on('window:badge', (_e, png: unknown, description: unknown) => {
+  /** What was last set, for the e2e to measure and look at (#108). */
+  let badgeImage: { png: string; scale: number; width: number } | null = null
+  ipcMain.on('window:badge', (_e, png: unknown, description: unknown, scale: unknown) => {
     const win = mainWindow
     if (!win || win.isDestroyed()) return
     const text = typeof description === 'string' ? description.slice(0, 120) : ''
     if (typeof png === 'string' && png.startsWith('data:image/png;base64,') && png.length < 100_000) {
-      const img = nativeImage.createFromDataURL(png)
+      // The page drew it at the display's physical size (#108), and it goes
+      // to Windows as a PLAIN picture of that size: Electron builds the
+      // overlay from an image's 1x picture, so one marked 2.25x was shrunk to
+      // 16 px and stretched back (MEASURED side by side on the taskbar). It
+      // stays an OVERLAY: drawn onto the window icon it was crisp in a bare
+      // window, but the installed app's taskbar button wears its Start menu
+      // shortcut's icon (the same app id) and never showed it (MEASURED in the
+      // installed build, 2026-10-03).
+      const factor = typeof scale === 'number' && scale >= 1 && scale <= 4 ? scale : 1
+      const img = nativeImage.createFromBuffer(Buffer.from(png.slice('data:image/png;base64,'.length), 'base64'))
       if (!img.isEmpty()) {
         win.setOverlayIcon(img, text)
         badgeSaid = text
+        badgeImage = { png, scale: factor, width: img.getSize().width }
         return
       }
     }
     win.setOverlayIcon(null, '')
     badgeSaid = ''
+    badgeImage = null
   })
   if (E2E) ipcMain.handle('e2e:taskbar-badge', () => badgeSaid)
+  if (E2E) ipcMain.handle('e2e:taskbar-badge-image', () => badgeImage)
 }
 
 // Single instance: a second launch (the verb, a shortcut, a command line)

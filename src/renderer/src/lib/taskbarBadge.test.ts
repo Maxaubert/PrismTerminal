@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { attentionCount, badgeText } from './taskbarBadge'
+import { attentionCount, badgePixels, badgeText } from './taskbarBadge'
 
 const set = (...ids: string[]): ReadonlySet<string> => new Set(ids)
 
@@ -29,5 +29,18 @@ describe('badgeText', () => {
     expect(badgeText(1)).toBe('1')
     expect(badgeText(9)).toBe('9')
     expect(badgeText(10)).toBe('9+')
+  })
+})
+
+describe('badgePixels', () => {
+  it("draws at the display's physical size: 16 logical pixels times the scale", () => {
+    expect(badgePixels(1)).toBe(16)
+    expect(badgePixels(1.5)).toBe(24)
+    expect(badgePixels(2.25)).toBe(36)
+  })
+  it('reads a nonsense scale as 1, and caps a huge one', () => {
+    expect(badgePixels(0)).toBe(16)
+    expect(badgePixels(Number.NaN)).toBe(16)
+    expect(badgePixels(9)).toBe(64)
   })
 })
