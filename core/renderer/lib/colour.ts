@@ -371,8 +371,23 @@ export function colourCommit(draft: string | null, value: string, range: AlphaRa
     const d = squash(draft)
     if ((['hex', 'rgba', 'hsla'] as const).some((f) => squash(format(shown, f)) === d)) return null
   }
-  const next = toStored(fitAlpha(typed, range))
+  // A code that names NO alpha (#rgb, #rrggbb, rgb(), hsl()) changes the
+  // colour and keeps the alpha in force (owner, 2026-10-03: a 6-digit code
+  // typed into a see-through Primary turned the window solid). An alpha is
+  // changed by the bar or by a code that says one.
+  const own = was && !saysAlpha(draft) ? { ...typed, a: was.a } : typed
+  const next = toStored(fitAlpha(own, range))
   return was && next === toStored(fitAlpha(was, range)) ? null : next
+}
+
+/** Whether a typed code carries an alpha of its own: `#rgba`, `#rrggbbaa`, or
+ *  a fourth argument to rgb()/hsl(). */
+export function saysAlpha(text: string): boolean {
+  const v = text.trim().toLowerCase()
+  const hex = /^#?([0-9a-f]+)$/.exec(v)
+  if (hex) return hex[1].length === 4 || hex[1].length === 8
+  const fn = /^(rgba?|hsla?)\((.*)\)$/.exec(v)
+  return !!fn && (args(fn[2])?.length ?? 0) === 4
 }
 
 /**
