@@ -2760,7 +2760,12 @@ const scenarios = {
       ok((await editor.locator('[data-colour-swatch][aria-label="Pick Background"]').count()) === 1, 'the Background well is there')
       await editor.locator('[data-colour-swatch][aria-label="Pick Background"]').click()
       await until(async () => (await pop.count()) === 1, 3000, 50)
-      ok((await pop.locator('[role="slider"][aria-label="Alpha"]').count()) === 0, "the theme's Background has no alpha yet (it drives nothing until the window's see-through moves to it)")
+      // The theme's Background alpha IS the window's see-through here (#114):
+      // offered, at least 30% as the Opacity slider was, and inert while
+      // acrylic is off, which it is on a fresh profile.
+      const bgAlpha = pop.locator('[role="slider"][aria-label="Alpha"]')
+      ok((await bgAlpha.count()) === 1 && (await bgAlpha.getAttribute('aria-valuemin')) === '30', "the theme's Background has an alpha, from 30 percent")
+      ok((await bgAlpha.getAttribute('aria-disabled')) === 'true', 'and it is inert while acrylic is off')
       await page.keyboard.press('Escape')
       await popGone()
       await shot('editor')
@@ -2862,6 +2867,120 @@ const scenarios = {
         return m.ground.join() === '244,241,232' ? m : null
       }, 4000, 100)
       ok(!!after && after.contrast >= 4.5, `on a picked light background the text still reads (${after ? after.contrast.toFixed(1) : '?'}:1, ink ${after?.ink})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * THE OPACITY SLIDER BECAME THE BACKGROUND'S ALPHA (#114; owner, 2026-10-03:
+   * alpha "should be built into the colour pickers ... it should not be a
+   * separate opacity setting"; option a, "go ahead"). What the old app left in
+   * storage is seeded into a real profile, the app is quit and launched again,
+   * and the window must be the window it was:
+   *  - a preset at Opacity 60 with acrylic on paints the same `--p-bg` (the
+   *    byte round(0.6 * 255) = 0x99), with no Opacity row on the page, and the
+   *    Background picker's own alpha moves it;
+   *  - a theme pick with a see-through Background asks first (#60), as a
+   *    changed Opacity did;
+   *  - a Custom saved at 80 and left live at 60 paints 60, and picking Custom
+   *    again restores its saved 80.
+   */
+  async opacityAlpha(ok) {
+    const w = world()
+    let { app, page } = await launch(w, { args: [w.alpha] })
+    const sheet = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--p-bg').trim().toLowerCase())
+    const get = (k) => page.evaluate((key) => localStorage.getItem(key), k)
+    /** Quit properly (localStorage is flushed on the way out), seed what the
+     *  old app left, quit again, and come back: the migration runs at launch. */
+    const relaunchWith = async (seed) => {
+      await page.evaluate((s) => {
+        localStorage.clear()
+        for (const [k, v] of Object.entries(s)) localStorage.setItem(k, v)
+      }, seed)
+      const gone = new Promise((r) => app.process().on('exit', r))
+      await page.evaluate(() => window.prism.quitApp()).catch(() => {})
+      ok(await Promise.race([gone.then(() => true), sleep(45000).then(() => false)]), 'the app quits before it is launched again')
+      ;({ app, page } = await launch(w))
+      await until(async () => (await tabLabels(page)).length >= 1, 20000)
+    }
+    const openAppearance = async () => {
+      await page.locator('[data-title-settings]').click()
+      await page.locator('[data-settings-tab="appearance"]').click()
+      await page.locator('[data-term-card]').first().waitFor({ timeout: 10000 })
+    }
+    try {
+      // 1. A preset, Opacity 60, acrylic on.
+      await relaunchWith({ 'prism.term.theme': 'dracula', 'prism.term.acrylic': '1', 'prism.term.opacity': '60' })
+      const ground = await until(async () => {
+        const s = await sheet()
+        return /^#[0-9a-f]{6}99$/.test(s) ? s : null
+      }, 10000)
+      ok(!!ground, `a saved Opacity 60 paints the ground at alpha 0x99, as it did (${await sheet()})`)
+      const picked = await get('prism.window.background')
+      ok(picked === ground, `it now lives on the Background colour (${picked})`)
+      ok((await get('prism.term.opacity')) === null, 'and the old key is gone')
+      await openAppearance()
+      ok((await page.locator('[data-pref="term-opacity"]').count()) === 0, 'there is no Opacity row')
+      const row = page.locator('[data-pref="window-background"]')
+      await row.scrollIntoViewIfNeeded()
+      const field = row.locator('input:not([type])')
+      ok((await field.inputValue()) === ground, `the Background field shows the eight digits in force (${await field.inputValue()})`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/opacity-alpha-row.png') }).catch(() => {})
+      // The picker's own alpha moves the window.
+      await row.locator('[data-colour-swatch]').click()
+      const pop = page.locator('[data-colour-popover][role="dialog"]')
+      await pop.waitFor({ timeout: 3000 })
+      const alpha = pop.locator('[role="slider"][aria-label="Alpha"]')
+      ok((await alpha.getAttribute('aria-valuenow')) === '60', `the Alpha slider reads 60 (${await alpha.getAttribute('aria-valuenow')})`)
+      ok((await alpha.getAttribute('aria-valuemin')) === '30', `and goes no lower than the slider did, 30 (${await alpha.getAttribute('aria-valuemin')})`)
+      ok((await alpha.getAttribute('aria-disabled')) !== 'true', 'and is live, with acrylic on')
+      await alpha.focus()
+      await page.keyboard.press('Shift+ArrowLeft')
+      const moved = await until(async () => {
+        const s = await sheet()
+        return /^#[0-9a-f]{6}(7f|80)$/.test(s) ? s : null
+      }, 4000, 50)
+      ok(!!moved, `Shift+Left takes the window to half (${await sheet()})`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/opacity-alpha-picker.png') }).catch(() => {})
+      await page.keyboard.press('Escape')
+      ok(!!(await until(async () => (await sheet()) === ground, 4000, 50)), 'Escape puts the window back as it was')
+
+      // A theme pick with the see-through Background in force asks first.
+      ok(!(await page.locator('[data-save-term]').isDisabled()), 'a see-through Background lights Save changes, as a changed Opacity did')
+      await page.locator('[data-term-card="nord"]').first().click()
+      const ask = page.locator('[data-theme-switch-ask]')
+      ok(!!(await until(async () => (await ask.count()) === 1, 3000, 50)), 'and a theme pick asks before it forgets it')
+      await page.locator('[data-ask-cancel]').click()
+      ok((await sheet()) === ground && (await get('prism.term.theme')) === 'dracula', 'Cancel keeps the theme and the see-through')
+
+      // Acrylic off: the bar is there, faded and inert, and the window is solid.
+      await page.locator('[data-pref="term-acrylic"] [role="switch"]').click()
+      ok(!!(await until(async () => /^#[0-9a-f]{6}$/.test(await sheet()), 4000, 50)), `with acrylic off the window is solid (${await sheet()})`)
+      await row.locator('[data-colour-swatch]').click()
+      await pop.waitFor({ timeout: 3000 })
+      ok((await pop.locator('[role="slider"][aria-label="Alpha"]').getAttribute('aria-disabled')) === 'true', 'and the Alpha slider is inert')
+      await page.keyboard.press('Escape')
+      await page.locator('[data-pref="term-acrylic"] [role="switch"]').click()
+
+      // 2. A Custom saved at 80, left live at 60.
+      const customTheme = { bg: '#1d1f21', fg: '#c5c8c6', cursor: '#f0c674', ansi: {}, acrylic: true, opacity: 80 }
+      await relaunchWith({
+        'prism.term.theme': 'custom',
+        'prism.term.acrylic': '1',
+        'prism.term.opacity': '60',
+        'prism.term.custom': JSON.stringify(customTheme)
+      })
+      ok(!!(await until(async () => (await sheet()) === '#1d1f2199', 10000)), `a Custom left live at 60 paints 60 (${await sheet()})`)
+      const savedSlot = JSON.parse((await get('prism.term.custom')) ?? '{}')
+      ok(savedSlot.bg === '#1d1f21cc' && savedSlot.opacity === undefined, `its saved 80 rides on its own background (${savedSlot.bg})`)
+      await openAppearance()
+      await page.locator('[data-term-card="custom"]').first().click()
+      const ask2 = page.locator('[data-theme-switch-ask]')
+      if (await until(async () => (await ask2.count()) === 1, 2000, 50)) await page.locator('[data-ask-discard]').click()
+      ok(!!(await until(async () => (await sheet()) === '#1d1f21cc', 4000, 50)), `picking Custom again restores the saved 80 (${await sheet()})`)
+      ok((await get('prism.window.background')) === null, 'and the live 60 went with the pick')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/opacity-alpha-custom.png') }).catch(() => {})
     } finally {
       await closeApp(app)
     }
@@ -3149,6 +3268,17 @@ const scenarios = {
         )
         return {
           accent: root.getPropertyValue('--p-accent').trim().toLowerCase(),
+          solid: root.getPropertyValue('--p-accent-solid').trim().toLowerCase(),
+          // The tab spinner's ring, drawn with its own classes: the line
+          // that reads --p-accent-solid (#114) needs no loading tab to sample.
+          spinner: (() => {
+            const span = document.createElement('span')
+            span.className = 'inline-block border-[1.5px] border-t-[var(--p-accent-solid)]'
+            document.body.appendChild(span)
+            const c = getComputedStyle(span).borderTopColor
+            span.remove()
+            return c
+          })(),
           hi: colour(root.getPropertyValue('--p-accent-hi').trim()),
           rule: rule ? getComputedStyle(rule).backgroundColor : null,
           stored: localStorage.getItem('prism.window.accent'),
@@ -3197,6 +3327,75 @@ const scenarios = {
     }, 10000)
     ok(!!picked, `a picked colour is the accent, and the tab's rule follows it (${picked?.rule})`)
     ok(picked?.stored === '#e07a2f' && picked?.follow === 1, 'it is stored, and Reset is offered')
+
+    // A SEE-THROUGH ACCENT (#114): its FILLS wear the alpha, its LINES never
+    // do, and the text on a fill reads 4.5:1 on what the eye sees. Under a
+    // see-through window the text-bearing fills are flattened (owner decision
+    // 5), since no ink can be held over an unknown desktop.
+    await field.fill('#e07a2f80')
+    await field.press('Enter')
+    const glassAccent = await until(async () => {
+      const p = await probe()
+      return /^#[0-9a-f]{6}80$/.test(p.accent) && p.stored === '#e07a2f80' ? p : null
+    }, 8000)
+    ok(!!glassAccent, `a hex8 accent publishes a see-through fill (${glassAccent?.accent}, stored ${glassAccent?.stored})`)
+    ok(!!glassAccent && glassAccent.rule === glassAccent.hi && !/rgba/.test(glassAccent.rule ?? ''), `and the active tab's rule stays solid (${glassAccent?.rule})`)
+    // The rule reads --p-accent-hi, which never carried the alpha, so the
+    // check above alone proves nothing about the lines that read the accent
+    // (review of #115): the line token is the exact pick, opaque, and the
+    // spinner's ring drawn from it has no alpha.
+    ok(glassAccent?.solid === '#e07a2f', `the accent's line token is the pick, opaque (${glassAccent?.solid})`)
+    ok(glassAccent?.spinner === 'rgb(224, 122, 47)', `and the tab spinner's ring drawn from it is solid (${glassAccent?.spinner})`)
+    const save = page.locator('[data-save-term]')
+    const saveLook = () =>
+      save.evaluate((el) => {
+        const s = getComputedStyle(el)
+        return { bg: s.backgroundColor, ink: s.color, ground: getComputedStyle(document.documentElement).getPropertyValue('--p-bg-solid').trim() }
+      })
+    const nums = (c) => (c.match(/[\d.]+/g) ?? []).map(Number)
+    const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+    const lin = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+    const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+    const ratio = (x, y) => {
+      const [a, b] = [lum(x), lum(y)]
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+    }
+    /** The Save label's contrast on its fill as seen over the solid ground. */
+    const saveReads = (l) => {
+      const f = nums(l.bg)
+      const a = f.length > 3 ? f[3] : 1
+      const g = hexRgb(l.ground)
+      const seen = f.slice(0, 3).map((v, i) => g[i] + (v - g[i]) * a)
+      return { a, r: ratio(nums(l.ink).slice(0, 3), seen) }
+    }
+    // Save changes lights with a changed working colour (a theme setting).
+    const working = page.locator('[data-pref="agent-color"] input:not([type])')
+    await working.fill('#3da9fc')
+    await working.press('Enter')
+    await until(async () => !(await save.isDisabled()), 4000, 50)
+    await save.scrollIntoViewIfNeeded()
+    await sleep(400) // the button's colours transition
+    const open = saveReads(await saveLook())
+    ok(Math.abs(open.a - 128 / 255) < 0.01, `over an opaque window the Save fill is see-through (alpha ${open.a.toFixed(2)})`)
+    ok(open.r >= 4.5, `and its label reads on the composite (${open.r.toFixed(1)}:1)`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-see-through.png') }).catch(() => {})
+    // A see-through window: acrylic on, the Background at 60%.
+    await page.locator('[data-pref="term-acrylic"] [role="switch"]').click()
+    const bgPick = page.locator('[data-pref="window-background"] input:not([type])')
+    await bgPick.fill('#1c233099')
+    await bgPick.press('Enter')
+    await until(async () => (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--p-bg').trim())) === '#1c233099', 6000, 50)
+    await sleep(400)
+    const glass = saveReads(await saveLook())
+    ok(glass.a === 1, `under a see-through window the Save fill is flattened, opaque (alpha ${glass.a})`)
+    ok(glass.r >= 4.5, `and its label still reads (${glass.r.toFixed(1)}:1)`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-under-glass.png') }).catch(() => {})
+    // Back to an opaque window and a working colour that follows the theme.
+    await page.locator('[data-follow-theme="background"]').click()
+    await page.locator('[data-pref="term-acrylic"] [role="switch"]').click()
+    await page.locator('[data-follow-theme="working"]').click()
+    await until(async () => (await save.isDisabled()), 4000, 50)
+    await row.scrollIntoViewIfNeeded()
     await sleep(800)
     await row.scrollIntoViewIfNeeded()
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-picked.png') }).catch(() => {})

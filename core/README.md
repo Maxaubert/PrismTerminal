@@ -121,7 +121,12 @@ label; the swatch is `button[data-colour-swatch]` "Pick <label>"; the popover
 is `[data-colour-popover][role="dialog"]`; the sliders are named "Saturation
 and brightness", "Hue" and "Alpha"; `button[data-colour-format]` and
 `button[data-colour-eyedropper]`. A host's own window-level key listener must
-leave events from inside `[data-colour-popover]` alone. Spec:
+leave events from inside `[data-colour-popover]` alone. Since 0.22.0 (#114)
+there is no Opacity row and no `termOpacity`/`setTermOpacity`: where
+`acrylic.kind` is 'window' the theme Background's alpha is the window's
+see-through (`termGroundAlpha`, `withGroundAlpha`, `legacyTermOpacity` for a
+host's one-time migration); `TERMINAL_OPTIONS` is the same list in every host.
+Spec:
 `docs/superpowers/specs/2026-10-03-colour-picker-alpha-design.md`.
 
 ## Rules for code in here (lint-enforced in Prism Terminal's `eslint.config.js`)

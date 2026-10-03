@@ -14,7 +14,8 @@ export interface TerminalOption {
   type: 'choice' | 'switch' | 'range' | 'colour' | 'theme'
   /** The localStorage key behind it. Same key in both apps, separate stores. */
   key: string
-  /** Absent = every host. */
+  /** Absent = every host. No row uses it since the Opacity slider went
+   *  (#114); kept, since each host's parity check reads it. */
   onlyWhere?: 'the terminal owns the window acrylic'
 }
 
@@ -31,15 +32,8 @@ export const TERMINAL_OPTIONS: readonly TerminalOption[] = [
   // The theme wall, and under it only what a theme sets (2026-09-28).
   { id: 'term-theme', label: 'Theme', type: 'theme', key: 'prism.term.theme' },
   { id: 'term-acrylic', label: 'Acrylic background', type: 'switch', key: 'prism.term.acrylic' },
-  {
-    id: 'term-opacity',
-    label: 'Opacity',
-    type: 'range',
-    key: 'prism.term.opacity',
-    // In Prism the window material belongs to the app style; a second alpha
-    // over the same glass would fight it (owner, 2026-09-19).
-    onlyWhere: 'the terminal owns the window acrylic'
-  },
+  // No Opacity row (#114): the theme Background's alpha is the window's
+  // see-through where the terminal owns the window acrylic.
   { id: 'agent-color', label: 'Working colour', type: 'colour', key: 'prism.term.agentColor' },
   { id: 'agent-done-color', label: 'Finished colour', type: 'colour', key: 'prism.term.agentDoneColor' },
   { id: 'agent-question-color', label: 'Question colour', type: 'colour', key: 'prism.term.agentQuestionColor' }

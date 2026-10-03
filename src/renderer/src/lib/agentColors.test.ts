@@ -7,7 +7,7 @@ import { TERM_PRESETS, presetAccent, resolveTermTheme } from '@core/renderer/lib
 describe('themeAgentColors', () => {
   it('working IS the chrome accent of the theme', () => {
     for (const id of ['prism', 'dracula', 'github']) {
-      const accent = chromeTokens(resolveTermTheme(id), 100, presetAccent(id)).vars['--p-accent']
+      const accent = chromeTokens(resolveTermTheme(id), 1, presetAccent(id)).vars['--p-accent']
       expect(themeAgentColors(id).working).toBe(accent)
     }
   })
@@ -26,4 +26,18 @@ describe('themeAgentColors', () => {
       expect(working.toLowerCase()).not.toBe(finished.toLowerCase())
     }
   )
+})
+
+// #114: a picked accent may be see-through; the indicator that follows it is
+// a line, and stays opaque.
+describe('a see-through picked accent', () => {
+  it('leaves the theme-derived working colour opaque', () => {
+    localStorage.setItem('prism.window.accent', '#e07a2f80')
+    try {
+      const { working } = themeAgentColors('pt-default')
+      expect(working).toBe('#e07a2f')
+    } finally {
+      localStorage.removeItem('prism.window.accent')
+    }
+  })
 })

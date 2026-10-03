@@ -28,12 +28,11 @@ export function themeAgentColors(themeId: string): { working: string; finished: 
   const own = resolveTermTheme(themeId)
   const background = windowBackground()
   const theme = background ? { ...own, background } : own
-  const vars = chromeTokens(theme, 100, presetAccent(themeId), undefined, windowAccent()).vars
+  const vars = chromeTokens(theme, 1, presetAccent(themeId), undefined, windowAccent()).vars
   const bg = vars['--p-bg-solid']
-  // The accent as a LINE, never see-through (#112): an indicator that follows
-  // the theme is opaque even when a picked accent is not. `--p-accent-solid`
-  // arrives with the accent's alpha; until then it is the accent itself.
-  const working = vars['--p-accent-solid'] ?? vars['--p-accent']
+  // The accent as a LINE, never see-through (#112, #114): an indicator that
+  // follows the theme is opaque even when a picked accent is not.
+  const working = vars['--p-accent-solid']
   const green = ensureContrast(normalizeColor(theme.green ?? '', FALLBACK_DONE), bg, FLOOR)
   // Near-identical colours measure about 1:1 against each other.
   const finished =

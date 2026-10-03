@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { FONT_PCTS, agentColorChoice, agentDoneColorChoice, agentQuestionColorChoice, setAgentDoneColor, setAgentQuestionColor, termGroundAlpha, applyCustomExtras, resetTermExtras, agentIndicator, customTermTheme, setAgentColor, saveCustomTermTheme, setAgentIndicator, setTermAcrylic, setTermFontPct, setTermOpacity, setTermThemeId, termAcrylic, termBaseFontPx, termFontPct, termOpacity, termThemeId } from './termLook'
+import { FONT_PCTS, agentColorChoice, agentDoneColorChoice, agentQuestionColorChoice, setAgentDoneColor, setAgentQuestionColor, termGroundAlpha, applyCustomExtras, resetTermExtras, agentIndicator, customTermTheme, setAgentColor, saveCustomTermTheme, setAgentIndicator, setTermAcrylic, setTermFontPct, setTermThemeId, termAcrylic, termBaseFontPx, termExtraDefaults, termFontPct, legacyTermOpacity, termThemeId } from './termLook'
+import * as termLook from './termLook'
+import { configureTermCore, resetTermCore, type TermHostConfig } from '../host'
 
 beforeEach(() => localStorage.clear())
 
@@ -90,19 +92,105 @@ describe('the working colour', () => {
   })
 })
 
-describe('acrylic and its opacity', () => {
+describe('acrylic, and the opacity it no longer has', () => {
   it('acrylic is off until asked for', () => {
     expect(termAcrylic()).toBe(false)
     setTermAcrylic(true)
     expect(termAcrylic()).toBe(true)
   })
-  it('reads a never-set opacity as opaque, not transparent', () => {
-    localStorage.clear()
-    expect(termOpacity()).toBe(100)
+  // #114: the Background colour's alpha replaced the Opacity slider. The old
+  // value is READ ONCE, by the migration, as the window read it: defensively,
+  // since Number(null) and Number('') are 0, and clamped 30-100.
+  it('the legacy opacity reads never-set as opaque and clamps as the window did', () => {
+    expect(legacyTermOpacity()).toBe(100)
     localStorage.setItem('prism.term.opacity', '')
-    expect(termOpacity()).toBe(100)
-    setTermOpacity(5)
-    expect(termOpacity()).toBe(30)
+    expect(legacyTermOpacity()).toBe(100)
+    localStorage.setItem('prism.term.opacity', '5')
+    expect(legacyTermOpacity()).toBe(30)
+    localStorage.setItem('prism.term.opacity', '62.4')
+    expect(legacyTermOpacity()).toBe(62)
+    localStorage.setItem('prism.term.opacity', 'soup')
+    expect(legacyTermOpacity()).toBe(100)
+  })
+  it('nothing writes an opacity any more, and no theme carries one', () => {
+    expect('setTermOpacity' in termLook).toBe(false)
+    expect('termOpacity' in termLook).toBe(false)
+    expect('opacity' in termExtraDefaults()).toBe(false)
+    applyCustomExtras({ bg: '#000000', fg: '#ffffff', cursor: '#ff0000', ansi: {}, acrylic: true, opacity: 60 } as never)
+    expect(localStorage.getItem('prism.term.opacity')).toBeNull()
+  })
+})
+
+// #112: alpha on every colour. Every reader takes 6 or 8 digits; a bad value
+// reads as absent; what is stored is the one canonical form.
+describe('colours with alpha', () => {
+  it('the three agent colours accept hex8 and refuse 7 or 9 digits', () => {
+    setAgentColor('#22c55e80')
+    expect(agentColorChoice()).toBe('#22c55e80')
+    setAgentDoneColor('#22C55E80')
+    expect(agentDoneColorChoice()).toBe('#22c55e80')
+    setAgentQuestionColor('#3b82f6cc')
+    expect(agentQuestionColorChoice()).toBe('#3b82f6cc')
+    for (const bad of ['#22c55e8', '#22c55e800']) {
+      localStorage.setItem('prism.term.agentColor', bad)
+      expect(agentColorChoice()).toBe('')
+    }
+  })
+  it('a picked opaque colour is stored exactly as it always was', () => {
+    setAgentColor('#22c55e')
+    expect(localStorage.getItem('prism.term.agentColor')).toBe('#22c55e')
+  })
+  it('the custom theme drops a bad ANSI value and keeps the rest', () => {
+    localStorage.setItem(
+      'prism.term.custom',
+      JSON.stringify({ bg: '#111111', fg: '#EEEEEE', cursor: '#ff000080', selection: '#33445566', ansi: { red: '#ff5555', green: 'soup', blue: '#0000ff40' } })
+    )
+    const c = customTermTheme()
+    expect(c?.fg).toBe('#eeeeee')
+    expect(c?.cursor).toBe('#ff000080')
+    expect(c?.selection).toBe('#33445566')
+    expect(c?.ansi).toEqual({ red: '#ff5555', blue: '#0000ff40' })
+  })
+  it('a bad background or foreground is no custom theme, as before', () => {
+    localStorage.setItem('prism.term.custom', JSON.stringify({ bg: 'soup', fg: '#eeeeee', cursor: '#ff0000', ansi: {} }))
+    expect(customTermTheme()).toBeNull()
+  })
+  it('a bad cursor or selection reads as absent', () => {
+    localStorage.setItem('prism.term.custom', JSON.stringify({ bg: '#111111', fg: '#eeeeee', cursor: 'soup', selection: 'soup', ansi: {} }))
+    const c = customTermTheme()
+    expect(c?.cursor).toBe('#eeeeee')
+    expect(c?.selection).toBeUndefined()
+  })
+  it('applyCustomExtras writes only valid colours', () => {
+    localStorage.setItem('prism.term.agentColor', '#123456')
+    applyCustomExtras({ bg: '#000000', fg: '#ffffff', cursor: '#ff0000', ansi: {}, indicatorColor: 'soup', doneColor: '#11223380', questionColor: '#zzzzzz' })
+    expect(localStorage.getItem('prism.term.agentColor')).toBeNull()
+    expect(localStorage.getItem('prism.term.agentDoneColor')).toBe('#11223380')
+    expect(localStorage.getItem('prism.term.agentQuestionColor')).toBeNull()
+  })
+  it('termGroundAlpha: 1 for a preset, the Custom background alpha for Custom', () => {
+    setTermThemeId('dracula')
+    expect(termGroundAlpha()).toBe(1)
+    saveCustomTermTheme({ bg: '#11111180', fg: '#eeeeee', cursor: '#ff0000', ansi: {} })
+    setTermThemeId('custom')
+    expect(termGroundAlpha()).toBeCloseTo(0x80 / 255)
+  })
+  it("termGroundAlpha is floored at 30% where it is the window's see-through, as the slider was", () => {
+    saveCustomTermTheme({ bg: '#12121205', fg: '#eeeeee', cursor: '#ff0000', ansi: {} })
+    setTermThemeId('custom')
+    // No host, or a host whose style owns the glass: read as stored.
+    expect(termGroundAlpha()).toBeCloseTo(0x05 / 255)
+    configureTermCore({ acrylic: { kind: 'window', supported: async () => true } } as unknown as TermHostConfig)
+    try {
+      expect(termGroundAlpha()).toBe(0x4d / 255)
+      // The floor is the byte 30% gives, so a picker's lowest value is unchanged.
+      saveCustomTermTheme({ bg: '#1212124d', fg: '#eeeeee', cursor: '#ff0000', ansi: {} })
+      expect(termGroundAlpha()).toBe(0x4d / 255)
+      saveCustomTermTheme({ bg: '#12121299', fg: '#eeeeee', cursor: '#ff0000', ansi: {} })
+      expect(termGroundAlpha()).toBe(0x99 / 255)
+    } finally {
+      resetTermCore()
+    }
   })
 })
 

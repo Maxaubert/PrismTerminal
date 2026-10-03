@@ -280,7 +280,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
   you use a minimal or full agent indicator, or edges. those options should be above the themes").
   Appearance runs: the host's `beforeTheme` (here Tab width, Edges), Font, Font size, Agent
   indicator; then the theme wall and Save changes; then what a theme SETS: the host's `afterTheme`
-  (here Background, Accent), Acrylic, Opacity, the two indicator colours. A theme switch and Save
+  (here Background, Accent), Acrylic, the two indicator colours. A theme switch and Save
   as Custom leave the font and its size alone (`termExtraDefaults`, `resetTermExtras`,
   `applyCustomExtras`; an older Custom's `font`/`fontPct` are ignored). Font size is 50% to 200%
   in tens; a saved size off that list reads as the nearest step. `themeSwitch` e2e holds it all.
@@ -315,14 +315,26 @@ so an update never silently changes what an existing user sees; the bridge to ma
   colour setting"; spec `docs/superpowers/specs/2026-10-03-colour-picker-alpha-design.md`, plan
   beside it in `plans/`). The core's `ColourField` (`settings/ColourPicker.tsx`) replaces the
   native `<input type=color>` everywhere; `HexSwatch` is it with `alpha={false}`, for rows not yet
-  moved (this app's Background and Accent until PR 2). Stored form `#rrggbb`, or `#rrggbbaa` with an
+  moved. Stored form `#rrggbb`, or `#rrggbbaa` with an
   alpha; every reader takes both. ALPHA 1 CHANGES NOTHING: a snapshot holds every preset and an
   opaque Custom byte for byte. A see-through Custom colour is composited against the ground in
   force, floored to `min(floor, contrast of the opaque pick)`; everything handed to xterm is 6 or 8
   digit hex (xterm throws on others). Opening and shutting writes nothing; Escape after a write
-  calls the row's `onRevert`. The theme's Background has no alpha yet: PR 2 makes it the window's
-  see-through, in place of Opacity. The `colourPicker` e2e holds it; Prism's `termColourPicker`
+  calls the row's `onRevert`. The `colourPicker` e2e holds it; Prism's `termColourPicker`
   gates the bump.
+  **THE BACKGROUND'S ALPHA IS THE WINDOW'S SEE-THROUGH; THERE IS NO OPACITY SLIDER** (#114, owner's
+  option a). Under acrylic the window paints at the alpha of the ground in force: the picked
+  Background colour's, else the theme's (a Custom `bg` may carry one), `termGroundAlpha`, passed to
+  `chromeTokens` as the byte's fraction. Min 30%, inert while acrylic is off; Prism's theme
+  Background has none (its style owns the glass). `lib/opacityMigration.ts` runs before the first
+  paint and maps a saved Opacity N to byte round(N / 100 * 255), which is exactly what N painted
+  (snapshot `chromeTheme.opacity.test.ts`): the saved `Custom.opacity` folds into `Custom.bg`, the
+  live value onto the picked Background. The ground alpha takes Opacity's place in Save changes'
+  dirty check, so a theme pick still asks first (#60). The Accent's alpha is for FILLS;
+  `--p-accent-solid` is the line (rules, spinner, progress, rings, an unpicked working colour),
+  `--p-on-accent` is chosen 4.5:1 on the composite (`selectionFor`), and under a see-through
+  ground the text fills are flattened over `--p-bg-solid`. The `opacityAlpha` and `accent` e2e
+  hold it.
 - **THE HELP POPUP BLURS THE WINDOW BEHIND IT AND CASTS NO SHADOW** (owner, 2026-09-22: "remove the
   shadow behind this and make the bg blurred when it's open"): `backdrop-blur` on a lighter scrim; the
   blur already lifts the panel off the page, and a shadow on top of it read as a dark halo.
@@ -739,8 +751,8 @@ the owner's own call, #99.)
   REAL drop with Chromium's drag events (`Input.dispatchDragEvent` carrying a file path): a
   synthetic DataTransfer holds a File with no path and proves nothing about `getPathForFile`.
   When a Prism component is stripped, grep what ELSE it owned before calling a feature kept.
-- **Opacity is a number read defensively** (`termOpacity`): `Number(null)` is 0, and never-set must
-  read as opaque.
+- **The legacy opacity is a number read defensively** (`legacyTermOpacity`, the migration's only
+  reader): `Number(null)` is 0, and never-set must read as opaque.
 - **Explorer verbs**: HKCU, `reg.exe` with argv only, on `Directory` and `Directory\Background`, no
   `*`. On by default, put back at launch unless somebody said no (the off-marker is the one fact
   stored), never in dev and never under `--e2e`, and the Settings switch reports what the REGISTRY

@@ -58,7 +58,7 @@ import {
   onTermLookChange,
   termAcrylic,
   termFontStack,
-  termOpacity,
+  termGroundAlpha,
   termThemeId
 } from '@core/renderer/lib/termLook'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
@@ -103,9 +103,13 @@ function paintChrome(): void {
   // paints the terminal's ground from the same token, so it follows too.
   const theme = resolveTermTheme(id)
   const background = windowBackground()
+  // THE WINDOW'S SEE-THROUGH IS THE GROUND'S ALPHA (#114, in place of the
+  // Opacity slider): the picked Background's, else the theme's own (a Custom
+  // may carry one), the same order the core reads. Passed as the byte's
+  // fraction, unrounded, so the field and the window name the same alpha.
   const tokens = chromeTokens(
     background ? { ...theme, background } : theme,
-    acrylic ? termOpacity() : 100,
+    acrylic ? termGroundAlpha() : 1,
     presetAccent(id),
     edges,
     windowAccent()
