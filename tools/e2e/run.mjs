@@ -1380,6 +1380,45 @@ const scenarios = {
 
   /** Closing the last tab lands on the start screen; the X is what quits, and
    *  what was open when it quit is what comes back. */
+  // QUITTING WITH MANY SHELLS IS CLEAN (#127; owner, 2026-10-04, a screenshot
+  // of "Assertion failed! conpty.node ... remove_pty_baton(baton->id)" as the
+  // stable copy closed for an update). node-pty 1.1.0's exit threads erased
+  // from one vector with no lock, so shells dying together raced, and its
+  // prebuild asserts: a modal dialog that holds the process open. Ten live
+  // shells, quit, three times: the process must exit by itself, quickly, 0.
+  async quitManyShells(ok) {
+    for (let round = 1; round <= 3; round += 1) {
+      // A profile per round: the same one would restore the last round's tabs.
+      const w = world()
+      const { app, page } = await launch(w, { args: [w.alpha] })
+      await until(async () => (await tabLabels(page)).length === 1)
+      for (let i = 1; i < 10; i += 1) {
+        await page.keyboard.press('Control+t')
+        await until(async () => (await tabLabels(page)).length === i + 1, 8000, 50)
+        await until(async () => /PS |>/.test(await termText(page)), 8000, 50)
+      }
+      ok((await tabLabels(page)).length === 10, `round ${round}: ten shells open`)
+      const proc = app.process()
+      // What the process says as it dies: a native abort names itself here.
+      let said = ''
+      proc.stderr?.on('data', (d) => (said = (said + d).slice(-3000)))
+      const exited = new Promise((r) => proc.once('exit', (code, signal) => r({ code, signal })))
+      const t0 = Date.now()
+      app.close().catch(() => {})
+      const end = await Promise.race([exited, sleep(10000).then(() => null)])
+      if (!end) {
+        try {
+          proc.kill()
+        } catch {
+          /* already gone */
+        }
+      }
+      ok(end !== null, `round ${round}: the app quit by itself (${end ? Date.now() - t0 : '>10000'} ms)`)
+      ok(end?.code === 0, `round ${round}: with exit code 0 (${JSON.stringify(end)})`)
+      if (end?.code !== 0 && said.trim()) console.log(`  stderr  ${said.trim().split('\n').slice(-12).join('\n          ')}`)
+    }
+  },
+
   async lastTab(ok) {
     const w = world()
     let { app, page } = await launch(w, { args: [w.alpha, w.beta] })

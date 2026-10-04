@@ -175,6 +175,64 @@ interface WarmShell {
 const warm = new Map<string, WarmShell>()
 const rootKey = (root: string): string => root.toLowerCase()
 
+/**
+ * Every shell we end, until node-pty has said it is gone (#127). Its exit
+ * watcher is a native thread that calls back into JavaScript; when the app
+ * quit first, the call landed while Node was tearing its environment down,
+ * threw, and Electron aborted (0xc0000409, no dialog). MEASURED in a WER dump,
+ * 2026-10-04: node::FreeEnvironment -> CleanupHandles -> ThreadSafeFunction::
+ * CallJS -> Napi::Error -> abort, about one quit in four with ten shells open.
+ * So a kill is remembered here and the quit waits (`shellsGone`).
+ */
+const dying = new Set<Promise<void>>()
+function killPty(p: IPty): void {
+  const gone = new Promise<void>((resolve) => {
+    let poll: ReturnType<typeof setInterval> | undefined
+    const done = (): void => {
+      if (poll) clearInterval(poll)
+      resolve()
+    }
+    try {
+      p.onExit(done)
+    } catch {
+      done()
+      return
+    }
+    // The exit EVENT waits for the output pipe to close: 1.0 to 2.7 s for a
+    // pwsh killed while it starts, which is what a warm shell is at quit
+    // (MEASURED). What the quit must outlive is only the native callback, and
+    // that sets the Windows agent's exitCode the moment it runs. Read it where
+    // node-pty has it; the event stands for everything else.
+    const agent = (p as unknown as { _agent?: { exitCode?: number } })._agent
+    if (agent && 'exitCode' in agent) {
+      poll = setInterval(() => {
+        if (agent.exitCode !== undefined) done()
+      }, 20)
+    }
+  })
+  dying.add(gone)
+  void gone.then(() => dying.delete(gone))
+  try {
+    p.kill()
+  } catch {
+    /* already gone */
+  }
+}
+
+/** How many shells we killed that have not exited yet. */
+export function shellsDying(): number {
+  return dying.size
+}
+
+/** Resolves once every shell we killed has exited, or after `timeoutMs`. */
+export function shellsGone(timeoutMs: number): Promise<void> {
+  if (!dying.size) return Promise.resolve()
+  return Promise.race([
+    Promise.all([...dying]).then(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
+  ])
+}
+
 export async function prewarmShell(root: string, shellId: string | undefined): Promise<void> {
   const key = rootKey(root)
   if (warm.has(key)) return
@@ -187,10 +245,10 @@ export async function prewarmShell(root: string, shellId: string | undefined): P
     warm.delete(k)
     try {
       w.sub.dispose()
-      w.pty.kill()
     } catch {
       /* already gone */
     }
+    if (!w.exited) killPty(w.pty)
   }
   try {
     const pty = await import('node-pty')
@@ -229,10 +287,10 @@ function killWarm(root?: string): void {
     warm.delete(k)
     try {
       w.sub.dispose()
-      w.pty.kill()
     } catch {
       /* already gone */
     }
+    if (!w.exited) killPty(w.pty)
   }
 }
 export { killWarm }
@@ -351,11 +409,7 @@ async function spawnPending(
     })
     // Closed while node-pty loaded: the tab is gone, so is this shell.
     if (killedWhilePending.has(id)) {
-      try {
-        p.kill()
-      } catch {
-        /* already gone */
-      }
+      killPty(p)
       return false
     }
     const batcher = new OutputBatcher((data) => send('term:data', id, data), 8)
@@ -420,11 +474,7 @@ export function killTerm(id: string): void {
   }
   // No flush: this death is ours (tab close, quit), nobody is listening, and
   // at quit the webContents a flush would send into may already be gone.
-  try {
-    s.pty.kill()
-  } catch {
-    /* already gone */
-  }
+  killPty(s.pty)
 }
 
 /** The live sessions' shell pids, for the agent poll. */

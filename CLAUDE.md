@@ -549,6 +549,14 @@ the owner's own call, #99.)
 - **Bundled ConPTY.** Shells spawn with `useConptyDll: true`; the inbox conhost fast-fails the whole
   app (0xc0000409) when a pty is killed mid-read. `node-pty` stays `asarUnpack`ed and
   `npmRebuild: false` (it ships N-API prebuilds; a rebuild dies in node-gyp).
+- **THE QUIT WAITS FOR EVERY SHELL TO BE GONE** (#127, 2026-10-04; owner's screenshot of node-pty's
+  "Assertion failed! remove_pty_baton" dialog). Two crashes at quit, both MEASURED: node-pty 1.1.0's
+  exit threads race on an unlocked vector (fixed upstream in #922, so `node-pty` is pinned to
+  `1.2.0-beta.15`, the owner's pick); and an exit callback that lands while Node tears down throws and
+  Electron aborts, 0xc0000409, about one quit in four with ten shells (WER dump: `FreeEnvironment` ->
+  `ThreadSafeFunction::CallJS` -> abort). So every kill goes through `killPty` and `will-quit` holds
+  the quit on `shellsGone` (3 s cap). It waits for the agent's `exitCode`, set by the native callback,
+  not the exit EVENT, which lags 1-2.7 s for a pwsh killed mid-start (a warm shell). `quitManyShells`.
 - **`titleBarStyle: 'hidden'`, never `frame: false`**: DWM will not composite acrylic behind a
   frameless window.
 - **Material before colour** (`material.ts`, measured on Electron 43): `setBackgroundMaterial('none')`
