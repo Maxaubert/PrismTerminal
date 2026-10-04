@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type JSX, type ReactNode } from 'react'
 import { dictationHost } from '../host'
-import { catalogEntry, LANGUAGES, recommendedModel, visibleModels } from '../../shared/dictationCatalog'
+import ModelDownloadAsk from '../components/ModelDownloadAsk'
+import {
+  catalogEntry,
+  LANGUAGES,
+  LIMITED_LANGUAGES_TEXT,
+  limitedLanguages,
+  recommendedModel,
+  visibleModels
+} from '../../shared/dictationCatalog'
 import type { CatalogEntry, DownloadFailure, EngineInfo, ItemStatus } from '../../shared/dictationTypes'
 import { DEFAULT_HOTKEY, formatHotkey, parseHotkeyFromEvent, usableHotkey, type Hotkey } from '../lib/dictationKey'
 import {
@@ -216,6 +224,27 @@ function MicField({ value, disabled }: { value: string; disabled: boolean }): JS
   )
 }
 
+/** Beside the language picker while the active model picks its own language
+ *  (#121; owner, 2026-10-04: "in the language drop down have an icon to
+ *  indicate that it doesn't support all languages"). A globe in the dim ink,
+ *  and the same one line as the download question on hover. */
+function LimitedMark(): JSX.Element {
+  return (
+    <span
+      data-language-limited
+      role="img"
+      aria-label={LIMITED_LANGUAGES_TEXT}
+      title={LIMITED_LANGUAGES_TEXT}
+      className="grid h-6 w-6 cursor-default place-items-center text-[var(--p-dim)]"
+    >
+      <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z" />
+      </svg>
+    </span>
+  )
+}
+
 /** "X Uninstall" (owner, 2026-09-19): it frees the disk, and says so by name.
  *  A BUTTON, the same one Download is: a first cut drew it as bare text to keep
  *  the destructive control quiet, and it read as a label rather than something
@@ -290,7 +319,7 @@ function ItemRow({
         badge ? 'bg-[color-mix(in_srgb,var(--p-text)_3.5%,transparent)]' : ''
       }`}
     >
-      <VendorMark vendor={entry.kind === 'gpu-pack' ? 'nvidia' : 'openai'} />
+      <VendorMark vendor={entry.kind === 'gpu-pack' || entry.engine === 'parakeet' ? 'nvidia' : 'openai'} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span data-item-name className="truncate text-[12.5px] font-semibold text-[var(--p-text)]">
@@ -353,6 +382,8 @@ export function DictationSettings(): JSX.Element | null {
   const [info, setInfo] = useState<EngineInfo | null>(null)
   const [progress, setProgress] = useState<Record<string, number>>({})
   const [failures, setFailures] = useState<Record<string, DownloadFailure>>({})
+  /** The model whose download waits on the one-line question, if any. */
+  const [asking, setAsking] = useState<string | null>(null)
 
   const api = host?.api
   const refresh = useCallback(() => {
@@ -397,6 +428,18 @@ export function DictationSettings(): JSX.Element | null {
       refresh()
     })
   }
+
+  /** A model that does not support every language says so once, before its
+   *  download (#121). A Retry after a failed one has already been asked. */
+  const fetchModel = (id: string): void => {
+    const failed = failures[id]
+    if (catalogEntry(id)?.limitedLanguages && (!failed || failed === 'cancelled')) setAsking(id)
+    else download(id)
+  }
+  /** The active model picks its own language: the picker shows Auto-detect,
+   *  cannot be changed, and the user's own choice waits, stored, for the next
+   *  Whisper model. */
+  const ownLanguage = limitedLanguages(model)
 
   const rec = recommendedModel(gpuOn)
   const noModel = !installed(model)
@@ -452,12 +495,16 @@ export function DictationSettings(): JSX.Element | null {
           off={!enabled}
           hint="The language dictation listens for."
         >
-          <Select
-            id="dictation-language"
-            value={language}
-            onChange={setDictationLanguage}
-            options={LANGUAGES.map((l) => ({ id: l.code, name: l.name }))}
-          />
+          <div className="flex items-center gap-2">
+            {ownLanguage && <LimitedMark />}
+            <Select
+              id="dictation-language"
+              value={ownLanguage ? 'auto' : language}
+              onChange={setDictationLanguage}
+              options={LANGUAGES.map((l) => ({ id: l.code, name: l.name }))}
+              disabled={ownLanguage}
+            />
+          </div>
         </Pref>
         <Pref
           id="dictation-pause-media"
@@ -496,7 +543,7 @@ export function DictationSettings(): JSX.Element | null {
                 // badge is what recommends; a second signal on the button made
                 // one row shout.
                 getPrimary={false}
-                onDownload={() => download(m.id)}
+                onDownload={() => fetchModel(m.id)}
                 onCancel={() => api.dictationCancel(m.id)}
                 installed={
                   <>
@@ -555,6 +602,17 @@ export function DictationSettings(): JSX.Element | null {
             />
           </div>
         </div>
+      )}
+      {asking && (
+        <ModelDownloadAsk
+          text={LIMITED_LANGUAGES_TEXT}
+          onCancel={() => setAsking(null)}
+          onDownload={() => {
+            const id = asking
+            setAsking(null)
+            download(id)
+          }}
+        />
       )}
     </div>
   )

@@ -21,7 +21,8 @@ Everything else happens **only when you ask for it**:
   from whisper.cpp's GitHub releases and the model from Hugging Face; the optional NVIDIA
   acceleration pack is a separate download you choose. Each file is checked against a fixed
   SHA-256 before use. Your voice never leaves the PC: it goes to a speech engine running on your
-  own machine (127.0.0.1) and is never written to disk.
+  own machine (127.0.0.1, or straight into the engine's input for the Parakeet model) and is never
+  written to disk.
 - **Links:** clicking a link printed in the terminal opens it in your browser.
 - **What you run:** the terminal runs your own shell, and whatever you run in it reaches the
   network as you tell it to.
