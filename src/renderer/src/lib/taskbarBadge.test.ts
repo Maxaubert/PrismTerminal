@@ -22,6 +22,15 @@ describe('attentionCount', () => {
       attentionCount({ doneIds: set('a'), questionIds: set(), workingIds: set('a'), doneOn: true, questionOn: true })
     ).toEqual({ count: 0, question: false })
   })
+  it('counts a failed tab too (#131), once, and only while its switch is on', () => {
+    const base = { doneIds: set('a'), questionIds: set(), workingIds: set(), doneOn: true, questionOn: true }
+    expect(attentionCount({ ...base, failedIds: set('a', 'f'), failedOn: true })).toEqual({ count: 2, question: false })
+    expect(attentionCount({ ...base, failedIds: set('f'), failedOn: false })).toEqual({ count: 1, question: false })
+    expect(attentionCount({ ...base, failedIds: set('f'), failedOn: true, workingIds: set('f') })).toEqual({
+      count: 1,
+      question: false
+    })
+  })
 })
 
 describe('badgeText', () => {

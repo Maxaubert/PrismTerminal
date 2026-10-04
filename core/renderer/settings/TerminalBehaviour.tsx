@@ -3,9 +3,13 @@ import { termApi } from '../host'
 import { savedShellId, saveShellId } from '../lib/termPrefs'
 import {
   setAgentDoneOn,
+  setAgentFailedOn,
+  setAgentHooksOn,
   setAgentIndicator,
   setAgentQuestionOn,
   useAgentDoneOn,
+  useAgentFailedOn,
+  useAgentHooksOn,
   useAgentIndicator,
   useAgentQuestionOn,
   type AgentIndicator
@@ -56,13 +60,17 @@ export function ShellSetting(): JSX.Element | null {
  *  the indicator, not part of a colour theme: a theme pick never resets it and
  *  a saved theme never carries it (owner, 2026-09-19, for both apps). */
 /**
- * THE TWO ATTENTION MARKS, each a switch (2026-09-28; owner: "an optional
+ * THE ATTENTION MARKS, each a switch (2026-09-28; owner: "an optional
  * completion indicator" and "a question indicator ... also optional"). What
- * each shows, the tab strip draws; their colours are with the theme's.
+ * each shows, the tab strip draws; their colours are with the theme's. The
+ * Failed mark and the switch for Claude Code's hooks that tell it (#131)
+ * follow them, on by default; off, a new shell is not handed the plugin.
  */
 export function AttentionSettings(): JSX.Element {
   const doneOn = useAgentDoneOn()
   const questionOn = useAgentQuestionOn()
+  const failedOn = useAgentFailedOn()
+  const hooksOn = useAgentHooksOn()
   return (
     <>
       <Pref
@@ -78,6 +86,20 @@ export function AttentionSettings(): JSX.Element {
         hint="Marks a tab whose agent is waiting for your answer, until you open it."
       >
         <Switch on={questionOn} onChange={setAgentQuestionOn} label="Question indicator" />
+      </Pref>
+      <Pref
+        id="agent-failed-on"
+        label="Failed indicator"
+        hint="Marks a tab whose agent stopped on an error while you were away, until you open it."
+      >
+        <Switch on={failedOn} onChange={setAgentFailedOn} label="Failed indicator" />
+      </Pref>
+      <Pref
+        id="agent-hooks"
+        label="Exact status from Claude Code"
+        hint="Claude Code tells the tab when it works, waits for you, finishes or fails. Applies to terminals opened after the change."
+      >
+        <Switch on={hooksOn} onChange={setAgentHooksOn} label="Exact status from Claude Code" />
       </Pref>
     </>
   )

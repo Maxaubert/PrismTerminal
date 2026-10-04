@@ -2,6 +2,7 @@ import type { IPty } from 'node-pty'
 import { cdCommand } from '../shared/termCwd'
 import { detectShells, shellById } from './shells'
 import { cmdPrompt } from './termPrompt'
+import { isOurPlugin } from './claudePlugin'
 
 // The pty host. Sessions are keyed by an id the renderer assigns - the same
 // pattern as tabs, where the renderer owns the list and main owns the
@@ -118,7 +119,50 @@ const SESSION_MARKERS = new Set([
   'CODEX_COMPANION_TRANSCRIPT_PATH'
 ])
 
-export function ptyEnv(from: NodeJS.ProcessEnv, shellId?: string): Record<string, string> {
+/**
+ * THE CLAUDE CODE PLUGIN (#131): Claude loads every folder named in this
+ * variable as a plugin (2.1.280+, MEASURED on 2.1.289, `;` between several),
+ * so a plain `claude` typed in the tab reports its state with nothing written
+ * to the user's own settings. The user's own value is KEPT and ours appended.
+ */
+const PLUGIN_DIRS = 'CLAUDE_CODE_PLUGIN_DIRS'
+
+/**
+ * What a host that ships the plugin says about a shell: where its plugin is,
+ * and whether the setting is on. A host that ships none (Prism, until it does)
+ * passes nothing, and the variable is left exactly as inherited.
+ */
+export interface ClaudePluginEnv {
+  dir: string
+  on: boolean
+}
+
+/** Which warm shell a spawn may adopt: one started with the same answer. */
+export const pluginKey = (p: ClaudePluginEnv | undefined): string =>
+  p ? `${p.on ? 1 : 0}|${p.dir}` : ''
+
+/**
+ * The user's plugin folders, with ours appended when `dir` is given. Any copy
+ * of OUR plugin the app inherited (`isOurs`, see claudePlugin.ts: launched
+ * from another copy's tab) is dropped first, so a Claude never runs two and
+ * "off" leaves none. Empty: the variable goes.
+ */
+export function withPluginDir(
+  dirs: string | undefined,
+  dir: string | undefined,
+  isOurs: (d: string) => boolean = () => false
+): string {
+  const list = (dirs ?? '').split(';').filter((d) => d.trim() && !isOurs(d))
+  if (dir && !list.some((d) => d.trim().toLowerCase() === dir.toLowerCase())) list.push(dir)
+  return list.join(';')
+}
+
+export function ptyEnv(
+  from: NodeJS.ProcessEnv,
+  shellId?: string,
+  plugin?: ClaudePluginEnv,
+  isOurs?: (d: string) => boolean
+): Record<string, string> {
   const env: Record<string, string> = {}
   let prompt: string | undefined
   for (const [k, v] of Object.entries(from)) {
@@ -136,6 +180,13 @@ export function ptyEnv(from: NodeJS.ProcessEnv, shellId?: string): Record<string
   // cmd reports its folder through PROMPT (#99), in front of whatever prompt
   // the user already had.
   if (shellId === 'cmd') env.PROMPT = cmdPrompt(prompt)
+  // Windows names are case-blind: write under the spelling already there.
+  const key = Object.keys(env).find((k) => k.toUpperCase() === PLUGIN_DIRS) ?? PLUGIN_DIRS
+  if (plugin) {
+    const dirs = withPluginDir(env[key], plugin.on ? plugin.dir : undefined, isOurs)
+    if (dirs) env[key] = dirs
+    else delete env[key]
+  }
   return env
 }
 
@@ -168,6 +219,10 @@ const sessions = new Map<string, Session>()
 interface WarmShell {
   pty: IPty
   defId: string
+  /** `pluginKey` of what it was started with (#131): adopted only by a spawn
+   *  that wants the same, so a switched-off setting is never handed a shell
+   *  that still carries the plugin. */
+  plugin: string
   buf: string
   sub: { dispose(): void }
   exited: boolean
@@ -233,7 +288,11 @@ export function shellsGone(timeoutMs: number): Promise<void> {
   ])
 }
 
-export async function prewarmShell(root: string, shellId: string | undefined): Promise<void> {
+export async function prewarmShell(
+  root: string,
+  shellId: string | undefined,
+  plugin?: ClaudePluginEnv
+): Promise<void> {
   const key = rootKey(root)
   if (warm.has(key)) return
   const def = shellById(shellId, await detectShells())
@@ -258,9 +317,9 @@ export async function prewarmShell(root: string, shellId: string | undefined): P
       cols: size.cols,
       rows: size.rows,
       cwd: root,
-      env: ptyEnv(process.env, def.id)
+      env: ptyEnv(process.env, def.id, plugin, isOurPlugin)
     })
-    const w: WarmShell = { pty: p, defId: def.id, buf: '', sub: { dispose: () => {} }, exited: false }
+    const w: WarmShell = { pty: p, defId: def.id, plugin: pluginKey(plugin), buf: '', sub: { dispose: () => {} }, exited: false }
     w.sub = p.onData((d) => {
       // The banner and prompt, kept for replay. Capped: a warm shell should
       // be quiet, and a runaway one is not worth adopting anyway.
@@ -348,12 +407,13 @@ export async function spawnTerm(
   root: string,
   shellId: string | undefined,
   send: Send,
-  resume?: string
+  resume?: string,
+  plugin?: ClaudePluginEnv
 ): Promise<boolean> {
   if (sessions.has(id) || pending.has(id)) return false
   pending.add(id)
   try {
-    return await spawnPending(id, root, shellId, send, resume)
+    return await spawnPending(id, root, shellId, send, resume, plugin)
   } finally {
     pending.delete(id)
     killedWhilePending.delete(id)
@@ -365,7 +425,8 @@ async function spawnPending(
   root: string,
   shellId: string | undefined,
   send: Send,
-  resume?: string
+  resume: string | undefined,
+  plugin: ClaudePluginEnv | undefined
 ): Promise<boolean> {
   const def = shellById(shellId, await detectShells())
   if (!def) return false
@@ -375,7 +436,7 @@ async function spawnPending(
   // waiting (the banner, the prompt), then wire it up like any session.
   // Never for a resume: the warm shell was spawned without the command.
   const w = warm.get(rootKey(root))
-  if (!resume && w && !w.exited && w.defId === def.id) {
+  if (!resume && w && !w.exited && w.defId === def.id && w.plugin === pluginKey(plugin)) {
     warm.delete(rootKey(root))
     w.sub.dispose()
     if (w.buf) send('term:data', id, w.buf)
@@ -405,7 +466,7 @@ async function spawnPending(
       cols: size.cols,
       rows: size.rows,
       cwd: root,
-      env: ptyEnv(process.env, def.id)
+      env: ptyEnv(process.env, def.id, plugin, isOurPlugin)
     })
     // Closed while node-pty loaded: the tab is gone, so is this shell.
     if (killedWhilePending.has(id)) {

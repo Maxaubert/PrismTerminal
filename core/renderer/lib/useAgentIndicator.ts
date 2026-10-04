@@ -3,8 +3,9 @@ import type { DetectedAgent } from '../../shared/types'
 import { activitySuppressed, inputEcho, markBorn, startupOutput } from './termActivity'
 import { forgetAgentTitle, readAgentTitle } from './agentTitle'
 import { noteWorking } from './agentClock'
-import { onTitle, readScreenTail } from './termBus'
+import { onAgentSignal, onTitle, readScreenTail } from './termBus'
 import { looksLikeQuestion } from './agentQuestion'
+import { hookStep, type AttentionMark, type HookEvent, type HookSession } from './agentHookState'
 import { termApi } from '../host'
 
 /**
@@ -25,6 +26,12 @@ export interface AgentIndicator {
   /** Sessions whose agent is waiting on YOU (a question or a permission
    *  prompt), marked while you were not looking at them (2026-09-28). */
   questionIds: ReadonlySet<string>
+  /** Sessions whose turn ended on an error, told by Claude Code's own hook
+   *  (#131), marked while you were not looking at them. */
+  failedIds: ReadonlySet<string>
+  /** Each failed session's error kind (`rate_limit`...), when the hook named
+   *  one. A ref, read whenever `failedIds` changes. */
+  failedKinds: RefObject<Map<string, string>>
   /** Which agent each session hosts. A ref: read at the moment of asking. */
   agentKinds: RefObject<Map<string, DetectedAgent>>
   /** The session ended: every mark it carried goes with it. */
@@ -43,6 +50,17 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
   const [workingIds, setWorkingIds] = useState<ReadonlySet<string>>(new Set())
   const [doneIds, setDoneIds] = useState<ReadonlySet<string>>(new Set())
   const [questionIds, setQuestionIds] = useState<ReadonlySet<string>>(new Set())
+  const [failedIds, setFailedIds] = useState<ReadonlySet<string>>(new Set())
+  const failedKinds = useRef(new Map<string, string>())
+  /**
+   * SESSIONS THAT SPEAK THROUGH HOOKS (#131), and the phase each last said.
+   * For these the hooks are the agent's word: the title only says an Esc
+   * (`agentHookState`), the output is never scored, and the screen is never
+   * read for a question. A session that never sends one keeps everything
+   * below as it was: Codex, a Claude started before the update, a folder not
+   * trusted yet, plugins blocked by policy, or the setting off.
+   */
+  const hooked = useRef(new Map<string, HookSession>())
   /**
    * LOOKING AT A TAB is having it in front AND the window focused (2026-09-28;
    * owner: the marks "stay there until you click the tab"). A tab that finished
@@ -101,11 +119,37 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     }
   }, [])
 
+  /** One hook signal, or an idle title, for a hooked session: the rules are
+   *  `agentHookState`'s; this only carries them out. A mark is raised only on
+   *  a tab nobody is looking at, as every mark is. */
+  const applyHook = useCallback((id: string, ev: HookEvent): void => {
+    const o = hookStep(hooked.current.get(id), ev)
+    if (!o) return
+    hooked.current.set(id, { phase: o.phase, kind: o.kind })
+    if (o.phase === 'failed' && o.kind) failedKinds.current.set(id, o.kind)
+    else if (o.phase === 'failed' || o.clear.includes('failed')) failedKinds.current.delete(id)
+    const away = !lookedAt(id)
+    const marks = (mark: AttentionMark) => (prev: ReadonlySet<string>): ReadonlySet<string> => {
+      if (away && o.raise.includes(mark)) return prev.has(id) ? prev : new Set(prev).add(id)
+      return o.clear.includes(mark) ? without(prev, id) : prev
+    }
+    setDoneIds(marks('finished'))
+    setQuestionIds(marks('question'))
+    setFailedIds(marks('failed'))
+    setWorkingIds((prev) => {
+      if (prev.has(id) === o.working) return prev
+      return o.working ? new Set(prev).add(id) : without(prev, id)
+    })
+  }, [])
+
   useEffect(
     () =>
       termApi().onTermAgent((id, present, kind) => {
         if (present) polled.current.add(id)
         else polled.current.delete(id)
+        // Another agent in this shell now: whatever Claude's hooks said was
+        // about the one that left.
+        if (!present || (kind && kind !== 'claude')) hooked.current.delete(id)
         if (present && kind) agentKinds.current.set(id, kind)
         else if (!present) {
           agentKinds.current.delete(id)
@@ -115,6 +159,8 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           forgetAgentTitle(id)
           stopFallback(id)
           setWorkingIds((prev) => without(prev, id))
+          failedKinds.current.delete(id)
+          setFailedIds((prev) => without(prev, id))
         }
         if (present) {
           // An agent's BIRTH state is idle: its startup paint (banner, welcome
@@ -143,6 +189,8 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
   useEffect(
     () =>
       termApi().onTermData((id) => {
+        // Its hooks say everything, questions included (#131).
+        if (hooked.current.has(id)) return
         // A session whose agent SAYS what it is doing (through the title,
         // see onTitle below) is never scored from its output: the agent's
         // own word is exact, and its repaints would only second-guess it.
@@ -213,9 +261,17 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
         if (!agentKinds.current.has(id)) agentKinds.current.set(id, r.kind)
         setAgentIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
         titleState.current.set(id, r.state)
-        // Idle is where a question is asked: read the screen for its box. Any
-        // other state is the agent at work again, so no question is pending.
+        // A session speaking through hooks: the title only says an Esc (#131).
+        if (hooked.current.has(id)) {
+          if (r.state === 'idle') applyHook(id, { state: 'idle-title' })
+          return
+        }
+        // Idle is where a question is asked: read the screen for its box.
+        // Codex says it outright (#131). Any other state is the agent at work
+        // again, so no question is pending.
         if (r.state === 'idle') checkQuestion(id)
+        else if (r.state === 'question')
+          setQuestionIds((prev) => (prev.has(id) || lookedAt(id) ? prev : new Set(prev).add(id)))
         else setQuestionIds((prev) => without(prev, id))
         const working = r.state === 'working'
         setWorkingIds((prev) => {
@@ -226,7 +282,31 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           return next
         })
       }),
-    [stopFallback, checkQuestion]
+    [stopFallback, checkQuestion, applyHook]
+  )
+
+  /**
+   * CLAUDE CODE'S HOOKS (#131), through the bundled plugin's OSC 777. Only
+   * Claude's UI writes one (never `claude -p`, MEASURED), so a signal is that
+   * agent being present, as a Claude title is: the poll is asked to look, and
+   * only the poll takes it back. From the first signal the session is hooked.
+   */
+  useEffect(
+    () =>
+      onAgentSignal((id, signal) => {
+        if (!polled.current.has(id)) termApi().termAgentLook?.()
+        if (!hooked.current.has(id)) {
+          outputRuns.current.delete(id)
+          stopFallback(id)
+          const t = questionTimers.current.get(id)
+          if (t !== undefined) clearTimeout(t)
+          questionTimers.current.delete(id)
+        }
+        if (!agentKinds.current.has(id)) agentKinds.current.set(id, 'claude')
+        setAgentIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+        applyHook(id, signal)
+      }),
+    [stopFallback, applyHook]
   )
 
   // Finished-while-away: an agent that STOPS working on a background tab
@@ -245,15 +325,22 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
       for (const id of was) {
         // Stopped, still an agent session, and nobody was looking at it: its
         // tab was in the background, or the window was.
-        if (!workingIds.has(id) && agentIds.has(id) && !seeing(id)) mut().add(id)
+        // A hooked session is told apart by its hooks instead (#131): a
+        // question or an Esc stops the work too, and neither is a finish.
+        if (!workingIds.has(id) && agentIds.has(id) && !seeing(id) && !hooked.current.has(id)) mut().add(id)
       }
       for (const id of prev) {
         if (workingIds.has(id) || seeing(id) || !agentIds.has(id)) mut().delete(id)
       }
       return next ?? prev
     })
-    // A question you are now looking at has been seen.
+    // A question, or a failure, you are now looking at has been seen.
     setQuestionIds((prev) => (activeId && focused && prev.has(activeId) ? without(prev, activeId) : prev))
+    setFailedIds((prev) => {
+      let next = prev
+      for (const id of prev) if (seeing(id) || workingIds.has(id) || !agentIds.has(id)) next = without(next, id)
+      return next
+    })
   }, [workingIds, activeId, agentIds, focused])
 
   // STABLE: a host subscribes to the pty's exit ONCE and calls this from there.
@@ -268,11 +355,14 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     setWorkingIds((prev) => without(prev, id))
     setDoneIds((prev) => without(prev, id))
     setQuestionIds((prev) => without(prev, id))
+    setFailedIds((prev) => without(prev, id))
+    hooked.current.delete(id)
+    failedKinds.current.delete(id)
     titleState.current.delete(id)
     const t = questionTimers.current.get(id)
     if (t !== undefined) clearTimeout(t)
     questionTimers.current.delete(id)
   }, [stopFallback])
 
-  return { agentIds, workingIds, doneIds, questionIds, agentKinds, forget }
+  return { agentIds, workingIds, doneIds, questionIds, failedIds, failedKinds, agentKinds, forget }
 }

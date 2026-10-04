@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OutputBatcher, ptyEnv } from './terminal'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { OutputBatcher, pluginKey, ptyEnv, withPluginDir } from './terminal'
+import { isOurPlugin, PLUGIN_NAME } from './claudePlugin'
 
 describe('OutputBatcher', () => {
   it('coalesces chunks and flushes once per window', () => {
@@ -90,5 +94,86 @@ describe('ptyEnv', () => {
     const env = ptyEnv({ FOO: 'bar', GONE: undefined })
     expect(env.FOO).toBe('bar')
     expect('GONE' in env).toBe(false)
+  })
+})
+
+// THE CLAUDE CODE PLUGIN (#131): the folder rides CLAUDE_CODE_PLUGIN_DIRS.
+describe('ptyEnv and the Claude Code plugin', () => {
+  const DIR = 'C:\\PT\\resources\\claude-plugin'
+  const on = { dir: DIR, on: true }
+  const off = { dir: DIR, on: false }
+
+  it('adds the plugin folder when the setting is on', () => {
+    expect(ptyEnv({}, 'pwsh', on).CLAUDE_CODE_PLUGIN_DIRS).toBe(DIR)
+  })
+
+  it("keeps the user's own folders and appends ours after them", () => {
+    expect(ptyEnv({ CLAUDE_CODE_PLUGIN_DIRS: 'D:\\mine;E:\\too' }, 'pwsh', on).CLAUDE_CODE_PLUGIN_DIRS).toBe(
+      `D:\\mine;E:\\too;${DIR}`
+    )
+  })
+
+  it('writes under the spelling the environment already uses, once', () => {
+    const env = ptyEnv({ Claude_Code_Plugin_Dirs: 'D:\\mine' }, 'pwsh', on)
+    expect(env.Claude_Code_Plugin_Dirs).toBe(`D:\\mine;${DIR}`)
+    expect('CLAUDE_CODE_PLUGIN_DIRS' in env).toBe(false)
+  })
+
+  it('does not add it twice', () => {
+    expect(ptyEnv({ CLAUDE_CODE_PLUGIN_DIRS: DIR.toLowerCase() }, 'pwsh', on).CLAUDE_CODE_PLUGIN_DIRS).toBe(
+      DIR.toLowerCase()
+    )
+  })
+
+  it("leaves it out when the setting is off, and the user's value as it was", () => {
+    expect('CLAUDE_CODE_PLUGIN_DIRS' in ptyEnv({}, 'pwsh', off)).toBe(false)
+    expect(ptyEnv({ CLAUDE_CODE_PLUGIN_DIRS: 'D:\\mine' }, 'pwsh', off).CLAUDE_CODE_PLUGIN_DIRS).toBe('D:\\mine')
+  })
+
+  it('drops a copy of OUR plugin inherited from another copy of the app, on or off', () => {
+    const ours = (d: string): boolean => d.endsWith('stable\\claude-plugin')
+    const from = { CLAUDE_CODE_PLUGIN_DIRS: 'D:\\mine;C:\\stable\\claude-plugin' }
+    expect(ptyEnv(from, 'pwsh', on, ours).CLAUDE_CODE_PLUGIN_DIRS).toBe(`D:\\mine;${DIR}`)
+    expect(ptyEnv(from, 'pwsh', off, ours).CLAUDE_CODE_PLUGIN_DIRS).toBe('D:\\mine')
+    expect('CLAUDE_CODE_PLUGIN_DIRS' in ptyEnv({ CLAUDE_CODE_PLUGIN_DIRS: 'C:\\stable\\claude-plugin' }, 'pwsh', off, ours)).toBe(false)
+  })
+
+  it('changes nothing for a host that ships no plugin (Prism), whatever is inherited', () => {
+    const from = { CLAUDE_CODE_PLUGIN_DIRS: 'D:\\mine;;C:\\stable\\claude-plugin', FOO: 'x' }
+    expect(ptyEnv(from, 'pwsh', undefined, () => true)).toEqual(ptyEnv(from, 'pwsh'))
+    expect(ptyEnv(from, 'pwsh').CLAUDE_CODE_PLUGIN_DIRS).toBe(from.CLAUDE_CODE_PLUGIN_DIRS)
+    expect('CLAUDE_CODE_PLUGIN_DIRS' in ptyEnv({}, 'pwsh')).toBe(false)
+  })
+
+  it('keys a warm shell by what it was started with', () => {
+    expect(pluginKey(undefined)).toBe('')
+    expect(pluginKey(on)).not.toBe(pluginKey(off))
+    expect(pluginKey(on)).toBe(pluginKey({ ...on }))
+  })
+
+  it('withPluginDir drops empty entries', () => {
+    expect(withPluginDir(';a;;', 'b')).toBe('a;b')
+    expect(withPluginDir(undefined, undefined)).toBe('')
+  })
+})
+
+describe('isOurPlugin', () => {
+  it('knows our plugin by its manifest name, and nothing else', () => {
+    const base = mkdtempSync(join(tmpdir(), 'pt-plugin-'))
+    const mk = (name: string, manifest: string | null): string => {
+      const d = join(base, name)
+      mkdirSync(join(d, '.claude-plugin'), { recursive: true })
+      if (manifest !== null) writeFileSync(join(d, '.claude-plugin', 'plugin.json'), manifest)
+      return d
+    }
+    expect(isOurPlugin(mk('ours', JSON.stringify({ name: PLUGIN_NAME })))).toBe(true)
+    expect(isOurPlugin(mk('theirs', JSON.stringify({ name: 'something-else' })))).toBe(false)
+    expect(isOurPlugin(mk('broken', '{'))).toBe(false)
+    expect(isOurPlugin(mk('empty', null))).toBe(false)
+    expect(isOurPlugin(join(base, 'missing'))).toBe(false)
+  })
+
+  it('names the plugin the app ships', () => {
+    expect(isOurPlugin(join(__dirname, '..', 'claude-plugin'))).toBe(true)
   })
 })

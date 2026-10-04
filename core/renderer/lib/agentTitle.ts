@@ -29,7 +29,15 @@ const isBraille = (c: string): boolean => {
   return cp >= 0x2800 && cp <= 0x28ff
 }
 
-export type AgentTitleState = 'working' | 'idle' | 'starting'
+/** `question`: Codex waits on you (#131; its "Action Required" title). */
+export type AgentTitleState = 'working' | 'idle' | 'starting' | 'question'
+
+/**
+ * CODEX ASKING (#131). MEASURED on Codex CLI 0.153.2: while it waits for an
+ * approval its title is `[ ! ] Action Required | <folder>`, alternating with
+ * `[ . ] Action Required | <folder>`; at rest it goes back to the bare folder.
+ */
+const CODEX_ASKS = /^\[\s*[!.]\s*\]\s*Action Required\b/
 export interface AgentTitle {
   kind: 'claude' | 'codex'
   state: AgentTitleState
@@ -52,6 +60,12 @@ export function readAgentTitle(id: string, title: string): AgentTitle | null {
   if (!first) return null
   const rest = t.slice(first.length).trim()
   const s = seen.get(id)
+  if (CODEX_ASKS.test(t)) {
+    // Asking is past startup; the name it returns to at rest is kept.
+    if (s?.kind === 'codex') s.ready = true
+    else seen.set(id, { kind: 'codex', name: s?.name ?? '', ready: true })
+    return { kind: 'codex', state: 'question' }
+  }
   if (HALF.has(first) || isBraille(first)) {
     const kind = HALF.has(first) ? 'claude' : 'codex'
     const next: Seen = { kind, name: rest, ready: s?.kind === kind ? s.ready : false }

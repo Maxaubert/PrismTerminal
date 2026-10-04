@@ -68,7 +68,7 @@ import { onWindowEdgesChange, windowEdges } from './lib/edgesPrefs'
 import { onWindowAccentChange, windowAccent } from './lib/accentPrefs'
 import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPrefs'
 import { attentionCount, drawBadge, useTaskbarBadgeOn } from './lib/taskbarBadge'
-import { useAgentDoneOn, useAgentQuestionOn } from '@core/renderer/lib/termLook'
+import { agentHooksOn, useAgentDoneOn, useAgentFailedOn, useAgentQuestionOn } from '@core/renderer/lib/termLook'
 
 const Settings = lazy(() => import('./components/Settings'))
 // Loaded when it is first opened: the popup brings the whole catalogue with it,
@@ -190,7 +190,7 @@ export default function App(): JSX.Element {
   // nothing, and with the setting off it listens to nothing.
   useDictationArm(activeShell ? activeShell.id : null)
   const findOpen = !!activeShell && findFor === activeShell.id
-  const { agentIds, workingIds, doneIds, questionIds, agentKinds } = indicator
+  const { agentIds, workingIds, doneIds, questionIds, failedIds, failedKinds, agentKinds } = indicator
 
   // The latest of everything, for listeners registered once.
   const live = useRef({ state, workingIds, agentIds, blocked: false, front: '' })
@@ -237,7 +237,9 @@ export default function App(): JSX.Element {
   const prewarm = useCallback(() => {
     // Only a folder known ahead of the click can be warmed; asking cannot.
     const dir = newTabMode() === 'folder' ? newTabFolder() || home.current : ''
-    if (dir) window.prism.termPrewarm(dir, savedShellId())
+    // With the plugin or without, as the spawn will ask (#131): a warm shell
+    // is only adopted by a spawn that wants what it was started with.
+    if (dir) window.prism.termPrewarm(dir, savedShellId(), agentHooksOn())
   }, [])
 
   const newTab = useCallback(async () => {
@@ -472,7 +474,8 @@ export default function App(): JSX.Element {
   const badgeOn = useTaskbarBadgeOn()
   const doneOn = useAgentDoneOn()
   const questionOn = useAgentQuestionOn()
-  const need = attentionCount({ doneIds, questionIds, workingIds, doneOn, questionOn })
+  const failedOn = useAgentFailedOn()
+  const need = attentionCount({ doneIds, questionIds, workingIds, doneOn, questionOn, failedIds, failedOn })
   useEffect(() => {
     if (!badgeOn || need.count === 0) {
       window.prism.setTaskbarBadge(null, '')
@@ -585,6 +588,8 @@ export default function App(): JSX.Element {
       workingIds={workingIds}
       doneIds={doneIds}
       questionIds={questionIds}
+      failedIds={failedIds}
+      failedKinds={failedKinds}
       agentIds={agentIds}
       loadingIds={loadingIds}
       onPick={(id) => setState((s) => pickTab(s, id))}

@@ -38,6 +38,28 @@ describe('readAgentTitle, the Codex dialect (measured 2026-09-04)', () => {
   })
 })
 
+describe('readAgentTitle, Codex asking (#131, measured on 0.153.2)', () => {
+  it('reads "Action Required" as waiting on you, in both of its frames', () => {
+    expect(read('⠙ proj')).toBe('codex:starting')
+    expect(read('proj')).toBe('codex:idle')
+    expect(read('⠴ proj')).toBe('codex:working')
+    expect(read('[ ! ] Action Required | proj')).toBe('codex:question')
+    expect(read('[ . ] Action Required | proj')).toBe('codex:question')
+    // Answered: back to work, then at rest under the name it had.
+    expect(read('⠦ proj')).toBe('codex:working')
+    expect(read('proj')).toBe('codex:idle')
+  })
+
+  it('is Codex asking even before anything else was seen', () => {
+    expect(read('[ ! ] Action Required | proj')).toBe('codex:question')
+  })
+
+  it('is not set off by a title that only mentions it', () => {
+    expect(read('Action Required')).toBeNull()
+    expect(read('notes [ ! ] Action Required')).toBeNull()
+  })
+})
+
 describe('readAgentTitle, everything else', () => {
   it('is null for the shell, a command, a path, an empty title', () => {
     expect(read('C:\\Program Files\\PowerShell\\7\\pwsh.exe')).toBeNull()

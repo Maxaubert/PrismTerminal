@@ -8,7 +8,8 @@ import {
 } from 'react'
 import { tabLabels, type Tab } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
-import { useAgentDoneOn, useAgentIndicator, useAgentQuestionOn } from '@core/renderer/lib/termLook'
+import { useAgentDoneOn, useAgentFailedOn, useAgentIndicator, useAgentQuestionOn } from '@core/renderer/lib/termLook'
+import { failedLabel } from '@core/renderer/lib/agentHookSignal'
 import { useAgentColors } from '@core/renderer/lib/agentColors'
 import { inkOn } from '@core/renderer/lib/colour'
 import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from '@core/renderer/lib/recentRoots'
@@ -64,6 +65,8 @@ export function TabStrip({
   workingIds,
   doneIds,
   questionIds,
+  failedIds,
+  failedKinds,
   agentIds,
   loadingIds,
   onPick,
@@ -84,6 +87,10 @@ export function TabStrip({
   doneIds: ReadonlySet<string>
   /** Sessions whose agent waits for your answer, unseen (2026-09-28). */
   questionIds: ReadonlySet<string>
+  /** Sessions whose turn ended on an error, unseen (#131), and the error's
+   *  kind where Claude Code named one. */
+  failedIds?: ReadonlySet<string>
+  failedKinds?: { readonly current: ReadonlyMap<string, string> }
   /** Sessions whose shell currently hosts an AI CLI (Claude Code, codex). */
   agentIds: ReadonlySet<string>
   /** Tabs still coming back to an agent (#106): a ring before the name,
@@ -110,9 +117,10 @@ export function TabStrip({
   const indicator = useAgentIndicator()
   const width = useTabWidth()
   // The user's pick where there is one, else the theme's accent and green.
-  const { working: agentColor, finished: doneColor, question: questionColor } = useAgentColors()
+  const { working: agentColor, finished: doneColor, question: questionColor, failed: failedColor } = useAgentColors()
   const doneOn = useAgentDoneOn()
   const questionOn = useAgentQuestionOn()
+  const failedOn = useAgentFailedOn()
   // Full mode fills the tab with the colour. Text biases WHITE: strict
   // contrast maths picks black on a mid orange or indigo, but white on a
   // saturated fill is the look; black only wins on genuinely light fills
@@ -307,15 +315,18 @@ export function TabStrip({
         // switch; a question outranks a plain finish. Full's fill is for
         // WORKING alone now: the finished fill it used to have is this line.
         const question = questionOn && !working && questionIds.has(t.id)
-        const done = doneOn && !working && !question && doneIds.has(t.id)
-        const mark = question ? questionColor : done ? doneColor : null
+        // FAILED (#131): a turn that ended on an error, said by Claude Code's
+        // own hook. Under a question, over a plain finish.
+        const failed = failedOn && !working && !question && !!failedIds?.has(t.id)
+        const done = doneOn && !working && !question && !failed && doneIds.has(t.id)
+        const mark = question ? questionColor : failed ? failedColor : done ? doneColor : null
         const tint = working ? agentColor : mark
         const loud = working && indicator === 'full'
         return (
           <div
             key={t.id}
             data-agent={tint ? indicator : undefined}
-            data-agent-state={working ? 'working' : question ? 'question' : done ? 'done' : undefined}
+            data-agent-state={working ? 'working' : question ? 'question' : failed ? 'failed' : done ? 'done' : undefined}
             data-agent-present={agentIds.has(t.id) ? '' : undefined}
             // Hairline side edges in the divider token: they separate flush
             // tabs when the style draws edges, and vanish (the token goes
@@ -413,7 +424,7 @@ export function TabStrip({
                 name to it. */}
             {mark && (
               <span
-                data-attention={question ? 'question' : 'done'}
+                data-attention={question ? 'question' : failed ? 'failed' : 'done'}
                 className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px]"
                 style={{ background: mark }}
                 aria-hidden
@@ -477,7 +488,15 @@ export function TabStrip({
               // four characters wide, so a one-letter name is not a sliver.
               className={`min-w-[4ch] truncate py-1 text-center ${width === 'fixed' ? 'flex-1' : 'max-w-[14rem]'}`}
               // The label is the folder's last segment; the whole path is here.
-              title={t.kind === 'settings' ? undefined : t.cwd}
+              // While the Failed line shows, what failed is said under the
+              // path (#131): "Failed: rate limit".
+              title={
+                t.kind === 'settings'
+                  ? undefined
+                  : failed
+                    ? `${t.cwd}\n${failedLabel(failedKinds?.current.get(t.id))}`
+                    : t.cwd
+              }
               onClick={() => {
               // A press that travelled is a drag, not a pick.
               if (dragging.current) {

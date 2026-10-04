@@ -1,0 +1,3 @@
+# The Claude Code plugin's hook (#131) is a batch file: cmd reads it line by
+# line and is only reliable with CRLF, whatever the checkout's own setting is.
+*.cmd text eol=crlf

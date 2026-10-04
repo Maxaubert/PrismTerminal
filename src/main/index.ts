@@ -89,6 +89,20 @@ const pathOpeners = {
   }
 }
 
+/**
+ * The Claude Code plugin this app hands its shells (#131), or undefined when
+ * it is not where it should be: then no shell is given a folder that is not
+ * there. Installed: `resources\claude-plugin`. A dev build and the e2e read
+ * the core's own copy, so they test the very files that ship.
+ */
+function claudePluginDir(): string | undefined {
+  // Unpackaged, main runs from out/main, two folders under the repo (the icon
+  // is found the same way): app.getAppPath() is that folder when the e2e
+  // launches the script directly.
+  const dir = app.isPackaged ? join(process.resourcesPath, 'claude-plugin') : join(__dirname, '../../core/claude-plugin')
+  return existsSync(join(dir, 'hooks', 'hooks.json')) ? dir : undefined
+}
+
 // userData is `%APPDATA%\PrismTerminal`, whatever the product name's spacing
 // would have made it. The e2e (and anyone else) passing Chromium's own
 // --user-data-dir keeps the profile they asked for: Electron has already
@@ -455,7 +469,11 @@ function wireIpc(): void {
     mayPrewarm: async (cwd) => !awaitingRestore && (await isDir(cwd)),
     // Prism's reroot. This app never moves a shell it did not start there.
     mayCd: () => false,
-    paths: pathOpeners
+    paths: pathOpeners,
+    // AGENT STATES FROM CLAUDE CODE'S HOOKS (#131): the plugin ships beside
+    // the app (electron-builder's extraResources), and a dev build reads the
+    // core's own copy. A shell gets it while the page's setting is on.
+    claudePluginDir: claudePluginDir()
   })
   // DICTATION (#13) is the core's too. What is this app's own: where ITS
   // installer put the CPU engine, the folder it shares with Prism, and the GPU
