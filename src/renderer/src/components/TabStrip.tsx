@@ -15,6 +15,7 @@ import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from 
 import { ContextMenu } from './ContextMenu'
 import { MenuIcon } from './MenuIcon'
 import { useTabWidth } from '../lib/tabWidthPrefs'
+import { dropSlot, type Lane } from '../lib/tabDrop'
 
 /**
  * The open shells, as a row under the title bar.
@@ -182,7 +183,7 @@ export function TabStrip({
   // sits under the pointer cannot work once they animate: the neighbour
   // slides out from under the cursor, the answer flips back, and the strip
   // judders. Frozen geometry has no feedback loop.
-  const lanes = useRef<Array<{ left: number; width: number; mid: number }>>([])
+  const lanes = useRef<Lane[]>([])
   const strip = useRef<HTMLDivElement>(null)
   const startX = useRef(0)
   /** True once the press has travelled far enough to BE a drag: a plain click
@@ -198,11 +199,6 @@ export function TabStrip({
     const el = heldFocus.current
     heldFocus.current = null
     if (el && document.contains(el)) requestAnimationFrame(() => el.focus())
-  }
-  /** The slot a point is asking for, from the frozen lanes. */
-  const slotAt = (x: number): number => {
-    const at = lanes.current.findIndex((l) => x < l.mid)
-    return at === -1 ? lanes.current.length : at
   }
   const onTabPointerDown = (e: PointerEvent<HTMLDivElement>, id: string, i: number): void => {
     if (e.button !== 0) return
@@ -234,9 +230,10 @@ export function TabStrip({
         ? Math.max(box.left - lane.left, Math.min(raw, box.right - (lane.left + lane.width)))
         : raw
     setCarry((c) => (c ? { ...c, dx, live: true } : c))
-    // The CARRIED tab's own centre decides, not the pointer: it is what the
-    // eye is following, and it keeps a grab near an edge honest.
-    if (lane) setDropAt(slotAt(lane.mid + dx))
+    // The CARRIED tab decides, not the pointer: it is what the eye is
+    // following, and it keeps a grab near an edge honest. Its leading edge,
+    // so first place is in reach (#125, lib/tabDrop).
+    setDropAt(dropSlot(lanes.current, carry.from, dx))
   }
   const onTabPointerUp = (e: PointerEvent<HTMLDivElement>): void => {
     if (!carry) return
