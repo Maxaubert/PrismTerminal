@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/prism-terminal-icon.svg" alt="Prism Terminal" width="128">
+  <img src="assets/prism-terminal-icon.png" alt="Prism Terminal" width="128">
 
   # Prism Terminal
 
