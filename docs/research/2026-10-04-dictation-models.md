@@ -63,3 +63,16 @@ Also reword Turbo's note "Close to Large v3 at about half the download". It is t
 - https://huggingface.co/ggml-org/parakeet-GGUF and https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
 - https://huggingface.co/ggerganov/whisper.cpp (where the quantized files are)
 - https://github.com/k2-fsa/sherpa-onnx/releases
+
+## Measured on the owner's machine (2026-10-04, after the owner chose Parakeet v3)
+
+`parakeet-cli.exe` from the pinned b5130 engine zip (and the installed CUDA pack), `ggml-parakeet-tdt-0.6b-v3-q8_0.bin` from `ggml-org/parakeet-GGUF` (SHA-256 `4d64e9e9...600e`, matched), the e2e's `jfk.wav` (11 s). Each run is a fresh process, model load included.
+
+| Engine and model | Per pass | Text |
+|---|---|---|
+| Parakeet v3 q8_0, CPU (8 or 16 threads) | 0.73 to 0.86 s | exact, with punctuation |
+| Parakeet v3 q8_0, CUDA pack | 16.2 s first run (kernels compiled into the cache), then 0.76 to 0.78 s | exact |
+| whisper-cli large-v3-turbo, CUDA, fresh process | 4.9 s first, then 1.5 s | exact |
+| whisper-cli base, CUDA, fresh process | 0.54 to 0.66 s | one comma missed |
+
+So Parakeet needs no server to be quick: a fresh process per pass costs under a second on CPU and GPU, which makes it the strongest CPU option. The owner approved adding it (Parakeet v3, a download prompt "This model doesn't support all languages", a language-dropdown icon with the same tooltip).
