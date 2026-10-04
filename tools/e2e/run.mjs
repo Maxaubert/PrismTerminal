@@ -1085,6 +1085,40 @@ const scenarios = {
    * measured is each tab's box, not the class that sets it, because a class
    * that loses to a longer label is exactly what this replaced.
    */
+  // A TAB REACHES FIRST PLACE (#125; owner, 2026-10-04: "i cant drag that
+  // github tab to the left of the prism tab to make it first"). The second
+  // tab is the WIDER one (Dynamic, a longer name), which is what could never
+  // get there: its centre was clamped short of the first tab's centre.
+  async tabDragFirst(ok) {
+    const w = world()
+    const wide = join(w.alpha, '..', 'a-much-longer-folder-name')
+    mkdirSync(wide)
+    const { app, page } = await launch(w, { args: [w.alpha, wide] })
+    ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open')
+    const boxes = await page.locator('[data-tab]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()))
+    ok(boxes[1].width > boxes[0].width, `the second tab is the wider (${Math.round(boxes[1].width)} > ${Math.round(boxes[0].width)})`)
+    const y = boxes[1].top + boxes[1].height / 2
+    await page.mouse.move(boxes[1].left + boxes[1].width / 2, y)
+    await page.mouse.down()
+    for (let x = boxes[1].left + boxes[1].width / 2; x > 0; x -= 20) await page.mouse.move(x, y)
+    await page.mouse.move(0, y)
+    await page.mouse.up()
+    ok(
+      await until(async () => (await tabLabels(page))[0]?.includes('a-much-longer-folder-name')),
+      `dragged all the way left it is first (${JSON.stringify(await tabLabels(page))})`
+    )
+    const back = await page.locator('[data-tab]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()))
+    await page.mouse.move(back[0].left + back[0].width / 2, y)
+    await page.mouse.down()
+    for (let x = back[0].left + back[0].width / 2; x < back[1].right + 40; x += 20) await page.mouse.move(x, y)
+    await page.mouse.up()
+    ok(
+      await until(async () => (await tabLabels(page))[1]?.includes('a-much-longer-folder-name')),
+      `and dragged right it is last again (${JSON.stringify(await tabLabels(page))})`
+    )
+    await closeApp(app)
+  },
+
   async tabWidth(ok) {
     const w = world()
     const long = join(w.alpha, '..', 'a-folder-with-a-name-far-too-long-to-fit-on-any-tab')
