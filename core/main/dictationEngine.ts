@@ -2,7 +2,9 @@ import { spawn, type ChildProcess } from 'child_process'
 import { randomBytes } from 'crypto'
 import { request } from 'http'
 import { createServer } from 'net'
+import { availableParallelism } from 'os'
 import { join } from 'path'
+import { engineFor as catalogEngineFor } from '../shared/dictationCatalog'
 import type {
   DictationEngine,
   DictationStore,
@@ -30,6 +32,16 @@ import type {
  *
  * The audio is never written to disk: it arrives as bytes over IPC and
  * leaves as bytes over a loopback socket to a port nobody else was told.
+ *
+ * PARAKEET IS ONE PROCESS PER PASS (#121). The pinned release has no server
+ * for it, only parakeet-cli, and none is needed: MEASURED on the owner's PC,
+ * a fresh process loads Parakeet v3 (q8_0) and answers the 11 s clip in 0.73
+ * to 0.86 s on the CPU and 0.76 to 0.78 s on the GPU pack, under the time a
+ * resident Whisper Base takes. It is started as `parakeet-cli.exe -m <model>
+ * -f - -np -t <n>` (plus `-ng` on the CPU engine), the WAV goes in on STDIN
+ * (its `-f -`, read into memory, MEASURED: "read 352078 bytes from stdin"),
+ * and the text comes back on stdout. So this path writes no audio to disk
+ * either. It has no language switch: the model detects the language itself.
  * ------------------------------------------------------------------ */
 
 /** The first CUDA run compiles its kernels for about 9 s (MEASURED), so a
@@ -78,6 +90,12 @@ export function silentWav(seconds = 0.5, rate = 16000): Uint8Array {
   return out
 }
 
+/** Parakeet's CPU threads: one per physical core (half the logical ones, as
+ *  SMT doubles them), at most 16. MEASURED on a 32-thread PC with the 11 s
+ *  clip: its default of 4 took 1.15 to 1.26 s a pass, 8 took 0.83 to 0.96 s
+ *  and 16 took 0.72 to 0.77 s. */
+export const PARAKEET_THREADS = Math.max(1, Math.min(16, Math.floor(availableParallelism() / 2)))
+
 /** How often a starting server is asked whether it is up yet. */
 const READY_POLL_MS = 100
 /** How much of the server's stderr is kept: enough for its last few lines,
@@ -98,6 +116,12 @@ export interface DictationEngineDeps {
   requestTimeoutMs?: number
   spawnImpl?: typeof spawn
   exeName?: string
+  /** parakeet-cli's file name, beside whisper-server in both engine folders. */
+  parakeetExeName?: string
+  /** Which runner a model needs. The default reads the catalog. */
+  engineFor?: (modelId: string) => 'whisper' | 'parakeet'
+  /** Threads for a Parakeet pass on the CPU. */
+  threads?: number
   /** What to actually launch for an engine exe and its argv. The default is
    *  the exe itself; the tests run a Node script through process.execPath. */
   command?: (exePath: string, args: string[]) => { file: string; args: string[] }
@@ -216,10 +240,19 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
   const requestTimeoutMs = deps.requestTimeoutMs ?? DICTATION_REQUEST_TIMEOUT_MS
   const spawnImpl = deps.spawnImpl ?? spawn
   const exeName = deps.exeName ?? 'whisper-server.exe'
+  const parakeetExe = deps.parakeetExeName ?? 'parakeet-cli.exe'
+  const runnerFor = deps.engineFor ?? catalogEngineFor
+  const threads = deps.threads ?? PARAKEET_THREADS
   const command = deps.command ?? ((exePath: string, args: string[]) => ({ file: exePath, args }))
   const now = deps.now ?? (() => Date.now())
 
   let current: Server | null = null
+  /** The Parakeet pass in flight, so stop() can end it. */
+  let pass: ChildProcess | null = null
+  /** The model a Parakeet pass last answered for: there is no resident
+   *  process to be warm, but the first GPU pass compiles kernels (16 s,
+   *  MEASURED) and a partial must not queue behind that. */
+  let parakeetWarm: string | null = null
   let lastKind: EngineKind | null = null
   let gpuFellBack = false
   let nvidia: boolean | null = null
@@ -246,7 +279,9 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
   function warmFor(req: { modelId: string; language: string }): Promise<TranscribeResult> {
     const modelPath = deps.store.modelPath(req.modelId)
     const language = req.language || 'auto'
-    if (current && current.warm && !current.exited && current.modelPath === modelPath && current.language === language)
+    if (runnerFor(req.modelId) === 'parakeet') {
+      if (modelPath && parakeetWarm === modelPath) return Promise.resolve({ ok: true, text: '', engine: lastKind ?? 'cpu' })
+    } else if (current && current.warm && !current.exited && current.modelPath === modelPath && current.language === language)
       return Promise.resolve({ ok: true, text: '', engine: current.kind })
     if (warming) return Promise.resolve({ ok: false, reason: 'warming' })
     warming = true
@@ -304,6 +339,111 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
     return cpuDir ? { kind: 'cpu', dir: cpuDir } : null
   }
 
+  /**
+   * THE C++ RUNTIME IS BESIDE THE CPU ENGINE (fetch-whisper.mjs copies it
+   * app-local, since a fresh Windows has no VCOMP140.dll). The GPU pack is the
+   * official zip and carries none, so the CPU engine's folder goes on the front
+   * of the child's PATH: Windows looks beside the exe first, then along PATH,
+   * and the GPU engine finds the same four DLLs there. The GPU engine also gets
+   * its own kernel cache (DICTATION_CUDA_CACHE_BYTES).
+   */
+  function childEnv(kind: EngineKind, dir: string): NodeJS.ProcessEnv {
+    const runtimeDir = deps.cpuDir()
+    const env: NodeJS.ProcessEnv =
+      runtimeDir && runtimeDir !== dir ? { ...process.env, PATH: `${runtimeDir};${process.env.PATH ?? ''}` } : { ...process.env }
+    const cache = kind === 'gpu' ? deps.cudaCacheDir?.() : null
+    if (cache) {
+      env.CUDA_CACHE_PATH = cache
+      env.CUDA_CACHE_MAXSIZE = String(DICTATION_CUDA_CACHE_BYTES)
+    }
+    return env
+  }
+
+  /** One Parakeet pass: a fresh parakeet-cli, the WAV on its stdin, the text
+   *  off its stdout. Never rejects. */
+  function parakeetOnce(kind: EngineKind, dir: string, modelPath: string, wav: Uint8Array): Promise<Answer> {
+    return new Promise((resolve) => {
+      const args = ['-m', modelPath, '-f', '-', '-np', '-t', String(threads), ...(kind === 'cpu' ? ['-ng'] : [])]
+      const cmd = command(join(dir, parakeetExe), args)
+      let child: ChildProcess
+      try {
+        child = spawnImpl(cmd.file, cmd.args, { cwd: dir, env: childEnv(kind, dir), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+      } catch (e) {
+        resolve({ ok: false, detail: (e as Error).message, died: true })
+        return
+      }
+      pass = child
+      const out: Buffer[] = []
+      let stderr = ''
+      let settled = false
+      const settle = (a: Answer): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        if (pass === child) pass = null
+        resolve(a)
+      }
+      const timeout = setTimeout(() => {
+        settle({ ok: false, detail: `no answer after ${requestTimeoutMs} ms`, died: false })
+        child.kill()
+      }, requestTimeoutMs)
+      child.stdout?.on('data', (c: Buffer) => out.push(c))
+      child.stderr?.setEncoding('utf8')
+      child.stderr?.on('data', (chunk: string) => {
+        stderr = (stderr + chunk).slice(-STDERR_KEEP)
+      })
+      child.once('error', (e) => settle({ ok: false, detail: e.message, died: true }))
+      // `close`, not `exit`: by then stdout and stderr have both been read out.
+      child.once('close', (code) => {
+        const said = stderr.trim()
+        if (code !== 0) return settle({ ok: false, detail: said || `parakeet-cli exited with code ${code}`, died: true })
+        // MEASURED: audio it cannot read is reported on stderr as "error: ..."
+        // with exit code 0, so the code alone is not the verdict.
+        const failed = /^error:.*$/m.exec(stderr)
+        if (failed) return settle({ ok: false, detail: failed[0], died: false })
+        // Its own UTF-8 bytes, untouched by any code page: the languages it
+        // knows are full of letters outside ASCII. CRLF and the edges trimmed.
+        settle({ ok: true, text: Buffer.concat(out).toString('utf8').trim() })
+      })
+      // A child that died before reading all of it closes the pipe under the
+      // write; the exit above is the answer, not this.
+      child.stdin?.on('error', () => {})
+      child.stdin?.end(Buffer.from(wav.buffer, wav.byteOffset, wav.byteLength))
+    })
+  }
+
+  /** A pass for a Parakeet model: the same choice of engine and the same
+   *  once-and-for-good fall back to the CPU as a Whisper server gets. */
+  async function runParakeet(req: TranscribeRequest, modelPath: string, stopped: () => boolean): Promise<TranscribeResult> {
+    // A resident Whisper server holds another model in memory nobody uses now.
+    if (current) kill(current)
+    const want = await pick()
+    if (stopped()) return STOPPED
+    if (!want) return { ok: false, reason: 'no-engine' }
+    let kind = want.kind
+    let answer = await parakeetOnce(kind, want.dir, modelPath, req.wav)
+    if (stopped()) return STOPPED
+    // Only a GPU engine that DIED falls back, Whisper's own rule: an "error:"
+    // about the audio or a timeout is not the card's fault, and the switch
+    // holds for the session and for Whisper too.
+    if (!answer.ok && !answer.died && kind === 'gpu') {
+      lastKind = kind
+      return { ok: false, reason: 'engine-failed', detail: answer.detail }
+    }
+    if (!answer.ok && kind === 'gpu') {
+      gpuFellBack = true
+      const cpuDir = deps.cpuDir()
+      if (!cpuDir) return { ok: false, reason: 'engine-failed', detail: answer.detail }
+      kind = 'cpu'
+      answer = await parakeetOnce(kind, cpuDir, modelPath, req.wav)
+      if (stopped()) return STOPPED
+    }
+    lastKind = kind
+    if (!answer.ok) return { ok: false, reason: 'engine-failed', detail: answer.detail }
+    parakeetWarm = modelPath
+    return { ok: true, text: answer.text, engine: kind }
+  }
+
   async function launch(
     kind: EngineKind,
     dir: string,
@@ -327,20 +467,7 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
       // DLLs (ggml, and cuBLAS for the GPU pack) are beside the exe. stdout is
       // dropped rather than piped: a pipe nobody drains fills, and the server
       // then blocks on its own logging.
-      // THE C++ RUNTIME IS BESIDE THE CPU ENGINE (fetch-whisper.mjs copies it
-      // app-local, since a fresh Windows has no VCOMP140.dll). The GPU pack is
-      // the official zip and carries none, so the CPU engine's folder goes on
-      // the front of the child's PATH: Windows looks beside the exe first, then
-      // along PATH, and the GPU server finds the same four DLLs there.
-      const runtimeDir = deps.cpuDir()
-      const env: NodeJS.ProcessEnv =
-        runtimeDir && runtimeDir !== dir ? { ...process.env, PATH: `${runtimeDir};${process.env.PATH ?? ''}` } : { ...process.env }
-      const cache = kind === 'gpu' ? deps.cudaCacheDir?.() : null
-      if (cache) {
-        env.CUDA_CACHE_PATH = cache
-        env.CUDA_CACHE_MAXSIZE = String(DICTATION_CUDA_CACHE_BYTES)
-      }
-      child = spawnImpl(cmd.file, cmd.args, { cwd: dir, env, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
+      child = spawnImpl(cmd.file, cmd.args, { cwd: dir, env: childEnv(kind, dir), windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
     } catch (e) {
       return { ok: false, detail: (e as Error).message }
     }
@@ -457,6 +584,7 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
 
     const modelPath = deps.store.modelPath(req.modelId)
     if (!modelPath) return { ok: false, reason: 'no-model' }
+    if (runnerFor(req.modelId) === 'parakeet') return runParakeet(req, modelPath, stopped)
     const language = req.language || 'auto'
 
     const want = await pick()
@@ -551,7 +679,11 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
       // the pill's live text, and one waiting behind a half-minute kernel
       // compile showed nothing and then held up the final. It is answered
       // 'warming' at once and the warm-up is started, so the pill can say so.
-      if (!req.final && !warmFailed && !(current && current.warm && !current.exited)) {
+      const warm =
+        runnerFor(req.modelId) === 'parakeet'
+          ? parakeetWarm !== null && parakeetWarm === deps.store.modelPath(req.modelId)
+          : !!(current && current.warm && !current.exited)
+      if (!req.final && !warmFailed && !warm) {
         void warmFor(req)
         return Promise.resolve({ ok: false, reason: 'warming' })
       }
@@ -586,12 +718,19 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
       // The pass in flight answers for itself: its server going away wakes it,
       // and it sees the epoch has moved.
       if (current) kill(current)
+      // Off means off for Parakeet too: a pass running now is ended, not left
+      // to finish, and the next arm warms again.
+      if (pass) {
+        pass.kill()
+        pass = null
+      }
+      parakeetWarm = null
     },
 
     info() {
       // `engine` is the kind of the server that is up, or of the last one that
       // was, so Settings can still say which engine answered after a stand-down.
-      return { running: current !== null, engine: current ? current.kind : lastKind, gpuFellBack }
+      return { running: current !== null || pass !== null, engine: current ? current.kind : lastKind, gpuFellBack }
     }
   }
 }

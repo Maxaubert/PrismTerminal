@@ -44,8 +44,10 @@ const BYTES = 8573270
 // in an empty folder start, load a model and transcribe. Every ggml-cpu-*.dll
 // stays, because ggml picks one at run time by what the USER's processor
 // supports (cascadelake on the machine this was measured on; haswell,
-// sandybridge, sse42 or plain x64 on older ones). The other 27 files of the
-// zip are other programs (the CLI, benchmarks, tests, Parakeet, SDL2).
+// sandybridge, sse42 or plain x64 on older ones). The last two are the same
+// zip's Parakeet runner (#121), which needs nothing more from it, MEASURED the
+// same way. The rest of the zip is other programs (the whisper CLI,
+// benchmarks, tests, SDL2).
 const FILES = [
   'whisper-server.exe',
   'whisper.dll',
@@ -59,7 +61,9 @@ const FILES = [
   'ggml-cpu-sandybridge.dll',
   'ggml-cpu-skylakex.dll',
   'ggml-cpu-sse42.dll',
-  'ggml-cpu-x64.dll'
+  'ggml-cpu-x64.dll',
+  'parakeet-cli.exe',
+  'parakeet.dll'
 ]
 // Where the zip keeps them. They land FLATTENED in <outDir>, beside each other,
 // which is what the DLL loader needs and what the engine resolver expects.
@@ -79,8 +83,11 @@ if (!process.argv[2]) fail('usage: node fetch-whisper.mjs <outDir>')
 const OUT = resolve(process.argv[2])
 
 const stamp = join(OUT, '.source')
+// EVERY file, not only the server: the stamp is the zip's checksum, which a
+// new FILES list (#121 added Parakeet's two) does not change, so a folder
+// fetched under the old list would otherwise pass as complete for good.
 if (
-  existsSync(join(OUT, 'whisper-server.exe')) &&
+  FILES.every((name) => existsSync(join(OUT, name))) &&
   existsSync(stamp) &&
   readFileSync(stamp, 'utf8').trim() === SHA256
 ) {
@@ -157,7 +164,7 @@ try {
   // goes is only what a previous pin could have left: an engine DLL that is no
   // longer in FILES would otherwise still be found, and loaded, by ggml.
   for (const old of readdirSync(OUT))
-    if (old === '.source' || /^(whisper|ggml)[\w.-]*\.(exe|dll)$/i.test(old))
+    if (old === '.source' || /^(whisper|ggml|parakeet)[\w.-]*\.(exe|dll)$/i.test(old))
       rmSync(join(OUT, old), { force: true })
   for (const name of FILES) {
     copyFileSync(join(tree, ZIP_DIR, name), join(OUT, name))

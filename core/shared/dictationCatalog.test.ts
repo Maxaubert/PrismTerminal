@@ -6,7 +6,11 @@ import {
   CATALOG,
   ENGINE,
   LANGUAGES,
+  LIMITED_LANGUAGES_TEXT,
   catalogEntry,
+  engineFor,
+  languageFor,
+  limitedLanguages,
   recommendedModel,
   visibleModels
 } from './dictationCatalog'
@@ -34,9 +38,9 @@ describe('CATALOG', () => {
     }
   })
 
-  it('holds the five models and the one GPU pack the design names', () => {
+  it('holds the seven models and the one GPU pack the design names', () => {
     expect(CATALOG.map((e) => e.id).sort()).toEqual(
-      ['base', 'gpu-pack', 'large-v3', 'large-v3-turbo', 'small', 'tiny'].sort()
+      ['base', 'gpu-pack', 'large-v3', 'large-v3-turbo', 'parakeet-v3', 'parakeet-v3-q4', 'small', 'tiny'].sort()
     )
     expect(CATALOG.filter((e) => e.kind === 'gpu-pack').map((e) => e.id)).toEqual(['gpu-pack'])
     const label = (id: string): string | undefined => catalogEntry(id)?.label
@@ -45,10 +49,11 @@ describe('CATALOG', () => {
     expect(label('small')).toBe('Whisper Small')
     expect(label('large-v3-turbo')).toBe('Whisper Large v3 Turbo')
     expect(label('large-v3')).toBe('Whisper Large v3')
+    expect(label('parakeet-v3')).toBe('Parakeet v3')
   })
 
-  it('pins every model to a COMMIT of the Hugging Face repo, never to main', () => {
-    const models = CATALOG.filter((e) => e.kind === 'model')
+  it('pins every Whisper model to a COMMIT of the Hugging Face repo, never to main', () => {
+    const models = CATALOG.filter((e) => e.kind === 'model' && engineFor(e.id) === 'whisper')
     expect(models.length).toBe(5)
     for (const e of models) {
       expect(e.url, e.id).not.toContain('/resolve/main/')
@@ -57,6 +62,36 @@ describe('CATALOG', () => {
       )
       expect(e.url.endsWith(`/ggml-${e.id}.bin`), e.id).toBe(true)
     }
+  })
+
+  it('pins Parakeet v3 to a COMMIT of ggml-org/parakeet-GGUF, the files read from its API', () => {
+    const commit = 'https://huggingface.co/ggml-org/parakeet-GGUF/resolve/35156454d1a39de06863303dd209fd2bed6ee079/'
+    const app = catalogEntry('parakeet-v3')
+    expect(app?.url).toBe(commit + 'ggml-parakeet-tdt-0.6b-v3-q8_0.bin')
+    expect(app?.bytes).toBe(668757119)
+    expect(app?.sha256).toBe('4d64e9e96c2792186d072fde0034df0ad670cf680a2f53069052ead827fd600e')
+    // The e2e's copy is the smallest official file of the same commit.
+    const e2e = catalogEntry('parakeet-v3-q4')
+    expect(e2e?.url).toBe(commit + 'ggml-parakeet-tdt-0.6b-v3-q4_0.bin')
+    expect(e2e?.bytes).toBe(355615679)
+    expect(e2e?.sha256).toBe('aa7fe2f5fb47d863ca23e8b1d490632d63a2599f515268b6d6bd656158dad45e')
+    for (const e of [app, e2e]) {
+      expect(e?.kind).toBe('model')
+      expect(e?.engine).toBe('parakeet')
+      expect(e?.limitedLanguages).toBe(true)
+      // Fast on a CPU (MEASURED under a second a pass): never marked as needing the pack.
+      expect(e?.needsGpu).toBeUndefined()
+    }
+    expect(e2e?.e2eOnly).toBe(true)
+    expect(app?.e2eOnly).toBeUndefined()
+  })
+
+  it('flags limited languages on the Parakeet files only, and runs them with parakeet-cli', () => {
+    expect(CATALOG.filter((e) => e.limitedLanguages).map((e) => e.id).sort()).toEqual(['parakeet-v3', 'parakeet-v3-q4'])
+    expect(CATALOG.filter((e) => e.engine === 'parakeet').map((e) => e.id).sort()).toEqual(['parakeet-v3', 'parakeet-v3-q4'])
+    for (const e of CATALOG) expect(engineFor(e.id), e.id).toBe(e.engine === 'parakeet' ? 'parakeet' : 'whisper')
+    // An id nobody knows is Whisper's, the engine that was there first.
+    expect(engineFor('nope')).toBe('whisper')
   })
 
   it('takes the GPU pack from the same pinned release as the engine', () => {
@@ -81,9 +116,12 @@ describe('CATALOG', () => {
 describe('visibleModels', () => {
   it('is the model manager list: models only, the e2e one left out, smallest first', () => {
     const ids = visibleModels().map((e) => e.id)
-    expect(ids).toEqual(['base', 'small', 'large-v3-turbo', 'large-v3'])
+    expect(ids).toEqual(['base', 'small', 'parakeet-v3', 'large-v3-turbo', 'large-v3'])
+    for (let i = 1; i < visibleModels().length; i += 1)
+      expect(visibleModels()[i].bytes, ids[i]).toBeGreaterThan(visibleModels()[i - 1].bytes)
     expect(catalogEntry('tiny')?.e2eOnly).toBe(true)
     expect(ids).not.toContain('tiny')
+    expect(ids).not.toContain('parakeet-v3-q4')
     expect(ids).not.toContain('gpu-pack')
   })
 
@@ -112,6 +150,26 @@ describe('catalogEntry and recommendedModel', () => {
   it('recommends by what the machine can run', () => {
     expect(recommendedModel(false).id).toBe('base')
     expect(recommendedModel(true).id).toBe('large-v3-turbo')
+  })
+})
+
+describe('limitedLanguages and languageFor', () => {
+  it('asks a model that picks its own language for auto, and leaves the stored choice to the rest', () => {
+    expect(limitedLanguages('parakeet-v3')).toBe(true)
+    expect(limitedLanguages('base')).toBe(false)
+    expect(limitedLanguages('')).toBe(false)
+    expect(limitedLanguages('nope')).toBe(false)
+    expect(languageFor('parakeet-v3', 'no')).toBe('auto')
+    expect(languageFor('parakeet-v3', 'auto')).toBe('auto')
+    // Back on a Whisper model, the user's language is what it always was.
+    expect(languageFor('base', 'no')).toBe('no')
+    expect(languageFor('large-v3-turbo', 'de')).toBe('de')
+    expect(languageFor('', 'sv')).toBe('sv')
+  })
+
+  it('says the one line the owner wrote, and nothing about why', () => {
+    expect(LIMITED_LANGUAGES_TEXT).toBe("This model doesn't support all languages.")
+    expect(LIMITED_LANGUAGES_TEXT).not.toMatch(/nvidia|parakeet|whisper|europe/i)
   })
 })
 
@@ -146,6 +204,9 @@ describe('ENGINE', () => {
     expect(ENGINE.sha256).toBe('f9ec6c52a2e949b62ab51fa21d0d497958f9e41c3010c157c4e42932d5316f3c')
     expect(ENGINE.bytes).toBeGreaterThan(0)
     expect(ENGINE.files).toContain('whisper-server.exe')
+    // Parakeet's runner comes out of the SAME zip (#121).
+    expect(ENGINE.files).toContain('parakeet-cli.exe')
+    expect(ENGINE.files).toContain('parakeet.dll')
     expect(new Set(ENGINE.files).size).toBe(ENGINE.files.length)
     // Flattened names: what the engine folder holds, not where the zip kept them.
     for (const f of ENGINE.files) expect(f, f).not.toMatch(/[\\/]/)

@@ -217,6 +217,30 @@ function tinyModel() {
   if (!commit || !file || !sha256) throw new Error('the catalog no longer spells the tiny model the way the e2e reads it')
   return { url: `https://huggingface.co/ggerganov/whisper.cpp/resolve/${commit}/${file}`, sha256 }
 }
+/** The e2e's Parakeet v3 file (#121): the smallest official one, read out of
+ *  the catalog the way Tiny is, from the same pinned commit the app uses. */
+function parakeetE2eModel() {
+  const src = readFileSync(resolve(process.cwd(), 'core/shared/dictationCatalog.ts'), 'utf8')
+  const commit = src.match(/const PARAKEET_COMMIT = '([0-9a-f]{40})'/)?.[1]
+  const block = src.slice(src.indexOf("id: 'parakeet-v3-q4'"))
+  const file = block.match(/url:\s*parakeet\('([^']+)'\)/)?.[1]
+  const sha256 = block.match(/sha256:\s*'([0-9a-f]{64})'/)?.[1]
+  if (!commit || !file || !sha256) throw new Error('the catalog no longer spells the e2e Parakeet model the way the e2e reads it')
+  return { url: `https://huggingface.co/ggml-org/parakeet-GGUF/resolve/${commit}/${file}`, sha256 }
+}
+/** parakeet-cli passes running out of THIS checkout's engine folder. */
+function ourParakeetPasses() {
+  try {
+    const out = execFileSync(
+      'powershell.exe',
+      ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "Name='parakeet-cli.exe'" | Where-Object { $_.ExecutablePath -like '*\\vendor\\whisper\\*' -or $_.ExecutablePath -like '*\\win-unpacked\\resources\\bin\\whisper\\*' } | Measure-Object).Count`],
+      { encoding: 'utf8', windowsHide: true }
+    )
+    return Number(out.trim()) || 0
+  } catch {
+    return -1
+  }
+}
 /** Speech servers started out of THIS checkout's engine folder, and no others:
  *  the owner's own dictation tool runs a whisper-server of its own. */
 function ourSpeechServers() {
@@ -4194,9 +4218,12 @@ const scenarios = {
     await sleep(400)
 
     const names = await page.evaluate(() => [...document.querySelectorAll('[data-dictation-item] [data-item-name]')].map((e) => e.textContent.trim()))
-    ok(names.length === 5 && names.slice(0, 4).every((n) => n.startsWith('Whisper ')), `models carry their full names (${JSON.stringify(names)})`)
+    ok(
+      names.length === 6 && JSON.stringify(names.slice(0, 5)) === JSON.stringify(['Whisper Base', 'Whisper Small', 'Parakeet v3', 'Whisper Large v3 Turbo', 'Whisper Large v3']),
+      `models carry their full names, smallest first (${JSON.stringify(names)})`
+    )
     const marks = await page.evaluate(() => [...document.querySelectorAll('[data-dictation-item] [data-vendor]')].map((e) => e.getAttribute('data-vendor')))
-    ok(marks.filter((m) => m === 'openai').length === 4 && marks.filter((m) => m === 'nvidia').length === 1, `every row leads with its vendor's mark (${marks.join(',')})`)
+    ok(marks.filter((m) => m === 'openai').length === 4 && marks.filter((m) => m === 'nvidia').length === 2, `every row leads with its vendor's mark (${marks.join(',')})`)
     const mark = await page.evaluate(() => {
       const row = document.querySelector('[data-dictation-item="base"]').getBoundingClientRect()
       const m = document.querySelector('[data-dictation-item="base"] [data-vendor]').getBoundingClientRect()
@@ -4219,7 +4246,7 @@ const scenarios = {
     ok(((await row('gpu-pack').locator('[data-item-badge]').textContent()) ?? '').trim() === 'Enabled', 'the GPU engine says Enabled')
     ok(((await row('gpu-pack').locator('[data-gpu-toggle]').textContent()) ?? '').trim() === 'Disable', 'and offers Disable')
     ok((await row('large-v3-turbo').locator('text=Recommended').count()) === 1, 'with the GPU on, Turbo is the recommended model')
-    const fills = await page.evaluate(() => ['small', 'large-v3-turbo', 'large-v3'].map((id) => getComputedStyle(document.querySelector(`[data-dictation-item="${id}"] button`)).backgroundColor))
+    const fills = await page.evaluate(() => ['small', 'parakeet-v3', 'large-v3-turbo', 'large-v3'].map((id) => getComputedStyle(document.querySelector(`[data-dictation-item="${id}"] button`)).backgroundColor))
     ok(new Set(fills).size === 1, `and its Download button is the same as every other (${fills.join(' | ')})`)
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-models.png') }).catch(() => {})
 
@@ -4231,6 +4258,136 @@ const scenarios = {
     ok((await row('gpu-pack').locator('[data-item-badge]').count()) === 0, 'the Enabled badge goes')
     ok(((await row('gpu-pack').locator('button').textContent()) ?? '').trim() === 'Enable', 'and the button offers Enable again')
     ok((await row('base').locator('text=Recommended').count()) === 1, 'with the GPU off, Base is the recommended model again')
+
+    // A MODEL THAT DOES NOT SUPPORT EVERY LANGUAGE SAYS SO, ONCE, BEFORE ITS
+    // DOWNLOAD (#121; owner, 2026-10-04): one line, Cancel and Download.
+    const LINE = "This model doesn't support all languages."
+    const ask = () => page.locator('[data-model-download-ask]')
+    await row('parakeet-v3').locator('button').click()
+    ok(await until(async () => (await ask().count()) === 1, 4000), 'Download on Parakeet v3 asks first')
+    const said = ((await ask().textContent()) ?? '').trim()
+    ok(said === LINE + 'Cancel' + 'Download', `and says the one line, with Cancel and Download and nothing else ("${said}")`)
+    ok((await row('parakeet-v3').getAttribute('data-state')) === 'absent', 'nothing downloads while it asks')
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-parakeet-ask.png') }).catch(() => {})
+    await ask().locator('[data-ask-cancel]').click()
+    ok(await until(async () => (await ask().count()) === 0, 2000), 'Cancel puts it away')
+    ok((await row('parakeet-v3').getAttribute('data-state')) === 'absent', 'and downloads nothing')
+    await row('parakeet-v3').locator('button').click()
+    await until(async () => (await ask().count()) === 1, 4000)
+    await page.keyboard.press('Escape')
+    ok(await until(async () => (await ask().count()) === 0, 2000) && (await row('parakeet-v3').getAttribute('data-state')) === 'absent', 'Escape is Cancel')
+    await row('parakeet-v3').locator('button').click()
+    await until(async () => (await ask().count()) === 1, 4000)
+    await ask().locator('[data-ask-download]').click()
+    ok(await until(async () => (await row('parakeet-v3').getAttribute('data-state')) === 'downloading', 4000), 'Download starts the download')
+    await row('parakeet-v3').locator('button', { hasText: 'Cancel' }).click()
+    ok(await until(async () => (await row('parakeet-v3').getAttribute('data-state')) === 'absent', 15000), 'and its own Cancel stops it')
+    ok(!existsSync(join(root, 'models', 'parakeet-v3.bin')), 'leaving no model behind')
+    // A Whisper model asks nothing.
+    await row('small').locator('button').click()
+    await sleep(400)
+    ok((await ask().count()) === 0, 'a Whisper model downloads without a question')
+    await row('small').locator('button', { hasText: 'Cancel' }).click().catch(() => {})
+    await until(async () => (await row('small').getAttribute('data-state')) === 'absent', 15000)
+
+    // THE LANGUAGE PICKER WHILE IT IS IN USE: Auto-detect, disabled, an icon
+    // that says the same line, and the user's own language kept for later.
+    await page.evaluate(() => localStorage.setItem('prism.dictation.language', 'no'))
+    await page.locator('[data-settings-tab="general"]').click()
+    const pk = join(root, 'models', 'parakeet-v3.bin')
+    writeFileSync(pk, '')
+    truncateSync(pk, entry('parakeet-v3').bytes)
+    await page.locator('[data-settings-tab="dictation"]').click()
+    const lang = page.locator('button#dictation-language')
+    ok(((await lang.textContent()) ?? '').trim() === 'Norwegian' && !(await lang.isDisabled()), 'on Whisper Base the picker shows the chosen language')
+    ok((await page.locator('[data-language-limited]').count()) === 0, 'with no icon beside it')
+    await until(async () => (await row('parakeet-v3').getAttribute('data-state')) === 'installed', 8000)
+    await row('parakeet-v3').locator('button', { hasText: 'Use' }).click()
+    ok(await until(async () => ((await lang.textContent()) ?? '').trim() === 'Auto-detect', 4000), 'on Parakeet v3 the picker shows Auto-detect')
+    ok(await lang.isDisabled(), 'and cannot be changed')
+    const icon = page.locator('[data-pref="dictation-language"] [data-language-limited]')
+    ok((await icon.count()) === 1 && (await icon.getAttribute('title')) === LINE, 'an icon beside it says the same line on hover')
+    await icon.hover()
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-parakeet-language.png') }).catch(() => {})
+    ok((await page.evaluate(() => localStorage.getItem('prism.dictation.language'))) === 'no', 'the stored language is untouched')
+    await row('base').locator('button', { hasText: 'Use' }).click()
+    ok(await until(async () => ((await lang.textContent()) ?? '').trim() === 'Norwegian', 4000) && !(await lang.isDisabled()), 'back on Whisper Base, Norwegian is back and the picker works')
+    ok((await page.locator('[data-language-limited]').count()) === 0, 'and the icon is gone')
+    await closeApp(app)
+  },
+
+  /**
+   * PARAKEET, REALLY (#121): the same fake microphone and sentence as
+   * `dictation`, heard by the REAL parakeet-cli from the bundled engine with
+   * the smallest official Parakeet v3 file. The words must land on the prompt
+   * with no Enter, live text must show while listening, and nothing may stay
+   * running: Parakeet is one process per pass, never a resident server.
+   */
+  async dictationParakeet(ok) {
+    const w = world()
+    const m = parakeetE2eModel()
+    const model = await cached('ggml-parakeet-tdt-0.6b-v3-q4_0.bin', m.url, m.sha256)
+    const clip = await cached('jfk.wav', JFK.url, JFK.sha256)
+    const root = join(w.profile, 'dictation')
+    mkdirSync(join(root, 'models'), { recursive: true })
+    copyFileSync(model, join(root, 'models', 'parakeet-v3-q4.bin'))
+    const engine = PACKAGED ? resolve(process.cwd(), 'dist/win-unpacked/resources/bin/whisper') : resolve(process.cwd(), 'vendor/whisper')
+    ok(existsSync(join(engine, 'parakeet-cli.exe')) && existsSync(join(engine, 'parakeet.dll')), `Parakeet's runner is bundled beside the speech engine (${PACKAGED ? 'packaged' : 'vendor/whisper'})`)
+    const { app, page } = await launch(w, {
+      args: [w.alpha],
+      env: { PT_E2E_MIC: clip, PT_DICTATION_ROOT: root, PT_E2E_NVIDIA: '0', ...(PACKAGED ? {} : { PT_WHISPER_DIR: engine }) }
+    })
+    await until(async () => (await tabLabels(page)).length === 1)
+    await page.waitForFunction(
+      () => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()),
+      null,
+      { timeout: 45000 }
+    )
+    const pill = () => page.locator('[data-dictation-pill]')
+    // Norwegian is the stored language on purpose: Parakeet is asked for auto,
+    // so the English sentence must still come back in English.
+    await page.evaluate(() => {
+      localStorage.setItem('prism.dictation.model', 'parakeet-v3-q4')
+      localStorage.setItem('prism.dictation.language', 'no')
+      localStorage.setItem('prism.dictation.sounds', '0')
+    })
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="dictation"]').click()
+    await page.locator('[data-pref="dictation-enabled"] [role="switch"]').click()
+    ok((await page.locator('button#dictation-language').isDisabled()) && (await page.locator('[data-language-limited]').count()) === 1, 'its language picker is disabled with the icon beside it')
+    // The warm-up runs a silent pass a moment after switching on, then ends.
+    // That the pass RUNS is dictationEngine.test.ts's to prove; here only that
+    // nothing is left behind once it could have.
+    await sleep(6000)
+    ok(ourParakeetPasses() === 0 && ourSpeechServers() === 0, 'switched on, nothing stays running')
+    await page.locator('[data-tab]').first().click()
+    await page.locator('.xterm').first().click({ force: true })
+
+    await page.keyboard.down('AltRight')
+    await sleep(300)
+    ok(await until(async () => (await pill().getAttribute('data-dictation-pill').catch(() => null)) === 'listening', 8000), 'holding Right Alt opens the pill: Listening')
+    const live = await until(async () => ((await page.locator('[data-dictation-live]').textContent().catch(() => '')) ?? '').trim(), 15000)
+    ok(!!live, `live text appears while still listening ("${live}")`)
+    await sleep(9000) // let the whole sentence play
+    const before = await termText(page)
+    const t0 = Date.now()
+    await page.keyboard.up('AltRight')
+    const heard = await until(async () => /ask not what your country/i.test((await termText(page)).replace(/\s+/g, ' ')), 30000)
+    ok(heard, `the spoken sentence arrives on the prompt line (${Date.now() - t0} ms after release)`)
+    ok(await until(async () => (await pill().count()) === 0, 5000), 'and the pill goes away')
+    const after = await termText(page)
+    ok(
+      (after.match(/PS [^>]*>/g) ?? []).length === (before.match(/PS [^>]*>/g) ?? []).length,
+      'NO ENTER was sent: there is no new prompt, the text is still being edited'
+    )
+    ok(await until(() => ourParakeetPasses() === 0, 4000), 'no Parakeet process outlives its pass')
+    ok(ourSpeechServers() === 0, 'and no Whisper server was ever started')
+
+    // Off again, and nothing at all.
+    await page.locator('[data-title-settings]').click()
+    await page.locator('[data-settings-tab="dictation"]').click()
+    await page.locator('[data-pref="dictation-enabled"] [role="switch"]').click()
+    ok(await until(() => ourParakeetPasses() === 0 && ourSpeechServers() === 0, 8000), 'switched off, no speech process exists')
     await closeApp(app)
   },
 
@@ -4281,7 +4438,7 @@ const scenarios = {
 
 const table = []
 /** Scenarios that honestly take longer than the default limit. */
-const SLOW = { dictation: 360000, helpPanel: 300000, updateWindow: 300000 }
+const SLOW = { dictation: 360000, dictationParakeet: 360000, helpPanel: 300000, updateWindow: 300000 }
 reapStrays()
 for (const [name, run] of Object.entries(scenarios)) {
   if (only.length && !only.some((o) => name.toLowerCase().includes(o.toLowerCase()))) continue

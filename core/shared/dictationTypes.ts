@@ -19,6 +19,12 @@ export interface CatalogEntry {
   recommended?: 'cpu' | 'gpu'
   /** Catalogued for the e2e only; never shown in the model manager. */
   e2eOnly?: boolean
+  /** What runs the model. Absent: Whisper, through the resident whisper-server.
+   *  'parakeet': parakeet-cli, one process per pass (#121). */
+  engine?: 'whisper' | 'parakeet'
+  /** It does not support every language and picks the language itself: the
+   *  language picker shows Auto-detect and is disabled while it is in use. */
+  limitedLanguages?: boolean
 }
 
 export type InstallState = 'absent' | 'downloading' | 'installed'
@@ -48,7 +54,8 @@ export interface TranscribeRequest {
   /** A complete 16 kHz mono PCM16 WAV file. Never written to disk. */
   wav: Uint8Array
   modelId: string
-  /** 'auto', or an ISO 639-1 code Whisper knows. */
+  /** 'auto', or an ISO 639-1 code Whisper knows. A model that picks the
+   *  language itself is sent 'auto' (see `languageFor`). */
   language: string
   /** A partial may be dropped for a newer one; a final never is. */
   final: boolean

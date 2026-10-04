@@ -34,6 +34,23 @@ const model = (file: string): string =>
   `https://huggingface.co/ggerganov/whisper.cpp/resolve/${MODELS_COMMIT}/${file}`
 
 /**
+ * The newest commit of huggingface.co/ggml-org/parakeet-GGUF on 2026-10-04
+ * (#121), the whisper.cpp project's own conversions of Parakeet TDT 0.6B v3.
+ * Sizes and checksums read from the Hugging Face API the same day, and each
+ * commit-pinned url HEAD-checked: 302 with the same size in `X-Linked-Size`
+ * and the same hash in `X-Linked-ETag`. The q8_0 file was also downloaded and
+ * matched byte for byte (sha256sum) on the owner's PC.
+ */
+const PARAKEET_COMMIT = '35156454d1a39de06863303dd209fd2bed6ee079'
+const parakeet = (file: string): string =>
+  `https://huggingface.co/ggml-org/parakeet-GGUF/resolve/${PARAKEET_COMMIT}/${file}`
+
+/** Said where a model that does not support every language is picked or in
+ *  use: the download question and the language picker's icon (owner,
+ *  2026-10-04: "simple ... model agnostic ... short to the point"). */
+export const LIMITED_LANGUAGES_TEXT = "This model doesn't support all languages."
+
+/**
  * The CPU engine each app BUNDLES, fetched at build time by
  * `core/tools/fetch-whisper.mjs`. That script runs before anything is compiled,
  * so it cannot import this file and carries its own copy of the pin; the
@@ -42,9 +59,11 @@ const model = (file: string): string =>
  * `files` is the MINIMAL set whisper-server.exe needs, MEASURED rather than
  * guessed: those thirteen were copied alone into an empty folder and the server
  * started, loaded Base and transcribed a clip (answering on its port 190 ms
- * after spawn). They are the zip's `Release/` folder minus 27 files of other
- * programs (the CLI, the benchmarks, the tests, Parakeet, llama.dll, SDL2):
- * 10.8 MB kept of 21.8 MB.
+ * after spawn). They are the zip's `Release/` folder minus the files of other
+ * programs (the whisper CLI, the benchmarks, the tests, llama.dll, SDL2).
+ * Since #121 the last two are parakeet-cli.exe and parakeet.dll, the same
+ * zip's Parakeet runner, which needs nothing else from it (MEASURED the same
+ * way: the fifteen alone transcribe a clip with Parakeet v3).
  *
  * ALL NINE `ggml-cpu-*.dll` STAY, and that is not caution. ggml picks its CPU
  * backend at run time by what the processor supports (this machine loaded
@@ -75,7 +94,9 @@ export const ENGINE = {
     'ggml-cpu-sandybridge.dll',
     'ggml-cpu-skylakex.dll',
     'ggml-cpu-sse42.dll',
-    'ggml-cpu-x64.dll'
+    'ggml-cpu-x64.dll',
+    'parakeet-cli.exe',
+    'parakeet.dll'
   ]
 } as const satisfies {
   tag: string
@@ -89,7 +110,8 @@ export const ENGINE = {
 /**
  * Multilingual models only (owner decision: auto-detect is the default, so an
  * English-only variant would be a model that silently ignores the language
- * picker). In the order the model manager shows them, smallest first, with
+ * picker). Parakeet v3 knows fewer languages than Whisper and says so
+ * (`limitedLanguages`), where the picker would otherwise do nothing. In the order the model manager shows them, smallest first, with
  * the e2e's model and the GPU pack after the ones a user picks from.
  *
  * The notes say who a model is FOR and leave "Recommended" and "needs the GPU
@@ -117,6 +139,24 @@ export const CATALOG: readonly CatalogEntry[] = [
     bytes: 487601967,
     sha256: '1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b',
     kind: 'model'
+  },
+  {
+    // PARAKEET V3 (#121; owner, 2026-10-04). NVIDIA's Parakeet TDT 0.6B v3 at
+    // 8 bits, run by the pinned release's own parakeet-cli. MEASURED on the
+    // owner's PC with the e2e's 11 s clip, a fresh process per pass: 0.73 to
+    // 0.86 s on the CPU, 0.76 to 0.78 s on the GPU pack (16 s once, the first
+    // time its kernels are compiled), the sentence exact with punctuation. So
+    // it is quick with no GPU at all. It knows 25 European languages and
+    // detects which by itself, so the picker has nothing to tell it.
+    id: 'parakeet-v3',
+    label: 'Parakeet v3',
+    note: 'Fast and accurate on any PC, in fewer languages.',
+    url: parakeet('ggml-parakeet-tdt-0.6b-v3-q8_0.bin'),
+    bytes: 668757119,
+    sha256: '4d64e9e96c2792186d072fde0034df0ad670cf680a2f53069052ead827fd600e',
+    kind: 'model',
+    engine: 'parakeet',
+    limitedLanguages: true
   },
   {
     id: 'large-v3-turbo',
@@ -149,6 +189,20 @@ export const CATALOG: readonly CatalogEntry[] = [
     bytes: 77691713,
     sha256: 'be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21',
     kind: 'model',
+    e2eOnly: true
+  },
+  {
+    // The smallest official Parakeet v3 file, so the e2e runs the REAL
+    // Parakeet engine on a 356 MB fetch (cached once) rather than 669 MB.
+    id: 'parakeet-v3-q4',
+    label: 'Parakeet v3 (4 bit)',
+    note: 'For the automated tests, the smallest Parakeet v3 file.',
+    url: parakeet('ggml-parakeet-tdt-0.6b-v3-q4_0.bin'),
+    bytes: 355615679,
+    sha256: 'aa7fe2f5fb47d863ca23e8b1d490632d63a2599f515268b6d6bd656158dad45e',
+    kind: 'model',
+    engine: 'parakeet',
+    limitedLanguages: true,
     e2eOnly: true
   },
   {
@@ -186,6 +240,25 @@ export function recommendedModel(hasGpuPack: boolean): CatalogEntry {
   // The test holds the catalog to exactly one of each, so the fallback is for
   // the type checker and for a catalog edited wrongly, never for a user.
   return visibleModels().find((e) => e.recommended === want) ?? visibleModels()[0]
+}
+
+/** The model picks its own language and does not support every one. */
+export function limitedLanguages(modelId: string): boolean {
+  return catalogEntry(modelId)?.limitedLanguages === true
+}
+
+/**
+ * The language a pass is asked for: the user's choice, except for a model that
+ * picks its own, which is asked for 'auto'. The STORED choice is never touched,
+ * so going back to a Whisper model brings the user's language back with it.
+ */
+export function languageFor(modelId: string, stored: string): string {
+  return limitedLanguages(modelId) ? 'auto' : stored
+}
+
+/** What runs a model: parakeet-cli for Parakeet, whisper-server otherwise. */
+export function engineFor(modelId: string): 'whisper' | 'parakeet' {
+  return catalogEntry(modelId)?.engine ?? 'whisper'
 }
 
 /**

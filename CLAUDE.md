@@ -80,7 +80,18 @@ so an update never silently changes what an existing user sees; the bridge to ma
     them together), and the GPU pack must be the SAME release tag.
   - **Which models, and why** (2026-10-04): `docs/research/2026-10-04-dictation-models.md`. Phonon 2
     is out (English only, not whisper.cpp); nothing is scrapped; quantized Whisper files are the next
-    step to measure; Parakeet v3 waits for whisper.cpp's server (PR #3904) and lacks Norwegian.
+    step to measure; Parakeet v3 runs one process per pass (below) and lacks Norwegian.
+  - **PARAKEET V3 IS ONE PROCESS PER PASS** (#121; owner, 2026-10-04). `parakeet-cli.exe` +
+    `parakeet.dll` come from the same pinned zip and GPU pack (research and timings:
+    `docs/research/2026-10-04-dictation-models.md`). MEASURED: a
+    fresh process answers in 0.72-0.86 s on CPU and 0.76-0.78 s on the pack (16 s once, kernels), so
+    there is no server. The WAV goes in on STDIN (`-f -`), never to disk; it says `error:` on stderr
+    with exit 0 for audio it cannot read, which (like a timeout) is NOT a GPU fault: only a pass
+    whose engine died sends the session to the CPU, Whisper's rule; threads are half the logical CPUs, at most 16. The catalog's
+    `limitedLanguages` flag (model-agnostic, no vendor in the words) asks "This model doesn't support
+    all languages." before the download, and while it is active the language picker shows Auto-detect,
+    disabled, with a globe icon saying the same; the STORED language is untouched (`languageFor`). The
+    `dictationParakeet` e2e runs the real engine with the q4_0 file (e2e-only catalog entry).
 - **THE UPDATE CHIP OPENS A WINDOW; IT DOES NOT INSTALL** (#28; owner, 2026-09-19: "when you click
   the Update badge, it opens like a pop window, which shows the change log or like patch notes for
   the new update, and then you can choose cancel or install"). Built ONCE in `core/` for both apps:

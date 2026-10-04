@@ -17,9 +17,11 @@ import { createDictationEngine, type DictationEngineDeps } from './dictationEngi
  */
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), '__fixtures__', 'fakeWhisperServer.mjs')
+const PARAKEET_FIXTURE = join(dirname(fileURLToPath(import.meta.url)), '__fixtures__', 'fakeParakeetCli.mjs')
 const MODELS: Record<string, string> = {
   base: 'C:\\Prism Dictation\\models\\ggml-base.bin',
-  small: 'C:\\Prism Dictation\\models\\ggml-small.bin'
+  small: 'C:\\Prism Dictation\\models\\ggml-small.bin',
+  pk: 'C:\\Prism Dictation\\models\\parakeet-v3.bin'
 }
 const WAV = new Uint8Array(1234).fill(7)
 
@@ -89,8 +91,12 @@ function world(knobs: Partial<Knobs> = {}, deps: Partial<DictationEngineDeps> = 
     command: (exePath, args) => {
       const kind = exePath.startsWith(gpuDir) ? 'gpu' : 'cpu'
       launched.push({ kind, exePath, args })
-      return { file: process.execPath, args: [FIXTURE, ...args, ...(kind === 'gpu' ? k.gpuFlags : k.cpuFlags)] }
+      const fixture = exePath.endsWith('parakeet-cli.exe') ? PARAKEET_FIXTURE : FIXTURE
+      return { file: process.execPath, args: [fixture, ...args, ...(kind === 'gpu' ? k.gpuFlags : k.cpuFlags)] }
     },
+    // 'pk' stands for a Parakeet model; the rest are Whisper's.
+    engineFor: (id) => (id === 'pk' ? 'parakeet' : 'whisper'),
+    threads: 6,
     ...deps
   })
   engines.push(engine)
@@ -469,5 +475,143 @@ describe('a server that dies mid-request', () => {
     w.set({ cpuFlags: [] })
     expect((await dies).ok).toBe(false)
     expect((await waits).ok).toBe(true)
+  })
+})
+
+// PARAKEET (#121): one parakeet-cli per pass, the WAV on its stdin.
+interface PkSeen {
+  bytes: number
+  model: string
+  file: string
+  noPrints: boolean
+  threads: string
+  noGpu: boolean
+  pid: number
+  cwd: string
+  cudaCache: string | null
+}
+const pk = (over: Partial<TranscribeRequest> = {}): TranscribeRequest => req({ modelId: 'pk', ...over })
+function pkSeen(r: TranscribeResult): PkSeen {
+  if (!r.ok) throw new Error(`expected an answer, got ${r.reason}: ${r.detail ?? ''}`)
+  return JSON.parse(r.text) as PkSeen
+}
+
+describe('a Parakeet model', () => {
+  it('runs parakeet-cli once per pass, the wav on stdin and never a file, and no language', async () => {
+    const w = world()
+    const r = await w.engine.transcribe(pk({ language: 'auto' }))
+    const s = pkSeen(r)
+    expect(w.launched).toHaveLength(1)
+    expect(w.launched[0].exePath).toBe(join(w.cpuDir, 'parakeet-cli.exe'))
+    // `-f -` is stdin: the audio never touches the disk.
+    expect(w.launched[0].args).toEqual(['-m', MODELS.pk, '-f', '-', '-np', '-t', '6', '-ng'])
+    expect(s).toMatchObject({ bytes: WAV.length, model: MODELS.pk, file: '-', noPrints: true, noGpu: true, cwd: w.cpuDir })
+    expect(r.ok && r.engine).toBe('cpu')
+    // Nothing stays up between passes.
+    await until(() => w.children.every(gone))
+    expect(w.engine.info().running).toBe(false)
+    const again = pkSeen(await w.engine.transcribe(pk()))
+    expect(again.pid).not.toBe(s.pid)
+    expect(w.launched).toHaveLength(2)
+  })
+
+  it('takes the text off stdout as UTF-8, CRLF trimmed', async () => {
+    const w = world({ cpuFlags: ['--fake-unicode'] })
+    expect(await w.engine.transcribe(pk())).toEqual({ ok: true, text: 'Grüß Gott, æøå, ¿qué tal?', engine: 'cpu' })
+  })
+
+  it('uses the GPU pack, with its kernel cache and without -ng, where a Whisper server would', async () => {
+    const w = world({ gpu: true, nvidia: true }, { cudaCacheDir: () => 'C:\\Prism Dictation\\cuda-cache' })
+    const r = await w.engine.transcribe(pk())
+    const s = pkSeen(r)
+    expect(r.ok && r.engine).toBe('gpu')
+    expect(s.noGpu).toBe(false)
+    expect(s.cwd).toBe(w.gpuDir)
+    expect(s.cudaCache).toBe('C:\\Prism Dictation\\cuda-cache')
+  })
+
+  it('falls back to the CPU, for good, when the GPU pass fails', async () => {
+    const w = world({ gpu: true, nvidia: true, gpuFlags: ['--fake-exit'] })
+    const r = await w.engine.transcribe(pk())
+    expect(r.ok && r.engine).toBe('cpu')
+    expect(w.engine.info().gpuFellBack).toBe(true)
+    expect((await w.engine.transcribe(pk())).ok).toBe(true)
+    expect(w.launched.map((l) => l.kind)).toEqual(['gpu', 'cpu', 'cpu'])
+  })
+
+  it('keeps the GPU when a GPU pass only says error about the audio (exit 0)', async () => {
+    const w = world({ gpu: true, nvidia: true, gpuFlags: ['--fake-error-zero'] })
+    const r = await w.engine.transcribe(pk())
+    expect(r).toMatchObject({ ok: false, reason: 'engine-failed' })
+    expect(w.engine.info().gpuFellBack).toBe(false)
+    expect(w.launched.map((l) => l.kind)).toEqual(['gpu'])
+  })
+
+  it('fails with what it said when it exits badly, or says error with exit 0', async () => {
+    const bad = world({ cpuFlags: ['--fake-exit'] })
+    const r = await bad.engine.transcribe(pk())
+    expect(r).toMatchObject({ ok: false, reason: 'engine-failed' })
+    expect(!r.ok && r.detail).toContain('CUDA error')
+    const zero = world({ cpuFlags: ['--fake-error-zero'] })
+    const z = await zero.engine.transcribe(pk())
+    expect(z).toMatchObject({ ok: false, reason: 'engine-failed' })
+    expect(!z.ok && z.detail).toContain('failed to read audio')
+  })
+
+  it('answers a partial before the first pass with warming, warms with a silent pass, then serves partials', async () => {
+    const w = world()
+    expect(await w.engine.transcribe(pk({ final: false }))).toEqual({ ok: false, reason: 'warming' })
+    await until(() => w.launched.length === 1)
+    let served: TranscribeResult | null = null
+    await until(() => {
+      void w.engine.transcribe(pk({ final: false })).then((r) => (served = r))
+      return served !== null && (served as TranscribeResult).ok
+    }, 6000)
+    // The warm-up was a real pass of the silent wav, the 0.5 s of it.
+    expect(w.launched[0].args).toContain('-ng')
+  })
+
+  it('is warmed once per model, not once per press', async () => {
+    const w = world()
+    expect((await w.engine.warm({ modelId: 'pk', language: 'auto' })).ok).toBe(true)
+    expect((await w.engine.warm({ modelId: 'pk', language: 'no' })).ok).toBe(true)
+    expect(w.launched).toHaveLength(1)
+  })
+
+  it('takes down a resident Whisper server, which holds a model nobody uses now', async () => {
+    const w = world()
+    await w.engine.transcribe(req())
+    expect(gone(w.children[0])).toBe(false)
+    await w.engine.transcribe(pk())
+    await until(() => gone(w.children[0]))
+    // And back on Whisper, a fresh server.
+    expect((await w.engine.transcribe(req())).ok).toBe(true)
+    expect(w.launched.map((l) => l.exePath.endsWith('whisper-server.exe'))).toEqual([true, false, true])
+  })
+
+  it('stop() ends a pass in flight at once, fails it and what waits, and the next arm warms again', async () => {
+    const w = world({ cpuFlags: ['--fake-delay', '3000'] })
+    const inFlight = w.engine.transcribe(pk())
+    const waiting = w.engine.transcribe(pk())
+    await until(() => w.children.length === 1)
+    await sleep(150)
+    expect(w.engine.info().running).toBe(true)
+    w.engine.stop()
+    expect(w.engine.info().running).toBe(false)
+    expect(await inFlight).toMatchObject({ ok: false, reason: 'engine-failed' })
+    expect(await waiting).toMatchObject({ ok: false, reason: 'engine-failed' })
+    await until(() => gone(w.children[0]), 1500)
+    // Off means off: no second process was started for the waiting one.
+    expect(w.launched).toHaveLength(1)
+    w.set({ cpuFlags: [] })
+    expect(await w.engine.transcribe(pk({ final: false }))).toEqual({ ok: false, reason: 'warming' })
+  })
+
+  it('kills a pass that never answers, and says so', async () => {
+    const w = world({ cpuFlags: ['--fake-delay', '5000'] }, { requestTimeoutMs: 200 })
+    const r = await w.engine.transcribe(pk())
+    expect(r).toMatchObject({ ok: false, reason: 'engine-failed' })
+    expect(!r.ok && r.detail).toContain('no answer')
+    await until(() => gone(w.children[0]))
   })
 })
