@@ -16,7 +16,7 @@ import { createWindowEdge } from './windowEdge'
 import { DEFAULT_WINDOW_EDGES, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 import { detectShells } from '@core/main/shells'
 import { createTabsStore } from './tabsStore'
-import { killAll } from '@core/main/terminal'
+import { killAll, shellsDying, shellsGone } from '@core/main/terminal'
 import { installUpdate, updateCalls, watchForUpdates } from './update'
 import { previewUpdate, runPreviewInstall, wantsPreview } from '@core/main/updatePreview'
 import { createVerbSwitch } from './verbSwitch'
@@ -731,12 +731,26 @@ if (!app.requestSingleInstanceLock()) {
     quitting = true
   })
   app.on('window-all-closed', () => app.quit())
-  // Every shell dies with the app; a pty with no window is an orphan.
-  app.on('will-quit', () => {
+  // Every shell dies with the app; a pty with no window is an orphan. And the
+  // app waits for them to be GONE before it ends (#127): a shell still dying
+  // when Node tears down calls back into it and Electron aborts. Three seconds
+  // at most, so a shell that never answers cannot hold the quit.
+  let shellsSettled = false
+  app.on('will-quit', (e) => {
     stopDwmHelper()
     stopDictation()
     killAll()
     tabs.flush()
+    // Nothing dying: no hold. A hold that ends at once is worse than none:
+    // its app.quit() lands inside the quit it cancelled and Electron drops it,
+    // so the app stayed up (MEASURED, the opacityAlpha quit). Hence also the
+    // fresh tick before quitting again.
+    if (shellsSettled || shellsDying() === 0) return
+    e.preventDefault()
+    void shellsGone(3000).then(() => {
+      shellsSettled = true
+      setTimeout(() => app.quit(), 0)
+    })
   })
 
   app.whenReady().then(() => {

@@ -15,6 +15,8 @@ interface FakePty {
 }
 const made: FakePty[] = []
 let gate: Promise<void> = Promise.resolve()
+// A real pty dies on its own thread, some time after kill() returns.
+let lateExit = false
 
 vi.mock('node-pty', () => ({
   spawn: () => {
@@ -25,7 +27,7 @@ vi.mock('node-pty', () => ({
       exit: () => exits.forEach((cb) => cb()),
       kill: () => {
         p.killed = true
-        p.exit()
+        if (!lateExit) p.exit()
       },
       onData: () => ({ dispose: () => {} }),
       onExit: (cb) => {
@@ -49,13 +51,44 @@ vi.mock('./shells', () => ({
   shellById: (_id: unknown, list: Array<{ id: string }>) => list[0]
 }))
 
-const { killAll, killTerm, livePids, prewarmShell, spawnTerm } = await import('./terminal')
+const { killAll, killTerm, livePids, prewarmShell, shellsGone, spawnTerm } = await import('./terminal')
 const send = (): void => {}
 
 beforeEach(() => {
+  lateExit = false
   killAll()
   made.length = 0
   gate = Promise.resolve()
+})
+
+describe('the quit waits for killed shells to be gone (#127)', () => {
+  const settled = async (p: Promise<void>): Promise<boolean> =>
+    Promise.race([p.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 20))])
+
+  it('resolves at once when nothing was killed', async () => {
+    expect(await settled(shellsGone(5000))).toBe(true)
+  })
+
+  it('waits until every killed shell has exited', async () => {
+    expect(await spawnTerm('q1', 'C:\\x', 'pwsh', send)).toBe(true)
+    expect(await spawnTerm('q2', 'C:\\x', 'pwsh', send)).toBe(true)
+    lateExit = true
+    killAll()
+    const gone = shellsGone(5000)
+    expect(await settled(gone)).toBe(false)
+    made[0].exit()
+    expect(await settled(gone)).toBe(false)
+    made[1].exit()
+    expect(await settled(gone)).toBe(true)
+  })
+
+  it('gives up after the timeout when a shell never answers', async () => {
+    expect(await spawnTerm('q3', 'C:\\x', 'pwsh', send)).toBe(true)
+    lateExit = true
+    killAll()
+    expect(await settled(shellsGone(5))).toBe(true)
+    made[0].exit() // let it go, so the next test starts clean
+  })
 })
 
 describe('a tab closed while its shell is starting (#12)', () => {
