@@ -832,8 +832,9 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
   the privacy statement the signing policy links: a new network request changes it in the same PR.
 - Shipping follows the global rules: issue, branch, PR, squash-merge, never commit to main, never
   merge without the owner's explicit approval of that PR. Bump the version inside the PR.
-- `release.yml` arrives with the icon PR (#2): no release is published with the placeholder icon
-  (`build/icon.ico` is currently Prism's).
+- **The app icon** is `build/icon.ico` (app, installer, uninstaller; 16-256 px frames) with its
+  source `build/icon-source.png`, and `assets/prism-terminal-icon.png` (256 px) for the README.
+  Since #129 (owner, 2026-10-04) it is "folded ribbons", from the owner's own icon variations.
 - **Installing is the last verification step.** `npm run package`, kill every `PrismTerminal` and
   `PrismTerminal-Setup*` process, run `dist/PrismTerminal-Setup-x64-<version>.exe /S`, then POLL
   `%LOCALAPPDATA%\Programs\PrismTerminal\PrismTerminal.exe` until its LastWriteTime moves (it goes
