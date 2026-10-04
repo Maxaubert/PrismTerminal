@@ -78,6 +78,9 @@ so an update never silently changes what an existing user sees; the bridge to ma
     it sounds, AltGr on a physical keyboard, pause-media against a real player.
   - Re-pinning the engine: `fetch-whisper.mjs` and `ENGINE` in the catalog must agree (a test holds
     them together), and the GPU pack must be the SAME release tag.
+  - **Which models, and why** (2026-10-04): `docs/research/2026-10-04-dictation-models.md`. Phonon 2
+    is out (English only, not whisper.cpp); nothing is scrapped; quantized Whisper files are the next
+    step to measure; Parakeet v3 waits for whisper.cpp's server (PR #3904) and lacks Norwegian.
 - **THE UPDATE CHIP OPENS A WINDOW; IT DOES NOT INSTALL** (#28; owner, 2026-09-19: "when you click
   the Update badge, it opens like a pop window, which shows the change log or like patch notes for
   the new update, and then you can choose cancel or install"). Built ONCE in `core/` for both apps:
