@@ -32,11 +32,11 @@ export interface ClipboardRead {
  *  signatures exist in one place. */
 export interface TermApi {
   termShells(): Promise<ShellDef[]>
-  termSpawn(id: string, cwd: string, shellId?: string, resume?: string): Promise<boolean>
+  termSpawn(id: string, cwd: string, shellId?: string, resume?: string, hooks?: boolean): Promise<boolean>
   termInput(id: string, data: string): void
   termResize(id: string, cols: number, rows: number): void
   termKill(id: string): void
-  termPrewarm(cwd: string, shellId?: string): void
+  termPrewarm(cwd: string, shellId?: string, hooks?: boolean): void
   onTermData(cb: (id: string, data: string) => void): () => void
   onTermAgent(cb: (id: string, has: boolean, kind: DetectedAgent | null) => void): () => void
   /** Ask the process poll to look NOW, past its backoff (#73). Optional so a
@@ -99,9 +99,10 @@ export interface TermHostConfig {
    * host's own accent for "working", and a green that reads on its ground for
    * "finished". The tab strip is the host's chrome, so the accent is the
    * host's to name: Prism Terminal derives its chrome from the terminal theme,
-   * Prism takes it from the app style.
+   * Prism takes it from the app style. `failed` (#131) is the theme's red on
+   * the host's ground; absent, the core's own red (`FAILED_RED`).
    */
-  themedAgentColors(themeId: string): { working: string; finished: string; question?: string }
+  themedAgentColors(themeId: string): { working: string; finished: string; question?: string; failed?: string }
 
   /**
    * The colour the terminal is really painted on, where the host lets somebody

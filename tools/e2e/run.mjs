@@ -470,6 +470,133 @@ const scenarios = {
     }
   },
 
+  /**
+   * CLAUDE CODE'S HOOKS (#131). A real pwsh stands in for Claude and prints the
+   * bundled plugin's OSC 777 lines itself, exactly the bytes Claude writes for
+   * a hook's terminalSequence (the plugin's own output is held to them by the
+   * unit test). What is proved: the plugin rides a new shell's environment and
+   * the switch takes it away; Working, Question, Done and Failed with its kind
+   * in the tooltip; the badge counts them; an idle title after Working with no
+   * Stop (an Esc) leaves no Finished line; the Failed switch; another OSC 777
+   * is ignored; and a hooked session's screen is not read for a question.
+   */
+  async agentHooks(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    try {
+      await until(async () => (await tabLabels(page)).length === 2)
+      const tab = (i) => page.locator('[data-tab]').nth(i)
+      const state = (i) => tab(i).getAttribute('data-agent-state')
+      const line = (i) => tab(i).locator('[data-attention]').getAttribute('data-attention').catch(() => null)
+      const badge = () => page.evaluate(() => window.prism.e2eTaskbarBadge())
+      // The sequence as Claude writes it: ESC ] 777 ; payload BEL.
+      const osc = (payload) => `[Console]::Write([char]27 + ']777;${payload}' + [char]7)`
+      const say = (state) => osc(`prism-agent;state=${state}`)
+      const at = (i, cmd) => tab(i).click().then(() => typeLine(page, cmd))
+      const later = (cmd) => `Start-Sleep -Milliseconds 1500; ${cmd}`
+      const IDLE = "$Host.UI.RawUI.WindowTitle = [char]0x2733 + ' Claude Code'"
+      // Opening a tab only counts as looking with the window focused, and the
+      // parked e2e window never is: say it is, as `attention` does.
+      const look = async (i) => {
+        await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+        await tab(i).click()
+      }
+      const PLUG =
+        "Write-Host ('PLUG-' + @($env:CLAUDE_CODE_PLUGIN_DIRS -split ';' | Where-Object { $_ -and (Test-Path (Join-Path $_ '.claude-plugin\\plugin.json')) }).Count)"
+
+      // THE PLUGIN RIDES THE SHELL'S ENVIRONMENT, and it is real files.
+      await at(0, PLUG)
+      ok(!!(await until(async () => (await termText(page)).includes('PLUG-1'), 10000)), 'a new shell is handed the Claude Code plugin')
+      await polled(page)
+
+      // WORKING, by the hook alone: no title, no output scoring.
+      await at(0, say('working'))
+      ok(!!(await until(async () => (await state(0)) === 'working', 8000, 50)), 'a working hook lights the tab')
+
+      // A QUESTION on a background tab: the Question line and the badge.
+      await at(0, later(say('question')))
+      await tab(1).click()
+      ok(!!(await until(async () => (await state(0)) === 'question', 10000, 50)), 'a question hook on a background tab marks it')
+      ok((await line(0)) === 'question', 'with the Question line')
+      ok(!!(await until(async () => (await badge()) === '1 tab needs a look', 4000, 50)), `and the taskbar badge counts it (${await badge()})`)
+      await look(0)
+      ok(!!(await until(async () => (await state(0)) === null, 4000, 50)), 'opening the tab clears it')
+
+      // DONE on a background tab: the Finished line.
+      await at(0, say('working'))
+      await at(0, later(say('done')))
+      await tab(1).click()
+      ok(!!(await until(async () => (await state(0)) === 'done', 10000, 50)), 'a Stop hook on a background tab leaves the Finished line')
+      await look(0)
+      await until(async () => (await state(0)) === null, 4000, 50)
+
+      // FAILED, with its kind: the two hooks of one failure, the kind's first.
+      await at(0, say('working'))
+      await at(0, later(`${osc('prism-agent;state=failed;kind=rate_limit')}; ${say('failed')}`))
+      await tab(1).click()
+      ok(!!(await until(async () => (await state(0)) === 'failed', 10000, 50)), 'a StopFailure hook on a background tab marks it Failed')
+      ok((await line(0)) === 'failed', 'with the Failed line')
+      const failedTip = (await tabTitles(page))[0]
+      ok(/\nFailed: rate limit$/.test(failedTip), `and the tooltip says what failed (${JSON.stringify(failedTip)})`)
+      ok(!!(await until(async () => (await badge()) === '1 tab needs a look', 4000, 50)), 'the badge counts a failed tab')
+      const colourOf = (i) => tab(i).locator('[data-attention]').evaluate((e) => getComputedStyle(e).backgroundColor)
+      const failedColour = await colourOf(0)
+      await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/agent-hooks-failed.png') }).catch(() => {})
+
+      // THE FAILED SWITCH: off, the line goes and the turn reads as finished.
+      await page.locator('[data-title-settings]').click()
+      await page.locator('[data-settings-tab="appearance"]').click()
+      const failedSwitch = page.locator('[data-pref="agent-failed-on"] [role="switch"]')
+      ok((await failedSwitch.getAttribute('aria-checked')) === 'true', 'the Failed indicator is on by default')
+      await failedSwitch.click()
+      ok(!!(await until(async () => (await line(0)) === 'done', 4000, 50)), 'switched off, no Failed line: the Finished one shows instead')
+      const doneColour = await colourOf(0)
+      ok(failedColour !== doneColour, `the Failed line is a colour of its own (${failedColour} vs ${doneColour})`)
+      await failedSwitch.click()
+      ok(!!(await until(async () => (await line(0)) === 'failed', 4000, 50)), 'and back on, it is Failed again')
+      ok((await page.locator('[data-pref="agent-hooks"] [role="switch"]').getAttribute('aria-checked')) === 'true', 'Exact status from Claude Code is on by default')
+
+      // AN ESC: working, then the idle title with no Stop. Not a finish.
+      await look(0)
+      await until(async () => (await state(0)) === null, 4000, 50)
+      await at(0, say('working'))
+      await until(async () => (await state(0)) === 'working', 8000, 50)
+      await at(0, later(IDLE))
+      await tab(1).click()
+      ok(!!(await until(async () => (await state(0)) !== 'working', 10000, 50)), 'an idle title after a working hook stops the work')
+      await sleep(1000)
+      ok((await state(0)) === null && (await line(0)) === null, `and leaves no Finished line, an Esc is not a finish (${await state(0)})`)
+      ok((await badge()) === '', 'nor anything for the badge')
+
+      // ANOTHER OSC 777, and our prefix with a state we do not know: nothing.
+      await at(0, later(`${osc('notify;Build;done')}; ${osc('prism-agent;state=sleeping')}; ${osc('prism-agentx;state=failed')}`))
+      await tab(1).click()
+      await sleep(2500)
+      ok((await state(0)) === null, `another OSC 777 payload changes nothing (${await state(0)})`)
+
+      // A HOOKED SESSION'S SCREEN IS NOT READ FOR A QUESTION: Claude's footer on
+      // screen with the title idle used to mark it; the hooks say it now.
+      await at(0, later(`Write-Host 'Enter to select, Esc to cancel'; ${IDLE}`))
+      await tab(1).click()
+      await sleep(2500)
+      ok((await state(0)) === null, `the question footer on screen does not mark a hooked session (${await state(0)})`)
+
+      // OFF MEANS OFF: a shell opened with the setting off gets no plugin.
+      const before = (await tabLabels(page)).length
+      await page.evaluate(() => localStorage.setItem('prism.term.agentHooks', '0'))
+      await tab(1).click()
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.press('Control+t')
+      await until(async () => (await tabLabels(page)).length === before + 1)
+      await typeLine(page, PLUG)
+      ok(!!(await until(async () => (await termText(page)).includes('PLUG-0'), 10000)), 'with the setting off, a new shell has no plugin')
+      // End idle, so closing asks nothing.
+      await at(0, "$Host.UI.RawUI.WindowTitle = 'pwsh'")
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   /** A light theme makes a light window: measured, never read off a name. */
   async theme(ok) {
     const w = world()
@@ -2453,7 +2580,7 @@ const scenarios = {
       // WHAT NO THEME OWNS SITS ABOVE THE WALL, WHAT A THEME SETS UNDER IT
       // (owner, 2026-09-28).
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
-      const want = ['tab-width', 'title-bar', 'window-edges', 'term-font-family', 'term-font', 'agent-indicator', 'agent-done-on', 'agent-question-on', 'term-theme', 'window-background', 'window-accent']
+      const want = ['tab-width', 'title-bar', 'window-edges', 'term-font-family', 'term-font', 'agent-indicator', 'agent-done-on', 'agent-question-on', 'agent-failed-on', 'agent-hooks', 'term-theme', 'window-background', 'window-accent']
       ok(JSON.stringify(rows.slice(0, want.length)) === JSON.stringify(want), `the page runs ${want.join(' > ')} (${rows.slice(0, want.length).join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()

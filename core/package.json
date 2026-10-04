@@ -1,6 +1,6 @@
 {
   "name": "prism-term-core",
-  "version": "0.23.1",
+  "version": "0.24.0",
   "description": "What Prism Terminal and Prism share: the terminal (pty, shells, agent detection and indicator, themes, links, the panel, dictation) and the update chip with its window. TypeScript source, compiled by the host.",
   "license": "MIT",
   "private": true,
@@ -18,7 +18,8 @@
     "./renderer/settings/options": "./renderer/settings/options.ts",
     "./renderer/settings/*": "./renderer/settings/*.tsx",
     "./renderer/settings/dictationOptions": "./renderer/settings/dictationOptions.ts",
-    "./tools/*": "./tools/*"
+    "./tools/*": "./tools/*",
+    "./claude-plugin/*": "./claude-plugin/*"
   },
   "files": [
     "main",
@@ -26,6 +27,7 @@
     "shared",
     "renderer",
     "tools",
+    "claude-plugin",
     "!**/*.test.ts",
     "!**/__fixtures__/**",
     "README.md"

@@ -3,8 +3,8 @@ import { useSyncExternalStore } from 'react'
 /**
  * THE TASKBAR BADGE (2026-09-28; owner: "a badge on the taskbar icon, where
  * it says how many sessions have completed without me having taken a look at
- * them yet"). The number is every tab showing an attention mark (finished or
- * a question, each only while its own switch is on), since both are sessions
+ * them yet"). The number is every tab showing an attention mark (finished,
+ * a question or failed (#131), each only while its own switch is on), since all are sessions
  * that need a look. Windows has no numeric badge for a desktop app, so it is
  * the window's OVERLAY icon: a small disc drawn here and set by main. This
  * app's own setting, on by default (`prism.window.taskbarBadge`).
@@ -42,6 +42,9 @@ export function attentionCount(p: {
   workingIds: ReadonlySet<string>
   doneOn: boolean
   questionOn: boolean
+  /** A turn that ended on an error (#131); absent, nothing failed. */
+  failedIds?: ReadonlySet<string>
+  failedOn?: boolean
 }): { count: number; question: boolean } {
   const ids = new Set<string>()
   let question = false
@@ -51,6 +54,7 @@ export function attentionCount(p: {
         ids.add(id)
         question = true
       }
+  if (p.failedOn && p.failedIds) for (const id of p.failedIds) if (!p.workingIds.has(id)) ids.add(id)
   if (p.doneOn) for (const id of p.doneIds) if (!p.workingIds.has(id)) ids.add(id)
   return { count: ids.size, question }
 }

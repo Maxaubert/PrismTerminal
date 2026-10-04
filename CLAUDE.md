@@ -579,6 +579,31 @@ the owner's own call, #99.)
   first idle title is the agent STARTING, not working. Output scoring (`termActivity`) is only the
   fallback, and an agent's startup paint is not work (`markBorn` / `startupOutput`). The rules live in
   `lib/useAgentIndicator.ts`; change them there, with Prism's reasoning in hand.
+- **CLAUDE CODE'S HOOKS ARE ITS WORD, ABOVE THE TITLE** (#131; owner, 2026-10-05: "go ahead and build
+  that"; spec `docs/superpowers/specs/2026-10-05-agent-hooks-design.md`, evidence in the research
+  folder's `prism-terminal/2026-10-05-agent-hooks-inventory.md`). `core/claude-plugin` is a Claude Code
+  plugin: each hook in `hooks/hooks.json` runs `hook.cmd`, a static echo (blocking events wait for it;
+  MEASURED 20-100 ms, so no node), in EXEC FORM (`cmd.exe` + `args` `/d /c call <root>/hook.cmd`): a
+  command string runs through PowerShell where Git Bash is missing and is a ParserError there, and
+  without `call` a plugin folder with brackets fails (both MEASURED, review of #131). Its `terminalSequence` Claude writes into its OWN terminal as
+  `ESC]777;prism-agent;state=working|question|done|failed[;kind=<StopFailure error>]BEL`. In-band: no
+  listener, no tab ids, and `claude -p` / SDK runs never write it (MEASURED). SessionStart/End are left
+  out (their bytes reached the pty 1 of 3 and 0 of 3). Main hands a shell the plugin through
+  `CLAUDE_CODE_PLUGIN_DIRS` (`ptyEnv`, the user's value kept, an inherited copy of ours dropped:
+  `claudePlugin.ts`), only where the host passes `claudePluginDir` (this app: `resources\claude-plugin`,
+  extraResources; dev reads the core's copy) AND the page's "Exact status from Claude Code"
+  (`agent-hooks`, on) is on; a warm shell is adopted only with the same answer. Prism passes no dir, so
+  nothing changes there until it ships the files. The reader: `lib/agentHookSignal` (parse, our prefix
+  only, else `false` so other OSC 777 users are untouched), termBus, `lib/agentHookState` (the pure
+  rules), `useAgentIndicator`. A HOOKED session is never scored from output nor read for a question;
+  its title only says an Esc (no hook fires on one, MEASURED: idle title 72 ms after): an idle title
+  after `working` with no Stop is idle with NO Finished line, and a Stop that lands after it still
+  finishes. The poll still decides presence. **Failed** is a third line (`agent-failed-on`, on), the
+  theme's red apart from the accent by hue (`marksApart`), over Finished and under Question, counted by
+  the badge, its kind on the tab's tooltip ("Failed: rate limit"); it raises Finished under it, so
+  with the switch off the tab reads as before. Sessions that never send a signal (Codex, an older
+  claude, an untrusted folder, plugins blocked by policy) keep the old method whole. Codex's
+  `[ ! ] Action Required` title is its Question. The `agentHooks` e2e holds it (it fails on main).
 - **FINISHED AND QUESTION ARE LINES, EACH OPTIONAL; EVERY WORKING TAB HAS ITS OWN BAR; THE TASKBAR
   COUNTS** (owner, 2026-09-28; spec `docs/superpowers/specs/2026-09-28-attention-and-warm-dictation-design.md`).
   A tab whose agent finished, or waits on you, while you were NOT LOOKING (another tab in front, or

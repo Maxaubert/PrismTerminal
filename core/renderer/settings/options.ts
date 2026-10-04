@@ -29,6 +29,10 @@ export const TERMINAL_OPTIONS: readonly TerminalOption[] = [
   { id: 'agent-indicator', label: 'Agent indicator', type: 'choice', key: 'prism.term.agentIndicator' },
   { id: 'agent-done-on', label: 'Finished indicator', type: 'switch', key: 'prism.term.agentDoneOn' },
   { id: 'agent-question-on', label: 'Question indicator', type: 'switch', key: 'prism.term.agentQuestionOn' },
+  // Claude Code's own word through its hooks (#131): a Failed mark, and the
+  // switch that hands new shells the plugin which tells it.
+  { id: 'agent-failed-on', label: 'Failed indicator', type: 'switch', key: 'prism.term.agentFailedOn' },
+  { id: 'agent-hooks', label: 'Exact status from Claude Code', type: 'switch', key: 'prism.term.agentHooks' },
   // The theme wall, and under it only what a theme sets (2026-09-28).
   { id: 'term-theme', label: 'Theme', type: 'theme', key: 'prism.term.theme' },
   { id: 'term-acrylic', label: 'Acrylic background', type: 'switch', key: 'prism.term.acrylic' },

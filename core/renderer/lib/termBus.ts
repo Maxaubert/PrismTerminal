@@ -1,3 +1,5 @@
+import type { AgentSignal } from './agentHookSignal'
+
 /**
  * Reaching a live terminal from outside its own component.
  *
@@ -91,6 +93,22 @@ export function onTitle(fn: (sessionId: string, title: string) => void): () => v
   titleListeners.add(fn)
   return () => {
     titleListeners.delete(fn)
+  }
+}
+
+// WHAT CLAUDE CODE'S HOOKS SAY (#131). TerminalPanel hears our OSC 777 through
+// xterm's parser and posts the parsed state here; the indicator listens, so it
+// never imports the panel (which sits behind Prism's lazy boundary).
+const signalListeners = new Set<(sessionId: string, signal: AgentSignal) => void>()
+
+export function reportAgentSignal(sessionId: string, signal: AgentSignal): void {
+  signalListeners.forEach((fn) => fn(sessionId, signal))
+}
+
+export function onAgentSignal(fn: (sessionId: string, signal: AgentSignal) => void): () => void {
+  signalListeners.add(fn)
+  return () => {
+    signalListeners.delete(fn)
   }
 }
 

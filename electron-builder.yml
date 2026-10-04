@@ -38,6 +38,11 @@ extraResources:
   # in the asar: it is an exe and its DLLs, and Windows has to be able to run it.
   - from: vendor/whisper
     to: bin/whisper
+  # The Claude Code plugin that reports an agent's state to its tab (#131):
+  # Claude loads it from CLAUDE_CODE_PLUGIN_DIRS, so it has to be real files
+  # on disk, never inside the asar (core/** is left out of it above).
+  - from: core/claude-plugin
+    to: claude-plugin
 win:
   icon: build/icon.ico
   executableName: PrismTerminal
