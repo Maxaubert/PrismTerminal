@@ -211,12 +211,15 @@ export function Select({
   id,
   value,
   onChange,
-  options
+  options,
+  disabled
 }: {
   id: string
   value: string
   onChange: (v: string) => void
   options: Array<{ id: string; name: string; style?: React.CSSProperties }>
+  /** Shown but not changeable: the value in force while something else decides it. */
+  disabled?: boolean
 }): JSX.Element {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -248,8 +251,9 @@ export function Select({
         id={id}
         aria-haspopup="listbox"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-8 min-w-[168px] items-center justify-between gap-2 rounded-[var(--p-radius-sm)] border border-[color:var(--p-divider)] bg-[var(--p-control)] px-2.5 text-[12px] font-medium text-[var(--p-text)] transition-colors hover:border-[color:var(--p-line)] focus-visible:border-[var(--p-accent-hi)] focus-visible:outline-none"
+        className="flex h-8 min-w-[168px] items-center justify-between gap-2 rounded-[var(--p-radius-sm)] border border-[color:var(--p-divider)] bg-[var(--p-control)] px-2.5 text-[12px] font-medium text-[var(--p-text)] transition-colors hover:border-[color:var(--p-line)] focus-visible:border-[var(--p-accent-hi)] focus-visible:outline-none disabled:opacity-50 disabled:hover:border-[color:var(--p-divider)]"
       >
         <span className="truncate" style={cur?.style}>
           {cur?.name ?? value}
@@ -258,7 +262,7 @@ export function Select({
           <path d="M6 9l6 6 6-6" />
         </svg>
       </button>
-      {open && (
+      {open && !disabled && (
         <div
           role="listbox"
           aria-labelledby={id}

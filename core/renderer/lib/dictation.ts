@@ -1,3 +1,4 @@
+import { engineFor, languageFor } from '../../shared/dictationCatalog'
 import { dictationHost } from '../host'
 import { cleanTranscript } from './dictationClean'
 import { initialKeyState, reduceKey, type KeyEvt, type KeyState } from './dictationKey'
@@ -63,7 +64,7 @@ function warmEngine(): void {
   const host = dictationHost()
   const modelId = dictationModel()
   if (!host || !modelId) return
-  host.api.dictationWarm?.({ modelId, language: dictationLanguage() })
+  host.api.dictationWarm?.({ modelId, language: languageFor(modelId, dictationLanguage()) })
 }
 let view: DictationView = IDLE
 const viewListeners = new Set<() => void>()
@@ -96,6 +97,10 @@ const PARTIAL_WINDOW_S = 28
 /** Below this there is nothing to transcribe: a brush of the key. */
 const MIN_SECONDS = 0.35
 const PARTIAL_EVERY_MS = 350
+/** The least new audio between two partials. A Parakeet partial is a fresh
+ *  process (0.7 to 0.9 s a pass, MEASURED), so it is asked at most about once
+ *  a second (#121); the resident Whisper server can take one every 0.6 s. */
+const PARTIAL_GAP_S = { whisper: 0.6, parakeet: 1 } as const
 const MESSAGE_MS = 2600
 
 const FAILURE_TEXT: Record<CaptureFailure, string> = {
@@ -192,12 +197,12 @@ async function begin(sessionId: string): Promise<void> {
     const cap = r.capture
     if (!cap || rec !== r) return
     if (cap.seconds() >= MAX_SECONDS) return void stop()
-    if (r.partialBusy || cap.seconds() < 1 || cap.seconds() - r.lastPartialAt < 0.6) return
+    if (r.partialBusy || cap.seconds() < 1 || cap.seconds() - r.lastPartialAt < PARTIAL_GAP_S[engineFor(modelId)]) return
     r.partialBusy = true
     r.lastPartialAt = cap.seconds()
     const wav = encodeWav(tailSamples(cap.snapshot(), TARGET_RATE, PARTIAL_WINDOW_S), TARGET_RATE)
     void host.api
-      .dictationTranscribe({ wav, modelId, language: dictationLanguage(), final: false })
+      .dictationTranscribe({ wav, modelId, language: languageFor(modelId, dictationLanguage()), final: false })
       .then((res) => {
         // Only while THIS recording is still listening: a partial that lands
         // after the final would overwrite the pill with older words.
@@ -236,7 +241,7 @@ async function finishStop(r: Recording): Promise<void> {
     res = await host.api.dictationTranscribe({
       wav: encodeWav(samples, TARGET_RATE),
       modelId: dictationModel(),
-      language: dictationLanguage(),
+      language: languageFor(dictationModel(), dictationLanguage()),
       final: true
     })
   } catch {
