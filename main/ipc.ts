@@ -2,7 +2,7 @@ import { CH } from '../shared/channels'
 import { validResume } from './agentResume'
 import { pollAgentsNow, pollAgentsSoon, startAgentPoll } from './agentPoll'
 import { detectShells } from './shells'
-import { cdTerm, killTerm, prewarmShell, resizeTerm, spawnTerm, writeTerm } from './terminal'
+import { cdTerm, killTerm, prewarmShell, resizeTerm, spawnTerm, writeTerm, type ClaudePluginEnv } from './terminal'
 import { openTermPath, pathKinds, PATHS_MAX, type PathOpeners } from './termPathOpen'
 
 /**
@@ -65,6 +65,13 @@ export interface TermIpcDeps {
    * nothing is painted that a click could not open.
    */
   paths?: PathOpeners
+  /**
+   * Where this host's copy of the Claude Code plugin is (#131): the folder
+   * holding `.claude-plugin/plugin.json`. A shell gets it while the page's
+   * setting is on. Absent (Prism, until it ships the files): no shell's
+   * environment is touched, whatever the page says.
+   */
+  claudePluginDir?: string
 }
 
 /** Registers every terminal channel and starts the agent poll. Returns the
@@ -72,17 +79,21 @@ export interface TermIpcDeps {
 export function registerTermIpc(deps: TermIpcDeps): () => void {
   const { ipcMain, send } = deps
   const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
+  // The page says whether its setting is on; only a literal true turns it on,
+  // and only where the host ships the plugin.
+  const plugin = (hooks: unknown): ClaudePluginEnv | undefined =>
+    deps.claudePluginDir ? { dir: deps.claudePluginDir, on: hooks === true } : undefined
 
   ipcMain.handle(CH.shells, () => detectShells())
 
-  ipcMain.handle(CH.spawn, async (_e: unknown, id: unknown, cwd: unknown, shellId: unknown, resume: unknown) => {
+  ipcMain.handle(CH.spawn, async (_e: unknown, id: unknown, cwd: unknown, shellId: unknown, resume: unknown, hooks: unknown) => {
     if (typeof id !== 'string' || !id || typeof cwd !== 'string') return false
     const dir = await deps.spawnDir(cwd)
     if (!dir) return false
     // The resume id came from main's own scan of the agent's session files,
     // but it crossed the renderer on the way back: shape-check it again before
     // it goes anywhere near a command line.
-    const ok = await spawnTerm(id, dir, str(shellId), send, validResume(str(resume)))
+    const ok = await spawnTerm(id, dir, str(shellId), send, validResume(str(resume)), plugin(hooks))
     // Warm the agent-poll pipeline now: the first process query is the slow
     // one, and running it while the user is still typing their first command
     // means the mark can appear on the poll that actually matters.
@@ -106,10 +117,10 @@ export function registerTermIpc(deps: TermIpcDeps): () => void {
   // A title claimed an agent the poll has not seen (#73): look now.
   ipcMain.on(CH.agentLook, () => pollAgentsNow())
 
-  ipcMain.on(CH.prewarm, (_e: unknown, cwd: unknown, shellId: unknown) => {
+  ipcMain.on(CH.prewarm, (_e: unknown, cwd: unknown, shellId: unknown, hooks: unknown) => {
     if (typeof cwd !== 'string') return
     void deps.mayPrewarm(cwd).then((ok) => {
-      if (ok) void prewarmShell(cwd, str(shellId))
+      if (ok) void prewarmShell(cwd, str(shellId), plugin(hooks))
     })
   })
 

@@ -9,6 +9,7 @@ import { shellOfShellId } from '../../shared/help/shells'
 import {
   onResumingChange,
   registerPaste,
+  reportAgentSignal,
   reportCwd,
   reportTitle,
   resumingIds,
@@ -28,6 +29,7 @@ import {
 } from '../lib/resumeReveal'
 import { ResumeSkeleton } from './ResumeSkeleton'
 import { parseOsc9 } from '../../shared/termCwd'
+import { parseAgentSignal } from '../lib/agentHookSignal'
 import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
 import { onGround } from '../lib/termGround'
 import { xtermTheme, type XtermTheme } from '../lib/termXterm'
@@ -54,6 +56,7 @@ import { cellFrom, cellText, type CellInfo } from '../lib/termCells'
 import {
   onTermLookChange,
   termBaseFontPx,
+  agentHooksOn,
   termAcrylic,
   termFontStack,
   termThemeId
@@ -746,6 +749,15 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     }
     return true
   })
+  // CLAUDE CODE'S OWN WORD, through the bundled plugin's hooks (#131): our
+  // OSC 777 payloads only. Anything else answers false, so another OSC 777
+  // user is left exactly as before.
+  term.parser.registerOscHandler(777, (data) => {
+    const signal = parseAgentSignal(data)
+    if (!signal) return false
+    reportAgentSignal(id, signal)
+    return true
+  })
   // A RESUMING TAB WEARS A SKELETON (#106), not a text spinner: the shell's
   // own words (its prompt, the resume command) are cleared the moment the
   // agent takes the console, and the terminal is shown once the agent has
@@ -923,7 +935,8 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // A session restored over a Claude conversation launches straight into it:
   // the resume id rides the SPAWN (main builds it into the shell's startup
   // command), so nothing is ever visibly typed.
-  void termApi().termSpawn(id, root, shellId, resume ?? undefined).then((ok) => {
+  // The plugin rides the spawn too (#131), while its setting is on.
+  void termApi().termSpawn(id, root, shellId, resume ?? undefined, agentHooksOn()).then((ok) => {
     if (!ok && sessions.has(id)) {
       // The resume spinner would go on writing over the error for the tab's
       // whole life (code review 2026-09-24, #24): no pty data will ever stop it.

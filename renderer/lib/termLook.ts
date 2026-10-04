@@ -177,6 +177,35 @@ export function setAgentQuestionOn(on: boolean): void {
   localStorage.setItem(QUESTION_ON_KEY, on ? '1' : '0')
   notify()
 }
+
+const FAILED_ON_KEY = 'prism.term.agentFailedOn'
+const HOOKS_KEY = 'prism.term.agentHooks'
+
+/**
+ * THE FAILED MARK (#131): a turn that ended on an error (a rate limit, an
+ * overload), told by Claude Code's own hook. A switch beside the other two,
+ * on by default for their reason.
+ */
+export function agentFailedOn(): boolean {
+  return localStorage.getItem(FAILED_ON_KEY) !== '0'
+}
+export function setAgentFailedOn(on: boolean): void {
+  localStorage.setItem(FAILED_ON_KEY, on ? '1' : '0')
+  notify()
+}
+
+/**
+ * "EXACT STATUS FROM CLAUDE CODE" (#131; owner, 2026-10-05: on by default,
+ * with a switch). On, a NEW shell is handed the bundled plugin; off, it is
+ * not, and no plugin loads. A running shell keeps what it started with.
+ */
+export function agentHooksOn(): boolean {
+  return localStorage.getItem(HOOKS_KEY) !== '0'
+}
+export function setAgentHooksOn(on: boolean): void {
+  localStorage.setItem(HOOKS_KEY, on ? '1' : '0')
+  notify()
+}
 /** Six digits, or eight with an alpha (#112): every reader takes both. */
 const HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i
 
@@ -439,6 +468,12 @@ export function useAgentDoneOn(): boolean {
 }
 export function useAgentQuestionOn(): boolean {
   return useSyncExternalStore(sub, agentQuestionOn)
+}
+export function useAgentFailedOn(): boolean {
+  return useSyncExternalStore(sub, agentFailedOn)
+}
+export function useAgentHooksOn(): boolean {
+  return useSyncExternalStore(sub, agentHooksOn)
 }
 export function useCustomTermTheme(): CustomTermTheme | null {
   // Cache per notify tick: useSyncExternalStore needs a stable snapshot.

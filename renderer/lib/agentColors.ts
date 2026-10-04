@@ -30,7 +30,11 @@ const chromeSnapshot = (): number => chromeRev
  *  moves it to its ground's floor (`themedAgentColors().question`). */
 export const QUESTION_BLUE = '#3b82f6'
 
-export function useAgentColors(): { working: string; finished: string; question: string } {
+/** The Failed mark's colour (#131) where the host names none: a clear red. A
+ *  host moves its theme's own red to its ground's floor (`themedAgentColors().failed`). */
+export const FAILED_RED = '#ef4444'
+
+export function useAgentColors(): { working: string; finished: string; question: string; failed: string } {
   const rev = useSyncExternalStore(subscribeChrome, chromeSnapshot)
   const themeId = useTermThemeId()
   // A custom theme edited in place keeps its id; its palette is the dependency.
@@ -43,7 +47,9 @@ export function useAgentColors(): { working: string; finished: string; question:
     return {
       working: working || themed.working,
       finished: finished || themed.finished,
-      question: question || themed.question || QUESTION_BLUE
+      question: question || themed.question || QUESTION_BLUE,
+      // Not a picker (#131): the theme's red, as the host resolves it.
+      failed: themed.failed || FAILED_RED
     }
     // `custom` is read by the host's resolver, not named in the body.
     // eslint-disable-next-line react-hooks/exhaustive-deps

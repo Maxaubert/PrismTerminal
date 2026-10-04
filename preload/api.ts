@@ -31,13 +31,15 @@ export interface ClipboardRead {
 export interface TermPreloadApi {
   /** The shells main detected; the only things term:spawn will ever launch. */
   termShells(): Promise<ShellDef[]>
-  /** `resume` is what the host's restore handed back for this shell, untouched. */
-  termSpawn(id: string, cwd: string, shellId?: string, resume?: string): Promise<boolean>
+  /** `resume` is what the host's restore handed back for this shell, untouched.
+   *  `hooks`: the page's "Exact status from Claude Code" setting (#131); main
+   *  hands the shell the plugin only where its host ships one. */
+  termSpawn(id: string, cwd: string, shellId?: string, resume?: string, hooks?: boolean): Promise<boolean>
   termInput(id: string, data: string): void
   termResize(id: string, cols: number, rows: number): void
   termKill(id: string): void
   /** Start a shell in `cwd` ahead of the click. Best-effort. */
-  termPrewarm(cwd: string, shellId?: string): void
+  termPrewarm(cwd: string, shellId?: string, hooks?: boolean): void
   /** Move a shell to a folder it should follow (Prism's #99); main writes the line. */
   termCd(id: string, path: string): void
   onTermData(cb: (id: string, data: string) => void): () => void
@@ -84,12 +86,12 @@ export function createTermApi(ipc: IpcRendererLike): TermPreloadApi {
   }
   return {
     termShells: () => ipc.invoke(CH.shells) as Promise<ShellDef[]>,
-    termSpawn: (id, cwd, shellId, resume) =>
-      ipc.invoke(CH.spawn, id, cwd, shellId, resume) as Promise<boolean>,
+    termSpawn: (id, cwd, shellId, resume, hooks) =>
+      ipc.invoke(CH.spawn, id, cwd, shellId, resume, hooks) as Promise<boolean>,
     termInput: (id, data) => ipc.send(CH.input, id, data),
     termResize: (id, cols, rows) => ipc.send(CH.resize, id, cols, rows),
     termKill: (id) => ipc.send(CH.kill, id),
-    termPrewarm: (cwd, shellId) => ipc.send(CH.prewarm, cwd, shellId),
+    termPrewarm: (cwd, shellId, hooks) => ipc.send(CH.prewarm, cwd, shellId, hooks),
     termCd: (id, path) => ipc.send(CH.cd, id, path),
     onTermData: (cb) => on(CH.data, cb),
     onTermAgent: (cb) => on(CH.agent, cb),
