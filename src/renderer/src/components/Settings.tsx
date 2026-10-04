@@ -370,7 +370,8 @@ function AppearanceTab(): JSX.Element {
 
 /* ---------- page shell ---------- */
 
-type TabId = 'general' | 'appearance' | 'dictation'
+export type SettingsPage = 'general' | 'appearance' | 'dictation'
+type TabId = SettingsPage
 
 const Ico = ({ d }: { d: string }): JSX.Element => (
   <svg
@@ -419,12 +420,18 @@ const UI_FONT = '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif'
 
 /**
  * The Settings page. It rides the tab strip as a tab of its own, so it FILLS
- * whatever App mounts it in rather than fixing itself over the window, and it
- * takes no props: there is nothing to close (the tab's X does that) and every
- * setting is a store it writes.
+ * whatever App mounts it in rather than fixing itself over the window. There
+ * is nothing to close (the tab's X does that) and every setting is a store it
+ * writes. The page it shows is App's (#123): this component unmounts whenever
+ * another tab is in front, and coming back must find the page that was left.
  */
-export default function Settings(): JSX.Element {
-  const [tab, setTab] = useState<TabId>('general')
+export default function Settings({
+  page: tab,
+  onPage: setTab
+}: {
+  page: SettingsPage
+  onPage: (page: SettingsPage) => void
+}): JSX.Element {
   const active = TABS.find((t) => t.id === tab) ?? TABS[0]
   return (
     <div
