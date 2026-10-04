@@ -27,6 +27,15 @@ Everything else happens **only when you ask for it**:
 - **What you run:** the terminal runs your own shell, and whatever you run in it reaches the
   network as you tell it to.
 
+## What it adds to Claude Code
+
+Prism Terminal adds a small local plugin to the Claude Code sessions started in its tabs, so the tab
+can show what the agent is doing: working, waiting on you, finished or failed. The plugin's hooks
+print one fixed line into that tab's own terminal; they send nothing over the network, read
+nothing, and write no file. It is passed through an environment variable of the tab's shell, never
+written into your Claude Code settings. Settings > Appearance > "Exact status from Claude Code"
+turns it off for every terminal opened afterwards.
+
 This file is the privacy statement the [code signing policy](README.md#code-signing-policy) refers
 to. If the app ever gains a request that is not listed here, this file changes in the same pull
 request.

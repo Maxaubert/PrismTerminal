@@ -38,6 +38,16 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
    runs `core/tools/fetch-whisper.mjs <dir>` at build time and ships that folder
    as `resources/bin/whisper`, and grants its own window the `media` permission
    (audio only).
+   **Claude Code's hooks** (#131) are in here too: the plugin itself
+   (`claude-plugin/`), the env injection (`main/terminal.ts` `ptyEnv`,
+   `main/claudePlugin.ts`), the reader (`renderer/lib/agentHookSignal.ts`,
+   `agentHookState.ts`, the OSC 777 handler in the panel) and the Failed line's
+   state and switches. The indicator reads signals in any host. A host ships the
+   plugin by copying `core/claude-plugin` beside its app (real files, not in an
+   asar) and passing that folder as `claudePluginDir` to `registerTermIpc`, plus
+   the page's setting to `termPrewarm`; one that passes no folder changes no
+   shell's environment. Its strip draws `failedIds` as a third line, and its
+   `themedAgentColors` may name `failed` (else `FAILED_RED`).
    **AND WHAT THE TWO APPS MUST SHOW IDENTICALLY, TERMINAL OR NOT** (#28, owner,
    2026-09-19). This WIDENS the core, on purpose, from "the terminal" to "what
    the two apps share". Asked to build the update window (*"when you click the
