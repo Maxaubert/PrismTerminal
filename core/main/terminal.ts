@@ -294,6 +294,12 @@ export async function prewarmShell(
   plugin?: ClaudePluginEnv
 ): Promise<void> {
   const key = rootKey(root)
+  // A warm shell started with the other plugin answer (#131 review) is never
+  // adopted, and it sat in this slot for good: every later tab in the folder
+  // started cold once the setting was switched. It makes way for one that
+  // matches what the next spawn will ask.
+  const held = warm.get(key)
+  if (held && held.plugin !== pluginKey(plugin)) killWarm(root)
   if (warm.has(key)) return
   const def = shellById(shellId, await detectShells())
   if (!def) return

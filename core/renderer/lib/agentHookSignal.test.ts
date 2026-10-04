@@ -1,5 +1,6 @@
 import { execFileSync } from 'child_process'
-import { readFileSync } from 'fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync } from 'fs'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import { AGENT_HOOK_EVENTS, failedLabel, parseAgentSignal, STOP_FAILURE_KINDS } from './agentHookSignal'
@@ -59,7 +60,7 @@ const PLUGIN = join(__dirname, '..', '..', 'claude-plugin')
 describe('the Claude Code plugin', () => {
   const hooks = JSON.parse(readFileSync(join(PLUGIN, 'hooks', 'hooks.json'), 'utf8')).hooks as Record<
     string,
-    Array<{ matcher: string; hooks: Array<{ type: string; command: string; timeout: number }> }>
+    Array<{ matcher: string; hooks: Array<{ type: string; command: string; args?: string[]; timeout: number }> }>
   >
 
   it('has a manifest Claude Code accepts', () => {
@@ -75,9 +76,17 @@ describe('the Claude Code plugin', () => {
           expect(h.type).toBe('command')
           // Small: blocking events wait for it.
           expect(h.timeout).toBeLessThanOrEqual(10)
-          const m = /^"\$\{CLAUDE_PLUGIN_ROOT\}\/hook\.cmd" ([a-z_ ]+)$/.exec(h.command)
-          expect(m, h.command).not.toBeNull()
-          return { event, matcher: e.matcher, args: m![1] }
+          // EXEC FORM, no shell (#131 review): without Git Bash, Claude Code
+          // runs a hook's command string through PowerShell, which reads
+          // `"path\hook.cmd" working` as a ParserError and shows a hook error
+          // on every event (MEASURED on 2.1.289). cmd.exe takes no shell; `call`
+          // keeps cmd from stripping the quotes off a folder with brackets in
+          // it, and the slash is kept since Claude drops a `\` before the name.
+          expect(h.command).toBe('cmd.exe')
+          const [d, c, call, script, ...rest] = h.args ?? []
+          expect([d, c, call, script]).toEqual(['/d', '/c', 'call', '$' + '{CLAUDE_PLUGIN_ROOT}/hook.cmd'])
+          for (const a of rest) expect(a).toMatch(/^[a-z_]+$/)
+          return { event, matcher: e.matcher, args: rest.join(' ') }
         })
       )
     )
@@ -90,10 +99,20 @@ describe('the Claude Code plugin', () => {
     expect(Object.keys(hooks)).not.toContain('SessionEnd')
   })
 
-  // cmd is on every Windows machine this runs on, CI's runner included.
-  it.runIf(process.platform === 'win32')('prints valid JSON with the sequence the parser reads, for every row', () => {
-    for (const args of new Set(AGENT_HOOK_EVENTS.map((r) => r.args))) {
-      const out = execFileSync('cmd.exe', ['/d', '/c', join(PLUGIN, 'hook.cmd'), ...args.split(' ')], {
+  // cmd is on every Windows machine this runs on, CI's runner included. Each
+  // hook is run AS WRITTEN (its command and args, the plugin root put in the
+  // way Claude Code does) from a copy in a folder with a space and brackets:
+  // `cmd /c "...(x)\hook.cmd"` strips its own quotes there and fails, which
+  // `call` is in the args to prevent (MEASURED with Claude Code 2.1.289).
+  it.runIf(process.platform === 'win32')('prints valid JSON with the sequence the parser reads, for every hook', () => {
+    const root = join(mkdtempSync(join(tmpdir(), 'pt-hooks-')), 'Prism (x) T')
+    mkdirSync(root)
+    copyFileSync(join(PLUGIN, 'hook.cmd'), join(root, 'hook.cmd'))
+    const placeholder = '$' + '{CLAUDE_PLUGIN_ROOT}'
+    const all = Object.values(hooks).flatMap((entries) => entries.flatMap((e) => e.hooks))
+    for (const h of all) {
+      const args = (h.args ?? []).slice(4).join(' ')
+      const out = execFileSync(h.command, (h.args ?? []).map((a) => a.replace(placeholder, root)), {
         encoding: 'utf8',
         input: '{"hook_event_name":"Stop"}',
         windowsHide: true

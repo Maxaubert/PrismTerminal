@@ -1,5 +1,5 @@
 {
-  "description": "Prism Terminal reads the agent state from these. Each prints one fixed OSC 777 line through terminalSequence.",
+  "description": "Prism Terminal reads the agent state from these. Each runs hook.cmd, which prints one fixed OSC 777 line through terminalSequence. Exec form (args): no shell, so it runs the same with Git Bash or PowerShell, in a folder with spaces or brackets.",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -7,7 +7,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" working",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "working"
+            ],
             "timeout": 5
           }
         ]
@@ -19,7 +26,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" working",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "working"
+            ],
             "timeout": 5
           }
         ]
@@ -31,7 +45,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" working",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "working"
+            ],
             "timeout": 5
           }
         ]
@@ -43,7 +64,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" working",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "working"
+            ],
             "timeout": 5
           }
         ]
@@ -55,7 +83,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" working",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "working"
+            ],
             "timeout": 5
           }
         ]
@@ -67,7 +102,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" working",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "working"
+            ],
             "timeout": 5
           }
         ]
@@ -79,7 +121,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" question",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "question"
+            ],
             "timeout": 5
           }
         ]
@@ -91,7 +140,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" question",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "question"
+            ],
             "timeout": 5
           }
         ]
@@ -103,7 +159,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" question",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "question"
+            ],
             "timeout": 5
           }
         ]
@@ -113,7 +176,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" question",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "question"
+            ],
             "timeout": 5
           }
         ]
@@ -123,7 +193,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" question",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "question"
+            ],
             "timeout": 5
           }
         ]
@@ -135,7 +212,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" done",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "done"
+            ],
             "timeout": 5
           }
         ]
@@ -147,7 +231,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed rate_limit",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "rate_limit"
+            ],
             "timeout": 5
           }
         ]
@@ -157,7 +249,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed overloaded",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "overloaded"
+            ],
             "timeout": 5
           }
         ]
@@ -167,7 +267,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed authentication_failed",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "authentication_failed"
+            ],
             "timeout": 5
           }
         ]
@@ -177,7 +285,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed oauth_org_not_allowed",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "oauth_org_not_allowed"
+            ],
             "timeout": 5
           }
         ]
@@ -187,7 +303,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed account_on_hold",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "account_on_hold"
+            ],
             "timeout": 5
           }
         ]
@@ -197,7 +321,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed billing_error",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "billing_error"
+            ],
             "timeout": 5
           }
         ]
@@ -207,7 +339,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed invalid_request",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "invalid_request"
+            ],
             "timeout": 5
           }
         ]
@@ -217,7 +357,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed model_not_found",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "model_not_found"
+            ],
             "timeout": 5
           }
         ]
@@ -227,7 +375,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed server_error",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "server_error"
+            ],
             "timeout": 5
           }
         ]
@@ -237,7 +393,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed max_output_tokens",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "max_output_tokens"
+            ],
             "timeout": 5
           }
         ]
@@ -247,7 +411,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed cloud_credential_error",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "cloud_credential_error"
+            ],
             "timeout": 5
           }
         ]
@@ -257,7 +429,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed unknown",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed",
+              "unknown"
+            ],
             "timeout": 5
           }
         ]
@@ -267,7 +447,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hook.cmd\" failed",
+            "command": "cmd.exe",
+            "args": [
+              "/d",
+              "/c",
+              "call",
+              "${CLAUDE_PLUGIN_ROOT}/hook.cmd",
+              "failed"
+            ],
             "timeout": 5
           }
         ]

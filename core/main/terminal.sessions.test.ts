@@ -127,4 +127,19 @@ describe('the warm shell (#2)', () => {
     expect(made).toHaveLength(2)
     expect(made[1].killed).toBe(false)
   })
+
+  it('a warm shell started with the other plugin answer makes way, and the next tab adopts the new one (#131)', async () => {
+    const on = { dir: 'C:\\PT\\claude-plugin', on: true }
+    const off = { dir: on.dir, on: false }
+    await prewarmShell('C:\\home', 'pwsh', on) // W1, with the plugin
+    await prewarmShell('C:\\home', 'pwsh', off) // switched off: W1 goes, W2 comes without
+    expect(made).toHaveLength(2)
+    expect(made[0].killed).toBe(true)
+    expect(await spawnTerm('tab', 'C:\\home', 'pwsh', send, undefined, off)).toBe(true) // adopts W2
+    expect(made).toHaveLength(2)
+    await prewarmShell('C:\\home', 'pwsh', off) // W3, the same answer
+    await prewarmShell('C:\\home', 'pwsh', off) // kept, nothing new
+    expect(made).toHaveLength(3)
+    expect(made[2].killed).toBe(false)
+  })
 })

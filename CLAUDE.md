@@ -583,7 +583,9 @@ the owner's own call, #99.)
   that"; spec `docs/superpowers/specs/2026-10-05-agent-hooks-design.md`, evidence in the research
   folder's `prism-terminal/2026-10-05-agent-hooks-inventory.md`). `core/claude-plugin` is a Claude Code
   plugin: each hook in `hooks/hooks.json` runs `hook.cmd`, a static echo (blocking events wait for it;
-  MEASURED 20-100 ms, so no node), whose `terminalSequence` Claude writes into its OWN terminal as
+  MEASURED 20-100 ms, so no node), in EXEC FORM (`cmd.exe` + `args` `/d /c call <root>/hook.cmd`): a
+  command string runs through PowerShell where Git Bash is missing and is a ParserError there, and
+  without `call` a plugin folder with brackets fails (both MEASURED, review of #131). Its `terminalSequence` Claude writes into its OWN terminal as
   `ESC]777;prism-agent;state=working|question|done|failed[;kind=<StopFailure error>]BEL`. In-band: no
   listener, no tab ids, and `claude -p` / SDK runs never write it (MEASURED). SessionStart/End are left
   out (their bytes reached the pty 1 of 3 and 0 of 3). Main hands a shell the plugin through
