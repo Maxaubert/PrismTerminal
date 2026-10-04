@@ -14,6 +14,7 @@ import { TabStrip } from './components/TabStrip'
 import TitleBar, { TitleButtons } from './components/TitleBar'
 import { useTitleBarMode } from './lib/titleBarPrefs'
 import EmptyState from './components/EmptyState'
+import type { SettingsPage } from './components/Settings'
 import { Dialog } from './components/Dialog'
 import {
   addTab,
@@ -159,6 +160,16 @@ export default function App(): JSX.Element {
   const active = tabs.find((t) => t.id === activeId) ?? null
   // A placeholder has no shell yet (#106): nothing that needs one may see it.
   const activeShell = active && active.kind !== 'settings' && !active.pending ? active : null
+  // The Settings tab keeps its page while it stays open (#123; owner,
+  // 2026-10-04: "if i go from settings to another tab then to settings again
+  // it should be the same tab it was on ... unless i close the settings tab
+  // and reopen"). The page unmounts behind another tab, so App holds it, and
+  // closing the tab is what forgets it.
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>('general')
+  const settingsOpen = tabs.some((t) => t.kind === 'settings')
+  // Adjusted while rendering, React's own pattern for state that follows other
+  // state: no effect, so no frame painted with the stale page.
+  if (!settingsOpen && settingsPage !== 'general') setSettingsPage('general')
   // Tabs still coming back to an agent wear a ring in the strip (#106): the
   // placeholders, then the sessions resuming until their agent has drawn.
   const resumingNow = useSyncExternalStore(onResumingChange, resumingIds)
@@ -670,7 +681,7 @@ export default function App(): JSX.Element {
         {active?.kind === 'settings' && (
           <div className="h-full min-h-0 w-full bg-[var(--p-bg)]">
             <Suspense fallback={null}>
-              <Settings />
+              <Settings page={settingsPage} onPage={setSettingsPage} />
             </Suspense>
           </div>
         )}
