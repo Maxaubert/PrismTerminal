@@ -1191,6 +1191,31 @@ const scenarios = {
     await closeApp(app)
   },
 
+  // SETTINGS KEEPS ITS PAGE WHILE ITS TAB STAYS OPEN (#123; owner,
+  // 2026-10-04): another tab in front and back finds the page that was left;
+  // closing the Settings tab and opening it again starts on General.
+  async settingsPage(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    ok(await until(async () => (await tabLabels(page)).length === 1), 'one tab open')
+    const current = () =>
+      page.evaluate(() => document.querySelector('[data-settings-tab][aria-current="page"]')?.getAttribute('data-settings-tab') ?? null)
+    const settingsTab = page.locator('[data-tab]', { hasText: 'Settings' })
+    await page.locator('[data-title-settings]').click()
+    ok(await until(async () => (await current()) === 'general'), 'Settings opens on General')
+    await page.locator('[data-settings-tab="dictation"]').click()
+    ok(await until(async () => (await current()) === 'dictation'), 'Dictation picked')
+    await page.locator('[data-tab]').first().click()
+    ok(await until(async () => (await current()) === null), 'the shell is in front, Settings unmounted')
+    await settingsTab.click()
+    ok(await until(async () => (await current()) === 'dictation'), `back on Settings it is still Dictation (${await current()})`)
+    await settingsTab.locator('[data-tab-close]').click({ force: true })
+    ok(await until(async () => (await settingsTab.count()) === 0), 'the Settings tab closed')
+    await page.locator('[data-title-settings]').click()
+    ok(await until(async () => (await current()) === 'general'), `opened again it starts on General (${await current()})`)
+    await closeApp(app)
+  },
+
   // LAUNCH WITH RESTORED AGENT TABS (#106; spec
   // docs/superpowers/specs/2026-09-30-launch-skeleton-design.md; owner,
   // 2026-09-30: "you see the no tab screen (false, there are three tabs
