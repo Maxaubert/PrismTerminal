@@ -27,13 +27,22 @@ so an update never silently changes what an existing user sees; the bridge to ma
 
 - **THE TERMINAL'S SETTINGS ARE THE CORE'S TOO** (owner, 2026-09-19: "they shouldn't be synced in
   terms of personalization, but the setting names, types, how they function and so on should be the
-  same"). `core/renderer/settings`: the field primitives, `TerminalAppearanceSettings` (theme wall and
-  editor, font, size, acrylic, the two indicator colours) and the rows `ShellSetting` /
-  `AgentIndicatorSetting`. Each app composes its OWN page round them (`components/Settings.tsx` here
-  is only the page plus this app's rows: new tabs, Explorer menu, window edges, accent, version). Values are per app (own
-  userData), never shared. `settings/options.ts` lists every terminal option by id; a unit test holds
-  the list and the sections together, and each app's e2e (`options`) asserts its page shows that
-  list and no terminal-looking row of its own. A row outside the list is a fork.
+  same"). `core/renderer/settings`: the field primitives and, since the GROUPED CARDS redesign
+  (#134, 2026-10-05; spec `docs/superpowers/specs/2026-10-05-settings-redesign-design.md`), the
+  whole frame (rail, Find a setting, sections, rows, icons, search, flash: `layout/`) and the
+  terminal's sections (`sections/`: Shell, Text, Theme, Tab marks, Claude Code, Mark colours,
+  Command help, the Dictation page). Each app decides which page holds a section: here
+  `components/settings/` is Appearance (Window, then the Theme section with Background and Accent
+  in its slot), Terminal (Shell, Opening terminals, Text, Command help), Agents (Tab marks with the
+  taskbar row, Claude Code, Mark colours), Dictation, About; this app's own rows are the closed list
+  `appOptions.ts`. Values are per app (own userData), never shared. The core lists
+  (`options.ts`, `dictationOptions.ts`, `helpOptions.ts`) name every row's section, icon, subtext
+  and search words as FLAT entries (Prism's gate reads them as text); a unit test holds the lists
+  and the sections together, and each app's e2e (`options`) asserts its page shows the lists, its
+  own rows and nothing else. A row outside both is a fork. Every row is in Find a setting's index
+  (`settingsIndex.ts`), and the `settingsSearch` e2e opens each one by its label. The old
+  components (`TerminalAppearanceSettings` and friends) stay exported, unchanged, until Prism has
+  moved (spec 3.0); do not build on them.
 - **THIS IS A PRODUCT FOR OTHER PEOPLE** (owner, 2026-09-19: "this isn't an app for just me. keep
   that in mind with all things you implement"). A feature bundles or fetches what it needs and works
   on a fresh Windows install: never lean on the owner's GPU, tools, caches or installed runtimes.
@@ -172,8 +181,9 @@ so an update never silently changes what an existing user sees; the bridge to ma
   (it failed with 2 copies before the fix).
 - **THE TITLE BAR CAN BE HIDDEN** (#91; owner, 2026-09-28: "add a no title bar option for pt in
   appearance as well, not theme related", and of the shapes offered, "tabs in the top row").
-  Settings > Appearance > Title bar (`title-bar`, `prism.window.titleBar`, `lib/titleBarPrefs.ts`),
-  above the theme wall: **Shown** (the DEFAULT, the window as it was) or **Hidden**: one row, the
+  Settings > Appearance > Show title bar (`title-bar`, `prism.window.titleBar`, `lib/titleBarPrefs.ts`),
+  above the theme wall, a SWITCH since #134 over the same stored values: on is **Shown** (the
+  DEFAULT, the window as it was), off is **Hidden**: one row, the
   tab strip (`inTitleRow`) with `TitleButtons` (chip, help, cog, window buttons) at its end, the
   strip's empty space the drag handle; with no tabs the row is the handle and the buttons. This
   app's row. The `titleBar` e2e measures both and the start screen.
@@ -287,14 +297,18 @@ so an update never silently changes what an existing user sees; the bridge to ma
   symbols other than comma and dot, no mentioning of specific keys or tips"; "the terminal
   settings pages in Prism and Prism Terminal should be the same in terms of order"). Every hint,
   sub and note is checked by `core/shared/settingsCopy.ts` (a test in the core and one per app).
-  `TERMINAL_OPTIONS` is in display order and the `options` e2e reads the page top to bottom against
-  it.
+  Since #134 a subtext is ONE line of at most eight words (`subTooLong`) and a label passes the
+  symbol rule (`labelProblem`), both held for the new files only (the legacy ones run longer).
+  `TERMINAL_OPTIONS` is in display order WITHIN EACH SECTION, and the `options` e2e reads every core
+  section (`[data-settings-section]`) against it; which page holds a section is each app's.
 - **WHAT NO THEME OWNS SITS ABOVE THE THEME WALL** (owner, 2026-09-28: font and font size "should
   transcend" the theme's save, "so changing a theme should not reset the font and font size or if
   you use a minimal or full agent indicator, or edges. those options should be above the themes").
-  Appearance runs: the host's `beforeTheme` (here Tab width, Edges), Font, Font size, Agent
-  indicator; then the theme wall and Save changes; then what a theme SETS: the host's `afterTheme`
-  (here Background, Accent), Acrylic, the two indicator colours. A theme switch and Save
+  Since #134 Appearance runs: the Window section (Tab width, Show title bar, Panel edges), then the
+  Theme section (the theme row with Save changes, the wall, what a theme SETS: Background, Accent,
+  Acrylic). The font and its size are Terminal's Text section; the indicator and the agent colours
+  are on Agents, where Mark colours carries the SAME Save changes (both save the whole setup and
+  light together, `theme/useTermSetup.ts`). A theme switch and Save
   as Custom leave the font and its size alone (`termExtraDefaults`, `resetTermExtras`,
   `applyCustomExtras`; an older Custom's `font`/`fontPct` are ignored). Font size is 50% to 200%
   in tens; a saved size off that list reads as the nearest step. `themeSwitch` e2e holds it all.
@@ -359,7 +373,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
   `shared/help/`, `renderer/lib/helpPrefs.ts`, `renderer/components/HelpPanel.tsx` (props only),
   `renderer/settings/Help.tsx` + `helpOptions.ts`, and `writeClipboard` on the bridge. This app's
   part is the way in: `F1`, the ? in the title bar, "Command help" in the terminal's right-click
-  menu, the row in Settings > General. The rules that must not regress:
+  menu, the row in Settings > Terminal. The rules that must not regress:
   - **IT NEVER INSERTS AND NEVER RUNS** (owner, 2026-09-19: "picking a command in the help panel
     does NOT insert it into the shell"). The component is handed the clipboard and nothing else: no
     session id, no `termInput`, no bridge. It is NOT a fifth exception to "the app never types into
@@ -616,7 +630,7 @@ the owner's own call, #99.)
   output arrives while idle; a rewording in a Claude update is a change there. In Minimal, EVERY working tab draws its OWN bar (owner, 2026-10-03, reverting the
   2026-09-28 shared bar across neighbours: "i want that to be one for each tab, like it was
   before"). The taskbar button's overlay icon shows
-  how many tabs carry a mark (`taskbarBadge.ts`, `window:badge`, Settings > General switch, on):
+  how many tabs carry a mark (`taskbarBadge.ts`, `window:badge`, Settings > Agents switch, on):
   a dark disc with a white number, whatever the marks (owner, 2026-09-29: "too big and it's
   green, it should be grey with white number"; 2026-10-01, beside ChatGPT's: "so much clearer and high
   res, fix that", #108). Drawn at the display's PHYSICAL size (`badgePixels`, 36 at 225%) and handed
@@ -717,8 +731,10 @@ the owner's own call, #99.)
   pressed segment (`SEGMENT_ON`), a switch that is on (`SWITCH_ON`, track in the soft ink, knob in
   the ground) and dictation's buttons are greys from the theme's own tokens, in `core/` so Prism
   follows. Save changes and Save as Custom keep the accent. Still accented, since they are not
-  buttons: Reset links, the chosen theme card, the dropdown's chosen item, the rail's page, focus
-  rings, progress, the hotkey capture while it listens. `neutralControls.test.ts` holds the
+  buttons: Reset links, the chosen theme card, the dropdown's chosen item, the badges, progress, the
+  hotkey capture while it listens, a found row's flash. NOT the rail's chosen page any more (#134,
+  owner: no accent bar): a grey `--p-hover-hi` fill; and focus in the new rows is a fill and a
+  lighter edge, not an accent ring (Prism #272). `neutralControls.test.ts` holds the
   source; the `accent` e2e asserts a picked accent moves none of the three controls.
 - **PT DEFAULT IS THE DEFAULT THEME HERE, AND FIRST IN THE WALL** (owner, 2026-09-22, handing over the palette he had saved as
   Custom: "let this be the default theme ... for prism terminal"): Wombat's colours on #121212, the

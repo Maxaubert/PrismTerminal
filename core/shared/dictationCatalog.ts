@@ -116,7 +116,9 @@ export const ENGINE = {
  *
  * The notes say who a model is FOR and leave "Recommended" and "needs the GPU
  * pack" to the badges the manager draws from `recommended` and `needsGpu`: a
- * note repeating a badge is the same thing said twice on one row.
+ * note repeating a badge is the same thing said twice on one row. Each note is
+ * a row's subtext, so at most eight plain words (the grouped cards redesign,
+ * 2026-10-05, which also dropped "CUDA 12.4": a row says what it does).
  */
 export const CATALOG: readonly CatalogEntry[] = [
   {
@@ -134,7 +136,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   {
     id: 'small',
     label: 'Whisper Small',
-    note: 'More accurate without a GPU, and about three times slower than Base.',
+    note: 'More accurate, about three times slower.',
     url: model('ggml-small.bin'),
     bytes: 487601967,
     sha256: '1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b',
@@ -150,7 +152,7 @@ export const CATALOG: readonly CatalogEntry[] = [
     // detects which by itself, so the picker has nothing to tell it.
     id: 'parakeet-v3',
     label: 'Parakeet v3',
-    note: 'Fast and accurate on any PC, in fewer languages.',
+    note: 'Fast and accurate, in fewer languages.',
     url: parakeet('ggml-parakeet-tdt-0.6b-v3-q8_0.bin'),
     bytes: 668757119,
     sha256: '4d64e9e96c2792186d072fde0034df0ad670cf680a2f53069052ead827fd600e',
@@ -161,7 +163,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   {
     id: 'large-v3-turbo',
     label: 'Whisper Large v3 Turbo',
-    note: 'Close to Large v3 at about half the download.',
+    note: 'Close to Large v3 at half the download.',
     url: model('ggml-large-v3-turbo.bin'),
     bytes: 1624555275,
     sha256: '1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69',
@@ -184,7 +186,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   {
     id: 'tiny',
     label: 'Whisper Tiny',
-    note: 'For the automated tests, small enough to fetch once and run anywhere.',
+    note: 'For the automated tests only.',
     url: model('ggml-tiny.bin'),
     bytes: 77691713,
     sha256: 'be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21',
@@ -196,7 +198,7 @@ export const CATALOG: readonly CatalogEntry[] = [
     // Parakeet engine on a 356 MB fetch (cached once) rather than 669 MB.
     id: 'parakeet-v3-q4',
     label: 'Parakeet v3 (4 bit)',
-    note: 'For the automated tests, the smallest Parakeet v3 file.',
+    note: 'For the automated tests only.',
     url: parakeet('ggml-parakeet-tdt-0.6b-v3-q4_0.bin'),
     bytes: 355615679,
     sha256: 'aa7fe2f5fb47d863ca23e8b1d490632d63a2599f515268b6d6bd656158dad45e',
@@ -208,7 +210,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   {
     id: 'gpu-pack',
     label: 'NVIDIA GPU acceleration',
-    note: 'The official CUDA 12.4 build, which runs the large models in under a second.',
+    note: 'Large models answer in under a second.',
     // ONE pack for every NVIDIA card (measured: it runs on an RTX 5090, a card
     // newer than CUDA 12.4, after a one-time 9.1 s kernel compile), which is
     // why the 273 MB CUDA 11.8 pack of the same release is not catalogued.
