@@ -230,7 +230,11 @@ export function SettingsFrame({
           <input
             ref={field}
             data-settings-find
-            data-owns-escape
+            // ONLY WHILE IT HOLDS TEXT: a host's own Escape yields to whatever
+            // wears this (Prism's App tests for it with querySelector), and a
+            // field that is always on the page would take Escape from the host
+            // for good. An empty field lets Escape through (spec 1.3).
+            data-owns-escape={query ? '' : undefined}
             type="search"
             value={query}
             placeholder="Find a setting"

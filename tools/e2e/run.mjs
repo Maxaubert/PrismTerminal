@@ -2752,6 +2752,17 @@ const scenarios = {
       await page.locator('[data-title-settings]').click()
       await find.waitFor({ timeout: 8000 })
       ok((await status.count()) === 0, 'with nothing typed there is no status line')
+      // An empty field lets Escape through to the host: it wears the
+      // owns-Escape mark only while it holds text (Prism's App yields to any
+      // element wearing it, and this field is always on the page).
+      ok((await find.getAttribute('data-owns-escape')) === null, 'an empty field does not claim Escape')
+      await find.fill('font')
+      ok((await find.getAttribute('data-owns-escape')) !== null, 'a field holding text does')
+      await find.fill('')
+      // Every row's control is a group named by the row's label, so a
+      // segmented control's options say which setting they set.
+      await gotoPref(page, 'tab-width')
+      ok((await page.locator('[data-pref="tab-width"] [role="group"]').getAttribute('aria-label')) === labelOf['tab-width'], 'a row names its controls by its label')
       // EVERY ROW, BY ITS OWN LABEL (spec 1.6: the index can drift from the
       // page, and opening every entry is what catches it).
       const misses = []

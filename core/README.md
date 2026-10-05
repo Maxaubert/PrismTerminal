@@ -164,7 +164,9 @@ fourth, under the same bar. Spec and plan:
   section (`[data-settings-section]`).
 - DOM hooks: `[data-settings-page]` on the frame, `[data-settings-tab=<page>]`
   on rail buttons (`aria-current="page"` on the chosen one, a GREY
-  `--p-hover-hi` fill, never the accent), `[data-settings-find]`,
+  `--p-hover-hi` fill, never the accent), `[data-settings-find]` (it wears
+  `data-owns-escape` only while it holds text, so an empty field lets Escape
+  through to the host), a row's controls in a `role="group"` named by its label,
   `[data-settings-section=<id>]`, `[data-settings-panel]`,
   `[data-pref=<id>]` + `[data-setting-row]` on rows, `[data-term-wall]` on the
   theme wall's block, `[data-flash]` while a found row flashes, every

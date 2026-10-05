@@ -127,7 +127,15 @@ export function SettingRow({
         </label>
         {sub && <Subtext id={subId} text={sub} warn={warn} />}
       </div>
-      <div data-row-control className={`flex items-center justify-end gap-2.5 justify-self-end ${dim}`}>
+      {/* A group named by the row's label: a segmented control's buttons are
+          named by their options alone ("Dynamic"), so without this a screen
+          reader never hears which setting they belong to (spec 1.3). */}
+      <div
+        data-row-control
+        role="group"
+        aria-label={label}
+        className={`flex items-center justify-end gap-2.5 justify-self-end ${dim}`}
+      >
         {children}
       </div>
     </div>
