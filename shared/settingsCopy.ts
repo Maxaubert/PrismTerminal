@@ -64,3 +64,41 @@ function literals(expr: string): string[] {
   }
   return out
 }
+
+// THE GROUPED CARDS REDESIGN (2026-10-05) adds rules BESIDE the ones above,
+// never inside them: Prism's unit suite calls `copyProblem` and
+// `settingsDescriptions` over its current pages, whose hints run longer, and
+// the core's legacy rows are as long. So both keep today's behaviour exactly,
+// and the new files (the option lists, `layout/`, `sections/`, each app's
+// `appOptions.ts`) are held to these as well.
+
+/** A subtext is ONE short line: at most this many words. */
+export const SUB_MAX_WORDS = 8
+
+/** Whether a subtext runs past the limit. */
+export function subTooLong(text: string): boolean {
+  return text.trim().split(/\s+/).filter(Boolean).length > SUB_MAX_WORDS
+}
+
+/** What is wrong with a row LABEL, or null: the symbol rule only. "Tab
+ *  width" names a tab, not the Tab key, so a label is not checked for key
+ *  names. */
+export function labelProblem(text: string): string | null {
+  if (ALLOWED.test(text)) return null
+  const bad = [...new Set([...text].filter((c) => !/[A-Za-z0-9 ,.]/.test(c)))].join(' ')
+  return `uses symbols other than comma and full stop: ${bad}`
+}
+
+/**
+ * The `label:` and `sub:` string fields of an option list or an app's
+ * `appOptions.ts`. Separate from `settingsDescriptions`, which Prism points at
+ * files full of `label:` fields that are not setting labels.
+ */
+export function settingsListCopy(source: string): { labels: string[]; subs: string[] } {
+  const LABEL = /\blabel:\s*(['"`])((?:\\.|(?!\1).)*)\1/g
+  const SUB = /\bsub:\s*(['"`])((?:\\.|(?!\1).)*)\1/g
+  return {
+    labels: [...source.matchAll(LABEL)].map((m) => m[2]),
+    subs: [...source.matchAll(SUB)].map((m) => m[2])
+  }
+}

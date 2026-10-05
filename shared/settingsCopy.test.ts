@@ -1,7 +1,7 @@
-import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { copyProblem, settingsDescriptions } from './settingsCopy'
+import { copyProblem, labelProblem, settingsDescriptions, settingsListCopy, subTooLong } from './settingsCopy'
 
 describe('copyProblem', () => {
   it('passes plain words with commas and full stops', () => {
@@ -27,18 +27,69 @@ describe('settingsDescriptions', () => {
   })
 })
 
+describe('the grouped cards rules (2026-10-05)', () => {
+  it('holds a subtext to eight words', () => {
+    expect(subTooLong('Lines between panels and around the window.')).toBe(false)
+    expect(subTooLong('Speech to text on this PC, never sent.')).toBe(false)
+    expect(subTooLong('The colour of the chosen page, buttons, progress bar and visualizer.')).toBe(true)
+  })
+  it('checks a label for symbols only, never for key names', () => {
+    expect(labelProblem('Tab width')).toBeNull()
+    expect(labelProblem('Exact status from Claude Code')).toBeNull()
+    expect(labelProblem("The theme's colour")).not.toBeNull()
+  })
+  it('reads the label and sub fields of a list, and nothing else', () => {
+    const src = `{ id: 'a', label: 'Tab width', sub: 'Sized to the name.', keywords: 'x y' }\n{ id: 'b', label: "Two", sub: \`Three.\` }`
+    expect(settingsListCopy(src)).toEqual({ labels: ['Tab width', 'Two'], subs: ['Sized to the name.', 'Three.'] })
+  })
+})
+
+/** Every file under a folder, subfolders included. */
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((f) => {
+    const p = join(dir, f)
+    return statSync(p).isDirectory() ? walk(p) : [p]
+  })
+}
+
 describe("the core's own settings", () => {
+  const dir = join(__dirname, '..', 'renderer', 'settings')
+  const source = walk(dir).filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+
   it('describe every setting in plain words', () => {
-    const dir = join(__dirname, '..', 'renderer', 'settings')
-    const files = [
-      ...readdirSync(dir).filter((f) => f.endsWith('.tsx')).map((f) => join(dir, f)),
-      join(__dirname, 'dictationCatalog.ts')
-    ]
+    const files = [...source, join(__dirname, 'dictationCatalog.ts')]
     const problems = files.flatMap((f) =>
       settingsDescriptions(readFileSync(f, 'utf8'))
         .map((text) => ({ f, text, problem: copyProblem(text) }))
         .filter((p) => p.problem)
     )
     expect(problems).toEqual([])
+  })
+
+  // THE WORD LIMIT IS FOR THE NEW FILES ONLY: the lists, `layout/`,
+  // `sections/` and the catalogue's notes, never the legacy components kept
+  // for the transition, whose hints run longer.
+  it('keep every new label plain and every new subtext to eight words', () => {
+    const fresh = source.filter((f) => {
+      const r = relative(dir, f).replace(/\\/g, '/')
+      return /^(layout|sections)\//.test(r) || ['options.ts', 'dictationOptions.ts', 'helpOptions.ts', 'coreIndex.ts'].includes(r)
+    })
+    expect(fresh.length).toBeGreaterThan(10)
+    const long: string[] = []
+    const bad: string[] = []
+    for (const f of fresh) {
+      const src = readFileSync(f, 'utf8')
+      const { labels, subs } = settingsListCopy(src)
+      for (const t of [...subs, ...settingsDescriptions(src)]) {
+        if (subTooLong(t)) long.push(t)
+        if (copyProblem(t)) bad.push(t)
+      }
+      for (const t of labels) if (labelProblem(t)) bad.push(t)
+    }
+    // The model notes are each a row's subtext on the new page.
+    for (const t of settingsDescriptions(readFileSync(join(__dirname, 'dictationCatalog.ts'), 'utf8')))
+      if (subTooLong(t)) long.push(t)
+    expect(long).toEqual([])
+    expect(bad).toEqual([])
   })
 })
