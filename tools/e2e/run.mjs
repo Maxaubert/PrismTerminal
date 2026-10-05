@@ -159,6 +159,37 @@ const tabLabels = (page) =>
     [...document.querySelectorAll('[data-tab]')].map((t) => (t.textContent ?? '').trim())
   )
 
+/**
+ * WHERE EACH SETTINGS ROW LIVES (2026-10-05, the grouped cards redesign): the
+ * page of the rail that holds it, as `components/settings/settingsIndex.ts`
+ * places it. Scenarios reach a row through `gotoPref`, never a fixed tab id,
+ * so a row moving between pages is one line here.
+ */
+const PREF_PAGE = {
+  'tab-width': 'appearance', 'title-bar': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
+  'window-background': 'appearance', 'window-accent': 'appearance', 'term-acrylic': 'appearance',
+  'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
+  'term-font': 'terminal', 'help-enabled': 'terminal',
+  'agent-indicator': 'agents', 'agent-done-on': 'agents', 'agent-question-on': 'agents', 'agent-failed-on': 'agents',
+  'taskbar-badge': 'agents', 'agent-hooks': 'agents', 'agent-color': 'agents', 'agent-done-color': 'agents',
+  'agent-question-color': 'agents',
+  'dictation-enabled': 'dictation', 'dictation-mode': 'dictation', 'dictation-hotkey': 'dictation', 'dictation-mic': 'dictation',
+  'dictation-language': 'dictation', 'dictation-pause-media': 'dictation', 'dictation-sounds': 'dictation',
+  'dictation-model': 'dictation', 'dictation-gpu': 'dictation',
+  'app-version': 'about'
+}
+
+/** Open Settings if it is not in front, go to the page that holds a row, and
+ *  wait for the row. Returns its locator. */
+async function gotoPref(page, id) {
+  if (!PREF_PAGE[id]) throw new Error(`gotoPref: no page known for ${id}`)
+  if ((await page.locator('[data-settings-page]').count()) === 0) await page.locator('[data-title-settings]').click()
+  await page.locator(`[data-settings-tab="${PREF_PAGE[id]}"]`).click()
+  const row = page.locator(`[data-pref="${id}"]`).first()
+  await row.waitFor({ timeout: 10000 })
+  return row
+}
+
 /** Wait for a prompt, then type a line into the shell in front. */
 async function typeLine(page, line) {
   await page.waitForFunction(
@@ -341,8 +372,8 @@ const scenarios = {
     ok(!!mark.bar && mark.bar === mark.accent, `and its line is the theme's accent (${mark.bar} vs ${mark.accent})`)
     // The finished mark is Full's alone: turn it up, the way a user would.
     await page.locator('[data-title-settings]').click()
-    // On Appearance, beside its two colours (2026-09-22).
-    await page.locator('[data-settings-tab="appearance"]').click()
+    // On Agents, with the marks and their colours (2026-10-05).
+    await gotoPref(page, 'agent-indicator')
     await page.locator('[data-pref="agent-indicator"] [data-seg="full"]').click()
     await page.locator('[data-tab]').nth(1).click()
     ok(
@@ -458,7 +489,7 @@ const scenarios = {
       // Switched off, the finished mark goes, and the badge has nothing to count.
       await page.evaluate(() => localStorage.setItem('prism.term.agentDoneOn', '0'))
       await page.locator('[data-title-settings]').click()
-      await page.locator('[data-settings-tab="appearance"]').click()
+      await gotoPref(page, 'agent-done-on')
       const sw = page.locator('[data-pref="agent-done-on"] [role="switch"]')
       if ((await sw.getAttribute('aria-checked')) === 'true') await sw.click()
       ok(!!(await until(async () => (await badge()) === '', 4000, 50)), 'with the Finished indicator off, nothing is counted')
@@ -545,7 +576,7 @@ const scenarios = {
 
       // THE FAILED SWITCH: off, the line goes and the turn reads as finished.
       await page.locator('[data-title-settings]').click()
-      await page.locator('[data-settings-tab="appearance"]').click()
+      await gotoPref(page, 'agent-failed-on')
       const failedSwitch = page.locator('[data-pref="agent-failed-on"] [role="switch"]')
       ok((await failedSwitch.getAttribute('aria-checked')) === 'true', 'the Failed indicator is on by default')
       await failedSwitch.click()
@@ -670,6 +701,7 @@ const scenarios = {
     // The title bar's cog is the way into Settings (there is no menu).
     await page.locator('[data-title-settings]').click()
     ok((await page.locator('[data-title-menu]').count()) === 0, 'the title bar has a settings cog and no menu')
+    await gotoPref(page, 'newtab-mode')
     ok(
       (await page.locator('[data-pref="newtab-mode"] [data-seg="folder"]').getAttribute('aria-pressed')) === 'true',
       'opening in a folder is the default'
@@ -1325,8 +1357,11 @@ const scenarios = {
     await page.locator('[data-settings-tab="appearance"]').click()
     const row = page.locator('[data-pref="title-bar"]')
     await row.waitFor({ timeout: 8000 })
-    await row.locator('[data-seg="hidden"]').click()
-    ok((await page.evaluate(() => localStorage.getItem('prism.window.titleBar'))) === 'hidden', 'Hidden is stored')
+    // A switch since the grouped cards (2026-10-05): on is Shown, the default.
+    const flip = row.locator('[role="switch"]')
+    ok((await flip.getAttribute('aria-checked')) === 'true', 'Show title bar is on by default')
+    await flip.click()
+    ok((await page.evaluate(() => localStorage.getItem('prism.window.titleBar'))) === 'hidden', 'switched off, Hidden is stored')
     await page.locator('[data-tab]').first().click()
     await sleep(300)
     const hidden = await layout()
@@ -1345,7 +1380,7 @@ const scenarios = {
     ok(empty.mode === 'tabs' && empty.buttons, 'with no tabs the top row still holds the buttons')
     await page.locator('[data-title-settings]').click()
     await page.locator('[data-settings-tab="appearance"]').click()
-    await row.locator('[data-seg="shown"]').click()
+    await flip.click()
     await sleep(200)
     const back = await layout()
     ok(back.mode !== 'tabs' && back.name, 'Shown brings the title bar back')
@@ -1354,7 +1389,7 @@ const scenarios = {
 
   // SETTINGS KEEPS ITS PAGE WHILE ITS TAB STAYS OPEN (#123; owner,
   // 2026-10-04): another tab in front and back finds the page that was left;
-  // closing the Settings tab and opening it again starts on General.
+  // closing the Settings tab and opening it again starts on Appearance.
   async settingsPage(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
@@ -1363,7 +1398,7 @@ const scenarios = {
       page.evaluate(() => document.querySelector('[data-settings-tab][aria-current="page"]')?.getAttribute('data-settings-tab') ?? null)
     const settingsTab = page.locator('[data-tab]', { hasText: 'Settings' })
     await page.locator('[data-title-settings]').click()
-    ok(await until(async () => (await current()) === 'general'), 'Settings opens on General')
+    ok(await until(async () => (await current()) === 'appearance'), 'Settings opens on Appearance')
     await page.locator('[data-settings-tab="dictation"]').click()
     ok(await until(async () => (await current()) === 'dictation'), 'Dictation picked')
     await page.locator('[data-tab]').first().click()
@@ -1373,7 +1408,7 @@ const scenarios = {
     await settingsTab.locator('[data-tab-close]').click({ force: true })
     ok(await until(async () => (await settingsTab.count()) === 0), 'the Settings tab closed')
     await page.locator('[data-title-settings]').click()
-    ok(await until(async () => (await current()) === 'general'), `opened again it starts on General (${await current()})`)
+    ok(await until(async () => (await current()) === 'appearance'), `opened again it starts on Appearance (${await current()})`)
     await closeApp(app)
   },
 
@@ -2360,9 +2395,9 @@ const scenarios = {
       await closed()
 
       /* ----- off means off ----- */
-      await page.locator('[data-settings-tab="general"]').click()
+      await gotoPref(page, 'help-enabled')
       const sw = page.locator('[data-pref="help-enabled"] [role="switch"]')
-      ok((await sw.getAttribute('aria-checked')) === 'true', 'Settings > General has the Command help switch, on by default')
+      ok((await sw.getAttribute('aria-checked')) === 'true', 'Settings > Terminal has the Command help switch, on by default')
       await sw.click()
       ok(await until(async () => (await page.locator('[data-title-help]').count()) === 0, 4000, 50), 'switched off, the ? leaves the title bar')
       await page.keyboard.press('Control+1')
@@ -2374,7 +2409,7 @@ const scenarios = {
       ok((await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Command help' }).count()) === 0, 'nor does the menu offer it')
       await page.keyboard.press('Escape')
       await page.keyboard.press('Control+,')
-      await page.locator('[data-settings-tab="general"]').click()
+      await gotoPref(page, 'help-enabled')
       await sw.click()
       ok(await until(async () => (await page.locator('[data-title-help]').count()) === 1, 4000, 50), 'switched back on, it returns')
       await page.keyboard.press('Control+1')
@@ -2435,90 +2470,382 @@ const scenarios = {
     // where one is found, and the parity list has to be the same on every PC.
     const { app, page } = await launch(w, { args: [w.alpha], env: { PT_E2E_NVIDIA: '0', PT_DICTATION_ROOT: join(w.profile, 'dictation') } })
     await until(async () => (await tabLabels(page)).length === 1)
-    const ids = (file, keep = () => true) =>
-      [...readFileSync(resolve(process.cwd(), file), 'utf8').matchAll(/\{\s*id: '([a-z-]+)'[^}]*\}/g)].filter((m) => keep(m[0])).map((m) => m[1])
-    const wanted = [
-      ...ids('core/renderer/settings/options.ts'),
-      ...ids('core/renderer/settings/dictationOptions.ts', (row) => !row.includes('onlyWhere')),
+    // Read as TEXT, the way Prism's gate reads them: an entry is `{ id: '...'`
+    // up to its first closing brace.
+    const entries = (file, keep = () => true) =>
+      [...readFileSync(resolve(process.cwd(), file), 'utf8').matchAll(/\{\s*id: '([a-z-]+)'[^}]*\}/g)]
+        .filter((m) => keep(m[0]))
+        .map((m) => ({ id: m[1], section: (m[0].match(/section: '([a-z]+)'/) ?? [])[1] ?? null }))
+    const core = [
+      ...entries('core/renderer/settings/options.ts'),
+      ...entries('core/renderer/settings/dictationOptions.ts', (row) => !row.includes('onlyWhere')),
       // Command help (#12) keeps a list of its own, as dictation does.
-      ...ids('core/renderer/settings/helpOptions.ts')
-    ].sort()
+      ...entries('core/renderer/settings/helpOptions.ts')
+    ]
+    const wanted = core.map((e) => e.id).sort()
     ok(wanted.length >= 18 && wanted.includes('help-enabled'), `the core lists the terminal, dictation and help options (${wanted.length})`)
+    ok(core.every((e) => e.section), 'and every entry names its section')
     await page.locator('[data-title-settings]').click()
     const shown = new Set()
-    const seenInOrder = []
-    for (const tab of ['general', 'appearance', 'dictation']) {
+    const sections = []
+    for (const tab of ['appearance', 'terminal', 'agents', 'dictation', 'about']) {
       await page.locator(`[data-settings-tab="${tab}"]`).click()
+      // Default shell is drawn once main has listed the shells.
+      if (tab === 'terminal') await page.locator('[data-pref="term-shell"]').waitFor({ timeout: 10000 })
       await sleep(400)
-      for (const id of await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))) {
-        shown.add(id)
-        seenInOrder.push(id)
-      }
+      const seen = await page.evaluate(() => ({
+        ids: [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')),
+        sections: [...document.querySelectorAll('[data-settings-section]')].map((s) => ({
+          id: s.getAttribute('data-settings-section'),
+          panels: s.querySelectorAll('[data-settings-panel]').length,
+          ids: [...s.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref'))
+        }))
+      }))
+      for (const id of seen.ids) shown.add(id)
+      sections.push(...seen.sections)
+      await page.screenshot({ path: resolve(process.cwd(), `.e2e-shots/settings-${tab}.png`) }).catch(() => {})
     }
     const missing = wanted.filter((id) => !shown.has(id))
     ok(missing.length === 0, `every terminal option is on the page (missing: ${JSON.stringify(missing)})`)
-    // ONE ORDER IN BOTH APPS (owner, 2026-09-22): read top to bottom, General
-    // then Appearance, the core's terminal rows come in the list's own order,
-    // whatever of this app's own sits between them. Prism's e2e asserts the same.
-    const termOrder = ids('core/renderer/settings/options.ts').filter((id) => shown.has(id))
-    const pageOrder = seenInOrder.filter((id) => termOrder.includes(id))
-    ok(
-      JSON.stringify(pageOrder) === JSON.stringify(termOrder),
-      `the terminal rows come in the shared order (${pageOrder.join(' > ')})`
-    )
-    // What is left must be THIS APP's rows, a closed list: a terminal-looking
-    // row outside the core's list is a fork.
-    // 'window-edges' (#27) is the window's chrome, which in Prism belongs to
-    // the app style and has a row of its own there: this app's, not the core's.
-    // 'window-accent' is the same: the accent is the app style's in Prism.
-    const own = ['newtab-mode', 'explorer-verb', 'taskbar-badge', 'app-version', 'window-edges', 'window-accent', 'window-background', 'tab-width', 'title-bar']
+    // ONE ORDER IN BOTH APPS (owner, 2026-09-22), PER SECTION since the
+    // grouped cards (2026-10-05): which page holds a core section is each
+    // app's, but inside one the rows come in the list's own order, whatever
+    // of this app's own sits between them. Prism's e2e asserts the same.
+    for (const s of [...new Set(core.map((e) => e.section))]) {
+      const list = core.filter((e) => e.section === s).map((e) => e.id)
+      const drawn = sections.filter((x) => x.id === s)
+      ok(drawn.length === 1, `the core section ${s} is drawn once (${drawn.length})`)
+      if (drawn.length !== 1) continue
+      ok(drawn[0].panels === 1, `and is one panel (${drawn[0].panels})`)
+      const order = drawn[0].ids.filter((id) => list.includes(id))
+      ok(JSON.stringify(order) === JSON.stringify(list), `${s}: its rows come in the shared order (${order.join(' > ')})`)
+    }
+    // What is left must be THIS APP's rows, a closed list (appOptions.ts): a
+    // terminal-looking row outside the core's lists is a fork.
+    const own = entries('src/renderer/src/components/settings/appOptions.ts').map((e) => e.id)
+    ok(own.length >= 9 && own.includes('window-edges') && own.includes('taskbar-badge'), `this app's own rows are listed (${own.length})`)
     const extra = [...shown].filter((id) => !wanted.includes(id) && !own.includes(id))
     ok(extra.length === 0, `and nothing else claims to be a setting (extra: ${JSON.stringify(extra)})`)
+    ok(own.every((id) => shown.has(id)), `and every one of them is drawn (${own.filter((id) => !shown.has(id))})`)
     ok((await page.locator('[data-pref="confirm-close"]').count()) === 0, 'the close question is not a setting any more')
+    ok((await page.locator('[data-pref="dictation-gpu"]').count()) === 0, 'the GPU row is not offered without an NVIDIA card')
+
     // AND IT IS LAID OUT (#20). The rows above all existed and all worked while
     // the page was a ruin: core/ sits outside the folder Tailwind scans, so
     // every utility used only by the shared sections was never generated, and
-    // a check that a row EXISTS cannot see that. Measured, so it can: a theme
-    // card has a card's width and the wall wraps into rows, a row has its
-    // padding, and the options of a segmented control do not overlap.
-    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-dictation.png') }).catch(() => {})
-    ok((await page.locator('[data-pref="dictation-gpu"]').count()) === 0, 'the GPU row is not offered without an NVIDIA card')
+    // a check that a row EXISTS cannot see that. Measured, so it can.
+    await page.locator('[data-settings-tab="dictation"]').click()
+    await page.locator('[data-dictation-item="base"]').waitFor({ timeout: 8000 })
     const dictRow = await page.evaluate(() => {
       const r = document.querySelector('[data-dictation-item="base"]')
       return r ? { pad: parseFloat(getComputedStyle(r).paddingTop), w: Math.round(r.getBoundingClientRect().width) } : null
     })
     ok(!!dictRow && dictRow.pad >= 8 && dictRow.w > 400, `the model manager is laid out (${JSON.stringify(dictRow)})`)
-    await page.locator('[data-settings-tab="appearance"]').click()
-    await sleep(400)
-    const look = await page.evaluate(() => {
-      const box = (e) => e.getBoundingClientRect()
-      const cards = [...document.querySelectorAll('[data-term-card]')].map(box)
-      const row = document.querySelector('[data-pref="term-font"]')
-      return {
-        cardWidth: Math.round(cards[0]?.width ?? 0),
-        cardRows: new Set(cards.map((c) => Math.round(c.top))).size,
-        rowPad: row ? parseFloat(getComputedStyle(row).paddingTop) : 0
-      }
-    })
-    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-appearance.png') }).catch(() => {})
-    ok(look.cardWidth >= 150, `a theme card is a card, not a sliver (${look.cardWidth}px wide)`)
-    ok(look.cardRows >= 2, `and the wall wraps into rows (${look.cardRows})`)
-    ok(look.rowPad >= 8, `a settings row has its padding (${look.rowPad}px)`)
-    await page.locator('[data-settings-tab="general"]').click()
-    await sleep(300)
-    const overlaps = await page.evaluate(() => {
-      let n = 0
-      for (const row of document.querySelectorAll('[data-pref]')) {
-        const b = [...row.querySelectorAll('button')].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0)
-        for (let i = 0; i < b.length; i += 1)
-          for (let j = i + 1; j < b.length; j += 1)
-            if (b[i].left < b[j].right - 1 && b[j].left < b[i].right - 1 && b[i].top < b[j].bottom - 1 && b[j].top < b[i].bottom - 1) n += 1
-      }
-      return n
-    })
-    ok(overlaps === 0, `no two controls in a row overlap (${overlaps} do)`)
-    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-general.png') }).catch(() => {})
+    const layout = async () =>
+      page.evaluate(() => {
+        const box = (e) => e.getBoundingClientRect()
+        const cards = [...document.querySelectorAll('[data-term-card]')].map(box)
+        const rows = [...document.querySelectorAll('[data-setting-row]')]
+        const tile = rows[0]?.firstElementChild?.firstElementChild
+        const panel = document.querySelector('[data-settings-panel]')
+        const second = rows.find((r) => r.previousElementSibling?.hasAttribute('data-setting-row'))
+        const rule = second ? getComputedStyle(second, '::before') : null
+        const radius = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--p-radius')) || 0
+        let overlaps = 0
+        for (const row of document.querySelectorAll('[data-pref]')) {
+          const b = [...row.querySelectorAll('button')].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0)
+          for (let i = 0; i < b.length; i += 1)
+            for (let j = i + 1; j < b.length; j += 1)
+              if (b[i].left < b[j].right - 1 && b[j].left < b[i].right - 1 && b[i].top < b[j].bottom - 1 && b[j].top < b[i].bottom - 1) overlaps += 1
+        }
+        return {
+          cardWidth: Math.round(cards[0]?.width ?? 0),
+          cardRows: new Set(cards.map((c) => Math.round(c.top))).size,
+          rowMin: rows.length ? Math.min(...rows.map((r) => Math.round(box(r).height))) : 0,
+          rowPad: rows[0] ? parseFloat(getComputedStyle(rows[0]).paddingTop) : 0,
+          tile: tile ? `${Math.round(box(tile).width)}x${Math.round(box(tile).height)}` : null,
+          panelRadius: panel ? parseFloat(getComputedStyle(panel).borderTopLeftRadius) : -1,
+          wantRadius: Math.max(4, radius + 3),
+          ruleLeft: rule ? parseFloat(rule.left) : -1,
+          overlaps
+        }
+      })
+    const pages = {}
+    for (const tab of ['appearance', 'terminal', 'agents', 'dictation', 'about']) {
+      await page.locator(`[data-settings-tab="${tab}"]`).click()
+      if (tab === 'terminal') await page.locator('[data-pref="term-shell"]').waitFor({ timeout: 10000 })
+      await sleep(300)
+      pages[tab] = await layout()
+    }
+    const a = pages.appearance
+    ok(a.cardWidth >= 150, `a theme card is a card, not a sliver (${a.cardWidth}px wide)`)
+    ok(a.cardRows >= 2, `and the wall wraps into rows (${a.cardRows})`)
+    for (const [tab, l] of Object.entries(pages)) {
+      ok(l.rowMin >= 58 && l.rowPad >= 8, `${tab}: every row is at least 58px tall, with its padding (${l.rowMin}px, ${l.rowPad}px)`)
+      ok(l.tile === '32x32', `${tab}: the icon tile is 32px (${l.tile})`)
+      ok(Math.abs(l.panelRadius - l.wantRadius) < 0.5, `${tab}: a panel's corner is the radius plus 3px, at least 4px (${l.panelRadius} vs ${l.wantRadius})`)
+      if (l.ruleLeft >= 0) ok(Math.abs(l.ruleLeft - 60) < 0.5, `${tab}: the hairline between rows starts after the icon column (${l.ruleLeft}px)`)
+      ok(l.overlaps === 0, `${tab}: no two controls in a row overlap (${l.overlaps} do)`)
+    }
     await closeApp(app)
+  },
+
+  /**
+   * THE GROUPED CARDS LOOK RIGHT (2026-10-05; spec 1.2, 1.3 and #20: a page
+   * that works is not a page that looks right). On a dark theme (Pitch), a
+   * light one (Paper) and with acrylic on: the label and the subtext read
+   * 4.5:1 on the panel as composited over the ground, a warning subtext too,
+   * the icon 3:1; the chosen rail page is the grey `--p-hover-hi` and not the
+   * accent; the only accent-filled buttons are Save changes; nothing scrolls
+   * sideways at 900 and 1600px; under 760px the rail is icons. Every page is
+   * shot in both schemes into .e2e-shots/settings-<page>-<scheme>.png, to be
+   * LOOKED AT beside the approved mockup.
+   */
+  async settingsLook(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha], env: { PT_E2E_NVIDIA: '1', PT_DICTATION_ROOT: join(w.profile, 'dictation') } })
+    await until(async () => (await tabLabels(page)).length === 1)
+    const setSize = (wd, ht) => app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows()[0].setSize(s[0], s[1]), [wd, ht])
+    await setSize(1600, 1000)
+    const measure = () =>
+      page.evaluate(() => {
+        const parse = (c) => {
+          const span = document.createElement('span')
+          span.style.color = c
+          document.body.appendChild(span)
+          const v = getComputedStyle(span).color
+          span.remove()
+          // color-mix() computes to color(srgb r g b / a), in 0..1.
+          const n = (v.replace(/^color\(srgb/, '').match(/[\d.]+/g) ?? []).map(Number)
+          const unit = v.startsWith('color(') ? 255 : 1
+          return { rgb: n.slice(0, 3).map((x) => x * unit), a: n.length > 3 ? n[3] : 1 }
+        }
+        const over = (top, under) => top.rgb.map((v, i) => under[i] + (v - under[i]) * top.a)
+        const lin = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+        const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+        const ratio = (x, y) => {
+          const [a, b] = [lum(x), lum(y)]
+          return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+        }
+        const root = getComputedStyle(document.documentElement)
+        const solid = parse(root.getPropertyValue('--p-bg-solid').trim()).rgb
+        const panelEl = document.querySelector('[data-settings-panel]')
+        const panelGround = panelEl ? over(parse(getComputedStyle(panelEl).backgroundColor), solid) : solid
+        const row = document.querySelector('[data-setting-row]')
+        const label = row?.querySelector('label')
+        const sub = row?.querySelector('[title]')
+        const tile = row?.firstElementChild?.firstElementChild
+        const warn = document.querySelector('[data-setting-row] [title] svg')?.closest('[title]')
+        const ink = (el) => (el ? over(parse(getComputedStyle(el).color), panelGround) : null)
+        const chosen = document.querySelector('[data-settings-tab][aria-current="page"]')
+        const accentFilled = [...document.querySelectorAll('button')].filter((b) => {
+          const bg = getComputedStyle(b).backgroundColor
+          const acc = parse(root.getPropertyValue('--p-accent').trim())
+          const mine = parse(bg)
+          return mine.a > 0.3 && mine.rgb.join() === acc.rgb.join()
+        })
+        return {
+          label: label ? ratio(ink(label), panelGround) : 0,
+          sub: sub ? ratio(ink(sub), panelGround) : 0,
+          icon: tile ? ratio(ink(tile), over(parse(getComputedStyle(tile).backgroundColor), panelGround)) : 0,
+          warn: warn ? ratio(ink(warn), panelGround) : null,
+          chosen: chosen ? parse(getComputedStyle(chosen).backgroundColor) : null,
+          hoverHi: parse(root.getPropertyValue('--p-hover-hi').trim()),
+          accent: parse(root.getPropertyValue('--p-accent').trim()),
+          accentButtons: accentFilled.map((b) => (b.hasAttribute('data-save-term') ? 'save' : b.textContent.trim())),
+          sideways: document.querySelector('[data-settings-page]').scrollWidth > document.querySelector('[data-settings-page]').clientWidth + 1
+        }
+      })
+    const pages = ['appearance', 'terminal', 'agents', 'dictation', 'about']
+    try {
+      await page.locator('[data-title-settings]').click()
+      for (const [scheme, theme] of [['dark', 'pitch'], ['light', 'paper']]) {
+        await gotoPref(page, 'term-theme')
+        await page.locator(`[data-term-card="${theme}"]`).first().click()
+        await until(() => page.evaluate((m) => document.documentElement.dataset.mode === m, scheme), 6000, 50)
+        // A warning subtext to measure: dictation on with no model.
+        await page.evaluate(() => localStorage.setItem('prism.dictation.enabled', '1'))
+        for (const p of pages) {
+          await page.locator(`[data-settings-tab="${p}"]`).click()
+          await sleep(500)
+          const m = await measure()
+          ok(m.label >= 4.5 && m.sub >= 4.5, `${scheme} ${p}: label and subtext read on the panel (${m.label.toFixed(1)}:1, ${m.sub.toFixed(1)}:1)`)
+          ok(m.icon >= 3, `${scheme} ${p}: the icon reads 3:1 on its tile (${m.icon.toFixed(1)}:1)`)
+          if (m.warn !== null) ok(m.warn >= 4.5, `${scheme} ${p}: a warning subtext reads 4.5:1 (${m.warn.toFixed(1)}:1)`)
+          ok(!!m.chosen && m.chosen.rgb.join() === m.hoverHi.rgb.join() && Math.abs(m.chosen.a - m.hoverHi.a) < 0.02, `${scheme} ${p}: the chosen rail page is the grey fill (${JSON.stringify(m.chosen)})`)
+          ok(!!m.chosen && m.chosen.rgb.join() !== m.accent.rgb.join(), `${scheme} ${p}: and not the accent`)
+          ok(m.accentButtons.every((b) => b === 'save'), `${scheme} ${p}: the only accent-filled buttons are Save changes (${JSON.stringify(m.accentButtons)})`)
+          ok(!m.sideways, `${scheme} ${p}: nothing scrolls sideways at 1600px`)
+          await page.screenshot({ path: resolve(process.cwd(), `.e2e-shots/settings-${p}-${scheme}.png`) }).catch(() => {})
+        }
+        await page.evaluate(() => localStorage.setItem('prism.dictation.enabled', '0'))
+      }
+      // Lit Save changes: an agent colour of one's own, on both pages that
+      // carry the button (Q3), and they light together.
+      const field = (await gotoPref(page, 'agent-color')).locator('input:not([type])')
+      await field.fill('#3da9fc')
+      await field.press('Enter')
+      ok(!!(await until(async () => !(await page.locator('[data-save-term]').isDisabled()), 4000, 50)), 'an agent colour of your own lights Mark colours\' Save changes')
+      await gotoPref(page, 'term-theme')
+      ok(!(await page.locator('[data-save-term]').isDisabled()), 'and the theme\'s Save changes with it')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-appearance-dirty.png') }).catch(() => {})
+      await gotoPref(page, 'agent-color')
+      await page.locator('[data-follow-theme="working"]').click()
+      // Acrylic on: the panels stay one thin coat.
+      await gotoPref(page, 'term-acrylic')
+      const acr = page.locator('[data-pref="term-acrylic"] [role="switch"]')
+      if ((await acr.getAttribute('aria-checked')) !== 'true') await acr.click()
+      await sleep(600)
+      const glass = await measure()
+      ok(glass.label >= 4.5 && glass.sub >= 4.5, `with acrylic on, label and subtext still read (${glass.label.toFixed(1)}:1, ${glass.sub.toFixed(1)}:1)`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-appearance-acrylic.png') }).catch(() => {})
+      await acr.click()
+      // 900px: still the full rail, nothing sideways.
+      await setSize(900, 800)
+      await sleep(500)
+      ok(!(await measure()).sideways, 'nothing scrolls sideways at 900px')
+      const railAt = async () =>
+        page.evaluate(() => Math.round(document.querySelector('[data-settings-page] nav[aria-label="Settings pages"]').getBoundingClientRect().width))
+      ok((await railAt()) >= 200, `at 900px the rail has its names (${await railAt()}px)`)
+      // Under 760px of the frame: icons only, and the field behind a magnifier.
+      await setSize(700, 800)
+      await sleep(500)
+      ok(!!(await until(async () => (await railAt()) <= 60, 3000, 50)), `under 760px the rail is icons (${await railAt()}px)`)
+      const label = page.locator('[data-settings-tab="appearance"] span').last()
+      ok(!(await label.isVisible()), 'with the page names hidden')
+      ok(!(await measure()).sideways, 'and nothing scrolls sideways')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-narrow.png') }).catch(() => {})
+      const find = page.locator('[data-settings-find]')
+      await find.click()
+      await page.keyboard.type('font')
+      ok(!!(await until(async () => (await find.evaluate((el) => el.getBoundingClientRect().width)) > 200, 3000, 50)), 'the magnifier opens the field over the pane')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-narrow-search.png') }).catch(() => {})
+      await page.keyboard.press('Escape')
+      await setSize(1600, 1000)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * FIND A SETTING (2026-10-05; spec 1.2, 1.3, 1.6): every row in the index is
+   * found by its own label and opened, landing on screen, flashed and holding
+   * the keyboard; by keyboard alone from the field to a control; Escape
+   * clears; no status line without a query; a word that matches nothing says
+   * so. The index is the app's own (settingsIndex.ts), read as text.
+   */
+  async settingsSearch(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha], env: { PT_E2E_NVIDIA: '0', PT_DICTATION_ROOT: join(w.profile, 'dictation') } })
+    await until(async () => (await tabLabels(page)).length === 1)
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1600, 1000))
+    const labelOf = {}
+    for (const file of ['core/renderer/settings/options.ts', 'core/renderer/settings/dictationOptions.ts', 'core/renderer/settings/helpOptions.ts', 'src/renderer/src/components/settings/appOptions.ts'])
+      for (const m of readFileSync(resolve(process.cwd(), file), 'utf8').matchAll(/\{\s*id: '([a-z-]+)'[^}]*\}/g))
+        if (!m[0].includes('onlyWhere')) labelOf[m[1]] = (m[0].match(/label: '([^']+)'/) ?? [])[1]
+    const order = [...readFileSync(resolve(process.cwd(), 'src/renderer/src/components/settings/settingsIndex.ts'), 'utf8').matchAll(/'([a-z]+(?:-[a-z]+)+|[a-z]+-[a-z]+)'/g)].map((m) => m[1])
+    const ids = [...new Set(order.filter((id) => labelOf[id]))]
+    ok(ids.length >= 30, `the index covers every row drawn on this PC (${ids.length})`)
+    const find = page.locator('[data-settings-find]')
+    const status = page.locator('[data-settings-page] [role="status"]')
+    try {
+      await page.locator('[data-title-settings]').click()
+      await find.waitFor({ timeout: 8000 })
+      ok((await status.count()) === 0, 'with nothing typed there is no status line')
+      // EVERY ROW, BY ITS OWN LABEL (spec 1.6: the index can drift from the
+      // page, and opening every entry is what catches it).
+      const misses = []
+      for (const id of ids) {
+        await find.fill(labelOf[id])
+        const first = page.locator('[data-settings-page] [role="option"]').first()
+        if (!(await until(async () => (await first.count()) === 1, 3000, 30))) {
+          misses.push(`${id}: nothing found`)
+          continue
+        }
+        const hit = await first.getAttribute('data-hit')
+        if (hit !== id) {
+          misses.push(`${id}: first result is ${hit}`)
+          continue
+        }
+        await first.click()
+        const landed = await until(
+          () =>
+            page.evaluate((pref) => {
+              const row = document.querySelector(`[data-pref="${pref}"]`)
+              if (!row) return null
+              const r = row.getBoundingClientRect()
+              const onScreen = r.bottom > 0 && r.top < innerHeight
+              return onScreen && row.hasAttribute('data-flash') && row.contains(document.activeElement) ? true : null
+            }, id),
+          4000,
+          30
+        )
+        if (!landed) misses.push(`${id}: not on screen, flashed and focused`)
+        ok((await find.inputValue()) === '', `${id}: choosing a result clears the field`)
+      }
+      ok(misses.length === 0, `every row is found by its label and opened (${JSON.stringify(misses)})`)
+      // KEYBOARD ONLY: the field, Down, Enter, and the control has the focus.
+      await find.focus()
+      await page.keyboard.type('explorer')
+      ok(!!(await until(async () => ((await status.textContent().catch(() => '')) ?? '').includes('result'), 3000, 50)), `a status line says how many (${await status.textContent().catch(() => '')})`)
+      await page.keyboard.press('ArrowDown')
+      ok(await page.evaluate(() => document.activeElement?.getAttribute('role') === 'option'), 'Down moves to the first result')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-search.png') }).catch(() => {})
+      await page.keyboard.press('Enter')
+      ok(
+        !!(await until(() => page.evaluate(() => !!document.activeElement?.closest('[data-pref="explorer-verb"]')), 4000, 30)),
+        'Enter opens it with the keyboard on the row\'s control'
+      )
+      ok((await page.locator('[data-settings-tab="terminal"]').getAttribute('aria-current')) === 'page', 'on the page that holds it')
+      // Escape clears; no status line is left behind.
+      await find.focus()
+      await page.keyboard.type('colour')
+      await until(async () => (await status.count()) === 1, 3000, 50)
+      ok((await page.locator('[data-settings-tab][aria-current="page"]').count()) === 0, 'while results are up no page is chosen in the rail')
+      await page.keyboard.press('Escape')
+      ok((await find.inputValue()) === '' && (await status.count()) === 0, 'Escape clears the field and the status line goes')
+      // Nothing found.
+      await find.fill('zebra')
+      ok(!!(await until(async () => ((await status.textContent().catch(() => '')) ?? '') === 'No results', 3000, 50)), 'a word that matches nothing says No results')
+      ok(((await page.locator('[data-settings-nothing]').textContent()) ?? '').includes('Nothing matches zebra'), 'and the pane says what was not found')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-search-empty.png') }).catch(() => {})
+      await find.fill('')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /** THE RAIL BY KEYBOARD (2026-10-05, spec 1.3): Tab goes field, rail, page;
+   *  Up and Down walk the rail, Home and End jump; the chosen page says so. */
+  async settingsKeys(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    await until(async () => (await tabLabels(page)).length === 1)
+    try {
+      await page.locator('[data-title-settings]').click()
+      const find = page.locator('[data-settings-find]')
+      await find.waitFor({ timeout: 8000 })
+      await find.focus()
+      await page.keyboard.press('Tab')
+      const at = () => page.evaluate(() => document.activeElement?.getAttribute('data-settings-tab') ?? document.activeElement?.tagName ?? null)
+      ok((await at()) === 'appearance', `Tab from the field lands on the rail's first page (${await at()})`)
+      await page.keyboard.press('ArrowDown')
+      ok((await at()) === 'terminal', `Down walks the rail (${await at()})`)
+      await page.keyboard.press('End')
+      ok((await at()) === 'about', `End jumps to the last (${await at()})`)
+      await page.keyboard.press('Home')
+      ok((await at()) === 'appearance', `Home to the first (${await at()})`)
+      await page.keyboard.press('ArrowDown')
+      await page.keyboard.press('ArrowDown')
+      await page.keyboard.press('Enter')
+      ok((await page.locator('[data-settings-tab="agents"]').getAttribute('aria-current')) === 'page', 'Enter opens it, and the rail says it is the page')
+      ok((await page.locator('[data-settings-tab][aria-current]').count()) === 1, 'one page at a time')
+      ok((await page.locator('nav[aria-label="Settings pages"]').count()) === 1, 'the rail is a navigation landmark')
+      for (let i = 0; i < 6; i += 1) await page.keyboard.press('Tab')
+      ok(await page.evaluate(() => !!document.activeElement?.closest('[data-settings-section]')), 'Tab goes on from the rail into the page')
+    } finally {
+      await closeApp(app)
+    }
   },
 
   /**
@@ -2562,12 +2889,14 @@ const scenarios = {
     // lights Save changes. (The font size did, until it left the theme's
     // setup on 2026-09-28.)
     const agentColour = async (hex) => {
+      await gotoPref(page, 'agent-color')
       const f = page.locator('[data-pref="agent-color"] input:not([type])')
       await f.fill(hex)
       await f.press('Enter')
       await sleep(200)
     }
     const pickFrom = async (pref, label) => {
+      await gotoPref(page, pref)
       await page.locator(`[data-pref="${pref}"] button[aria-haspopup="listbox"]`).click()
       await page.locator('[role="listbox"] [role="option"]', { hasText: label }).first().click()
       await sleep(200)
@@ -2578,11 +2907,14 @@ const scenarios = {
       await page.locator('[data-term-card]').first().waitFor({ timeout: 10000 })
 
       // WHAT NO THEME OWNS SITS ABOVE THE WALL, WHAT A THEME SETS UNDER IT
-      // (owner, 2026-09-28).
+      // (owner, 2026-09-28). Since the grouped cards (2026-10-05) the font
+      // and the agent rows have pages of their own; Appearance keeps the
+      // window's rows above the theme and what a theme sets under it.
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
-      const want = ['tab-width', 'title-bar', 'window-edges', 'term-font-family', 'term-font', 'agent-indicator', 'agent-done-on', 'agent-question-on', 'agent-failed-on', 'agent-hooks', 'term-theme', 'window-background', 'window-accent']
-      ok(JSON.stringify(rows.slice(0, want.length)) === JSON.stringify(want), `the page runs ${want.join(' > ')} (${rows.slice(0, want.length).join(' > ')})`)
+      const want = ['tab-width', 'title-bar', 'window-edges', 'term-theme', 'window-background', 'window-accent', 'term-acrylic']
+      ok(JSON.stringify(rows) === JSON.stringify(want), `Appearance runs ${want.join(' > ')} (${rows.join(' > ')})`)
       // Font size is 50% to 200% in tens.
+      await gotoPref(page, 'term-font')
       await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()
       const sizes = await page.locator('[role="listbox"] [role="option"]').allTextContents()
       await page.keyboard.press('Escape')
@@ -2592,14 +2924,16 @@ const scenarios = {
       // A theme switch leaves the font, its size, the indicator's style and
       // the edges exactly as they were, and asks nothing about them.
       await pickFrom('term-font', '140%')
-      await page.locator('[data-pref="window-edges"] [data-seg="solid"]').click()
-      await page.locator('[data-pref="agent-indicator"] [data-seg="full"]').click()
+      await (await gotoPref(page, 'window-edges')).locator('[data-seg="solid"]').click()
+      await (await gotoPref(page, 'agent-indicator')).locator('[data-seg="full"]').click()
+      await gotoPref(page, 'term-font-family')
       const fontIds = await page.locator('[data-pref="term-font-family"] button[aria-haspopup="listbox"]').click().then(() =>
         page.locator('[role="listbox"] [role="option"]').allTextContents()
       )
       await page.locator('[role="listbox"] [role="option"]').nth(fontIds.length > 1 ? 1 : 0).click()
       await sleep(200)
       const mine = await store()
+      await gotoPref(page, 'term-theme')
       ok(await page.locator('[data-save-term]').isDisabled(), 'none of them lights Save changes')
       await page.locator('[data-term-card="nord"]').first().click()
       await sleep(300)
@@ -2612,7 +2946,9 @@ const scenarios = {
 
       // A Custom to lead the wall: an agent colour, saved.
       await agentColour('#3DA9FC')
+      // The Save in Mark colours' heading saves the same whole setup (Q3).
       await page.locator('[data-save-term]').click()
+      await gotoPref(page, 'term-theme')
       await until(async () => (await page.locator('[data-term-card="custom"]').count()) === 1, 4000)
       const order = await page.evaluate(() => [...document.querySelectorAll('[data-term-card]')].slice(0, 2).map((c) => c.getAttribute('data-term-card')))
       ok(order[0] === 'custom' && order[1] === 'pt-default', `Custom comes first, then the default (${order.join(', ')})`)
@@ -2630,6 +2966,7 @@ const scenarios = {
         return s.accent && s.background ? s : null
       }, 4000)
       ok(!!picked, 'a background and an accent are picked')
+      await gotoPref(page, 'term-theme')
       await page.locator('[data-term-card="pitch"]').first().click()
       await sleep(300)
       ok((await ask.count()) === 0, 'with nothing unsaved a theme switch asks nothing')
@@ -2639,6 +2976,7 @@ const scenarios = {
       // Unsaved: Cancel keeps everything as it was.
       await agentColour('#C0FFEE')
       const dirty = await store()
+      await gotoPref(page, 'term-theme')
       await page.locator('[data-term-card="nord"]').first().click()
       ok(!!(await until(async () => (await ask.count()) === 1, 3000, 50)), 'with a change unsaved, picking a theme asks first')
       await page.locator('[data-ask-cancel]').click()
@@ -2652,6 +2990,7 @@ const scenarios = {
       ok(gone.theme === 'nord' && gone.agent !== dirty.agent, `Discard switches and drops the change (${JSON.stringify({ ...gone, custom: undefined })})`)
       // Save as Custom: the change is kept in Custom, then the switch happens.
       await agentColour('#C0FFEE')
+      await gotoPref(page, 'term-theme')
       await page.locator('[data-term-card="pitch"]').first().click()
       await ask.waitFor({ timeout: 3000 })
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/theme-switch-ask.png') }).catch(() => {})
@@ -2686,15 +3025,18 @@ const scenarios = {
 
       // #26
       for (const pref of ['agent-color', 'window-accent']) {
+        await gotoPref(page, pref)
         await page.locator(`[data-pref="${pref}"] input:not([type])`).focus()
         await page.keyboard.press('Tab')
+        await sleep(200)
       }
-      await sleep(200)
       ok((await get('prism.term.agentColor')) === null && (await get('prism.window.accent')) === null, 'tabbing through a colour that follows the theme leaves it following')
+      await gotoPref(page, 'agent-color')
       ok((await page.locator('[data-follow-theme="working"]').count()) === 0, 'and offers no Reset')
       // #112: the row is now a code field AND a swatch; Tab walks both with the
       // picker shut, and still pins nothing.
       for (const pref of ['agent-color', 'agent-done-color', 'window-background']) {
+        await gotoPref(page, pref)
         await page.locator(`[data-pref="${pref}"] input:not([type])`).focus()
         await page.keyboard.press('Tab')
         ok(await page.evaluate((p) => document.activeElement?.matches(`[data-pref="${p}"] [data-colour-swatch]`), pref), `Tab goes from ${pref}'s code field to its swatch`)
@@ -2735,10 +3077,12 @@ const scenarios = {
 
       // #8, #29: a saved Custom with an agent colour, a picked background, then
       // an edit. (A font size until 2026-09-28, when the font left the theme.)
+      await gotoPref(page, 'agent-color')
       const agent = page.locator('[data-pref="agent-color"] input:not([type])')
       await agent.fill('#3DA9FC')
       await agent.press('Enter')
       await page.locator('[data-save-term]').click()
+      await gotoPref(page, 'term-theme')
       await until(async () => (await page.locator('[data-term-card="custom"]').count()) === 1, 4000)
       const bgField = page.locator('[data-pref="window-background"] input:not([type])')
       await bgField.fill('#202830')
@@ -2818,21 +3162,20 @@ const scenarios = {
       await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x25D0 + ' Claude Code'")
       ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-agent-state="working"]')), 8000, 50)), 'a working stand-in agent is on the strip')
 
-      await page.locator('[data-title-settings]').click()
-      await page.locator('[data-settings-tab="appearance"]').click()
+      await gotoPref(page, 'agent-indicator')
       await page.locator('[data-pref="agent-indicator"] [data-seg="full"]').click()
       const row = page.locator('[data-pref="agent-color"]')
       const swatch = row.locator('[data-colour-swatch]')
       const field = row.locator('input:not([type])')
       const reset = row.locator('[data-follow-theme]')
       ok((await get('prism.term.agentColor')) === null, 'the working colour follows the theme to begin with')
-      ok((await swatch.getAttribute('aria-label')) === 'Pick Working colour', 'the row has a swatch named for it')
+      ok((await swatch.getAttribute('aria-label')) === 'Pick Agent working colour', 'the row has a swatch named for it')
       ok((await page.locator('input[type="color"]').count()) === 0, 'and no native colour input is left on the page')
 
       // Opened and shut with no change: nothing stored, no Reset.
       await swatch.click()
       ok(!!(await until(async () => (await pop.count()) === 1, 3000, 50)), 'the swatch opens the picker')
-      ok((await pop.getAttribute('aria-label')) === 'Working colour', "named for the row's colour")
+      ok((await pop.getAttribute('aria-label')) === 'Agent working colour', "named for the row's colour")
       const sliders = await pop.locator('[role="slider"]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
       ok(JSON.stringify(sliders) === JSON.stringify(['Saturation and brightness', 'Hue', 'Alpha']), `with its three sliders (${sliders.join(', ')})`)
       ok((await pop.locator('button[data-colour-format]').textContent()) === 'HEX', 'and the format reads HEX')
@@ -2943,6 +3286,7 @@ const scenarios = {
       await row.locator('[data-follow-theme]').click()
 
       // The theme editor: red at 40%, the text at 30%, saved as Custom.
+      await gotoPref(page, 'term-theme')
       await page.locator('[data-term-card="pitch"]').first().click()
       await page.locator('[data-edit-theme="pitch"]').click()
       const editor = page.locator('[data-theme-editor]')
@@ -3052,6 +3396,7 @@ const scenarios = {
       await editor.locator('button:has-text("Cancel")').click()
       await until(async () => (await editor.count()) === 0, 3000, 50)
       // Save changes: lit by an agent colour, it keeps the palette's alphas.
+      await gotoPref(page, 'agent-color')
       await field.fill('#3da9fc')
       await field.press('Enter')
       await page.locator('[data-save-term]').click()
@@ -3103,6 +3448,7 @@ const scenarios = {
       const accent = page.locator('[data-pref="window-accent"] input:not([type])')
       await accent.fill('#1D3FBF')
       await accent.press('Enter')
+      await gotoPref(page, 'agent-color')
       const working = await until(async () => {
         const v = (await page.locator('[data-pref="agent-color"] input:not([type])').inputValue()).toLowerCase()
         return v === '#1d3fbf' ? v : null
@@ -3295,13 +3641,14 @@ const scenarios = {
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1500, 2600))
     await page.locator('[data-theme-wall-toggle]').click()
     await sleep(900)
-    await page.locator('[data-pref="term-theme"]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/theme-wall.png') }).catch(() => {})
+    await page.locator('[data-term-wall]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/theme-wall.png') }).catch(() => {})
     await page.locator('[data-theme-wall-toggle]').click()
     await app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows()[0].setSize(s[0], s[1]), size)
     await sleep(500)
     // A colour put back to the theme's is a plain RESET word, as in Prism
     // (owner, same day: "just a simple reset text you can click"), not a
     // bordered button.
+    await gotoPref(page, 'agent-color')
     const well = page.locator('[data-pref="agent-color"] input:not([type])')
     const themed = (await well.inputValue()).toLowerCase()
     await well.fill('#e07a2f')
@@ -3347,14 +3694,18 @@ const scenarios = {
         }
         const tab = document.querySelector('[data-tab]')
         const title = document.querySelector('[data-title-bar]')
-        const rail = document.querySelector('[data-settings-page] aside')
-        const row = document.querySelector('[data-pref="window-edges"]')
+        const rail = document.querySelector('[data-settings-page] nav[aria-label="Settings pages"]')
+        // The grouped cards (2026-10-05): a section's panel edge, and the
+        // hairline between two of its rows, both the list's line.
+        const panel = document.querySelector('[data-settings-section="window"] [data-settings-panel]')
+        const second = document.querySelector('[data-pref="title-bar"]')
         const css = (el, prop) => (el ? getComputedStyle(el)[prop] : null)
         const edges = {
           tab: css(tab, 'borderRightColor'),
           title: css(title, 'borderBottomColor'),
           rail: css(rail, 'borderRightColor'),
-          row: css(row, 'borderBottomColor')
+          row: css(panel, 'borderTopColor'),
+          rule: second ? getComputedStyle(second, '::before').backgroundColor : null
         }
         return {
           divider: alpha(token('--p-divider')),
@@ -3369,6 +3720,7 @@ const scenarios = {
           title: edges.title === null ? null : alpha(edges.title),
           rail: edges.rail === null ? null : alpha(edges.rail),
           row: edges.row === null ? null : alpha(edges.row),
+          rule: edges.rule === null ? null : alpha(edges.rule),
           // A border keeps its pixel whatever its colour: nothing may move.
           tabWidth: tab ? tab.getBoundingClientRect().width : 0,
           titleHeight: title ? title.getBoundingClientRect().height : 0,
@@ -3384,7 +3736,7 @@ const scenarios = {
       until(async () => {
         const p = await probe(pg)
         const chrome = [p.tab, p.title, ...(p.rail === null ? [] : [p.rail])]
-        const arrived = chrome.every((a) => near(a, p.divider)) && (p.row === null || near(p.row, p.line))
+        const arrived = chrome.every((a) => near(a, p.divider)) && (p.row === null || near(p.row, p.line)) && (p.rule === null || near(p.rule, p.line))
         return arrived && also(p) ? p : null
       }, ms)
 
@@ -3410,7 +3762,7 @@ const scenarios = {
       'Settings > Appearance has an Edges row, weakest to strongest as in Prism: None, Faint, Hairline, Solid'
     )
     ok((await settled(page))?.pressed === 'hairline', 'with Hairline pressed, since that is what is in force')
-    ok(near((await probe(page)).row, 0.09), 'a settings row wears the 9% list line it always did')
+    ok(near((await probe(page)).row, 0.09) && near((await probe(page)).rule, 0.09), 'a settings panel and the hairline between its rows wear the 9% list line')
 
     // Each option in turn, ending on one that is NOT the default, so the
     // relaunch below proves something.
@@ -3432,7 +3784,7 @@ const scenarios = {
     ok(all, 'all four options were measured')
     if (all) {
       const { none, faint, hairline, solid } = seen
-      for (const edge of ['tab', 'title', 'rail', 'row']) {
+      for (const edge of ['tab', 'title', 'rail', 'row', 'rule']) {
         ok(none[edge] === 0, `none: the ${edge} edge is transparent (alpha ${none[edge]})`)
         ok(
           faint[edge] > 0 && faint[edge] < hairline[edge] && hairline[edge] < solid[edge],
@@ -3555,10 +3907,11 @@ const scenarios = {
           switch: look(document.querySelector('[role="switch"][aria-checked="true"]'))
         }
       })
+    await gotoPref(page, 'newtab-mode')
     await page.locator('[data-choose-folder]').waitFor({ state: 'visible', timeout: 10000 })
     await sleep(700)
     const plain = await controls()
-    ok(!!plain.button && !!plain.segment && !!plain.switch, 'a row button, a pressed segment and an on switch are on the General page')
+    ok(!!plain.button && !!plain.segment && !!plain.switch, 'a row button, a pressed segment and an on switch are on the Terminal page')
     await page.locator('[data-settings-tab="appearance"]').click()
     const row = page.locator('[data-pref="window-accent"]')
     await row.waitFor({ state: 'visible', timeout: 10000 })
@@ -3618,6 +3971,7 @@ const scenarios = {
       return { a, r: ratio(nums(l.ink).slice(0, 3), seen) }
     }
     // Save changes lights with a changed working colour (a theme setting).
+    await gotoPref(page, 'agent-color')
     const working = page.locator('[data-pref="agent-color"] input:not([type])')
     await working.fill('#3da9fc')
     await working.press('Enter')
@@ -3629,6 +3983,7 @@ const scenarios = {
     ok(open.r >= 4.5, `and its label reads on the composite (${open.r.toFixed(1)}:1)`)
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-see-through.png') }).catch(() => {})
     // A see-through window: acrylic on, the Background at 60%.
+    await gotoPref(page, 'term-acrylic')
     await page.locator('[data-pref="term-acrylic"] [role="switch"]').click()
     const bgPick = page.locator('[data-pref="window-background"] input:not([type])')
     await bgPick.fill('#1c233099')
@@ -3642,15 +3997,17 @@ const scenarios = {
     // Back to an opaque window and a working colour that follows the theme.
     await page.locator('[data-follow-theme="background"]').click()
     await page.locator('[data-pref="term-acrylic"] [role="switch"]').click()
+    await gotoPref(page, 'agent-color')
     await page.locator('[data-follow-theme="working"]').click()
     await until(async () => (await save.isDisabled()), 4000, 50)
+    await gotoPref(page, 'window-accent')
     await row.scrollIntoViewIfNeeded()
     await sleep(800)
     await row.scrollIntoViewIfNeeded()
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-picked.png') }).catch(() => {})
     // The accent reached the tab (above); the settings controls stay as they
     // were, and none of them is the accent.
-    await page.locator('[data-settings-tab="general"]').click()
+    await gotoPref(page, 'newtab-mode')
     await page.locator('[data-choose-folder]').waitFor({ state: 'visible', timeout: 10000 })
     await sleep(700)
     const after = await controls()
@@ -4438,7 +4795,7 @@ const scenarios = {
     await page.locator('[data-title-settings]').click()
     await page.locator('[data-settings-tab="dictation"]').click()
     await page.waitForSelector('[data-dictation-item="gpu-pack"][data-state="installed"]', { timeout: 8000 })
-    ok((await page.locator('[data-settings-tab="dictation"]').getAttribute('aria-current')) === 'page' && (await page.locator('[data-settings-tab="general"]').getAttribute('aria-current')) === null, 'the rail marks Dictation as the page in front')
+    ok((await page.locator('[data-settings-tab="dictation"]').getAttribute('aria-current')) === 'page' && (await page.locator('[data-settings-tab="appearance"]').getAttribute('aria-current')) === null, 'the rail marks Dictation as the page in front')
     await page.mouse.move(900, 300)
     await sleep(400)
 
@@ -4518,7 +4875,7 @@ const scenarios = {
     // THE LANGUAGE PICKER WHILE IT IS IN USE: Auto-detect, disabled, an icon
     // that says the same line, and the user's own language kept for later.
     await page.evaluate(() => localStorage.setItem('prism.dictation.language', 'no'))
-    await page.locator('[data-settings-tab="general"]').click()
+    await page.locator('[data-settings-tab="terminal"]').click()
     const pk = join(root, 'models', 'parakeet-v3.bin')
     writeFileSync(pk, '')
     truncateSync(pk, entry('parakeet-v3').bytes)

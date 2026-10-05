@@ -139,6 +139,48 @@ host's one-time migration); `TERMINAL_OPTIONS` is the same list in every host.
 Spec:
 `docs/superpowers/specs/2026-10-03-colour-picker-alpha-design.md`.
 
+**THE SETTINGS LAYOUT (2026-10-05, the grouped cards redesign; owner: "can you
+mock up some new settings pages ... grouped cards ... both apps")** is the
+fourth, under the same bar. Spec and plan:
+`docs/superpowers/specs/2026-10-05-settings-redesign-design.md`.
+- `renderer/settings/layout/`: `SettingsFrame` (the rail, Find a setting, the
+  results page, the pane and its header; props `pages`, `page`, `onPage`,
+  `index`, `title`, `headerAction`, `compact`), `SettingsSection` (heading +
+  ONE panel), `SettingRow` (icon tile, label, one line of subtext, control;
+  `warn`, `off`, `tap`), `SettingBlock` (a full-width part of a panel),
+  `icons.ts`, `search.ts` (pure), `flash.ts`. Props only.
+- `renderer/settings/sections/`: `ShellSection`, `TerminalTextSection`,
+  `TerminalThemeSection({ afterTheme, onThemePicked })`,
+  `AgentMarksSection({ after })`, `ClaudeCodeSection`, `MarkColoursSection`
+  (carries the SAME Save changes as the theme row: both save the whole setup
+  and light together, `theme/useTermSetup.ts`), `HelpSection`, `DictationPage`.
+  WHICH PAGE holds a section is the host's; `coreSettingsIndex({ pageOf,
+  nvidia, help })` gives the host the core's rows for its index.
+- The lists (`options.ts`, `dictationOptions.ts`, `helpOptions.ts`) carry each
+  row's `section`, `icon`, `sub` (its resting subtext, at most eight plain
+  words, which the search reads too) and hidden `keywords`, as FLAT one-line
+  entries with no brace inside: Prism's gate reads them as text. Their order
+  is the display order inside each section, and each app's e2e checks it per
+  section (`[data-settings-section]`).
+- DOM hooks: `[data-settings-page]` on the frame, `[data-settings-tab=<page>]`
+  on rail buttons (`aria-current="page"` on the chosen one, a GREY
+  `--p-hover-hi` fill, never the accent), `[data-settings-find]`,
+  `[data-settings-section=<id>]`, `[data-settings-panel]`,
+  `[data-pref=<id>]` + `[data-setting-row]` on rows, `[data-term-wall]` on the
+  theme wall's block, `[data-flash]` while a found row flashes, every
+  existing dictation and theme hook unchanged.
+- Focus inside a row is a fill and a lighter edge, never a ring (Prism #272);
+  a dropdown's menu in a row blurs what is behind it and casts no shadow.
+- No new token: panels are `color-mix()` of `--p-text`, edges `--p-line`,
+  corners `max(4px, --p-radius + 3px)`.
+- **Kept for the transition, removed in PR 3:** `Pref`, `ThemeHead`, `ROWS`,
+  `TerminalAppearanceSettings`, `AgentIndicatorSetting`, `AttentionSettings`,
+  `ShellSetting`, `HelpSetting` and `DictationSettings` stay exported and draw
+  exactly as before, until Prism no longer imports them. They are built on the
+  same extracted pieces (`theme/ThemeWall.tsx`, `theme/useTermSetup.ts`,
+  `dictation/useDictationState.ts`, `dictation/parts.tsx`), so every rule has
+  one copy and, for a few days, two layouts.
+
 ## Rules for code in here (lint-enforced in Prism Terminal's `eslint.config.js`)
 
 - **Relative imports only.** No `@shared` / `@renderer` / `@core` aliases: a

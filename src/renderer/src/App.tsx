@@ -14,7 +14,7 @@ import { TabStrip } from './components/TabStrip'
 import TitleBar, { TitleButtons } from './components/TitleBar'
 import { useTitleBarMode } from './lib/titleBarPrefs'
 import EmptyState from './components/EmptyState'
-import type { SettingsPage } from './components/Settings'
+import type { SettingsPage } from './components/settings/Settings'
 import { Dialog } from './components/Dialog'
 import {
   addTab,
@@ -70,7 +70,7 @@ import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPref
 import { attentionCount, drawBadge, useTaskbarBadgeOn } from './lib/taskbarBadge'
 import { agentHooksOn, useAgentDoneOn, useAgentFailedOn, useAgentQuestionOn } from '@core/renderer/lib/termLook'
 
-const Settings = lazy(() => import('./components/Settings'))
+const Settings = lazy(() => import('./components/settings/Settings'))
 // Loaded when it is first opened: the popup brings the whole catalogue with it,
 // several hundred entries of text that a launch has no use for.
 const HelpPanel = lazy(() => import('@core/renderer/components/HelpPanel'))
@@ -165,11 +165,11 @@ export default function App(): JSX.Element {
   // it should be the same tab it was on ... unless i close the settings tab
   // and reopen"). The page unmounts behind another tab, so App holds it, and
   // closing the tab is what forgets it.
-  const [settingsPage, setSettingsPage] = useState<SettingsPage>('general')
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>('appearance')
   const settingsOpen = tabs.some((t) => t.kind === 'settings')
   // Adjusted while rendering, React's own pattern for state that follows other
   // state: no effect, so no frame painted with the stale page.
-  if (!settingsOpen && settingsPage !== 'general') setSettingsPage('general')
+  if (!settingsOpen && settingsPage !== 'appearance') setSettingsPage('appearance')
   // Tabs still coming back to an agent wear a ring in the strip (#106): the
   // placeholders, then the sessions resuming until their agent has drawn.
   const resumingNow = useSyncExternalStore(onResumingChange, resumingIds)
