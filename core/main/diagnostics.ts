@@ -37,7 +37,7 @@ export interface DiagnosticsDeps {
 /** The slice of a BrowserWindow the watch needs. */
 export interface DiagWindow extends EmitterLike {
   isDestroyed?(): boolean
-  webContents: { mainFrame?: { collectJavaScriptCallStack?(): Promise<string> } | null }
+  webContents: { mainFrame?: { collectJavaScriptCallStack?(): Promise<string> | Promise<void> } | null }
 }
 
 export interface Diagnostics {
@@ -82,7 +82,8 @@ export function startDiagnostics(deps: DiagnosticsDeps): Diagnostics {
     collectStack: async () => {
       if (!win || win.isDestroyed?.()) return null
       const frame = win.webContents.mainFrame
-      return frame?.collectJavaScriptCallStack ? await frame.collectJavaScriptCallStack() : null
+      const stack = frame?.collectJavaScriptCallStack ? await frame.collectJavaScriptCallStack() : null
+      return typeof stack === 'string' ? stack : null
     }
   })
   const unhook = hookCrashes({ log, process: deps.process, app: deps.app })

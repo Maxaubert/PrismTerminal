@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import type { UpdateInfo } from '../../shared/updateTypes'
 import { NO_UPDATE, updateFlow, type UpdateFlow } from './updateFlow'
+import { crumb } from './diag'
 
 // The update chip and its window, wired to a host (#28). The rules are
 // `updateFlow`'s; this is only the plumbing both apps would otherwise write
@@ -95,7 +96,10 @@ export function useUpdateFlow(
     return () => clearTimeout(t)
   }, [loose])
 
-  const open = useCallback(() => dispatch({ type: 'open' }), [])
+  const open = useCallback(() => {
+    crumb('update-open')
+    dispatch({ type: 'open' })
+  }, [])
   const cancel = useCallback(() => dispatch({ type: 'cancel' }), [])
   const dismissNotice = useCallback(() => dispatch({ type: 'dismiss' }), [])
 
@@ -104,6 +108,7 @@ export function useUpdateFlow(
     const info = s.info
     if (!info || s.phase !== 'idle') return
     const start = (): void => {
+      crumb('update-install', { version: info.version, preview: !!info.mock })
       dispatch({ type: 'install' })
       void bridge.installUpdate(info.url).then(
         (ok) => dispatch({ type: 'settled', ok }),
