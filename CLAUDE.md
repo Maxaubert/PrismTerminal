@@ -875,9 +875,10 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
   merge without the owner's explicit approval of that PR. Bump the version inside the PR.
 - **The app icon** is `build/icon.ico` (app, installer, uninstaller; 16-256 px frames) with its
   source `build/icon-source.png`, and `assets/prism-terminal-icon.png` (256 px) for the README.
-  Since #136 (owner, 2026-10-07: "try this icon for prism terminal") it is the orange robot face;
-  before that "folded ribbons" (#129). The source had a few stray specks outside the face, cleared
-  before it was squared.
+  Since #136 (owner, 2026-10-07) it is the rainbow shapes on a black rounded badge with a faint
+  #202020 edge, Wind's taskbar badge ("give it a outer border just like wind has since i have a black
+  taskbar so we need a faint border"). `tools/make-icon.py` draws the badge per frame from the artwork,
+  the edge one physical pixel wide and snapped to the frame's pixels. Before: "folded ribbons" (#129).
 - **Installing is the last verification step.** `npm run package`, kill every `PrismTerminal` and
   `PrismTerminal-Setup*` process, run `dist/PrismTerminal-Setup-x64-<version>.exe /S`, then POLL
   `%LOCALAPPDATA%\Programs\PrismTerminal\PrismTerminal.exe` until its LastWriteTime moves (it goes
