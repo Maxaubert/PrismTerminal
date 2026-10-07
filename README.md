@@ -191,7 +191,10 @@ is unchanged until it passes one). Call it before any IPC is registered (it
 times every call by wrapping `ipcMain` itself), `watchWindow(win)` once the
 window exists, `stop()` on the quit that goes ahead, and add `withStackPolicy`
 in the session's `onHeadersReceived` for `mainFrame` responses (without that
-Document-Policy the page stack never comes). The bridge is `DGCH` in
+Document-Policy the page stack never comes). Optional: `longWaitChannels`
+(the host's channels that wait on the user or a download, never `ipc-slow`),
+`powerMonitor` (a getter, so a sleep is not a lag), and `log.flushSync()` in
+the window's `session-end`, where no quit comes. The bridge is `DGCH` in
 `shared/channels.ts`, `preload/diagApi.ts` and `main/diagIpc.ts`; the page
 calls `startDiag(bridge)` and anything may call `crumb()`. The Settings page
 is `settings/sections/DiagnosticsPage.tsx` (props only), its rows

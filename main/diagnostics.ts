@@ -32,6 +32,13 @@ export interface DiagnosticsDeps {
   appInfo: { name: string; version: string; e2e?: boolean }
   /** Show the log folder (Settings' Open folder). */
   openFolder(dir: string): void
+  /** The host's channels that wait on the user or a download: never
+   *  `ipc-slow`, never in `inflight` (`ipcTiming`'s `LONG_WAIT`). */
+  longWaitChannels?: string[]
+  /** Electron's `powerMonitor`, as a getter: it cannot be used before the
+   *  app is ready, so it is hooked in `watchWindow`. Its `suspend` and
+   *  `resume` keep a sleep from being logged as a lag. */
+  powerMonitor?: () => EmitterLike
 }
 
 /** The slice of a BrowserWindow the watch needs. */
@@ -72,7 +79,7 @@ export function startDiagnostics(deps: DiagnosticsDeps): Diagnostics {
     ...(deps.appInfo.e2e ? { e2e: true } : {})
   })
 
-  const timing = timeIpcMain(deps.ipcMain, log)
+  const timing = timeIpcMain(deps.ipcMain, log, { longWait: deps.longWaitChannels })
   let win: DiagWindow | null = null
   const watch: StallWatch = startStallWatch({
     log,
@@ -89,14 +96,30 @@ export function startDiagnostics(deps: DiagnosticsDeps): Diagnostics {
   const unhook = hookCrashes({ log, process: deps.process, app: deps.app })
   registerDiagIpc({ ipcMain: deps.ipcMain, log, watch, openFolder: deps.openFolder })
 
+  let power: EmitterLike | null = null
+  const onSuspend = (): void => watch.suspend()
+  const onResume = (): void => watch.resume()
+
   return {
     log,
     watchWindow: (w) => {
       win = w
       watchWindowHealth(w, log, watch)
+      if (!power && deps.powerMonitor) {
+        try {
+          power = deps.powerMonitor()
+          power.on('suspend', onSuspend)
+          power.on('resume', onResume)
+        } catch {
+          power = null
+        }
+      }
     },
     stop: () => {
       watch.stop()
+      power?.removeListener('suspend', onSuspend)
+      power?.removeListener('resume', onResume)
+      power = null
       unhook()
       log.write('main', 'quit', {})
       log.close()
