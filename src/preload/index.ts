@@ -135,7 +135,9 @@ const api = {
   /** The e2e's: release checks sent and installs attempted this session. A
    *  preview, fake install included, must leave both at 0. */
   e2eUpdateCalls: (): Promise<{ checks: number; installs: number }> =>
-    ipcRenderer.invoke('e2e:update-calls')
+    ipcRenderer.invoke('e2e:update-calls'),
+  /** The e2e's diagLog (#140): answers after 600 ms, past the 500 ms ipc-slow line. */
+  e2eSlowIpc: (): Promise<boolean> => ipcRenderer.invoke('e2e:slow-ipc')
 }
 
 export type PrismApi = typeof api

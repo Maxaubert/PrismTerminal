@@ -77,8 +77,10 @@ export function DiagnosticsPage({ api }: { api: DiagSettingsBridge }): JSX.Eleme
       </SettingRow>
       <SettingRow id="diag-mark" icon={m.icon} label={m.label} sub={m.sub}>
         {/* Both words in one cell, only one visible: the button never
-            changes width as it answers. */}
-        <button type="button" className={`${ROW_BUTTON} grid`} onClick={mark} data-diag-mark aria-live="polite">
+            changes width as it answers. A grid button puts its one row at
+            the top, where a plain one centres its text (the e2e shot showed
+            Mark sitting 3px above Open folder's line), so it is centred. */}
+        <button type="button" className={`${ROW_BUTTON} grid place-content-center`} onClick={mark} data-diag-mark aria-live="polite">
           <span className={`col-start-1 row-start-1 ${marked ? 'invisible' : ''}`}>Mark</span>
           <span className={`col-start-1 row-start-1 ${marked ? '' : 'invisible'}`}>Marked</span>
         </button>

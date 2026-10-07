@@ -176,6 +176,7 @@ const PREF_PAGE = {
   'dictation-enabled': 'dictation', 'dictation-mode': 'dictation', 'dictation-hotkey': 'dictation', 'dictation-mic': 'dictation',
   'dictation-language': 'dictation', 'dictation-pause-media': 'dictation', 'dictation-sounds': 'dictation',
   'dictation-model': 'dictation', 'dictation-gpu': 'dictation',
+  'diag-verbose': 'diagnostics', 'diag-folder': 'diagnostics', 'diag-mark': 'diagnostics',
   'app-version': 'about'
 }
 
@@ -2480,15 +2481,17 @@ const scenarios = {
       ...entries('core/renderer/settings/options.ts'),
       ...entries('core/renderer/settings/dictationOptions.ts', (row) => !row.includes('onlyWhere')),
       // Command help (#12) keeps a list of its own, as dictation does.
-      ...entries('core/renderer/settings/helpOptions.ts')
+      ...entries('core/renderer/settings/helpOptions.ts'),
+      // The diagnostics log (#140) too: its own list, read the same way.
+      ...entries('core/renderer/settings/diagnosticsOptions.ts')
     ]
     const wanted = core.map((e) => e.id).sort()
-    ok(wanted.length >= 18 && wanted.includes('help-enabled'), `the core lists the terminal, dictation and help options (${wanted.length})`)
+    ok(wanted.length >= 21 && wanted.includes('help-enabled') && wanted.includes('diag-verbose'), `the core lists the terminal, dictation, help and diagnostics options (${wanted.length})`)
     ok(core.every((e) => e.section), 'and every entry names its section')
     await page.locator('[data-title-settings]').click()
     const shown = new Set()
     const sections = []
-    for (const tab of ['appearance', 'terminal', 'agents', 'dictation', 'about']) {
+    for (const tab of ['appearance', 'terminal', 'agents', 'dictation', 'diagnostics', 'about']) {
       await page.locator(`[data-settings-tab="${tab}"]`).click()
       // Default shell is drawn once main has listed the shells.
       if (tab === 'terminal') await page.locator('[data-pref="term-shell"]').waitFor({ timeout: 10000 })
@@ -2571,7 +2574,7 @@ const scenarios = {
         }
       })
     const pages = {}
-    for (const tab of ['appearance', 'terminal', 'agents', 'dictation', 'about']) {
+    for (const tab of ['appearance', 'terminal', 'agents', 'dictation', 'diagnostics', 'about']) {
       await page.locator(`[data-settings-tab="${tab}"]`).click()
       if (tab === 'terminal') await page.locator('[data-pref="term-shell"]').waitFor({ timeout: 10000 })
       await sleep(300)
@@ -2588,6 +2591,151 @@ const scenarios = {
       ok(l.overlaps === 0, `${tab}: no two controls in a row overlap (${l.overlaps} do)`)
     }
     await closeApp(app)
+  },
+
+  /**
+   * THE DIAGNOSTICS LOG (#140; owner, 2026-10-07: "robust logging and
+   * debugging ... especially to catch stalls"). Each problem is made on
+   * purpose and then found in <profile>\logs\diag.jsonl, the file the owner's
+   * "it stalled just now" is read from: a 2.5 s busy loop in the page (a
+   * page-stall naming the script, the crumbs before it, and the stack main
+   * took while it spun), a call main answers after 600 ms (`e2e:slow-ipc`,
+   * --e2e only), a thrown error and a rejected promise. Then the Diagnostics
+   * page: Open folder, Mark, and Detailed logging kept across a relaunch.
+   * And the quiet level is quiet: an idle 3 s writes nothing.
+   */
+  async diagLog(ok) {
+    const w = world()
+    const file = join(w.profile, 'logs', 'diag.jsonl')
+    const read = () => {
+      try {
+        return readFileSync(file, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((l) => {
+            try {
+              return JSON.parse(l)
+            } catch {
+              return { bad: l }
+            }
+          })
+      } catch {
+        return []
+      }
+    }
+    // Lines land in batches (the page's every 250 ms, the writer's every
+    // 250 ms), so every look waits for its line.
+    const has = (fn, ms = 10000) => until(() => read().find(fn) ?? false, ms, 100)
+    let { app, page } = await launch(w, { args: [w.alpha] })
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      const session = await has((l) => l.k === 'session')
+      ok(!!session && session.src === 'main' && session.e2e === true && session.verbose === false && typeof session.version === 'string' && session.pid > 0,
+        `a session line opens the log (${JSON.stringify(session && { version: session.version, electron: session.electron, verbose: session.verbose })})`)
+      ok(!!(await has((l) => l.k === 'crumb' && l.a === 'shell-spawn' && l.src === 'main')), 'the restored tab\'s shell is a crumb, from main')
+      // A tab opened by the user (the launch's own tab is a restore).
+      await page.waitForFunction(() => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()), null, { timeout: 45000 })
+      await page.keyboard.press('Control+t')
+      ok(!!(await until(async () => (await tabLabels(page)).length === 2)), 'Ctrl+T opens a second tab')
+      ok(!!(await has((l) => l.k === 'crumb' && l.a === 'tab-open' && l.src === 'page')), 'and the tab that opened is a crumb, from the page')
+
+      // QUIET IS QUIET: once both shells are at their prompts, an idle 3 s
+      // writes nothing (no heartbeat, no canary, no timer is a line of its own).
+      await page.waitForFunction(() => {
+        const rows = [...document.querySelectorAll('.xterm .xterm-rows')]
+        return rows.length > 0 && rows.every((r) => /PS [^>]*>\s*$/.test((r.textContent ?? '').trimEnd()))
+      }, null, { timeout: 45000 })
+      await sleep(1000)
+      const idleFrom = read().length
+      await sleep(3000)
+      const idle = read().slice(idleFrom)
+      ok(idle.length === 0, `an idle 3 s at the quiet level writes nothing (${JSON.stringify(idle.map((l) => l.k))})`)
+
+      // A STALL: 2.5 s of the page's thread, started by a named timer.
+      await page.evaluate(() => {
+        setTimeout(function diagE2eBusy() {
+          const end = performance.now() + 2500
+          while (performance.now() < end) {
+            /* spin */
+          }
+        }, 0)
+      })
+      const stall = await has((l) => l.k === 'page-stall' && l.ms >= 2000)
+      ok(!!stall && stall.src === 'page', `the busy loop is a page-stall (${stall?.ms} ms)`)
+      const scripts = Array.isArray(stall?.scripts) ? stall.scripts : []
+      ok(scripts.some((x) => x && (x.fn === 'diagE2eBusy' || /setTimeout/i.test(x.invoker ?? ''))),
+        `with the script that ran named (${JSON.stringify(scripts)})`)
+      const crumbs = Array.isArray(stall?.crumbs) ? stall.crumbs : []
+      ok(crumbs.some((c) => c && c.a === 'tab-open'), `and the crumbs said before it (${JSON.stringify(crumbs)})`)
+      // page-stack is kept (task 11, MEASURED): the stack main took while the
+      // page spun, written because a page-stall overlapping it arrived.
+      const stack = await has((l) => l.k === 'page-stack', 6000)
+      ok(!!stack && /diagE2eBusy/.test(stack.stack ?? '') && stack.ms >= 2000, `main took the spinning page's stack (${stack ? `${stack.ms} ms, ${String(stack.stack).split('\n')[1]?.trim()}` : 'none'})`)
+
+      // A SLOW CALL: main answers after 600 ms.
+      ok((await page.evaluate(() => window.prism.e2eSlowIpc())) === true, 'the slow call answers')
+      const slow = await has((l) => l.k === 'ipc-slow' && l.ch === 'e2e:slow-ipc')
+      ok(!!slow && slow.ms >= 500 && slow.ok === true, `and is an ipc-slow line naming its channel (${slow?.ms} ms)`)
+
+      // ERRORS: thrown in a timer, so it reaches the page's own handler (one
+      // thrown inside evaluate is Playwright's), and a rejection nobody holds.
+      await page.evaluate(() => {
+        setTimeout(() => {
+          throw new Error('diag-e2e-thrown')
+        }, 0)
+        void Promise.reject(new Error('diag-e2e-rejected'))
+      })
+      const thrown = await has((l) => l.k === 'page-error' && /diag-e2e-thrown/.test(l.msg ?? ''))
+      ok(!!thrown && /diag-e2e-thrown/.test(thrown.stack ?? ''), 'a thrown error is a page-error, with its stack')
+      ok(!!(await has((l) => l.k === 'page-rejection' && /diag-e2e-rejected/.test(l.msg ?? ''))), 'a rejected promise is a page-rejection')
+
+      // THE PAGE: the folder, Mark, Detailed logging.
+      const folderRow = await gotoPref(page, 'diag-folder')
+      ok(!!(await has((l) => l.k === 'crumb' && l.a === 'settings-page' && l.page === 'diagnostics')), 'opening the page is a crumb')
+      const shownDir = await until(async () => ((await folderRow.textContent()) ?? '').includes(join(w.profile, 'logs')), 5000, 100)
+      ok(!!shownDir, 'Log files shows the folder the log is in')
+      await folderRow.locator('button').click()
+      const opened = await until(() => app.evaluate(() => globalThis.__e2eOpenedPaths ?? []).then((x) => x.find((o) => o.abs === join(w.profile, 'logs')) ?? false), 4000, 100)
+      ok(!!opened, 'Open folder opens that folder (recorded under --e2e)')
+      // Its word sits in the middle of the button, as Open folder's does (the
+      // first shot of the page had it at the top: a grid button's row starts there).
+      const off = await page.evaluate(() => {
+        const b = document.querySelector('[data-diag-mark]')
+        // The TEXT's own box, through a Range: a stretched span is as tall as
+        // the button whatever line its word sits on.
+        const t = b?.querySelector('span')?.firstChild
+        if (!b || !t) return null
+        const r = document.createRange()
+        r.selectNodeContents(t)
+        const [bb, tb] = [b.getBoundingClientRect(), r.getBoundingClientRect()]
+        return Math.abs(bb.top + bb.height / 2 - (tb.top + tb.height / 2))
+      })
+      ok(off !== null && off <= 1, `Mark's word is centred in its button (${off?.toFixed(1)}px off)`)
+      const markAt = Date.now()
+      await page.locator('[data-diag-mark]').click()
+      ok(!!(await until(async () => (await page.locator('[data-diag-mark] span').last().isVisible()), 2000, 50)), 'Mark says Marked')
+      const mark = await has((l) => l.k === 'mark')
+      ok(!!mark && mark.src === 'page' && Math.abs(Date.parse(mark.t) - markAt) < 3000, `and stamps the moment in the log (${mark?.t})`)
+      const sw = page.locator('[data-pref="diag-verbose"] [role="switch"]')
+      ok((await sw.getAttribute('aria-checked')) === 'false', 'Detailed logging is off by default')
+      await sw.click()
+      ok(!!(await has((l) => l.k === 'verbose' && l.on === true)), 'switching it on is a line')
+      // The log's own diag: channels are never timed, so an app call.
+      await page.evaluate(() => window.prism.homeDir())
+      ok(!!(await has((l) => l.k === 'ipc' && l.ch && !l.ch.startsWith('diag:'))), 'and every call is logged from then on')
+      await closeApp(app)
+      ok(read().at(-1)?.k === 'quit', `a quit is the session's last line (${read().at(-1)?.k})`)
+
+      // KEPT ACROSS A RELAUNCH: main reads it from <userData>\diag.json.
+      ;({ app, page } = await launch(w, { args: [w.alpha] }))
+      const second = await has((l, i, all) => l.k === 'session' && all.slice(0, i).some((x) => x.k === 'session'))
+      ok(!!second && second.verbose === true, `the next session starts detailed (${second?.verbose})`)
+      await gotoPref(page, 'diag-verbose')
+      ok(!!(await until(async () => (await page.locator('[data-pref="diag-verbose"] [role="switch"]').getAttribute('aria-checked')) === 'true', 5000, 100)), 'and the switch says so')
+      ok(read().every((l) => !l.bad), 'every line in the file is one JSON object')
+    } finally {
+      await closeApp(app)
+    }
   },
 
   /**
@@ -2656,7 +2804,7 @@ const scenarios = {
           sideways: document.querySelector('[data-settings-page]').scrollWidth > document.querySelector('[data-settings-page]').clientWidth + 1
         }
       })
-    const pages = ['appearance', 'terminal', 'agents', 'dictation', 'about']
+    const pages = ['appearance', 'terminal', 'agents', 'dictation', 'diagnostics', 'about']
     try {
       await page.locator('[data-title-settings]').click()
       for (const [scheme, theme] of [['dark', 'pitch'], ['light', 'paper']]) {
@@ -5030,6 +5178,61 @@ const scenarios = {
 }
 
 const table = []
+/**
+ * THE STALLS REPORT (#140): every scenario's app keeps the diagnostics log in
+ * its own profile, so before the profile goes its stall and error lines are
+ * kept for one table at the end of the run. A report only: the exit code is
+ * the scenarios' alone. The diagLog scenario makes some on purpose (the busy
+ * loop and its stack, the slow call, the two errors), and those rows say so;
+ * anything else it logged is as real as any other scenario's.
+ */
+const stalls = []
+const STALL_KINDS = new Set(['page-stall', 'page-stack', 'main-lag', 'fs-slow', 'ipc-slow', 'unresponsive'])
+const ERROR_KINDS = new Set(['page-error', 'page-rejection', 'main-error', 'main-rejection', 'ipc-error', 'gone', 'logger-error'])
+function stallDetail(l) {
+  const cut = (v) => String(v ?? '').replace(/\s+/g, ' ').slice(0, 70)
+  if (l.k === 'page-stall') {
+    const top = Array.isArray(l.scripts) ? l.scripts[0] : null
+    return cut(top ? [top.fn, top.src, top.invoker].filter(Boolean).join(' ') : `blocking ${l.blocking ?? '?'}`)
+  }
+  if (l.k === 'page-stack') return cut(String(l.stack ?? '').split('\n').find((x) => /^\s*at /.test(x))?.trim())
+  if (l.k === 'main-lag') return cut((Array.isArray(l.inflight) ? l.inflight : []).map((c) => `${c.ch} ${c.ms}${c.done ? ' done' : ''}`).join(', ') || 'nothing in flight')
+  if (l.k === 'ipc-slow' || l.k === 'ipc-error') return cut(`${l.ch}${l.err ? ` ${l.err}` : ''}`)
+  if (l.k === 'gone') return cut(`${l.type} ${l.reason} ${l.exitCode}`)
+  return cut(l.msg ?? l.err ?? '')
+}
+function collectStalls(scenario) {
+  for (const base of worlds) {
+    const dir = join(base, 'profile', 'logs')
+    let files
+    try {
+      files = readdirSync(dir).filter((f) => f.startsWith('diag.jsonl'))
+    } catch {
+      continue
+    }
+    for (const f of files) {
+      let text
+      try {
+        text = readFileSync(join(dir, f), 'utf8')
+      } catch {
+        continue
+      }
+      for (const raw of text.split('\n')) {
+        if (!raw) continue
+        let l
+        try {
+          l = JSON.parse(raw)
+        } catch {
+          continue
+        }
+        const err = ERROR_KINDS.has(l.k)
+        if (!err && !(STALL_KINDS.has(l.k) && typeof l.ms === 'number' && l.ms >= 1000)) continue
+        const made = scenario === 'diagLog' && (['page-stall', 'page-stack', 'page-error', 'page-rejection'].includes(l.k) || l.ch === 'e2e:slow-ipc')
+        stalls.push({ scenario, kind: l.k, ms: typeof l.ms === 'number' ? l.ms : null, detail: stallDetail(l), expected: made })
+      }
+    }
+  }
+}
 /** Scenarios that honestly take longer than the default limit. */
 const SLOW = { dictation: 360000, dictationParakeet: 360000, helpPanel: 300000, updateWindow: 300000 }
 reapStrays()
@@ -5067,6 +5270,7 @@ for (const [name, run] of Object.entries(scenarios)) {
     over = true
   }
   const strays = reapStrays()
+  collectStalls(name)
   removeWorlds()
   table.push({ name, checks, fails, secs: ((Date.now() - t0) / 1000).toFixed(1), strays })
 }
@@ -5074,6 +5278,13 @@ for (const [name, run] of Object.entries(scenarios)) {
 console.log('\nscenario          checks  fails  secs')
 for (const r of table) {
   console.log(`${r.name.padEnd(18)}${String(r.checks).padStart(6)}${String(r.fails).padStart(7)}${r.secs.padStart(6)}`)
+}
+console.log('\nStalls (stalls of 1 s or more and errors, from each scenario\'s diagnostics log; a report, not a gate)')
+if (!stalls.length) console.log('  none')
+else {
+  console.log(`  ${'scenario'.padEnd(18)}${'kind'.padEnd(16)}${'ms'.padStart(7)}  detail`)
+  for (const r of stalls)
+    console.log(`  ${r.scenario.padEnd(18)}${r.kind.padEnd(16)}${(r.ms === null ? '-' : String(r.ms)).padStart(7)}  ${r.expected ? '(expected) ' : ''}${r.detail}`)
 }
 const failed = table.filter((r) => r.fails > 0)
 console.log(failed.length ? `\n${failed.length} scenario(s) FAILED` : '\nall scenarios passed')

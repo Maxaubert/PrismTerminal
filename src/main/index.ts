@@ -683,6 +683,9 @@ function wireIpc(): void {
   })
   // The DWM border itself is off under --e2e, so the suite asks what main HEARD.
   if (E2E) ipcMain.handle('e2e:window-edges', () => windowEdges)
+  // The e2e's diagLog (#140): a call that answers after 600 ms, so the IPC
+  // timing's ipc-slow line (500 ms+) is proved on a real channel.
+  if (E2E) ipcMain.handle('e2e:slow-ipc', () => new Promise((r) => setTimeout(() => r(true), 600)))
   // THE TASKBAR BADGE (2026-09-28): the page draws the disc, main puts it on
   // the window's taskbar button as its overlay icon. Only a small PNG data url
   // is taken; anything else, or null, clears it.
