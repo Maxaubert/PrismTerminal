@@ -3904,7 +3904,10 @@ const scenarios = {
     // SETTINGS CONTROLS DO NOT WEAR THE ACCENT (owner, 2026-09-23: "i dont want
     // settings buttons to be affected by the accent colour"; only Save is).
     // Sampled here with the theme's accent, and again after a pick: a row
-    // button, a pressed segment and a switch that is on must not move.
+    // button and a pressed segment must not move. AN ON SWITCH DOES (#138;
+    // owner, 2026-10-07: "yes option 1 but it should depend on the theme so
+    // only teal on the teal theme"): its track is the accent's fill
+    // (--p-sel-bg) and its knob the ink on it (--p-on-accent), both times.
     const controls = () =>
       page.evaluate(() => {
         const look = (el) => {
@@ -3912,17 +3915,32 @@ const scenarios = {
           const s = getComputedStyle(el)
           return `${s.backgroundColor}|${s.color}|${s.borderTopColor}`
         }
+        const token = (name) => {
+          const span = document.createElement('span')
+          span.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+          document.body.appendChild(span)
+          const c = getComputedStyle(span).backgroundColor
+          span.remove()
+          return c
+        }
+        const sw = document.querySelector('[role="switch"][aria-checked="true"]:not(:disabled)')
         return {
           button: look(document.querySelector('[data-choose-folder]')),
           segment: look(document.querySelector('[data-pref="newtab-mode"] [aria-pressed="true"]')),
-          switch: look(document.querySelector('[role="switch"][aria-checked="true"]'))
+          track: sw ? getComputedStyle(sw).backgroundColor : null,
+          knob: sw?.firstElementChild ? getComputedStyle(sw.firstElementChild).backgroundColor : null,
+          selBg: token('--p-sel-bg'),
+          onAccent: token('--p-on-accent')
         }
       })
     await gotoPref(page, 'newtab-mode')
     await page.locator('[data-choose-folder]').waitFor({ state: 'visible', timeout: 10000 })
     await sleep(700)
     const plain = await controls()
-    ok(!!plain.button && !!plain.segment && !!plain.switch, 'a row button, a pressed segment and an on switch are on the Terminal page')
+    ok(!!plain.button && !!plain.segment && !!plain.track, 'a row button, a pressed segment and an on switch are on the Terminal page')
+    ok(plain.track === plain.selBg, `an on switch's track is the theme's accent fill (${plain.track} vs ${plain.selBg})`)
+    ok(plain.knob === plain.onAccent, `and its knob is the ink on the accent (${plain.knob} vs ${plain.onAccent})`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-switch-pt-default.png') }).catch(() => {})
     await page.locator('[data-settings-tab="appearance"]').click()
     const row = page.locator('[data-pref="window-accent"]')
     await row.waitFor({ state: 'visible', timeout: 10000 })
@@ -4030,10 +4048,12 @@ const scenarios = {
       span.remove()
       return c
     })
-    for (const k of ['button', 'segment', 'switch']) {
+    for (const k of ['button', 'segment']) {
       ok(after[k] === plain[k], `the ${k} is unchanged by the picked accent (${after[k]})`)
       ok(!after[k].split('|').includes(accentRgb), `and the ${k} wears no accent`)
     }
+    ok(after.track !== plain.track && after.track === after.selBg, `an on switch's track follows the picked accent (${plain.track} -> ${after.track})`)
+    ok(after.knob === after.onAccent, `and its knob is the ink on it (${after.knob})`)
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-neutral-controls.png') }).catch(() => {})
     await page.locator('[data-settings-tab="appearance"]').click()
     await row.waitFor({ state: 'visible', timeout: 10000 })
@@ -4095,6 +4115,17 @@ const scenarios = {
       }, 8000)),
       "Reset puts the theme's background back"
     )
+
+    // On a LIGHT theme the on switch is that theme's accent and its ink (#138).
+    await page.locator('[data-term-card="paper"]').first().click()
+    await until(async () => (await page.locator('[data-term-card="paper"]').first().getAttribute('aria-pressed')) === 'true', 4000, 50)
+    await gotoPref(page, 'newtab-mode')
+    await page.locator('[data-choose-folder]').waitFor({ state: 'visible', timeout: 10000 })
+    await sleep(700)
+    const light = await controls()
+    ok(light.track === light.selBg && light.track !== plain.track, `on a light theme the on switch is its accent (${light.track})`)
+    ok(light.knob === light.onAccent, `with the ink on it as the knob (${light.knob})`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-switch-light.png') }).catch(() => {})
     await closeApp(app)
   },
 

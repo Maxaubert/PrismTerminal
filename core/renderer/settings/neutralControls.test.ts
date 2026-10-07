@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ROW_BUTTON, SEGMENT_ON, SWITCH_KNOB_ON, SWITCH_ON } from './fields'
 
-// Settings controls are neutral and only Save wears the accent (owner,
+// Settings controls are neutral and only Save and an on switch (#138) wear the accent (owner,
 // 2026-09-23). The e2e measures it on a real page; this holds the source, so
 // an accent slipped back into a control fails before anything is built.
 const ACCENT = /--p-(accent|accent-hi|on-accent|sel-bg)\b/
@@ -11,11 +11,24 @@ const ACCENT = /--p-(accent|accent-hi|on-accent|sel-bg)\b/
 const code = (src: string): string[] => src.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*\*)/.test(l))
 
 describe('settings controls', () => {
-  it('row button, pressed segment and switch carry no accent token', () => {
-    for (const cls of [ROW_BUTTON, SEGMENT_ON, SWITCH_ON, SWITCH_KNOB_ON]) {
+  it('row button and pressed segment carry no accent token', () => {
+    for (const cls of [ROW_BUTTON, SEGMENT_ON]) {
       // The focus ring may be the accent: it marks the keyboard, not the button.
       expect(cls.replace(/focus-visible:\S+/g, '')).not.toMatch(ACCENT)
     }
+  })
+
+  // #138 (owner, 2026-10-07: "yes option 1 but it should depend on the theme
+  // so only teal on the teal theme"): an ON switch is the one control that
+  // wears the accent, as the fill and its own ink, the pair held to 4.5:1.
+  it('an on switch wears the accent fill with the on-accent knob', () => {
+    expect(SWITCH_ON).toMatch(/(^|\s)bg-\[var\(--p-sel-bg\)\]/)
+    expect(SWITCH_KNOB_ON).toBe('bg-[var(--p-on-accent)]')
+    // Off stays the grey track and the white knob.
+    const src = readFileSync(resolve(__dirname, 'fields.tsx'), 'utf8')
+    const sw = src.slice(src.indexOf('export function Switch'), src.indexOf('export function parseHexInput'))
+    expect(sw).toMatch(/on \? SWITCH_ON : 'bg-\[var\(--p-track\)\]'/)
+    expect(sw).toMatch(/on \? SWITCH_KNOB_ON : 'bg-white'/)
   })
 
   it("dictation's buttons carry no accent", () => {
