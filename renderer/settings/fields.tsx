@@ -26,7 +26,7 @@ export function Switch({
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!on)}
-      className={`relative h-[20px] w-[36px] shrink-0 rounded-full transition-colors disabled:cursor-default ${
+      className={`relative h-[20px] w-[36px] shrink-0 rounded-full transition-[background-color,filter,opacity] disabled:cursor-default ${
         on ? SWITCH_ON : 'bg-[var(--p-track)]'
       }`}
     >
@@ -317,6 +317,7 @@ export const RESET_LINK =
  * keep accented are the save buttons"). Every grey here is a token the theme
  * derives from its own ground, so it keeps its contrast on every preset and on
  * a chosen background. The focus ring stays the accent: it is not a button.
+ * Since #138 (2026-10-07) an ON switch is the exception, below.
  */
 
 /** The button a row uses for a verb of its own: the dropdown's own look. */
@@ -327,8 +328,20 @@ export const ROW_BUTTON =
  *  light theme), in the text's own ink. */
 export const SEGMENT_ON = 'bg-[color-mix(in_srgb,var(--p-text)_16%,var(--p-control))] text-[var(--p-text)]'
 
-/** A switch that is on: the track in the soft text ink and the knob in the
- *  ground, so on and off differ in lightness, not only in position. */
-export const SWITCH_ON = 'bg-[var(--p-text-soft)]'
-export const SWITCH_KNOB_ON = 'bg-[var(--p-bg)]'
+/**
+ * A switch that is on WEARS THE THEME'S ACCENT (#138; owner, 2026-10-07:
+ * "toggles differ in look i like the teal with black not the green and
+ * white", then "yes option 1 but it should depend on the theme so only teal on
+ * the teal theme"). This narrows #42 for the switch alone: row buttons and
+ * segments stay grey. The track is `--p-sel-bg`, the accent as a FILL, which
+ * both apps move until `--p-on-accent` clears 4.5:1 on it (the update chip's
+ * own pair); the raw accent is only held to 3:1, and a see-through accent's
+ * fill is flattened under glass. The knob is that ink: near-black on a bright
+ * accent (teal, orange), white on a dark one. Hovered it lifts like Save;
+ * disabled it is dimmed, so a switch nobody can change does not shout the
+ * accent. Off is the grey track and white knob it always was, and keyboard
+ * focus stays the row's fill (Prism #272: never a ring).
+ */
+export const SWITCH_ON = 'bg-[var(--p-sel-bg)] enabled:hover:brightness-110 disabled:opacity-50'
+export const SWITCH_KNOB_ON = 'bg-[var(--p-on-accent)]'
 
