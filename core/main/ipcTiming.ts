@@ -1,0 +1,204 @@
+import { performance } from 'perf_hooks'
+import { CH, DCH } from '../shared/channels'
+import type { DiagLog } from './diagLog'
+import { errorFields, summariseArgs } from './diagSummary'
+
+/**
+ * EVERY IPC CALL, TIMED AT THE ONE PLACE THEY ALL PASS (#140).
+ *
+ * Both apps register every channel on Electron's one `ipcMain` object, and the
+ * core's register functions are handed that same object, so patching its
+ * `handle`, `on` and `once` here times every call in the app without touching
+ * a single registration. Cost per call: two `performance.now()` and a map
+ * entry for the in-flight table.
+ *
+ * - A `handle` that settles after 500 ms, or a sync `on` body that ran 100 ms
+ *   or more, is `ipc-slow` with its channel, time and summarised arguments.
+ * - One that throws or rejects is `ipc-error`; the error is RETHROWN
+ *   UNCHANGED, so behaviour is exactly what it was.
+ * - In verbose every call is `ipc` with its channel and time (no arguments).
+ * - `removeListener` / `off` with the ORIGINAL listener still remove it
+ *   (Prism's `open:listen` depends on that): a map from each listener to its
+ *   wrappers, per channel.
+ * - `inflight()` is the table of calls running now, which `main-lag` prints:
+ *   a late event loop next to a 3 s `folder:sizes` call names the suspect.
+ */
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Listener = (event: any, ...args: any[]) => any
+export interface IpcMainPatchable {
+  handle(channel: string, listener: Listener): unknown
+  on(channel: string, listener: Listener): unknown
+  once?(channel: string, listener: Listener): unknown
+  removeListener(channel: string, listener: Listener): unknown
+  off?(channel: string, listener: Listener): unknown
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+export interface InflightCall {
+  ch: string
+  ms: number
+}
+
+export interface IpcTiming {
+  /** Calls running now, longest first, at most eight. */
+  inflight(): InflightCall[]
+}
+
+export interface IpcTimingOptions {
+  now?: () => number
+  /** A handle slower than this is `ipc-slow`. */
+  slowMs?: number
+  /** A sync `on` body slower than this is `ipc-slow`. */
+  syncSlowMs?: number
+  /** A channel whose arguments are logged by size only. */
+  opaque?: (ch: string) => boolean
+}
+
+/** Typed text, the clipboard and recorded audio: never written down, even
+ *  when the call that carried them was slow. */
+const OPAQUE = new Set<string>([CH.input, CH.clipboardWrite, DCH.transcribe])
+const isOwn = (ch: string): boolean => ch.startsWith('diag:')
+
+export function timeIpcMain(ipcMain: IpcMainPatchable, log: DiagLog, opts: IpcTimingOptions = {}): IpcTiming {
+  const now = opts.now ?? ((): number => performance.now())
+  const slowMs = opts.slowMs ?? 500
+  const syncSlowMs = opts.syncSlowMs ?? 100
+  const opaque = opts.opaque ?? ((ch: string): boolean => OPAQUE.has(ch))
+
+  let nextId = 0
+  const running = new Map<number, { ch: string; start: number }>()
+  const wrappers = new WeakMap<Listener, Map<string, Listener[]>>()
+
+  const remember = (fn: Listener, ch: string, w: Listener): void => {
+    let byCh = wrappers.get(fn)
+    if (!byCh) wrappers.set(fn, (byCh = new Map()))
+    const list = byCh.get(ch) ?? []
+    list.push(w)
+    byCh.set(ch, list)
+  }
+  const recall = (fn: Listener, ch: string): Listener => {
+    const list = wrappers.get(fn)?.get(ch)
+    return list?.pop() ?? fn
+  }
+
+  const ended = (ch: string, start: number, args: unknown[], ok: boolean, sync: boolean, err?: unknown): void => {
+    try {
+      const ms = Math.round(now() - start)
+      if (!ok) log.write('main', 'ipc-error', { ch, ms, ...renameMsg(errorFields(err)) })
+      if (ms >= (sync ? syncSlowMs : slowMs))
+        log.write('main', 'ipc-slow', { ch, ms, args: summariseArgs(args, opaque(ch)), ok, ...(sync ? { sync: true } : {}) })
+      else if (log.verbose()) log.write('main', 'ipc', { ch, ms })
+    } catch {
+      /* the log never breaks a call */
+    }
+  }
+
+  const wrapHandle = (ch: string, fn: Listener): Listener => {
+    if (isOwn(ch)) return fn
+    return (event, ...args) => {
+      const start = now()
+      const id = nextId++
+      running.set(id, { ch, start })
+      let result: unknown
+      try {
+        result = fn(event, ...args)
+      } catch (err) {
+        running.delete(id)
+        ended(ch, start, args, false, false, err)
+        throw err
+      }
+      if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+        return (result as Promise<unknown>).then(
+          (v) => {
+            running.delete(id)
+            ended(ch, start, args, true, false)
+            return v
+          },
+          (err) => {
+            running.delete(id)
+            ended(ch, start, args, false, false, err)
+            throw err
+          }
+        )
+      }
+      running.delete(id)
+      ended(ch, start, args, true, false)
+      return result
+    }
+  }
+
+  const wrapOn = (ch: string, fn: Listener): Listener => {
+    if (isOwn(ch)) return fn
+    return (event, ...args) => {
+      const start = now()
+      let result: unknown
+      try {
+        result = fn(event, ...args)
+      } catch (err) {
+        ended(ch, start, args, false, true, err)
+        throw err
+      }
+      ended(ch, start, args, true, true)
+      return result
+    }
+  }
+
+  const orig = {
+    handle: ipcMain.handle.bind(ipcMain),
+    on: ipcMain.on.bind(ipcMain),
+    once: ipcMain.once?.bind(ipcMain),
+    removeListener: ipcMain.removeListener.bind(ipcMain),
+    off: ipcMain.off?.bind(ipcMain)
+  }
+
+  ipcMain.handle = (ch, fn) => orig.handle(ch, wrapHandle(ch, fn))
+  ipcMain.on = (ch, fn) => {
+    const w = wrapOn(ch, fn)
+    if (w !== fn) remember(fn, ch, w)
+    orig.on(ch, w)
+    return ipcMain
+  }
+  // NOT through the emitter's own `once`: it registers through `this.on`,
+  // which is the patched one, and its inner wrapper is then hidden inside
+  // ours where `removeListener(fn)` cannot find it (MEASURED in the unit
+  // test). A once is an `on` that removes itself first.
+  if (orig.once) {
+    ipcMain.once = (ch, fn) => {
+      const one: Listener = (event, ...args) => {
+        ipcMain.removeListener(ch, fn)
+        return fn(event, ...args)
+      }
+      const w = wrapOn(ch, one)
+      remember(fn, ch, w)
+      orig.on(ch, w)
+      return ipcMain
+    }
+  }
+  ipcMain.removeListener = (ch, fn) => {
+    orig.removeListener(ch, recall(fn, ch))
+    return ipcMain
+  }
+  if (orig.off) {
+    const off = orig.off
+    ipcMain.off = (ch, fn) => {
+      off(ch, recall(fn, ch))
+      return ipcMain
+    }
+  }
+
+  return {
+    inflight: () => {
+      const t = now()
+      return [...running.values()]
+        .map((r) => ({ ch: r.ch, ms: Math.round(t - r.start) }))
+        .sort((a, b) => b.ms - a.ms)
+        .slice(0, 8)
+    }
+  }
+}
+
+/** `ipc-error` names the message `err`, beside `ch`. */
+function renameMsg(f: { msg: string; stack?: string }): { err: string; stack?: string } {
+  return f.stack ? { err: f.msg, stack: f.stack } : { err: f.msg }
+}
