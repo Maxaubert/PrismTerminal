@@ -728,14 +728,20 @@ the owner's own call, #99.)
   want settings buttons to be affected by the accent colour... grey based on the bg colour ... same
   colours as the drop down menus"; "the only ones to keep accented are the save buttons"; both
   apps). This narrows the accent rule above: row buttons (`ROW_BUTTON`, the dropdown's look), the
-  pressed segment (`SEGMENT_ON`), a switch that is on (`SWITCH_ON`, track in the soft ink, knob in
-  the ground) and dictation's buttons are greys from the theme's own tokens, in `core/` so Prism
-  follows. Save changes and Save as Custom keep the accent. Still accented, since they are not
+  pressed segment (`SEGMENT_ON`) and dictation's buttons are greys from the theme's own tokens, in
+  `core/` so Prism follows. Save changes and Save as Custom keep the accent. **AN ON SWITCH WEARS
+  THE THEME'S ACCENT** (#138; owner, 2026-10-07: "toggles differ in look i like the teal with black
+  not the green and white", then "yes option 1 but it should depend on the theme so only teal on the
+  teal theme"). This narrows #42 for switches only: `SWITCH_ON` is `--p-sel-bg` (the accent as a
+  fill, moved until `--p-on-accent` clears 4.5:1 on it, the update chip's pair) and
+  `SWITCH_KNOB_ON` is `--p-on-accent` (near-black on a bright accent, white on a dark one); dimmed
+  when disabled, lifted on hover; off is the grey track and white knob as before. Still accented, since they are not
   buttons: Reset links, the chosen theme card, the dropdown's chosen item, the badges, progress, the
   hotkey capture while it listens, a found row's flash. NOT the rail's chosen page any more (#134,
   owner: no accent bar): a grey `--p-hover-hi` fill; and focus in the new rows is a fill and a
   lighter edge, not an accent ring (Prism #272). `neutralControls.test.ts` holds the
-  source; the `accent` e2e asserts a picked accent moves none of the three controls.
+  source; the `accent` e2e asserts a picked accent moves neither the row button nor the segment, and that an
+  on switch is `--p-sel-bg` with an `--p-on-accent` knob on PT Default, a picked accent and Paper.
 - **PT DEFAULT IS THE DEFAULT THEME HERE, AND FIRST IN THE WALL** (owner, 2026-09-22, handing over the palette he had saved as
   Custom: "let this be the default theme ... for prism terminal"): Wombat's colours on #121212, the
   two blacks lifted, the icon's orange `#fe8f34` as the accent. A core preset like any other, and
