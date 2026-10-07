@@ -228,5 +228,42 @@ merges. It also folds in the auto bump.
 - The owner then merges Prism B, rebased on that bump.
 - A and B ride after the PRs already open (PT #139, which takes core 0.26.0, then this is 0.27.0).
 
+## Measured during PR A (2026-10-07)
+
+- **`page-stack` is KEPT (task 11).** Electron 43.7.3, a page spinning in a 3 s busy loop:
+  `mainFrame.collectJavaScriptCallStack()` answered in 0 to 1 ms, but with the sentence "Website
+  owner has not opted in for JS call stacks in crash reports." until the document was served with
+  `Document-Policy: include-js-call-stacks-in-crash-reports`. Set through
+  `session.webRequest.onHeadersReceived` (or a `protocol.handle('file')` wrapper), the stack came
+  back (`at spinHard ... at outerBusy ...`) for a `file://` page AND a dev server's `http://` page.
+  In the BUILT Prism Terminal under `--e2e` the whole chain landed: `page-stall` (3000 ms, invoker
+  `TimerHandler:setTimeout`), then `page-stack` with the busy function's name, 2012 ms after the
+  last beat. The core exports `withStackPolicy`; each host adds it for `mainFrame` responses.
+- **The first run found a cause already:** the first `term:spawn` of a launch blocked main for
+  about 1.4 to 1.6 s (`main-lag` beside `ipc-slow term:spawn`, `shell-spawn` `ms` 1446 to 1647):
+  node-pty's import and the ConPTY start on the restore's spawn. Its own issue, not this PR.
+- **It also found two bugs, fixed before the commit:** a page error's script location, named
+  `src`, overwrote the line's `src` (now `loc`, and the writer's four keys can never be
+  overwritten); and `main-lag` listed nothing in flight because the blocking call had settled a
+  millisecond before the late tick ran (now it names the calls that ended inside the lag, `done`).
+- **Electron's main runs Node in warn mode** for unhandled rejections (MEASURED: a warning, the app
+  runs on, with or without a listener), so listening to `unhandledRejection` changes nothing but
+  the console warning.
+
+Deviations from the design above, each small:
+- Strings cap at 300, but a `stack` at 2000: 300 characters is about two frames.
+- `main-lag` uses the 50 ms drift timer alone: `monitorEventLoopDelay` is a sampled histogram and
+  says how bad, never when, and a timeline line needs the when.
+- `page-stack` is also written when the window reports `unresponsive` (a real hang, no throttle),
+  not only on an overlapping `page-stall`.
+- The page error's location field is `loc`, not `src` (above). `quit` is a kind of its own, the
+  last line of a session.
+- The settings component is `core/renderer/settings/sections/DiagnosticsPage.tsx` (beside
+  `DictationPage`, so the grouped cards' copy rules hold it), and it takes the bridge as a prop
+  rather than through a new `TermHostConfig` field. In PT it is the rail's fifth page, directly
+  above About: the redesign (#134) had already given the rail four pages before About.
+- `startDiagnostics` (`core/main/diagnostics.ts`) composes the pieces, so a host wires it in one
+  call; `pageLine` in `diagIpc.ts` holds the page to its own kinds.
+
 **After merge:** install both. The owner uses them, and the first "it stalled" is read with
 `npm run diag`.
