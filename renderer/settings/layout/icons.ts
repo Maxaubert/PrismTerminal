@@ -42,6 +42,11 @@ export const SETTING_ICONS = {
   download: 'M12 4v11M7 10.5l5 5 5-5M5 20h14',
   chip: 'M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4',
   version: 'M20 12l-8 8-9-9V3h8zM7.5 7.5h.01',
+  // Diagnostics (#140): the page, the log, its folder, the mark.
+  diagnostics: 'M4 5h16v14H4zM6.5 12h3l1.5-3 2 6 1.5-3h3',
+  log: 'M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7',
+  folder: 'M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z',
+  flag: 'M5 21V4M5 4h12l-2.5 4.5L17 13H5',
   // Marks inside a row.
   warn: 'M12 4l9 16H3zM12 10v4M12 17h.01',
   x: 'M6 6l12 12M18 6L6 18'

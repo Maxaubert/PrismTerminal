@@ -1,3 +1,4 @@
+import { DIAGNOSTICS_OPTIONS } from './diagnosticsOptions'
 import { dictationOptionIds } from './dictationOptions'
 import { HELP_OPTIONS } from './helpOptions'
 import { terminalOptionIds } from './options'
@@ -16,16 +17,20 @@ import { acrylicSub, opt, themeSub } from './sections/opts'
 export function coreSettingsIndex({
   pageOf,
   nvidia,
-  help = true
+  help = true,
+  diagnostics = false
 }: {
   pageOf: (section: SettingsSectionId) => string
   nvidia: boolean
   help?: boolean
+  /** The Diagnostics page (#140): only in a host that wired the log. */
+  diagnostics?: boolean
 }): SettingsIndexEntry[] {
   const ids = [
     ...terminalOptionIds({ windowAcrylic: false }),
     ...dictationOptionIds({ nvidia }),
-    ...(help ? HELP_OPTIONS.map((o) => o.id) : [])
+    ...(help ? HELP_OPTIONS.map((o) => o.id) : []),
+    ...(diagnostics ? DIAGNOSTICS_OPTIONS.map((o) => o.id) : [])
   ]
   return ids.map((id) => {
     const o = opt(id)
