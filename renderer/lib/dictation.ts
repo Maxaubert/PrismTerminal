@@ -1,5 +1,6 @@
 import { engineFor, languageFor } from '../../shared/dictationCatalog'
 import { dictationHost } from '../host'
+import { crumb } from './diag'
 import { cleanTranscript } from './dictationClean'
 import { initialKeyState, reduceKey, type KeyEvt, type KeyState } from './dictationKey'
 import {
@@ -85,6 +86,9 @@ export function onDictationLevel(l: (level: number) => void): () => void {
   }
 }
 function setView(patch: Partial<DictationView>): void {
+  // The timeline (#140): listening is a start, transcribing the stop, idle
+  // the end of the pass. Never the text.
+  if (patch.phase && patch.phase !== view.phase) crumb('dictation', { phase: patch.phase })
   view = { ...view, ...patch }
   viewListeners.forEach((l) => l())
 }

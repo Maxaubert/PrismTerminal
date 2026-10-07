@@ -3,6 +3,7 @@ import { cdCommand } from '../shared/termCwd'
 import { detectShells, shellById } from './shells'
 import { cmdPrompt } from './termPrompt'
 import { isOurPlugin } from './claudePlugin'
+import { diagMain } from './diagLog'
 
 // The pty host. Sessions are keyed by an id the renderer assigns - the same
 // pattern as tabs, where the renderer owns the list and main owns the
@@ -408,6 +409,15 @@ function withResume(def: { exe: string; args: string[]; id: string }, resume: st
 const pending = new Set<string>()
 const killedWhilePending = new Set<string>()
 
+/** A shell's birth and end on the diagnostics timeline (#140). Never throws. */
+function shellCrumb(a: string, fields: Record<string, unknown>): void {
+  try {
+    diagMain().write('main', 'crumb', { a, ...fields })
+  } catch {
+    /* the log never breaks a spawn */
+  }
+}
+
 export async function spawnTerm(
   id: string,
   root: string,
@@ -452,17 +462,20 @@ async function spawnPending(
         outputTicks += 1
         batcher.push(d)
       }),
-      w.pty.onExit(() => {
+      w.pty.onExit((e) => {
         batcher.flush()
         sessions.delete(id)
+        shellCrumb('shell-exit', { id, pid: w.pty.pid, exitCode: e?.exitCode ?? null })
         send('term:exit', id)
       })
     ]
     sessions.set(id, { pty: w.pty, batcher, subs, defId: w.defId })
+    shellCrumb('shell-spawn', { id, pid: w.pty.pid, shell: def.id, warm: true })
     const want = desiredSize.get(id)
     if (want) resizeTerm(id, want.cols, want.rows)
     return true
   }
+  const t0 = performance.now()
   try {
     const pty = await import('node-pty')
     const size = desiredSize.get(id) ?? { cols: 80, rows: 24 }
@@ -485,15 +498,18 @@ async function spawnPending(
         outputTicks += 1
         batcher.push(d)
       }),
-      p.onExit(() => {
+      p.onExit((e) => {
         batcher.flush()
         sessions.delete(id)
+        shellCrumb('shell-exit', { id, pid: p.pid, exitCode: e?.exitCode ?? null })
         send('term:exit', id)
       })
     ]
     sessions.set(id, { pty: p, batcher, subs, defId: def.id })
+    shellCrumb('shell-spawn', { id, pid: p.pid, shell: def.id, cwd: root, resume: !!resume, ms: Math.round(performance.now() - t0) })
     return true
-  } catch {
+  } catch (err) {
+    shellCrumb('shell-spawn-failed', { id, shell: def.id, cwd: root, err: err instanceof Error ? err.message : String(err) })
     return false // shell missing or ConPTY refused; the renderer shows the line
   }
 }

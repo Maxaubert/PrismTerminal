@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
 import { labelProblem, copyProblem, subTooLong } from '../../shared/settingsCopy'
+import { DIAGNOSTICS_OPTIONS } from './diagnosticsOptions'
 import { DICTATION_OPTIONS, dictationOptionIds } from './dictationOptions'
 import { HELP_OPTIONS } from './helpOptions'
 import { isSettingIcon } from './layout/icons'
@@ -34,8 +35,8 @@ const rendered = new Set(
   [...sections.matchAll(/<(?:Pref|SettingRow)\s+id="([a-z-]+)"|data-pref="([a-z-]+)"/g)].map((m) => m[1] ?? m[2])
 )
 
-const ALL = [...TERMINAL_OPTIONS, ...DICTATION_OPTIONS, ...HELP_OPTIONS]
-const LIST_FILES = ['options.ts', 'dictationOptions.ts', 'helpOptions.ts']
+const ALL = [...TERMINAL_OPTIONS, ...DICTATION_OPTIONS, ...HELP_OPTIONS, ...DIAGNOSTICS_OPTIONS]
+const LIST_FILES = ['options.ts', 'dictationOptions.ts', 'helpOptions.ts', 'diagnosticsOptions.ts']
 
 describe('the terminal options list', () => {
   it('names every row the shared sections render, and nothing they do not', () => {
@@ -103,6 +104,9 @@ describe('the terminal options list', () => {
         "dictation-model=prism.dictation.model",
         "dictation-gpu=null",
         "help-enabled=prism.help.enabled",
+        "diag-verbose=null",
+        "diag-folder=null",
+        "diag-mark=null",
       ]
     `)
   })
@@ -148,7 +152,14 @@ describe('the grouped cards fields of the lists (2026-10-05)', () => {
       const src = readFileSync(join(__dirname, f), 'utf8')
       const entries = [...src.matchAll(/\{\s*id: '([a-z-]+)'[^}]*\}/g)]
       const ids = entries.map((m) => m[1])
-      const list = f === 'options.ts' ? TERMINAL_OPTIONS : f === 'dictationOptions.ts' ? DICTATION_OPTIONS : HELP_OPTIONS
+      const list =
+        f === 'options.ts'
+          ? TERMINAL_OPTIONS
+          : f === 'dictationOptions.ts'
+            ? DICTATION_OPTIONS
+            : f === 'diagnosticsOptions.ts'
+              ? DIAGNOSTICS_OPTIONS
+              : HELP_OPTIONS
       expect(ids, f).toEqual(list.map((o) => o.id))
       for (const m of entries) {
         expect(m[0].includes('\n'), m[1]).toBe(false)
