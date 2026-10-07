@@ -113,6 +113,14 @@ describe('createDiagLog', () => {
     expect(log.failed()).toBe(true)
   })
 
+  it('keeps its own four keys whatever the fields say (MEASURED: a page error named its script src)', async () => {
+    const dir = join(scratch(), 'logs')
+    const log = make({ dir, uptime: () => 7 })
+    log.write('page', 'page-error', { src: null, k: 'session', up: 0, t: 'x', msg: 'm' })
+    await log.flush()
+    expect(lines(log.file)[0]).toMatchObject({ src: 'page', k: 'page-error', up: 7, msg: 'm' })
+  })
+
   it('caps what a caller hands it', async () => {
     const dir = join(scratch(), 'logs')
     const log = make({ dir })

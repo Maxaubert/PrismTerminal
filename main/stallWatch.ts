@@ -29,7 +29,7 @@ import type { InflightCall } from './ipcTiming'
 
 export interface StallWatchDeps {
   log: DiagLog
-  inflight(): InflightCall[]
+  inflight(windowMs?: number): InflightCall[]
   /** One cheap async fs call: the host stats its userData folder. */
   canary(): Promise<unknown>
   /** The page's JavaScript stack now, or null. Absent: no page-stack. */
@@ -105,7 +105,9 @@ export function startStallWatch(deps: StallWatchDeps): StallWatch {
       const n = now()
       const late = Math.round(n - last - tickMs)
       last = n
-      if (late >= lagMs) log.write('main', 'main-lag', { ms: late, inflight: deps.inflight() })
+      // The window covers the whole block: the call that caused it has often
+      // settled by the time this tick could run.
+      if (late >= lagMs) log.write('main', 'main-lag', { ms: late, inflight: deps.inflight(late + tickMs) })
       if (lastBeat !== null && !askedThisGap && n - lastBeat >= beatGapMs) {
         askedThisGap = true
         void askStack(n - lastBeat)

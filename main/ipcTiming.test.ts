@@ -199,6 +199,19 @@ describe('timeIpcMain', () => {
     expect(timing.inflight()).toEqual([])
   })
 
+  it('names a call that ended inside the window, since a lag is only seen once the loop is free', async () => {
+    const ipc = new FakeIpcMain()
+    const c = clock()
+    const timing = timeIpcMain(ipc, fakeLog(), { now: c.now })
+    ipc.on('term:spawn', () => c.at(c.now() + 1800))
+    c.at(1000)
+    ipc.emit('term:spawn', {})
+    c.at(2850)
+    expect(timing.inflight()).toEqual([])
+    expect(timing.inflight(2000)).toEqual([{ ch: 'term:spawn', ms: 1800, done: true }])
+    expect(timing.inflight(10)).toEqual([])
+  })
+
   it('logs only the sizes of an opaque channel', async () => {
     const ipc = new FakeIpcMain()
     const log = fakeLog()

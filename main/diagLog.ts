@@ -62,6 +62,8 @@ export const DIAG_FILE = 'diag.jsonl'
 export const DIAG_MAX_BYTES = 2 * 1024 * 1024
 /** Rotated files kept beside the live one: `.1` (newest) to `.4`. */
 export const DIAG_KEEP = 4
+/** Every line's own keys, in this order, before its fields. */
+const LINE_KEYS = ['t', 'up', 'src', 'k'] as const
 
 export function createDiagLog(opts: DiagLogOptions): DiagLog {
   const dir = opts.dir
@@ -88,7 +90,11 @@ export function createDiagLog(opts: DiagLogOptions): DiagLog {
     } catch {
       t = new Date(now()).toISOString()
     }
-    return JSON.stringify({ t, up, src, k, ...cleanFields(fields ?? {}) }) + '\n'
+    // The four line keys are the writer's: a field named `src` (a page error's
+    // script, once) must not overwrite where the line came from.
+    const rest = cleanFields(fields ?? {})
+    for (const key of LINE_KEYS) delete rest[key]
+    return JSON.stringify({ t, up, src, k, ...rest }) + '\n'
   }
 
   const schedule = (): void => {
