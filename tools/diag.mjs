@@ -32,6 +32,7 @@ const PROBLEMS = new Set([
   'gone',
   'unresponsive',
   'logger-error',
+  'logger-dropped',
   'mark'
 ])
 const CRUMBS_BEFORE = 5
@@ -123,7 +124,7 @@ function summary(l) {
     case 'page-rejection':
     case 'main-error':
     case 'main-rejection':
-      return `${l.msg}${l.loc ? ` at ${l.loc}` : ''}${l.stack ? `\n${indent(l.stack, 6)}` : ''}`
+      return `${l.msg}${l.loc ? ` at ${l.loc}` : ''}${l.repeats ? ` (and ${l.repeats} more like it)` : ''}${l.stack ? `\n${indent(l.stack, 6)}` : ''}`
     case 'mark':
       return l.note ? `"${l.note}"` : '(no note)'
     case 'crumb': {

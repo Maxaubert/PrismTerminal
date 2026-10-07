@@ -62,7 +62,20 @@ export interface IpcTimingOptions {
   syncSlowMs?: number
   /** A channel whose arguments are logged by size only. */
   opaque?: (ch: string) => boolean
+  /** The host's own channels that wait on the user or a download, added to
+   *  `LONG_WAIT` (PT: the folder picker, the update install). */
+  longWait?: Iterable<string>
 }
+
+/**
+ * Calls that are SUPPOSED to take long (review of #140): a folder picker
+ * answers when the user has picked, a download when 643 MB have come. They
+ * are never `ipc-slow`, which `npm run diag` reads as a stall suspect, and
+ * never in `inflight`, where one running for minutes sat at the top of every
+ * `main-lag` and pushed the real suspect out of the eight slots. They are
+ * still `ipc-error` when they fail, and `ipc` in Detailed logging.
+ */
+export const LONG_WAIT: ReadonlySet<string> = new Set([DCH.download])
 
 /** Typed text, the clipboard and recorded audio: never written down, even
  *  when the call that carried them was slow. */
@@ -75,6 +88,7 @@ export function timeIpcMain(ipcMain: IpcMainPatchable, log: DiagLog, opts: IpcTi
   const slowMs = opts.slowMs ?? 500
   const syncSlowMs = opts.syncSlowMs ?? 100
   const opaque = opts.opaque ?? ((ch: string): boolean => OPAQUE.has(ch))
+  const longWait = new Set<string>([...LONG_WAIT, ...(opts.longWait ?? [])])
 
   let nextId = 0
   const running = new Map<number, { ch: string; start: number }>()
@@ -98,10 +112,13 @@ export function timeIpcMain(ipcMain: IpcMainPatchable, log: DiagLog, opts: IpcTi
     try {
       const end = now()
       const ms = Math.round(end - start)
-      recent.push({ ch, start, end })
-      if (recent.length > RECENT_MAX) recent.shift()
+      const long = longWait.has(ch)
+      if (!long) {
+        recent.push({ ch, start, end })
+        if (recent.length > RECENT_MAX) recent.shift()
+      }
       if (!ok) log.write('main', 'ipc-error', { ch, ms, ...renameMsg(errorFields(err)) })
-      if (ms >= (sync ? syncSlowMs : slowMs))
+      if (!long && ms >= (sync ? syncSlowMs : slowMs))
         log.write('main', 'ipc-slow', { ch, ms, args: summariseArgs(args, opaque(ch)), ok, ...(sync ? { sync: true } : {}) })
       else if (log.verbose()) log.write('main', 'ipc', { ch, ms })
     } catch {
@@ -114,7 +131,7 @@ export function timeIpcMain(ipcMain: IpcMainPatchable, log: DiagLog, opts: IpcTi
     return (event, ...args) => {
       const start = now()
       const id = nextId++
-      running.set(id, { ch, start })
+      if (!longWait.has(ch)) running.set(id, { ch, start })
       let result: unknown
       try {
         result = fn(event, ...args)

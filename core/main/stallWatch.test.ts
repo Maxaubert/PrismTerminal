@@ -156,11 +156,60 @@ describe('the page heartbeat', () => {
     expect(log.lines).toEqual([{ src: 'main', k: 'page-stack', fields: { stack: STACK, ms: 2000, unresponsive: true } }])
   })
 
+  it("does not ask for the page's stack when it was MAIN that was blocked", async () => {
+    const collect = vi.fn(() => Promise.resolve(STACK))
+    const w = watch({ collectStack: collect })
+    w.beat()
+    await pass(50)
+    // Main stuck for 2.5 s: the page beat on, but its beats waited in the queue.
+    await pass(50, 2500)
+    expect(log.lines.map((l) => l.k)).toEqual(['main-lag'])
+    for (let i = 0; i < 5; i += 1) await pass(50)
+    expect(collect).not.toHaveBeenCalled()
+    // A real page freeze after it is still caught.
+    w.beat()
+    for (let i = 0; i < 45; i += 1) await pass(50)
+    expect(collect).toHaveBeenCalledTimes(1)
+  })
+
   it('does not watch a page that has never beaten (it is still loading)', async () => {
     const collect = vi.fn(() => Promise.resolve(STACK))
     watch({ collectStack: collect })
     for (let i = 0; i < 100; i += 1) await pass(50)
     expect(collect).not.toHaveBeenCalled()
+  })
+})
+
+describe('sleep', () => {
+  it('logs nothing for a sleep, not a lag, not a stack, not a slow stat', async () => {
+    const collect = vi.fn(() => Promise.resolve('\n    at x (a.js:1:1)'))
+    let release!: () => void
+    let stats = 0
+    const w = watch({
+      collectStack: collect,
+      canary: () => {
+        stats += 1
+        return stats === 1 ? new Promise<void>((r) => (release = r)) : Promise.resolve()
+      }
+    })
+    for (let i = 0; i < 100; i += 1) {
+      if (i % 10 === 0) w.beat()
+      await pass(50)
+    }
+    expect(stats).toBe(1)
+    w.suspend()
+    // Woken after ten minutes: the first tick runs before `resume` is heard.
+    await pass(50, 600_000)
+    w.resume()
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    w.beat()
+    for (let i = 0; i < 10; i += 1) await pass(50)
+    expect(log.lines).toEqual([])
+    expect(collect).not.toHaveBeenCalled()
+    // And it watches again afterwards.
+    await pass(50, 300)
+    expect(log.lines.map((l) => l.k)).toEqual(['main-lag'])
   })
 })
 

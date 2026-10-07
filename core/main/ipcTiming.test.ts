@@ -212,6 +212,25 @@ describe('timeIpcMain', () => {
     expect(timing.inflight(10)).toEqual([])
   })
 
+  it('never calls a wait on the user or a download slow, and keeps it out of the in-flight table', async () => {
+    const ipc = new FakeIpcMain()
+    const log = fakeLog()
+    const c = clock()
+    const timing = timeIpcMain(ipc, log, { now: c.now, longWait: ['dialog:pick-folder'] })
+    const hold: Array<() => void> = []
+    ipc.handle('dialog:pick-folder', () => new Promise<void>((r) => hold.push(r)))
+    ipc.handle('dictation:download', () => new Promise<void>((r) => hold.push(r)))
+    ipc.handle('folder:sizes', () => new Promise<void>((r) => hold.push(r)))
+    const calls = [ipc.invoke('dialog:pick-folder'), ipc.invoke('dictation:download'), ipc.invoke('folder:sizes')]
+    await Promise.resolve()
+    c.at(90_000)
+    expect(timing.inflight(1000)).toEqual([{ ch: 'folder:sizes', ms: 90_000 }])
+    hold.forEach((r) => r())
+    await Promise.all(calls)
+    expect(log.lines.map((l) => l.fields.ch)).toEqual(['folder:sizes'])
+    expect(timing.inflight(1000)).toEqual([{ ch: 'folder:sizes', ms: 90_000, done: true }])
+  })
+
   it('logs only the sizes of an opaque channel', async () => {
     const ipc = new FakeIpcMain()
     const log = fakeLog()

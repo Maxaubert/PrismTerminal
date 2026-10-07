@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, session, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, powerMonitor, session, shell } from 'electron'
 import pkg from '../../package.json'
 import { existsSync } from 'fs'
 import { stat } from 'fs/promises'
@@ -343,8 +343,14 @@ function createWindow(): void {
     agentBusy = false
     // Not prevented: the window closes, and window-all-closed ends the app.
   })
-  // Windows is shutting down or logging off: no before-quit is coming.
-  win.on('session-end', () => tabs.flush())
+  // Windows is shutting down or logging off: no before-quit is coming, nor
+  // the will-quit that writes out the diagnostics log, so its last lines
+  // (those just before a hang at shutdown) are written here.
+  win.on('session-end', () => {
+    tabs.flush()
+    diag?.log.write('main', 'session-end', {})
+    diag?.log.flushSync()
+  })
 
   win.on('enter-full-screen', () => {
     send('window:fullscreen', true)
@@ -742,7 +748,10 @@ if (!app.requestSingleInstanceLock()) {
     app,
     appInfo: { name: 'Prism Terminal', version: pkg.version, e2e: E2E },
     // Never under --e2e: recorded, like every path the app opens (#64).
-    openFolder: (dir) => pathOpeners.openPath(dir)
+    openFolder: (dir) => pathOpeners.openPath(dir),
+    // These wait on the user (the picker) or a download: never a stall.
+    longWaitChannels: ['dialog:pick-folder', 'update:install'],
+    powerMonitor: () => powerMonitor
   })
   app.on('second-instance', (_e, argv, workingDirectory) => {
     // Resolved against the folder the second launch was typed in (#16).

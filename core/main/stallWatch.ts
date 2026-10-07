@@ -54,6 +54,14 @@ export interface StallWatch {
   pageStall(startAt: number, ms: number): void
   /** The window's own `unresponsive` event. */
   unresponsive(): void
+  /**
+   * `powerMonitor`'s `suspend` and `resume` (review of #140). The monotonic
+   * clock may run on through a sleep, and the first tick after a lid-close
+   * would otherwise log the whole sleep as a `main-lag` and ask for the
+   * page's stack, since no beat came either.
+   */
+  suspend(): void
+  resume(): void
   stop(): void
 }
 
@@ -80,6 +88,9 @@ export function startStallWatch(deps: StallWatchDeps): StallWatch {
   let askedThisGap = false
   let held: { stack: string; at: number; ms: number; heldAt: number } | null = null
   let canaryBusy = false
+  let suspended = false
+  /** Bumped at a resume: a canary stat that spanned the sleep is not timed. */
+  let epoch = 0
 
   const safe = (fn: () => void): void => {
     try {
@@ -105,9 +116,19 @@ export function startStallWatch(deps: StallWatchDeps): StallWatch {
       const n = now()
       const late = Math.round(n - last - tickMs)
       last = n
+      // Asleep (or just woken, before `resume` is heard): the clock ran on
+      // through the sleep, which is neither a lag nor a missed beat.
+      if (suspended) return
       // The window covers the whole block: the call that caused it has often
       // settled by the time this tick could run.
-      if (late >= lagMs) log.write('main', 'main-lag', { ms: late, inflight: deps.inflight(late + tickMs) })
+      if (late >= lagMs) {
+        log.write('main', 'main-lag', { ms: late, inflight: deps.inflight(late + tickMs) })
+        // While MAIN was blocked the page's beats waited in its IPC queue:
+        // that time is main's, and must not read as a page freeze (review of
+        // #140: the output held back then floods the page, its long frame
+        // overlaps the stack, and the page is blamed for main's stall).
+        if (lastBeat !== null) lastBeat = Math.min(n, lastBeat + late)
+      }
       if (lastBeat !== null && !askedThisGap && n - lastBeat >= beatGapMs) {
         askedThisGap = true
         void askStack(n - lastBeat)
@@ -121,8 +142,10 @@ export function startStallWatch(deps: StallWatchDeps): StallWatch {
     if (canaryBusy) return
     canaryBusy = true
     const t0 = now()
+    const started = epoch
     const done = (): void => {
       canaryBusy = false
+      if (started !== epoch || suspended) return
       safe(() => {
         const ms = Math.round(now() - t0)
         if (ms >= canarySlowMs) log.write('main', 'fs-slow', { ms })
@@ -159,6 +182,16 @@ export function startStallWatch(deps: StallWatchDeps): StallWatch {
         // is real, so ask now and write what comes back.
         void askStack(lastBeat === null ? 0 : now() - lastBeat).then(() => writeHeld({ unresponsive: true }))
       }),
+    suspend: () => {
+      suspended = true
+    },
+    resume: () => {
+      suspended = false
+      epoch += 1
+      last = now()
+      if (lastBeat !== null) lastBeat = now()
+      askedThisGap = false
+    },
     stop: () => {
       clearInterval(tick)
       clearInterval(canary)

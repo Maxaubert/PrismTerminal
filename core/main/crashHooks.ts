@@ -1,6 +1,7 @@
 import { performance } from 'perf_hooks'
 import type { DiagLog } from './diagLog'
 import { errorFields } from './diagSummary'
+import { createDiagGate } from '../shared/diagGate'
 
 /**
  * ERRORS AND CRASHES, OBSERVED (#140).
@@ -13,9 +14,9 @@ import { errorFields } from './diagSummary'
  * warning and the app ran on, with or without a listener, so the listener
  * costs the console warning and nothing else.
  *
- * Every line here is written to disk AT ONCE (`flushSync`): the process may
- * be about to end, and the 250 ms batch would lose exactly the line that
- * explains why.
+ * An exception and a process that went are written to disk AT ONCE
+ * (`flushSync`): the process may be about to end, and the 250 ms batch would
+ * lose exactly the line that explains why. A rejection goes in the batch.
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -31,10 +32,12 @@ export interface CrashHookDeps {
   process: EmitterLike
   /** Electron's `app`. */
   app: EmitterLike
+  /** Monotonic ms, for the repeat gate. */
+  now?: () => number
 }
 
 /** Hooks the process and the app; returns the function that unhooks them. */
-export function hookCrashes({ log, process: proc, app }: CrashHookDeps): () => void {
+export function hookCrashes({ log, process: proc, app, now = () => performance.now() }: CrashHookDeps): () => void {
   const land = (k: string, fields: Record<string, unknown>): void => {
     try {
       log.write('main', k, fields)
@@ -43,9 +46,35 @@ export function hookCrashes({ log, process: proc, app }: CrashHookDeps): () => v
       /* the log never adds a second failure to the first */
     }
   }
+  // The same error over and over (a rejection inside a poll) is one line per
+  // 10 s with a count, not a line each time (`shared/diagGate`).
+  const gate = createDiagGate<Record<string, unknown>>()
+  const gated = (k: string, fields: Record<string, unknown>, sync: boolean): void => {
+    try {
+      const line = gate.offer(k, `${k}|${String(fields.msg)}`, fields, now())
+      if (!line) return
+      if (sync) land(k, line)
+      else log.write('main', k, line)
+    } catch {
+      /* silent */
+    }
+  }
+  const sweep = setInterval(() => {
+    try {
+      // `k` rides in the held fields for this; the writer keeps its own `k`
+      // and drops a field of that name.
+      for (const line of gate.sweep(now())) log.write('main', String(line.k), line)
+    } catch {
+      /* silent */
+    }
+  }, 10_000)
+  sweep.unref?.()
   const onError = (err: unknown, origin: unknown): void =>
-    land('main-error', { ...errorFields(err), origin: typeof origin === 'string' ? origin : null })
-  const onRejection = (reason: unknown): void => land('main-rejection', errorFields(reason))
+    gated('main-error', { ...errorFields(err), origin: typeof origin === 'string' ? origin : null, k: 'main-error' }, true)
+  // NOT written synchronously: a rejection does not end the process
+  // (MEASURED, above), and a promise that rejects inside a poll would pay a
+  // sync mkdir and append on main's thread every cycle. The batch takes it.
+  const onRejection = (reason: unknown): void => gated('main-rejection', { ...errorFields(reason), k: 'main-rejection' }, false)
   const onRenderGone = (_e: unknown, _wc: unknown, d: { reason?: string; exitCode?: number } = {}): void =>
     land('gone', { type: 'renderer', reason: d.reason ?? null, exitCode: d.exitCode ?? null })
   const onChildGone = (_e: unknown, d: { type?: string; reason?: string; exitCode?: number; name?: string } = {}): void =>
@@ -56,6 +85,7 @@ export function hookCrashes({ log, process: proc, app }: CrashHookDeps): () => v
   app.on('render-process-gone', onRenderGone)
   app.on('child-process-gone', onChildGone)
   return () => {
+    clearInterval(sweep)
     proc.removeListener('uncaughtExceptionMonitor', onError)
     proc.removeListener('unhandledRejection', onRejection)
     app.removeListener('render-process-gone', onRenderGone)

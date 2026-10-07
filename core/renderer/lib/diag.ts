@@ -1,4 +1,5 @@
 import type { DiagApi, DiagPageLine } from '../../preload/diagApi'
+import { createDiagGate } from '../../shared/diagGate'
 
 /**
  * THE PAGE'S HALF OF THE DIAGNOSTICS LOG (#140), for both hosts.
@@ -35,6 +36,8 @@ let api: DiagApi | null = null
 let verbose = false
 let ring: Crumb[] = []
 let queue: DiagPageLine[] = []
+let dropped = 0
+let errorGate = createDiagGate<DiagPageLine>()
 let stopFn: (() => void) | null = null
 
 /** A script's own name, without where the app happens to be installed. */
@@ -106,14 +109,33 @@ export function errorLine(
   return { k, at: Date.now(), msg, stack, loc }
 }
 
+/** Past `QUEUE_MAX` the NEWEST lines are dropped, and counted: the first
+ *  lines of a flood say what started it. */
 function enqueue(line: DiagPageLine): void {
   if (!api) return
+  if (queue.length >= QUEUE_MAX) {
+    dropped += 1
+    return
+  }
   queue.push(line)
-  if (queue.length > QUEUE_MAX) queue.splice(0, queue.length - QUEUE_MAX)
+}
+
+/** An error or a rejection, through the repeat gate (`shared/diagGate`): an
+ *  error thrown on every frame is one line per 10 s with a count, where it
+ *  was 60 lines a second that rolled the whole log over in about 75 s. */
+function enqueueError(line: DiagPageLine): void {
+  const out = errorGate.offer(line.k, `${line.k}|${String(line.msg)}|${String(line.loc)}`, line, Date.now())
+  if (out) enqueue(out)
 }
 
 function send(): void {
-  if (!api || queue.length === 0) return
+  if (!api) return
+  for (const held of errorGate.sweep(Date.now())) enqueue({ ...held, at: Date.now() })
+  if (dropped > 0) {
+    queue.push({ k: 'crumb', at: Date.now(), a: 'diag-dropped', n: dropped })
+    dropped = 0
+  }
+  if (queue.length === 0) return
   const lines = queue
   queue = []
   try {
@@ -209,8 +231,8 @@ export function startDiag(bridge: DiagApi, target: PageTarget = globalThis as un
     observers.push(o)
   }
 
-  const onError = (ev: never): void => enqueue(errorLine('page-error', ev))
-  const onRejection = (ev: never): void => enqueue(errorLine('page-rejection', ev))
+  const onError = (ev: never): void => enqueueError(errorLine('page-error', ev))
+  const onRejection = (ev: never): void => enqueueError(errorLine('page-rejection', ev))
   // A page going away (a reload) sends what it has rather than losing it.
   const onHide = (): void => send()
   target.addEventListener?.('error', onError)
@@ -239,4 +261,6 @@ export function resetDiag(): void {
   verbose = false
   ring = []
   queue = []
+  dropped = 0
+  errorGate = createDiagGate<DiagPageLine>()
 }

@@ -156,6 +156,31 @@ describe('startDiag', () => {
   })
 })
 
+describe('an error on every frame', () => {
+  it('is one line per 10 s with a count, not sixty a second', async () => {
+    const listeners = new Map<string, (ev: never) => void>()
+    const target = {
+      addEventListener: (type: string, fn: (ev: never) => void) => listeners.set(type, fn),
+      removeEventListener: (type: string) => listeners.delete(type)
+    }
+    const api = fakeApi()
+    const stop = startDiag(api, target)
+    await vi.advanceTimersByTimeAsync(0)
+    const fire = (): void =>
+      listeners.get('error')!({ error: new Error('loop'), filename: 'file:///app/out/renderer/a.js', lineno: 1 } as never)
+    for (let i = 0; i < 60 * 5; i += 1) {
+      fire()
+      await vi.advanceTimersByTimeAsync(16)
+    }
+    const errors = (): Array<Record<string, unknown>> => api.batches.flat().filter((l) => l.k === 'page-error')
+    expect(errors()).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(errors()).toHaveLength(2)
+    expect(errors()[1].repeats).toBe(299)
+    stop()
+  })
+})
+
 describe('time', () => {
   it('returns what the work returned, and logs it only past the threshold', async () => {
     const api = fakeApi()

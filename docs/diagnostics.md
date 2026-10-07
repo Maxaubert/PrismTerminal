@@ -73,24 +73,33 @@ Quiet level, always on:
 | --- | --- | --- | --- |
 | `session` | main | start | `app`, `version`, `electron`, `chrome`, `windows`, `pid`, `verbose`, `cpus`, `cpu`, `ramGb`, `e2e` |
 | `quit` | main | the quit, last line | |
-| `main-lag` | main | main's 50 ms tick came 100 ms or more late | `ms`, `inflight` (`ch`, `ms`, `done`) |
+| `session-end` | main | Windows is shutting down or logging off (no `quit` follows) | |
+| `main-lag` | main | main's 50 ms tick came 100 ms or more late (never for a sleep: `powerMonitor`) | `ms`, `inflight` (`ch`, `ms`, `done`) |
 | `fs-slow` | main | a `stat` of userData (every 5 s) took 500 ms or more | `ms` |
-| `ipc-slow` | main | a `handle` settled after 500 ms, or a sync `on` body ran 100 ms | `ch`, `ms`, `args`, `ok`, `sync` |
+| `ipc-slow` | main | a `handle` settled after 500 ms, or a sync `on` body ran 100 ms; never a call that waits on the user or a download (the folder picker, an update install, a dictation download: `LONG_WAIT` plus the host's `longWaitChannels`), which is also left out of `inflight` | `ch`, `ms`, `args`, `ok`, `sync` |
 | `ipc-error` | main | a handler threw or rejected (rethrown unchanged) | `ch`, `ms`, `err`, `stack` |
 | `page-stall` | page | a long animation frame of 200 ms or more | `ms`, `blocking`, `scripts` (`src`, `fn`, `invoker`, `ms`), `crumbs` (`a`, `ago`) |
 | `page-stack` | main | the page missed its heartbeat for 2 s, and a `page-stall` covering that moment arrived (or the window said unresponsive) | `stack`, `ms`, `unresponsive` |
-| `page-error` / `page-rejection` | page | `error`, `unhandledrejection` | `msg`, `stack`, `loc` (script:line:col) |
-| `main-error` / `main-rejection` | main | `uncaughtExceptionMonitor`, `unhandledRejection` (observed only) | `msg`, `stack`, `origin` |
+| `page-error` / `page-rejection` | page | `error`, `unhandledrejection` | `msg`, `stack`, `loc` (script:line:col), `repeats` |
+| `main-error` / `main-rejection` | main | `uncaughtExceptionMonitor`, `unhandledRejection` (observed only) | `msg`, `stack`, `origin`, `repeats` |
 | `gone` | main | a renderer or child process (GPU, utility) ended | `type`, `reason`, `exitCode`, `name` |
 | `unresponsive` / `responsive` | main | the window's own hang events | `ms` (on `responsive`) |
 | `crumb` | page, main | an action (below) | `a`, its own fields |
 | `mark` | page | Settings > Diagnostics > Mark a problem | `note` |
 | `verbose` | main | Detailed logging switched | `on` |
-| `logger-error` | main | the log could not write (once a session) | `msg` |
+| `logger-error` | main | the log could not write, or could not rotate (once a session; a failed rotation keeps writing to the live file and tries again 30 s later) | `msg` |
+| `logger-dropped` | main | the writer's queue was full (2000 lines): the NEWEST were dropped | `n` |
 | `<name>-slow` | page | an app's own timing through `time()` (Prism: `sort-slow`, `guard-slow`) | `ms`, its own fields |
 
 Detailed logging adds `ipc` (every call: `ch`, `ms`), `page-task` (long tasks from 50 ms: `ms`) and
 the high-rate crumbs (`often`).
+
+**Errors are gated** (`core/shared/diagGate.ts`): the same error (kind, message, place) is written
+once per 10 s, and the next line for it carries `repeats`, how many copies were not written in
+between; at most 10 error lines per kind per 10 s whatever they say. An error thrown on every frame
+would otherwise roll the whole 10 MB over in about 75 s and take the first error with it. The
+page's own queue drops its newest lines past 200 the same way and says so with a `diag-dropped`
+crumb (`n`).
 
 ## Crumbs
 
@@ -115,8 +124,11 @@ second passes `{ often: true }`.
 ## Wiring (a host)
 
 - Main, before any IPC is registered: `startDiagnostics({ diagLogDir, ipcMain, process, app,
-  appInfo, openFolder })`, then `watchWindow(win)` once the window exists and `stop()` on the quit
-  that goes ahead. No `diagLogDir`: nothing is logged and the bridge still answers.
+  appInfo, openFolder, longWaitChannels, powerMonitor })`, then `watchWindow(win)` once the window
+  exists and `stop()` on the quit that goes ahead. No `diagLogDir`: nothing is logged and the
+  bridge still answers. `powerMonitor` is a getter (`() => powerMonitor`), hooked in `watchWindow`
+  since it cannot be used before ready. At a Windows shutdown no quit comes: call
+  `diag.log.flushSync()` in the window's `session-end`.
 - `session.webRequest.onHeadersReceived`: `withStackPolicy` on `mainFrame` responses, or the page
   stack never comes (MEASURED: "Website owner has not opted in").
 - Preload: `...createDiagApi(ipcRenderer)`. Page: `startDiag(bridge)` before the first render.

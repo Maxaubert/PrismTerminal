@@ -1,5 +1,5 @@
 import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'fs'
-import { appendFile, mkdir } from 'fs/promises'
+import { open } from 'fs/promises'
 import { dirname, join } from 'path'
 import { performance } from 'perf_hooks'
 import { cleanFields, errorFields } from './diagSummary'
@@ -20,6 +20,13 @@ import { cleanFields, errorFields } from './diagSummary'
  * first failure queues one `logger-error` line (which lands if the next write
  * works, as after a moment's file lock) and the rest are dropped quietly.
  * Nothing here may take the app down to report that the app is slow.
+ *
+ * A ROTATION THAT FAILS DOES NOT STOP THE LOG (review of #140). Renaming the
+ * full file fails with EBUSY or EPERM while something holds it open without
+ * share-delete (an editor, `Get-Content -Wait`, an antivirus scan). The batch
+ * is then appended to the live file anyway and the rotation is tried again
+ * 30 s later: before, every flush retried, failed and dropped its lines, the
+ * `logger-error` line with them, and the log went quiet for the session.
  */
 
 export type DiagSource = 'main' | 'page'
@@ -64,6 +71,11 @@ export const DIAG_MAX_BYTES = 2 * 1024 * 1024
 export const DIAG_KEEP = 4
 /** Every line's own keys, in this order, before its fields. */
 const LINE_KEYS = ['t', 'up', 'src', 'k'] as const
+/** The writer's queue, at most. Past it the NEWEST lines are dropped and
+ *  counted (`logger-dropped`): the first lines of a flood say what started it. */
+const QUEUE_MAX = 2000
+/** How long a failed rotation waits before it is tried again (uptime ms). */
+const ROTATE_RETRY_MS = 30_000
 
 export function createDiagLog(opts: DiagLogOptions): DiagLog {
   const dir = opts.dir
@@ -82,6 +94,16 @@ export function createDiagLog(opts: DiagLogOptions): DiagLog {
   let anyFailed = false
   let reported = false
   let closed = false
+  let dirReady = false
+  let dropped = 0
+  let rotateAfter = 0
+  /**
+   * The batch the async path has taken and not yet seen land. `flushSync`
+   * (the quit, a crash) writes it first, ahead of what is queued, so the
+   * lines before the event are neither lost with the process nor written
+   * after it; `done` keeps the async path from counting it twice.
+   */
+  let inflightBatch: { text: string; bytes: number; done: boolean } | null = null
 
   const line = (src: DiagSource, k: string, at: number, up: number, fields?: Record<string, unknown>): string => {
     let t: string
@@ -118,22 +140,52 @@ export function createDiagLog(opts: DiagLogOptions): DiagLog {
     }
   }
 
-  /** Rotation, synchronous: it happens once per 2 MB, and renames are fast. */
-  const rotateIfFull = (incoming: number): void => {
-    if (size === 0 || size + incoming <= maxBytes) return
-    rmSync(`${file}.${DIAG_KEEP}`, { force: true })
-    for (let n = DIAG_KEEP - 1; n >= 1; n -= 1) {
-      try {
-        renameSync(`${file}.${n}`, `${file}.${n + 1}`)
-      } catch {
-        /* that one did not exist yet */
-      }
-    }
-    renameSync(file, `${file}.1`)
-    size = 0
+  /** The folder is made once, and again only after a write failed (it may
+   *  have been removed): an `mkdir` per flush was one more call on the fs
+   *  threadpool that the canary measures. */
+  const ensureDir = (): void => {
+    if (dirReady) return
+    mkdirSync(dir, { recursive: true })
+    dirReady = true
   }
 
+  /** Rotation, synchronous: it happens once per 2 MB, and renames are fast.
+   *  It never throws: a file held open stays the live one a while longer. */
+  const rotateIfFull = (incoming: number): void => {
+    if (size === 0 || size + incoming <= maxBytes) return
+    if (uptime() < rotateAfter) return
+    try {
+      rmSync(`${file}.${DIAG_KEEP}`, { force: true })
+      for (let n = DIAG_KEEP - 1; n >= 1; n -= 1) {
+        try {
+          renameSync(`${file}.${n}`, `${file}.${n + 1}`)
+        } catch {
+          /* that one did not exist yet */
+        }
+      }
+      renameSync(file, `${file}.1`)
+      size = 0
+    } catch (err) {
+      rotateAfter = uptime() + ROTATE_RETRY_MS
+      fail(err)
+    }
+  }
+
+  /** Did the async write of `b` reach the file already? Its callback has
+   *  not run, but the threadpool may have done the write. If it is still
+   *  queued (a starved pool), it is written here too: at a quit the queued
+   *  one never runs, and after a `main-error` a batch twice beats none. */
+  const landed = (b: { bytes: number }): boolean => fileSize(file) >= size + b.bytes
+
   const take = (): string | null => {
+    if (dropped > 0) {
+      try {
+        queue.push(line('main', 'logger-dropped', now(), uptime(), { n: dropped }))
+      } catch {
+        /* silent */
+      }
+      dropped = 0
+    }
     if (queue.length === 0) return null
     const text = queue.join('')
     queue = []
@@ -148,14 +200,31 @@ export function createDiagLog(opts: DiagLogOptions): DiagLog {
     chain = chain.then(async () => {
       const text = take()
       if (text === null) return
+      const batch = { text, bytes: Buffer.byteLength(text), done: false }
       try {
-        await mkdir(dir, { recursive: true })
-        const bytes = Buffer.byteLength(text)
-        rotateIfFull(bytes)
-        await appendFile(file, text)
-        size += bytes
+        ensureDir()
+        rotateIfFull(batch.bytes)
+        inflightBatch = batch
+        // Opened, then written, and not `appendFile`: the open is a threadpool
+        // round trip of its own, and a `flushSync` that lands in it has
+        // already written this batch (MEASURED in the unit test: with
+        // `appendFile` the batch came out after the quit line, then again).
+        const fh = await open(file, 'a')
+        try {
+          if (batch.done) return
+          await fh.writeFile(text)
+        } finally {
+          await fh.close().catch(() => {})
+        }
+        if (!batch.done) size += batch.bytes
       } catch (err) {
-        fail(err)
+        if (!batch.done) {
+          dirReady = false
+          fail(err)
+        }
+      } finally {
+        batch.done = true
+        if (inflightBatch === batch) inflightBatch = null
       }
     })
     return chain
@@ -166,15 +235,25 @@ export function createDiagLog(opts: DiagLogOptions): DiagLog {
       clearTimeout(timer)
       timer = null
     }
-    const text = take()
-    if (text === null) return
+    let text = take() ?? ''
+    const pending = inflightBatch
+    if (pending && !pending.done) {
+      // Taken by the async path and still on its way: written here, first,
+      // unless the threadpool has already put it in the file.
+      pending.done = true
+      inflightBatch = null
+      if (landed(pending)) size += pending.bytes
+      else text = pending.text + text
+    }
+    if (!text) return
     try {
-      mkdirSync(dir, { recursive: true })
+      ensureDir()
       const bytes = Buffer.byteLength(text)
       rotateIfFull(bytes)
       appendFileSync(file, text)
       size += bytes
     } catch (err) {
+      dirReady = false
       fail(err)
     }
   }
@@ -184,8 +263,11 @@ export function createDiagLog(opts: DiagLogOptions): DiagLog {
     try {
       // `up` for a line said earlier (a page batch) is moved back by its age.
       const age = Math.max(0, now() - at)
+      if (queue.length >= QUEUE_MAX) {
+        dropped += 1
+        return
+      }
       queue.push(line(src, k, at, Math.max(0, uptime() - age), fields))
-      if (queue.length > 2000) queue.splice(0, queue.length - 2000)
       schedule()
     } catch (err) {
       fail(err)
