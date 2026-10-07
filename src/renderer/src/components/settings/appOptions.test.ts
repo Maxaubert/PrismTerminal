@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { DIAGNOSTICS_OPTIONS } from '@core/renderer/settings/diagnosticsOptions'
 import { DICTATION_OPTIONS } from '@core/renderer/settings/dictationOptions'
 import { HELP_OPTIONS } from '@core/renderer/settings/helpOptions'
 import { isSettingIcon } from '@core/renderer/settings/layout/icons'
@@ -8,7 +9,7 @@ import { TERMINAL_OPTIONS } from '@core/renderer/settings/options'
 import { APP_OPTIONS, APP_SECTIONS } from './appOptions'
 import { ROW_ORDER, SETTINGS_PAGES, settingsIndex } from './settingsIndex'
 
-const CORE = [...TERMINAL_OPTIONS, ...DICTATION_OPTIONS, ...HELP_OPTIONS]
+const CORE = [...TERMINAL_OPTIONS, ...DICTATION_OPTIONS, ...HELP_OPTIONS, ...DIAGNOSTICS_OPTIONS]
 
 describe("this app's own settings rows", () => {
   it('have unique ids, none of them a core row', () => {
@@ -72,5 +73,6 @@ describe('Find a setting', () => {
     expect(at['agent-hooks']).toBe('agents/Claude Code')
     expect(at['dictation-enabled']).toBe('dictation/')
     expect(at['app-version']).toBe('about/')
+    expect(at['diag-verbose']).toBe('diagnostics/')
   })
 })

@@ -12,7 +12,7 @@
  * keys, `registry` (the Explorer verb, read back from Windows), or null for a
  * row that stores nothing. One line per entry, as in the core's lists.
  */
-export type AppPageId = 'appearance' | 'terminal' | 'agents' | 'dictation' | 'about'
+export type AppPageId = 'appearance' | 'terminal' | 'agents' | 'dictation' | 'diagnostics' | 'about'
 
 export interface AppOption {
   id: string

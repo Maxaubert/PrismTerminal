@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { createTermApi } from '@core/preload/api'
 import { createDictationApi } from '@core/preload/dictationApi'
+import { createDiagApi } from '@core/preload/diagApi'
 import type { Restored, SavedTabs, UpdateInfo } from '@shared/types'
 import type { WindowEdges } from '@shared/windowEdges'
 
@@ -24,6 +25,8 @@ const api = {
   ...createTermApi(ipcRenderer),
   // ...and so is dictation's (#13).
   ...createDictationApi(ipcRenderer),
+  // ...and the diagnostics log's (#140).
+  ...createDiagApi(ipcRenderer),
   /** The real path of a File from a drop (the sandbox hides `File.path`). */
   getDroppedPath: (file: File): string => webUtils.getPathForFile(file),
   /** A dropped path as the folder a tab would open in: a folder is itself, a
