@@ -102,8 +102,8 @@ export function errorLine(
   const msg =
     err instanceof Error ? err.message : typeof err === 'string' ? err : (ev.message ?? String(err ?? 'unknown'))
   const stack = err instanceof Error && err.stack ? err.stack : null
-  const src = ev.filename ? `${shortSrc(ev.filename)}:${ev.lineno ?? 0}:${ev.colno ?? 0}` : null
-  return { k, at: Date.now(), msg, stack, src }
+  const loc = ev.filename ? `${shortSrc(ev.filename)}:${ev.lineno ?? 0}:${ev.colno ?? 0}` : null
+  return { k, at: Date.now(), msg, stack, loc }
 }
 
 function enqueue(line: DiagPageLine): void {

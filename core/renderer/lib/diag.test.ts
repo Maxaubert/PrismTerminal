@@ -99,7 +99,7 @@ describe('errorLine', () => {
     expect(errorLine('page-error', { message: 'x is undefined', error: new Error('x is undefined'), filename: 'file:///a/out/renderer/assets/index.js', lineno: 3, colno: 9 })).toMatchObject({
       k: 'page-error',
       msg: 'x is undefined',
-      src: 'assets/index.js:3:9'
+      loc: 'assets/index.js:3:9'
     })
     expect(errorLine('page-rejection', { reason: 'plain' })).toMatchObject({ k: 'page-rejection', msg: 'plain' })
   })

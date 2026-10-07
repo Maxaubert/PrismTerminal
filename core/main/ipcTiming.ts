@@ -38,11 +38,20 @@ export interface IpcMainPatchable {
 export interface InflightCall {
   ch: string
   ms: number
+  /** It had ended by the time it was asked about, inside the window. */
+  done?: true
 }
 
 export interface IpcTiming {
-  /** Calls running now, longest first, at most eight. */
-  inflight(): InflightCall[]
+  /**
+   * Calls running now, and those that ENDED in the last `windowMs`, longest
+   * first, at most eight. The window is the point: a lag is only seen once
+   * the loop is free again, and by then the call that blocked it has
+   * usually settled (MEASURED, the first launch of the built app: a 1630 ms
+   * `main-lag` with nothing in flight, beside a 1837 ms `term:spawn` that
+   * had ended a millisecond before).
+   */
+  inflight(windowMs?: number): InflightCall[]
 }
 
 export interface IpcTimingOptions {
@@ -59,6 +68,7 @@ export interface IpcTimingOptions {
  *  when the call that carried them was slow. */
 const OPAQUE = new Set<string>([CH.input, CH.clipboardWrite, DCH.transcribe])
 const isOwn = (ch: string): boolean => ch.startsWith('diag:')
+const RECENT_MAX = 32
 
 export function timeIpcMain(ipcMain: IpcMainPatchable, log: DiagLog, opts: IpcTimingOptions = {}): IpcTiming {
   const now = opts.now ?? ((): number => performance.now())
@@ -68,6 +78,8 @@ export function timeIpcMain(ipcMain: IpcMainPatchable, log: DiagLog, opts: IpcTi
 
   let nextId = 0
   const running = new Map<number, { ch: string; start: number }>()
+  /** The last calls to end, for `inflight`'s window. */
+  const recent: Array<{ ch: string; start: number; end: number }> = []
   const wrappers = new WeakMap<Listener, Map<string, Listener[]>>()
 
   const remember = (fn: Listener, ch: string, w: Listener): void => {
@@ -84,7 +96,10 @@ export function timeIpcMain(ipcMain: IpcMainPatchable, log: DiagLog, opts: IpcTi
 
   const ended = (ch: string, start: number, args: unknown[], ok: boolean, sync: boolean, err?: unknown): void => {
     try {
-      const ms = Math.round(now() - start)
+      const end = now()
+      const ms = Math.round(end - start)
+      recent.push({ ch, start, end })
+      if (recent.length > RECENT_MAX) recent.shift()
       if (!ok) log.write('main', 'ipc-error', { ch, ms, ...renameMsg(errorFields(err)) })
       if (ms >= (sync ? syncSlowMs : slowMs))
         log.write('main', 'ipc-slow', { ch, ms, args: summariseArgs(args, opaque(ch)), ok, ...(sync ? { sync: true } : {}) })
@@ -188,12 +203,16 @@ export function timeIpcMain(ipcMain: IpcMainPatchable, log: DiagLog, opts: IpcTi
   }
 
   return {
-    inflight: () => {
+    inflight: (windowMs = 0) => {
       const t = now()
-      return [...running.values()]
-        .map((r) => ({ ch: r.ch, ms: Math.round(t - r.start) }))
-        .sort((a, b) => b.ms - a.ms)
-        .slice(0, 8)
+      const live: InflightCall[] = [...running.values()].map((r) => ({ ch: r.ch, ms: Math.round(t - r.start) }))
+      const settled: InflightCall[] =
+        windowMs > 0
+          ? recent
+              .filter((r) => r.end >= t - windowMs)
+              .map((r) => ({ ch: r.ch, ms: Math.round(r.end - r.start), done: true as const }))
+          : []
+      return [...live, ...settled].sort((a, b) => b.ms - a.ms).slice(0, 8)
     }
   }
 }
