@@ -1,7 +1,7 @@
 {
   "name": "prism-terminal",
   "productName": "Prism Terminal",
-  "version": "0.33.0",
+  "version": "0.34.0",
   "description": "A tabbed Windows terminal for AI CLIs.",
   "main": "./out/main/index.js",
   "author": "Max",
@@ -16,6 +16,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "fetch:bin": "node core/tools/fetch-whisper.mjs vendor/whisper",
+    "diag": "node tools/diag.mjs",
     "install:stable": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/install-stable.ps1",
     "e2e": "npm run fetch:bin && npm run build && node tools/e2e/run.mjs",
     "lint": "eslint .",

@@ -36,6 +36,7 @@ import { copyText } from '@core/renderer/lib/copyNotice'
 import UpdateChip from '@core/renderer/components/UpdateChip'
 import UpdateDialog from '@core/renderer/components/UpdateDialog'
 import { useUpdateFlow } from '@core/renderer/lib/useUpdateFlow'
+import { crumb } from '@core/renderer/lib/diag'
 import { humanFor, workingFor } from '@core/renderer/lib/agentClock'
 import { forgetSession, markResume, markTouched } from '@core/renderer/lib/termActivity'
 import { onCwd, onResumingChange, pasteInto, resumingIds } from '@core/renderer/lib/termBus'
@@ -192,6 +193,15 @@ export default function App(): JSX.Element {
   const findOpen = !!activeShell && findFor === activeShell.id
   const { agentIds, workingIds, doneIds, questionIds, failedIds, failedKinds, agentKinds } = indicator
 
+  // THE TIMELINE (#140): which tab is in front, and which Settings page, as
+  // crumbs, so a stall in the log says what the user had just done.
+  useEffect(() => {
+    if (activeId) crumb('tab-switch', { id: activeId })
+  }, [activeId])
+  useEffect(() => {
+    if (settingsOpen) crumb('settings-page', { page: settingsPage })
+  }, [settingsOpen, settingsPage])
+
   // The latest of everything, for listeners registered once.
   const live = useRef({ state, workingIds, agentIds, blocked: false, front: '' })
 
@@ -223,6 +233,7 @@ export default function App(): JSX.Element {
   const openTab = useCallback(
     (cwd: string, resume?: string): string => {
       const id = nextId()
+      crumb('tab-open', { id, cwd, resume: !!resume })
       spawnSession(id, cwd, resume)
       setState((s) => addTab(s, id, cwd))
       return id
@@ -292,6 +303,7 @@ export default function App(): JSX.Element {
     (id: string) => {
       const tab = live.current.state.tabs.find((t) => t.id === id)
       if (!tab) return
+      crumb('tab-close', { id, kind: tab.kind ?? 'shell' })
       if (tab.kind !== 'settings') {
         window.prism.termKill(id)
         disposeTermSession(id)

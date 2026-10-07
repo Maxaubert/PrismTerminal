@@ -1,8 +1,18 @@
 # Privacy
 
 Prism Terminal has no accounts, no analytics, no telemetry and no crash reporting. It keeps your
-settings and open tabs on your own PC (`%APPDATA%\PrismTerminal`), and nothing about you or what
-you do in it is sent anywhere.
+settings, open tabs and a diagnostics log on your own PC (`%APPDATA%\PrismTerminal`), and nothing
+about you or what you do in it is sent anywhere.
+
+## The diagnostics log
+
+To find out why the app froze or failed, Prism Terminal keeps a log on your PC
+(`%APPDATA%\PrismTerminal\logs`, at most 10 MB, the oldest part removed as it grows): when the
+window or the app was slow and for how long, errors, and a timeline of what you did in the app
+(a tab opened, closed or switched, a Settings page, an update, dictation starting and stopping, a
+shell starting and ending). Folder paths are written in full. What you type, what you copy and
+what you say are never written to it. The log is **never sent anywhere**; it leaves your PC only if
+you send it yourself. Settings > Diagnostics opens its folder, and has a switch for more detail.
 
 ## What reaches the network
 

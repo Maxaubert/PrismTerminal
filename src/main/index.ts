@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, session, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, powerMonitor, session, shell } from 'electron'
 import pkg from '../../package.json'
 import { existsSync } from 'fs'
 import { stat } from 'fs/promises'
@@ -8,6 +8,8 @@ import type { Restored, SavedTabs, UpdateInfo } from '@shared/types'
 import { claudeSessionsAsync } from '@core/main/agentResume'
 import { registerTermIpc } from '@core/main/ipc'
 import { registerDictationIpc } from '@core/main/dictationIpc'
+import { startDiagnostics, type Diagnostics } from '@core/main/diagnostics'
+import { withStackPolicy } from '@core/main/diagIpc'
 import { planRestore } from './planRestore'
 import { foldersFromArgv } from './argv'
 import { acrylicOk, createMaterial } from './material'
@@ -187,6 +189,9 @@ const isDir = (p: unknown): Promise<boolean> =>
  * hands its folder over and ends.
  * ------------------------------------------------------------------ */
 let quitting = false // app.quit() is under way
+/** The diagnostics log (#140). Started first thing in the instance that holds
+ *  the lock, before any IPC is registered: the timing wraps ipcMain itself. */
+let diag: Diagnostics | null = null
 /** Kills dictation's children (the speech server, the media helper). Set by wireIpc. */
 let stopDictation: () => void = () => {}
 let quitWanted = false // a quit the close question interrupted; confirm resumes it
@@ -295,6 +300,8 @@ function createWindow(): void {
     }
   })
   mainWindow = win
+  // Its hang events, and its frame for the page's stack when the heartbeat stops.
+  diag?.watchWindow(win)
   win.on('ready-to-show', () => {
     // Maximised is restored after the window exists rather than at construction:
     // a window created maximised has no sensible un-maximised size to go back to.
@@ -336,8 +343,14 @@ function createWindow(): void {
     agentBusy = false
     // Not prevented: the window closes, and window-all-closed ends the app.
   })
-  // Windows is shutting down or logging off: no before-quit is coming.
-  win.on('session-end', () => tabs.flush())
+  // Windows is shutting down or logging off: no before-quit is coming, nor
+  // the will-quit that writes out the diagnostics log, so its last lines
+  // (those just before a hang at shutdown) are written here.
+  win.on('session-end', () => {
+    tabs.flush()
+    diag?.log.write('main', 'session-end', {})
+    diag?.log.flushSync()
+  })
 
   win.on('enter-full-screen', () => {
     send('window:fullscreen', true)
@@ -676,6 +689,9 @@ function wireIpc(): void {
   })
   // The DWM border itself is off under --e2e, so the suite asks what main HEARD.
   if (E2E) ipcMain.handle('e2e:window-edges', () => windowEdges)
+  // The e2e's diagLog (#140): a call that answers after 600 ms, so the IPC
+  // timing's ipc-slow line (500 ms+) is proved on a real channel.
+  if (E2E) ipcMain.handle('e2e:slow-ipc', () => new Promise((r) => setTimeout(() => r(true), 600)))
   // THE TASKBAR BADGE (2026-09-28): the page draws the disc, main puts it on
   // the window's taskbar button as its overlay icon. Only a small PNG data url
   // is taken; anything else, or null, clears it.
@@ -718,6 +734,25 @@ function wireIpc(): void {
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
+  // THE DIAGNOSTICS LOG (#140; owner, 2026-10-07: "robust logging and
+  // debugging ... especially to catch stalls"), the core's, schema in
+  // docs/diagnostics.md. Here and not at ready: the crash hooks should hear a
+  // failure during startup too, and every ipcMain registration (all in
+  // wireIpc) comes after, so every call is timed. Only the instance holding
+  // the lock: a second launch hands its folder over and ends, and two writers
+  // on one file would interleave their batches.
+  diag = startDiagnostics({
+    diagLogDir: join(app.getPath('userData'), 'logs'),
+    ipcMain,
+    process,
+    app,
+    appInfo: { name: 'Prism Terminal', version: pkg.version, e2e: E2E },
+    // Never under --e2e: recorded, like every path the app opens (#64).
+    openFolder: (dir) => pathOpeners.openPath(dir),
+    // These wait on the user (the picker) or a download: never a stall.
+    longWaitChannels: ['dialog:pick-folder', 'update:install'],
+    powerMonitor: () => powerMonitor
+  })
   app.on('second-instance', (_e, argv, workingDirectory) => {
     // Resolved against the folder the second launch was typed in (#16).
     const folders = foldersFromArgv(argv, undefined, workingDirectory)
@@ -763,7 +798,13 @@ if (!app.requestSingleInstanceLock()) {
     // its app.quit() lands inside the quit it cancelled and Electron drops it,
     // so the app stayed up (MEASURED, the opacityAlpha quit). Hence also the
     // fresh tick before quitting again.
-    if (shellsSettled || shellsDying() === 0) return
+    if (shellsSettled || shellsDying() === 0) {
+      // The quit is going ahead: the log's queue is written synchronously,
+      // so its last lines land.
+      diag?.stop()
+      diag = null
+      return
+    }
     e.preventDefault()
     void shellsGone(3000).then(() => {
       shellsSettled = true
@@ -790,6 +831,17 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionCheckHandler((wc, permission, _origin, details) => {
       if (!own(wc) || !granted.has(permission)) return false
       return permission !== 'media' || (details as { mediaType?: string }).mediaType !== 'video'
+    })
+    // THE PAGE OPTS IN TO HAVING ITS STACK READ (#140): main asks for it when
+    // the heartbeat stops (`collectJavaScriptCallStack`), and the frame only
+    // answers for a document served with this Document-Policy. MEASURED on
+    // Electron 43: without the header the answer is "Website owner has not
+    // opted in"; with it, set here, the stack of a 3 s busy loop came back in
+    // about 1 ms, for the built file:// page and the dev server's page alike.
+    // Documents only; every other response passes untouched.
+    session.defaultSession.webRequest.onHeadersReceived((d, callback) => {
+      if (d.resourceType !== 'mainFrame') return callback({})
+      callback({ responseHeaders: withStackPolicy(d.responseHeaders) })
     })
     wireIpc()
     createWindow()

@@ -6,7 +6,8 @@
  * holds every name to this record.
  *
  * `dictation` has no heading: it is the first section of the Dictation page,
- * and the page's own title says what it is.
+ * and the page's own title says what it is. Nor has `diagnostics` (#140), the
+ * one section of its page.
  */
 export const SETTINGS_SECTIONS = {
   shell: 'Shell',
@@ -20,7 +21,8 @@ export const SETTINGS_SECTIONS = {
   listening: 'Listening',
   while: 'While dictating',
   models: 'Speech models',
-  gpu: 'GPU acceleration'
+  gpu: 'GPU acceleration',
+  diagnostics: ''
 } as const
 
 export type SettingsSectionId = keyof typeof SETTINGS_SECTIONS

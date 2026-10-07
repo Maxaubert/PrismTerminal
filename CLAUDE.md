@@ -852,6 +852,13 @@ keys; components/; lib/ is pure and tested). One responsibility per file; aliase
 ## Build, test, release
 
 - `npm run dev`, `npm test` (vitest), `npm run typecheck`, `npm run lint`.
+- **THE DIAGNOSTICS LOG** (#140; owner, 2026-10-07: "robust logging and debugging ... especially to
+  catch stalls"). Both apps write `<userData>\logs\diag.jsonl` (PT `%APPDATA%\PrismTerminal\logs`,
+  the stable copy `%APPDATA%\PrismTerminalStable\logs`, Prism `%APPDATA%\Prism\logs`): stalls with
+  the scripts and the page stack, slow IPC, errors, crumbs. When the owner says something stalled or
+  failed, READ IT FIRST: `npm run diag -- --app stable --since 10m` (a `mark` line is their Mark
+  button). Schema, kinds and how to read them: [`docs/diagnostics.md`](docs/diagnostics.md). Local
+  only, never sent (`PRIVACY.md`); typed text, the clipboard and audio are never written.
 - **A test run leaves nothing in %TEMP%** (2026-09-28): `vitest.global.ts` points the whole run's
   TEMP at one folder and removes it afterwards (14 `pt-*` folders a run leaked before; Prism's suite
   had left 40,000, which is what made its tree stall). A new test may mkdtemp freely.

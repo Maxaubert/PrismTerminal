@@ -12,6 +12,8 @@ export const SETTINGS_PAGES: Array<SettingsPageDef & { id: AppPageId }> = [
   { id: 'terminal', label: 'Terminal', icon: 'terminal' },
   { id: 'agents', label: 'Agents', icon: 'agents' },
   { id: 'dictation', label: 'Dictation', icon: 'dictation' },
+  // The log (#140): the last page above About, with the app's own matters.
+  { id: 'diagnostics', label: 'Diagnostics', icon: 'diagnostics' },
   { id: 'about', label: 'About', icon: 'about', end: true }
 ]
 
@@ -29,7 +31,8 @@ const PAGE_OF: Record<SettingsSectionId, AppPageId> = {
   listening: 'dictation',
   while: 'dictation',
   models: 'dictation',
-  gpu: 'dictation'
+  gpu: 'dictation',
+  diagnostics: 'diagnostics'
 }
 
 /** Every row in the order the pages draw them, which is the order Find a
@@ -41,13 +44,14 @@ export const ROW_ORDER = [
   'agent-color', 'agent-done-color', 'agent-question-color',
   'dictation-enabled', 'dictation-mode', 'dictation-hotkey', 'dictation-mic', 'dictation-language',
   'dictation-pause-media', 'dictation-sounds', 'dictation-model', 'dictation-gpu',
+  'diag-verbose', 'diag-folder', 'diag-mark',
   'app-version'
 ] as const
 
 /** The index Find a setting reads: the core's rows drawn here, and this
  *  app's own, in page order. */
 export function settingsIndex(nvidia: boolean): SettingsIndexEntry[] {
-  const core = coreSettingsIndex({ pageOf: (s) => PAGE_OF[s], nvidia })
+  const core = coreSettingsIndex({ pageOf: (s) => PAGE_OF[s], nvidia, diagnostics: true })
   const own: SettingsIndexEntry[] = APP_OPTIONS.map((o) => ({
     id: o.id,
     page: o.page,

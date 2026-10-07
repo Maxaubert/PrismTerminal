@@ -22,6 +22,21 @@ export const CH = {
   openPath: 'term:open-path'
 } as const
 
+/** The diagnostics log's channels (#140). A table of its own, like
+ *  dictation's: a host wires it with one call on each side of the bridge
+ *  (`createDiagApi`, `startDiagnostics`). Every `diag:` channel is left out of
+ *  the IPC timing, which would otherwise log the log. */
+export const DGCH = {
+  /** The page's lines, batched every 250 ms. */
+  batch: 'diag:batch',
+  /** The page is alive: every 500 ms. A 2 s gap asks for its stack. */
+  beat: 'diag:beat',
+  info: 'diag:info',
+  setVerbose: 'diag:set-verbose',
+  openFolder: 'diag:open-folder',
+  mark: 'diag:mark'
+} as const
+
 /** Dictation's channels (#13). A table of its own: dictation is optional, and
  *  a host wires it with a separate call on each side of the bridge. */
 export const DCH = {
