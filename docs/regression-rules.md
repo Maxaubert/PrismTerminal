@@ -316,4 +316,4 @@ one-liner in `CLAUDE.md` only if it is among the most important.
 - <a id="renderer-sandboxed"></a>**Renderer is sandboxed** (`sandbox: true`, context isolation on). The preload reaches the
   clipboard through main for that reason. `will-navigate` and window-open allow http(s) only.
 - The preload global is `window.prism` and localStorage keys are `prism.term.*`, kept from Prism so
-  copied code needs no renaming. The app has its own userData (`%APPDATA%\PrismTerminal`).
+  copied code needs no renaming. The app has its own userData (`%APPDATA%\PrismTerminal`).

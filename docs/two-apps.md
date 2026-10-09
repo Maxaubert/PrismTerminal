@@ -510,4 +510,4 @@ Prism's CLAUDE.md still holds the long history of WHY the terminal behaves as it
 the date in a copied comment).
 
 Design spec and plan: `docs/superpowers/specs/2026-09-18-prism-terminal-design.md`,
-`docs/superpowers/plans/2026-09-18-prism-terminal.md`. Owner decisions are marked `(owner)` there.
+`docs/superpowers/plans/2026-09-18-prism-terminal.md`. Owner decisions are marked `(owner)` there.
