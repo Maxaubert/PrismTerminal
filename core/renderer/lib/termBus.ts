@@ -96,6 +96,22 @@ export function onTitle(fn: (sessionId: string, title: string) => void): () => v
   }
 }
 
+// THE KEYS PRESSED IN A SESSION (#144): the indicator hears a question being
+// answered by a key no hook reports (Esc, a "No"). xterm's onKey, so only keys
+// the user pressed, never the terminal's own replies. Nothing is kept.
+const keyListeners = new Set<(sessionId: string, key: string) => void>()
+
+export function reportTermKey(sessionId: string, key: string): void {
+  keyListeners.forEach((fn) => fn(sessionId, key))
+}
+
+export function onTermKey(fn: (sessionId: string, key: string) => void): () => void {
+  keyListeners.add(fn)
+  return () => {
+    keyListeners.delete(fn)
+  }
+}
+
 // WHAT CLAUDE CODE'S HOOKS SAY (#131). TerminalPanel hears our OSC 777 through
 // xterm's parser and posts the parsed state here; the indicator listens, so it
 // never imports the panel (which sits behind Prism's lazy boundary).

@@ -623,7 +623,14 @@ the owner's own call, #99.)
   A tab whose agent finished, or waits on you, while you were NOT LOOKING (another tab in front, or
   the window unfocused) gets a static 3 px line along its bottom: Finished colour, or Question
   colour (default blue) which outranks it; each behind its own switch (`agent-done-on`,
-  `agent-question-on`, both on). Opening the tab clears it. Full's fill is for working alone now.
+  `agent-question-on`, both on). Opening the tab clears Finished (and Failed). **A QUESTION LASTS
+  UNTIL IT IS ANSWERED** (#144; owner, 2026-10-09: "if you go on that tab and then just move to
+  another tab without answering the question, the blue bar shouldn't disappear ... it should only
+  disappear if you actually answered the question"): it goes up on the tab in front too
+  (`raisedWhileSeen`), a look never takes it down, and the badge counts it until it goes: work
+  again (a hook or title), another hook state, the agent leaving, the tab closing, or a key that
+  settles the box (Enter, Esc, Ctrl+C, a digit; `answersQuestion`) with the box gone after it, the
+  one way a "No" or an Esc is heard, since no hook fires for those. Full's fill is for working alone now.
   CLAUDE GIVES NO SIGNAL FOR A QUESTION (MEASURED in a pty: the title is `✳` exactly as when done, no
   bell, no OSC 9), so `agentQuestion.looksLikeQuestion` reads the last text rows of the screen
   (through termBus, never by importing the panel) for its footer when the title goes idle and as

@@ -11,6 +11,7 @@ import {
   registerPaste,
   reportAgentSignal,
   reportCwd,
+  reportTermKey,
   reportTitle,
   resumingIds,
   setResuming,
@@ -688,6 +689,8 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // heard on onKey, which only fires for a key; the rest of onData counts
   // only when it is plain text (an IME commit), never when it is a reply.
   term.onKey(() => markTouched(id))
+  // A key can answer an agent's question where no hook says so (#144).
+  term.onKey((e) => reportTermKey(id, e.key))
   // THE CARET FOLLOWS TYPING, NOT A STREAMING AGENT (#101). Magnifiers, screen
   // readers and the IME window follow xterm's helper textarea, which xterm
   // puts on the cursor after every write (`_syncTextArea` on onCursorMove).
