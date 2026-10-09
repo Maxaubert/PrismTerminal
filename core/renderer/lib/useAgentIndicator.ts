@@ -91,6 +91,14 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
    *  for a question only while its agent is idle. */
   const titleState = useRef(new Map<string, string>())
   const questionTimers = useRef(new Map<string, number>())
+  /** The screen reads pending after a key that may have answered a question.
+   *  A NEW question cancels them: its box may not be drawn yet, and a read in
+   *  that gap would take it down unanswered (review of #144). */
+  const answerTimers = useRef(new Map<string, number[]>())
+  const stopAnswerCheck = useCallback((id: string): void => {
+    for (const t of answerTimers.current.get(id) ?? []) clearTimeout(t)
+    answerTimers.current.delete(id)
+  }, [])
   /** Read the session's screen for Claude's question box: mark it when it
    *  appears (on the tab in front too, #144), unmark it when it has gone. */
   const checkQuestion = useCallback((id: string): void => {
@@ -134,6 +142,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     if (o.phase === 'failed' && o.kind) failedKinds.current.set(id, o.kind)
     else if (o.phase === 'failed' || o.clear.includes('failed')) failedKinds.current.delete(id)
     const away = !lookedAt(id)
+    if (o.raise.includes('question')) stopAnswerCheck(id)
     const marks = (mark: AttentionMark) => (prev: ReadonlySet<string>): ReadonlySet<string> => {
       if ((away || raisedWhileSeen(mark)) && o.raise.includes(mark)) return prev.has(id) ? prev : new Set(prev).add(id)
       return o.clear.includes(mark) ? without(prev, id) : prev
@@ -145,7 +154,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
       if (prev.has(id) === o.working) return prev
       return o.working ? new Set(prev).add(id) : without(prev, id)
     })
-  }, [])
+  }, [stopAnswerCheck])
 
   useEffect(
     () =>
@@ -277,7 +286,10 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
         // Codex says it outright (#131). Any other state is the agent at work
         // again, so no question is pending.
         if (r.state === 'idle') checkQuestion(id)
-        else if (r.state === 'question') setQuestionIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+        else if (r.state === 'question') {
+          if (!questionsNow.current.has(id)) stopAnswerCheck(id)
+          setQuestionIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+        }
         else setQuestionIds((prev) => without(prev, id))
         const working = r.state === 'working'
         setWorkingIds((prev) => {
@@ -288,7 +300,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           return next
         })
       }),
-    [stopFallback, checkQuestion, applyHook]
+    [stopFallback, checkQuestion, applyHook, stopAnswerCheck]
   )
 
   /**
@@ -320,14 +332,12 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
    * cancelling a question with Esc, ends the turn without a hook (no Stop on an
    * interrupt), so a key that settles a box is heard here: the question is
    * answered once the box has gone from the screen after it (`questionAnswered`).
-   * Read twice, since the agent repaints a moment after the key. A box still
-   * up is the next of several questions, still pending.
+   * Read four times over five seconds, since the agent repaints a moment after
+   * the key and a busy machine can make that moment long: a hooked session's
+   * screen is read nowhere else, so a single late repaint would leave the line
+   * up until the next prompt (review of #144). A box still up is the next of
+   * several questions, still pending.
    */
-  const answerTimers = useRef(new Map<string, number[]>())
-  const stopAnswerCheck = useCallback((id: string): void => {
-    for (const t of answerTimers.current.get(id) ?? []) clearTimeout(t)
-    answerTimers.current.delete(id)
-  }, [])
   useEffect(
     () =>
       onTermKey((id, key) => {
@@ -335,7 +345,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
         stopAnswerCheck(id)
         answerTimers.current.set(
           id,
-          [250, 1000].map((ms) =>
+          [250, 1000, 2500, 5000].map((ms) =>
             window.setTimeout(() => {
               if (!questionAnswered(key, readScreenTail(id))) return
               stopAnswerCheck(id)

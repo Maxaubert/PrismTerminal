@@ -485,6 +485,9 @@ const scenarios = {
       await sleep(1200)
       ok((await state(0)) === 'question', `opening the tab does not clear the question (${await state(0)})`)
       ok((await tab(0).locator('[data-attention="question"]').count()) === 1, 'its line is drawn on the tab in front')
+      // Drawn, not only present: a 3px box in a real colour (review of #144).
+      const qa = await tab(0).locator('[data-attention="question"]').evaluate((el) => ({ h: Math.round(el.getBoundingClientRect().height), bg: getComputedStyle(el).backgroundColor }))
+      ok(qa.h === 3 && !/rgba\(.*,\s*0\)|transparent/.test(qa.bg), `and it is visible there (${JSON.stringify(qa)})`)
       await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/attention-question-active.png') }).catch(() => {})
       ok((await badge()) === '1 tab needs a look', `and the badge still counts it (${await badge()})`)
       await tab(1).click()
