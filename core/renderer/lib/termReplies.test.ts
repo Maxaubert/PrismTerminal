@@ -12,6 +12,7 @@ import {
   oscColour,
   themePush,
   themeReports,
+  themeReportsOnPoll,
   xtversionAsked,
   xtversionReply
 } from './termReplies'
@@ -104,6 +105,23 @@ describe('themePush', () => {
     let s = themeReports(THEME_REPORTS_OFF, true, 'dark')
     s = noteThemeMode(s, 'light')
     expect(themePush(s, 'light').send).toBeNull()
+  })
+})
+
+describe('themeReportsOnPoll', () => {
+  const on = themeReports(THEME_REPORTS_OFF, true, 'dark')
+  it('ends the reports when the agent the poll or title had armed leaves', () => {
+    expect(themeReportsOnPoll(on, true, false)).toEqual(THEME_REPORTS_OFF)
+  })
+  // MEASURED (e2e termReplies, 2026-10-11): the poll's FIRST verdict for a tab
+  // is a change from nothing, "no agent", and it landed after a program that
+  // is no agent had sent ?2031h, so a theme switch told it nothing.
+  it('keeps them on a "no agent" verdict when no agent was there', () => {
+    expect(themeReportsOnPoll(on, false, false)).toBe(on)
+  })
+  it('keeps them when an agent arrives or stays', () => {
+    expect(themeReportsOnPoll(on, false, true)).toBe(on)
+    expect(themeReportsOnPoll(on, true, true)).toBe(on)
   })
 })
 

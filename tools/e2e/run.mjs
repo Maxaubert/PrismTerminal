@@ -2535,6 +2535,9 @@ const scenarios = {
       ok(!/IN C 16\b/.test(await text()), 'and no ^V with it: one key, one paste')
       await page.keyboard.press('Shift+Enter')
       ok(!!(await until(async () => /IN C 0a\b/.test(await text()), 5000)), "Shift+Enter is Ctrl+J, Claude's own newline (#175)")
+      await sleep(500)
+      // xterm sent a CR on Enter's keypress too, so Claude submitted (2026-10-11).
+      ok(!/IN C 0d/.test(await text()), 'and no Enter with it: the newline does not submit')
       await page.keyboard.type('q')
       ok(!!(await until(() => page.evaluate(() => !document.querySelector('[data-agent-present]')), 45000, 200)), 'the poll sees the agent leave')
 
@@ -2549,6 +2552,8 @@ const scenarios = {
       await until(async () => (await text()).includes('TITLED'), 5000, 50)
       await page.keyboard.press('Shift+Enter')
       ok(!!(await until(async () => /IN T 0a\b/.test(await text()), 1000, 50)), 'once it titles itself "✳ Claude Code", Shift+Enter is Ctrl+J within 1 s')
+      await sleep(500)
+      ok((await text()).split('IN T 0d').length - 1 === 1, 'and no Enter with it')
       await page.keyboard.type('q')
     } finally {
       await app

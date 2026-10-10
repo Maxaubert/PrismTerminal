@@ -46,6 +46,7 @@ import {
   noteThemeMode,
   themePush,
   themeReports,
+  themeReportsOnPoll,
   xtversionAsked,
   xtversionReply,
   type GroundMode
@@ -1098,9 +1099,10 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     onPathsFound(id, () => links.revisit()),
     termApi().onTermAgent((forId, present, kind) => {
       if (forId !== id) return
+      // The agent that asked for theme reports has gone with it; a first
+      // "no agent" verdict is no departure (`themeReportsOnPoll`).
+      reports = themeReportsOnPoll(reports, arm.here, present)
       arm = armOnPoll(arm, present, kind)
-      // The agent that asked for theme reports has gone with it.
-      if (!present) reports = THEME_REPORTS_OFF
     }),
     termApi().onTermData((forId, data) => {
       if (forId === id) writeOutput(data)
@@ -1169,6 +1171,11 @@ function createSession(id: string, root: string, shellId: string | undefined): S
       // end, a command nobody wrote. There Shift+Enter is Enter, as xterm sends it.
       markTouched(id) // input like any other: its repaint is echo, not work
       termApi().termInput(id, newlineKey(arm.kind))
+      // Returning false only stops xterm's keydown; the browser still fires a
+      // keypress for Enter and xterm sent a CR on it, so Claude got Ctrl+J
+      // THEN Enter and submitted (MEASURED, e2e imagePaste 2026-10-11:
+      // "IN C 0a" then "IN C 0d"). preventDefault cancels that keypress.
+      e.preventDefault()
       return false
     }
     // ONE CTRL+V IS ONE PASTE (owner, 2026-09-22: "when I copy text and paste

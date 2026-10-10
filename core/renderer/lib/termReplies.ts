@@ -95,6 +95,18 @@ export function themeReports(s: ThemeReports, on: boolean, now: GroundMode): The
   return { on, last: on ? (s.last ?? now) : s.last }
 }
 
+/**
+ * The poll's word on the agent (`term:agent`): the reports end with the agent
+ * that was there (`wasHere`, armed by the poll or its title) leaving, in a
+ * shell with no prompt report to end them (cmd, WSL). A "no agent" with no
+ * agent before is not a departure: the poll's FIRST verdict for a tab is that,
+ * and it can land after a program that is no agent sent ?2031h (MEASURED, e2e
+ * termReplies 2026-10-11: a theme switch then told the program nothing).
+ */
+export function themeReportsOnPoll(s: ThemeReports, wasHere: boolean, present: boolean): ThemeReports {
+  return wasHere && !present ? THEME_REPORTS_OFF : s
+}
+
 /** A query answered (OSC 11, `?996n`): the program now knows `mode`. */
 export function noteThemeMode(s: ThemeReports, mode: GroundMode): ThemeReports {
   return { ...s, last: mode }
