@@ -600,10 +600,30 @@ const scenarios = {
         `the badge is ${want}px at scale ${pic.dpr}, not a stretched small image (${pic.img ? `${pic.img.width}px at ${pic.img.scale}` : 'none'})`
       )
       if (pic.img) writeFileSync(resolve(process.cwd(), '.e2e-shots/taskbar-badge.png'), Buffer.from(pic.img.png.split(',')[1], 'base64'))
+      // A QUESTION LASTS UNTIL IT IS ANSWERED (#144; owner, 2026-10-09: "if you
+      // go on that tab and then just move to another tab without answering the
+      // question, the blue bar shouldn't disappear").
       await page.evaluate(() => window.dispatchEvent(new Event('focus')))
       await tab(0).click()
-      ok(!!(await until(async () => (await state(0)) === null, 4000, 50)), 'opening the tab clears it')
+      await sleep(1200)
+      ok((await state(0)) === 'question', `opening the tab does not clear the question (${await state(0)})`)
+      ok((await tab(0).locator('[data-attention="question"]').count()) === 1, 'its line is drawn on the tab in front')
+      // Drawn, not only present: a 3px box in a real colour (review of #144).
+      const qa = await tab(0).locator('[data-attention="question"]').evaluate((el) => ({ h: Math.round(el.getBoundingClientRect().height), bg: getComputedStyle(el).backgroundColor }))
+      ok(qa.h === 3 && !/rgba\(.*,\s*0\)|transparent/.test(qa.bg), `and it is visible there (${JSON.stringify(qa)})`)
+      await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/attention-question-active.png') }).catch(() => {})
+      ok((await badge()) === '1 tab needs a look', `and the badge still counts it (${await badge()})`)
+      await tab(1).click()
+      await sleep(600)
+      ok((await state(0)) === 'question', `leaving it unanswered keeps the line (${await state(0)})`)
+      // Answering is work again: the line goes, and the badge with it. The box
+      // is cleared first, as Claude's goes when it is answered.
+      await at(0, `Clear-Host; ${WORK}`)
+      ok(!!(await until(async () => (await state(0)) === 'working', 8000, 50)), 'answering it takes the question down')
       ok(!!(await until(async () => (await badge()) === '', 4000, 50)), 'and the badge with it')
+      await at(0, IDLE)
+      await sleep(800)
+      ok((await state(0)) === null, `and it does not come back at rest (${await state(0)})`)
 
       // FINISHED on a background tab: the green line, until the tab is opened.
       await at(2, "Start-Sleep -Milliseconds 1500; " + IDLE)
@@ -695,8 +715,31 @@ const scenarios = {
       ok(!!(await until(async () => (await state(0)) === 'question', 10000, 50)), 'a question hook on a background tab marks it')
       ok((await line(0)) === 'question', 'with the Question line')
       ok(!!(await until(async () => (await badge()) === '1 tab needs a look', 4000, 50)), `and the taskbar badge counts it (${await badge()})`)
+      // A QUESTION LASTS UNTIL IT IS ANSWERED (#144): opened and left, it stays.
       await look(0)
-      ok(!!(await until(async () => (await state(0)) === null, 4000, 50)), 'opening the tab clears it')
+      await sleep(1000)
+      ok((await state(0)) === 'question' && (await line(0)) === 'question', `opening the tab does not clear the question (${await state(0)})`)
+      await tab(1).click()
+      await sleep(500)
+      ok((await state(0)) === 'question', `leaving it unanswered keeps the line (${await state(0)})`)
+      ok((await badge()) === '1 tab needs a look', `and the badge still counts it (${await badge()})`)
+      // Answered by a key no hook reports (a "No", an Esc): Enter with no box on
+      // screen. The stand-in is a pwsh prompt, so Enter only draws a new one.
+      await look(0)
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.press('Enter')
+      ok(!!(await until(async () => (await state(0)) === null, 4000, 50)), 'a key that settles the box answers it')
+      ok(!!(await until(async () => (await badge()) === '', 4000, 50)), 'and the badge lets it go')
+      // Asked on the tab in front, it is marked there too; the next hook (a yes
+      // is work again) takes it down. One line typed, so no Enter lands while
+      // the question is up: what takes it down is the hook alone.
+      await at(0, `${later(say('question'))}; Start-Sleep -Milliseconds 4000; ${say('working')}`)
+      ok(!!(await until(async () => (await state(0)) === 'question', 10000, 50)), 'a question asked on the tab in front marks it')
+      await page.keyboard.press('ArrowDown')
+      await sleep(1200)
+      ok((await state(0)) === 'question', `walking the choices is not an answer (${await state(0)})`)
+      ok(!!(await until(async () => (await state(0)) === 'working', 10000, 50)), 'a working hook after it answers it')
+      ok((await line(0)) === null, 'and no line is left')
 
       // DONE on a background tab: the Finished line.
       await at(0, say('working'))
