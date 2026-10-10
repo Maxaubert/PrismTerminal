@@ -27,8 +27,10 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   Ctrl+V match `e.code` too (a Russian layout's C is 'с'). Shift+Enter sends a newline ONLY where an
   agent runs, at a plain prompt it is Enter: Ctrl+J to Claude and the `\` continuation otherwise
   (`newlineKey`, measured: Codex 0.153.2 drops a bare LF), armed by Claude's title glyphs or Codex's
-  Action Required before the poll, never a bare braille spinner, and disarmed only by the poll (#175).
-  An image on Ctrl+V sends the AGENT's key, Alt+V to Claude and ^V otherwise, exactly one, since a
+  Action Required before the poll, never a bare braille spinner, and disarmed by the poll (#175), or
+  by the shell's prompt report when only a title armed it (`lib/agentArm.ts`: a WSL tab's poll sees
+  wsl.exe and never says left). An image on Ctrl+V sends the AGENT's key, Alt+V to Claude (on WSL
+  too) and ^V otherwise, exactly one, since a
   keybindings.json binding both would paste twice (`imagePasteKey`, #170). The panel's attach is keyed on the
   session alone (a `cd` must not re-attach it and take the focus). Under a question or the update
   window the tab chords do nothing (Ctrl+W keeps its rule). A kill while a spawn is pending wins,
@@ -168,7 +170,9 @@ one-liner in `CLAUDE.md` only if it is among the most important.
 - <a id="replies-only-when-asked"></a>**THE APP ANSWERS A PROGRAM ONLY WHAT IT ASKED** (#168, #171, #172, #176; spec
   `docs/superpowers/specs/2026-10-10-claude-code-compat-design.md` section 15). Every byte the core writes into a pty that
   no key produced is a reply to a query in that pty's own stream (OSC 10/11 `?`, `CSI ? 996 n`, `CSI > q`, DECRQM 2031)
-  or the `?997` report the program turned on with `?2031h`, and only on a change. Replies hold no CR, LF or printable
+  or the `?997` report the program turned on with `?2031h`, only on a change and only while that program is there:
+  the shell's prompt report, the poll's "agent left" and RIS turn the reports off (review 2026-10-11: a push after a
+  killed Claude reached PSReadLine as ESC, RevertLine, then typed `[?997;1n`). Replies hold no CR, LF or printable
   command, go through `term.input(reply, false)` so `onData` and `looksTyped` treat them as the replies they are
   ([typing on onKey](#typing-on-onkey)), and never read anything private: OSC 52 is write-only and a read gets no
   answer. The pure half is `core/renderer/lib/termReplies.ts` (tested); the light/dark it reports is the chrome's own
@@ -336,11 +340,15 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   default asked `confirm()` and opened a blank window main denied, on any button). Their cells are
   painted from the stream (`lib/termOsc8.ts`: the cursor at the open and at the close, MEASURED to
   bracket Claude Code's label through the bundled ConPTY) while their text stands, on both screens,
-  and the menu's Copy link / Open link take their uri. A reflow or a buffer switch forgets them.
-  `FORCE_HYPERLINK=1` is set for every shell unless the user set it, any value kept (#173; `ptyEnv`;
-  MEASURED 2026-10-11: Claude Code prints OSC 8 only with it, its own `hyperlinks` setting still
-  winning; the vercel CLI reads it too; Codex and this repo's `node_modules` do not). It came after
-  the handler, so no link is ever a dead confirm box. The `osc8Links` e2e holds both.
+  and the menu's Copy link / Open link take where a click goes. A LABEL THAT SHOWS ANOTHER HOST'S
+  ADDRESS OPENS WHAT IT SHOWS (`osc8Target`, review 2026-10-11): xterm's OSC 8 provider outranks the
+  visible-text match, so `https://github.com/...` printed over a hidden `https://evil.example/`
+  opened evil.example. An OSC 8 label is a link to the click-caret gate too. A reflow or a buffer
+  switch forgets them. **THE APP NEVER SETS `FORCE_HYPERLINK`** (#173 did; review 2026-10-11 took
+  it out): supports-hyperlinks reads it BEFORE its isTTY test (read in claude.exe 2.1.296), so it
+  put raw OSC 8 into every pipe and redirect, Claude's own Bash tool commands among them. Claude
+  prints `label (long url)` without it; its `hyperlinks` setting, or a user's own variable, turns
+  OSC 8 on. The `osc8Links` e2e holds both.
 - <a id="path-links"></a>**A PATH ON SCREEN IS A LINK WHEN IT EXISTS** (#99; owner, 2026-09-29: "clickable links that would
   open the file or folder", then "go ahead"). `lib/termPaths` finds what COULD be a path (relative or
   absolute, sentence punctuation and `:12` taken off); main's `termPathOpen` answers which exist from

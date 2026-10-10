@@ -247,6 +247,13 @@ only finds URLs and paths in text, and Claude's labels ("#165") are neither.
 
 ## 6. #173 (low): FORCE_HYPERLINK
 
+> **Withdrawn by the review of 2026-10-11.** `supports-hyperlinks` (in claude.exe 2.1.296 and the
+> vercel CLI) reads `FORCE_HYPERLINK` BEFORE its `isTTY` test, so set for the whole shell it put raw
+> OSC 8 into every pipe and redirect, the commands Claude's own Bash tool runs among them. `ptyEnv`
+> no longer sets it; a user's own value passes through. The OSC 8 handler (section 5) stays, and a
+> label showing another host's address opens what it shows (`osc8Target`). The plan below is the
+> history.
+
 ### What exists
 
 `core/main/terminal.ts:161-180` `ptyEnv` sets `TERM` and `COLORTERM` only. Claude emits OSC 8 only
@@ -429,15 +436,17 @@ not reproduced in PT yet).
 ### What exists
 
 `termPaste.ts:67-79` `decidePaste` returns `{ kind: 'key' }` for an image; the panel sends `\x16`
-(`TerminalPanel.tsx:817-826`). Claude 2.1.296 binds `ctrl+v` to image paste only off Windows (and on
-WSL); on Windows it is `alt+v` (read in the binary). The owner's `keybindings.json` binds both, which
+(`TerminalPanel.tsx:817-826`). Claude 2.1.296 binds `ctrl+v` to image paste only off Windows; on
+Windows AND on WSL it is `alt+v` (read in the binary: `Ie=M==="windows"||M==="wsl"`,
+`Me=Ie?"alt+v":"ctrl+v"`; corrected by the review of 2026-10-11, the research report had WSL wrong). The owner's `keybindings.json` binds both, which
 hid it. Codex reads the clipboard image on Ctrl+V.
 
 ### The change
 
 - Pure, `termPaste.ts`: `imagePasteKey(agent: DetectedAgent | null): string`: `'\x1bv'` (Alt+V)
-  for `claude`; `'\x16'` (^V) for everything else (codex, other agents, a plain shell, and WSL,
-  where the poll sees `wsl.exe` and Claude inside wants Ctrl+V). EXACTLY ONE key is sent, never
+  for `claude`; `'\x16'` (^V) for everything else (codex, other agents, a plain shell). Claude in
+  WSL wants Alt+V too: the poll sees only `wsl.exe`, so a WSL tab sends it once Claude's title has
+  armed `claude`, and the shell's prompt report takes that back (`lib/agentArm.ts`). EXACTLY ONE key is sent, never
   both: with the owner's bindings both keys paste, and two would paste the image twice.
 - The panel tracks `agentKind: DetectedAgent | null` beside `agentHere`: from `onTermAgent`'s
   `kind` (`:836-838`), from the resume (`agentOfResume`), and from the title (section 12's

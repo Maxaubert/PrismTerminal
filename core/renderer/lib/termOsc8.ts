@@ -5,7 +5,8 @@ import { cellText, type CellInfo } from './termCells'
  * OSC 8 HYPERLINKS (#169): a program prints a label and says, in-band, which
  * uri it stands for (`ESC ] 8 ; params ; uri ST`, label, `ESC ] 8 ; ; ST`).
  * Claude Code prints its links this way once told the terminal takes them
- * (FORCE_HYPERLINK, #173), "PR #165" in its status line among them.
+ * (its `hyperlinks` setting, or a FORCE_HYPERLINK of the user's own: the app
+ * no longer sets it, see `ptyEnv`), "PR #165" in its status line among them.
  *
  * xterm records which cells belong to a link, but keeps it internal (the
  * cell's `urlId`), with no public way to ask. So the panel FOLLOWS THE STREAM:
@@ -28,6 +29,31 @@ export function parseOsc8(data: string): { uri: string } | null {
 
 /** The only links the app opens (main and the preload check again). */
 export const isWebLink = (uri: string): boolean => /^https?:\/\//i.test(uri)
+
+const hostOf = (url: string): string | null => {
+  try {
+    return new URL(url).host.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * WHERE AN OSC 8 LINK GOES, on a click, Open link or Copy link (review
+ * 2026-10-11). xterm registers its OSC 8 provider before any other, and the
+ * lowest one wins, so the hidden uri outranked the web-links match on the
+ * visible text, both painted the link colour and with no confirm: output
+ * printing `https://github.com/org/repo` over `https://evil.example/` opened
+ * evil.example. A label that SHOWS an address (`shown`, the visible link under
+ * it) on another host is taken at its word; any other label ("PR #165") opens
+ * its uri. Hosts, not whole urls: a label is often a shortened form of its own
+ * uri.
+ */
+export function osc8Target(uri: string, shown: string | null): string {
+  if (!shown) return uri
+  const want = hostOf(uri)
+  return want !== null && want === hostOf(shown) ? uri : shown
+}
 
 /** Where a span's first row is now: an xterm marker on the normal screen (it
  *  follows the buffer as it trims), a plain line on the alternate one. */

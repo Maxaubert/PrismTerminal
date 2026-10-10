@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type JSX } from 'react'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type IBufferRange } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
 import { decidePaste, imagePasteKey, newlineKey, sanitizePaste, type PathShell } from '../lib/termPaste'
-import { titleArmsAgent } from '../lib/agentTitle'
-import type { DetectedAgent } from '../../shared/types'
+import { armAtStart, armOnPoll, armOnPrompt, armOnTitle } from '../lib/agentArm'
 import { shellOfShellId } from '../../shared/help/shells'
 import {
   onResumingChange,
@@ -73,7 +72,7 @@ import {
   type CaretPos
 } from '../lib/termCaretHold'
 import { cellFrom, cellText, type CellInfo } from '../lib/termCells'
-import { bufferRowCells, isWebLink, Osc8Spans, parseOsc8, spanText, type SpanAnchor } from '../lib/termOsc8'
+import { bufferRowCells, isWebLink, osc8Target, Osc8Spans, parseOsc8, spanText, type SpanAnchor } from '../lib/termOsc8'
 import {
   onTermLookChange,
   termBaseFontPx,
@@ -209,7 +208,12 @@ function fitKeepingCursorLine(term: Terminal, fit: FitAddon): void {
  * exactly as it was. The rules are `termClickCaret`'s, pure and tested; this
  * only reads the event and the buffer into them. Returns the disposer.
  */
-function attachClickCaret(term: Terminal, el: HTMLElement, id: string): () => void {
+function attachClickCaret(
+  term: Terminal,
+  el: HTMLElement,
+  id: string,
+  oscLinkAt: (line: number, x: number) => boolean
+): () => void {
   // DECTCEM, followed from the stream: xterm keeps whether the cursor is
   // hidden to itself. Returning false lets xterm apply it as always.
   let cursorHidden = false
@@ -261,7 +265,12 @@ function attachClickCaret(term: Terminal, el: HTMLElement, id: string): () => vo
         cursorHidden,
         textBelow,
         offLine: clicked < first || clicked > last,
-        onLink: findLinks(text).some((l) => charAt >= l.start && charAt < l.end)
+        // An OSC 8 label is a link too, though its text is not one (review
+        // 2026-10-11: a click on a prompt's linked git segment opened it AND
+        // walked the caret).
+        onLink:
+          findLinks(text).some((l) => charAt >= l.start && charAt < l.end) ||
+          oscLinkAt(clicked, Math.floor((e.clientX - r.left) / cellW))
       }
       if (!caretClickAllowed(gate)) return
       const keys = arrowKeys(
@@ -314,6 +323,19 @@ function logicalLine(term: Terminal, y: number): {
   }
   const { text, index, textEnd } = cellText(cells)
   return { first, last, widths: cells.map((c) => c.width), text, index, textEnd }
+}
+
+/** The web address SHOWN over an OSC 8 link's cells (xterm's range: 1-based,
+ *  one row, the end cell included), read across the whole logical line so a
+ *  shown address that wraps still counts. */
+function shownLinkOver(term: Terminal, range: IBufferRange): string | null {
+  const line = logicalLine(term, range.start.y - 1)
+  const charOf = (p: { x: number; y: number }): number =>
+    line.index[Math.min(Math.max(0, (p.y - 1 - line.first) * term.cols + p.x - 1), line.index.length - 1)]
+  const from = charOf(range.start)
+  const to = charOf(range.end)
+  const hit = findLinks(line.text).find((l) => l.start <= to && l.end > from)
+  return hit ? line.text.slice(hit.start, hit.end) : null
 }
 
 /**
@@ -426,9 +448,11 @@ export function termContextAt(
   const line = logicalLine(term, y)
   const target = (y - line.first) * term.cols + col
   const at = line.index[Math.min(target, line.index.length - 1)]
-  // An OSC 8 label ("PR #165") is a link though its text is not (#169); its
-  // uri is what a left click opens, so it is what the menu copies and opens.
-  const link = s.oscLink(y, col) ?? linkAt(line.text, at)
+  // An OSC 8 label ("PR #165") is a link though its text is not (#169); where
+  // a left click goes (`osc8Target`) is what the menu copies and opens.
+  const shown = linkAt(line.text, at)
+  const osc = s.oscLink(y, col)
+  const link = osc ? osc8Target(osc, shown) : shown
   return { selection, link, path: link ? null : pathAt(line.text, at, s.cwd()) }
 }
 
@@ -657,9 +681,13 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     // the menu, as for every other link (owner, 2026-09-28). No confirm, ever.
     // Only http(s): xterm drops any other scheme with allowNonHttpProtocols
     // off, and this checks again, as do the preload and main.
+    // A label that shows another host's address opens what it shows
+    // (`osc8Target`, review 2026-10-11).
     linkHandler: {
-      activate: (e, uri) => {
-        if (e.button === 0 && isWebLink(uri)) termApi().openExternal(uri)
+      activate: (e, uri, range) => {
+        if (e.button !== 0 || !isWebLink(uri)) return
+        const to = osc8Target(uri, shownLinkOver(term, range))
+        if (isWebLink(to)) termApi().openExternal(to)
       },
       allowNonHttpProtocols: false
     }
@@ -913,6 +941,11 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   }
   term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, trackReports(true))
   term.parser.registerCsiHandler({ prefix: '?', final: 'l' }, trackReports(false))
+  // RIS (ESC c) resets every mode, this one too. False: xterm still resets.
+  term.parser.registerEscHandler({ final: 'c' }, () => {
+    reports = THEME_REPORTS_OFF
+    return false
+  })
   // CSI ? 996 n: "which are you now?" xterm keeps every other DSR.
   term.parser.registerCsiHandler({ prefix: '?', final: 'n' }, (params) => {
     const p = modeParams(params)
@@ -1017,9 +1050,8 @@ function createSession(id: string, root: string, shellId: string | undefined): S
 
   // Whether an agent runs in this shell right now, and which, for Shift+Enter
   // and an image on Ctrl+V below: a resumed session is its agent from its
-  // first moment, and main's process poll says when one arrives or leaves.
-  let agentHere = Boolean(resume)
-  let agentKind: DetectedAgent | null = resume ? agentOfResume(resume) : null
+  // first moment; the title, the poll and the prompt move it (`agentArm`).
+  let arm = armAtStart(resume ? agentOfResume(resume) : null)
   /**
    * The one paste. Bracketed for text - without that framing a multi-line
    * paste reaches the shell as a run of Enter presses, so the first line runs
@@ -1034,37 +1066,41 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     if (decision.kind === 'key') {
       markTouched(id)
       // The AGENT's image-paste key, Alt+V to Claude on Windows (#170).
-      termApi().termInput(id, imagePasteKey(agentKind))
+      termApi().termInput(id, imagePasteKey(arm.kind))
     } else if (decision.kind === 'text') {
       markTouched(id) // a paste is typing; bracketed, it starts with ESC
       term.paste(decision.data)
     }
   }
 
-  // THE TITLE ARMS IT BEFORE THE POLL (#175): the poll's first verdict comes
-  // 2.5 s at the earliest (backing off to 20 s), and until then Shift+Enter
-  // SUBMITTED a half-written message. Only Claude's own glyphs and Codex's
-  // "Action Required" arm it (`titleArmsAgent`). Only the poll's "left" takes
-  // it back (the #73 rule), and a stale title does not re-arm, since it does
-  // not change again.
+  // The title arms the agent's keys before the poll (#175; `agentArm` has the
+  // rules).
   term.onTitleChange((t) => {
-    const named = titleArmsAgent(t)
-    if (named) {
-      agentHere = true
-      agentKind = named
+    arm = armOnTitle(arm, t)
+  })
+  // THE SHELL'S PROMPT IS BACK (OSC 9;9): nothing runs in front of it. It takes
+  // back what only a title armed (a WSL tab's poll never says "left"), and a
+  // ?2031h whose program died without its ?2031l (review 2026-10-11): a theme
+  // push after it reached the shell, and PSReadLine read the ESC as
+  // RevertLine and typed the rest. Registered after the cwd handler, so it is
+  // asked first, and returns false: that handler still takes the sequence.
+  term.parser.registerOscHandler(9, (data) => {
+    if (parseOsc9(data)) {
+      arm = armOnPrompt(arm)
+      reports = THEME_REPORTS_OFF
     }
+    return false
   })
   const unsub = [
-    attachClickCaret(term, el, id),
+    attachClickCaret(term, el, id, (line, x) => oscLink(line, x) !== null),
     // A path this session asked about turned out to exist: paint the lines
     // that asked (#167; it used to be every line of every tab).
     onPathsFound(id, () => links.revisit()),
     termApi().onTermAgent((forId, present, kind) => {
       if (forId !== id) return
-      agentHere = present
-      // The poll knows a process, the title its agent: an 'other' process
-      // (a wrapper) does not undo the title's claude or codex.
-      agentKind = !present ? null : kind === 'other' && agentKind ? agentKind : kind
+      arm = armOnPoll(arm, present, kind)
+      // The agent that asked for theme reports has gone with it.
+      if (!present) reports = THEME_REPORTS_OFF
     }),
     termApi().onTermData((forId, data) => {
       if (forId === id) writeOutput(data)
@@ -1124,7 +1160,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     // Returning false keeps xterm from ALSO feeding the bytes to the pty: left
     // to xterm, Ctrl+` became a NUL, which counted as the user typing.
     if (termHost().ownsKey(e)) return false
-    if (e.key === 'Enter' && e.shiftKey && agentHere) {
+    if (e.key === 'Enter' && e.shiftKey && arm.here) {
       // Newline-without-submit, in the bytes the agent reads as one
       // (`newlineKey`, measured #175: Ctrl+J for Claude, `\` + Enter
       // otherwise). This is what /terminal-setup exists to configure; here it
@@ -1132,7 +1168,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
       // at a plain prompt `\` then Enter RAN the line with a backslash on its
       // end, a command nobody wrote. There Shift+Enter is Enter, as xterm sends it.
       markTouched(id) // input like any other: its repaint is echo, not work
-      termApi().termInput(id, newlineKey(agentKind))
+      termApi().termInput(id, newlineKey(arm.kind))
       return false
     }
     // ONE CTRL+V IS ONE PASTE (owner, 2026-09-22: "when I copy text and paste

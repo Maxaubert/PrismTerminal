@@ -90,10 +90,12 @@ describe('ptyEnv', () => {
     expect(env.ANTHROPIC_API_KEY).toBe('k')
   })
 
-  // #173: Claude Code prints its links as OSC 8 hyperlinks only when told the
-  // terminal takes them; without it a link is "label (long url)".
-  it('tells programs the terminal takes hyperlinks', () => {
-    expect(ptyEnv({}).FORCE_HYPERLINK).toBe('1')
+  // #173, then the review of 2026-10-11: supports-hyperlinks reads
+  // FORCE_HYPERLINK BEFORE its isTTY test, so set for the whole shell it put
+  // raw OSC 8 into every pipe and redirect (`vercel ls > out.txt`, the
+  // commands Claude's own Bash tool runs). The app never sets it.
+  it('never forces hyperlinks on the programs in a tab', () => {
+    expect(Object.keys(ptyEnv({})).some((k) => k.toUpperCase() === 'FORCE_HYPERLINK')).toBe(false)
   })
 
   it("keeps the user's own FORCE_HYPERLINK, 0 included", () => {

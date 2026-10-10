@@ -1,6 +1,39 @@
 import { describe, expect, it } from 'vitest'
 import type { CellInfo } from './termCells'
-import { isWebLink, Osc8Spans, parseOsc8, spanRows, spanText, spanTextRange, type Osc8Span } from './termOsc8'
+import {
+  isWebLink,
+  osc8Target,
+  Osc8Spans,
+  parseOsc8,
+  spanRows,
+  spanText,
+  spanTextRange,
+  type Osc8Span
+} from './termOsc8'
+
+// Review 2026-10-11: xterm's OSC 8 provider outranks the web-links match on the
+// visible text, so a label that READS as one address could open another.
+describe('osc8Target', () => {
+  it('opens the uri behind a label that is not an address', () => {
+    expect(osc8Target('https://github.com/o/r/pull/165', null)).toBe('https://github.com/o/r/pull/165')
+  })
+
+  it('opens the uri when the label shows the same host', () => {
+    expect(osc8Target('https://github.com/o/r/pull/165', 'https://github.com/o/r')).toBe(
+      'https://github.com/o/r/pull/165'
+    )
+    expect(osc8Target('https://GitHub.com/x', 'https://github.com/y')).toBe('https://GitHub.com/x')
+  })
+
+  it('opens what the label SHOWS when it names another host', () => {
+    expect(osc8Target('https://evil.example/', 'https://github.com/org/repo')).toBe('https://github.com/org/repo')
+    expect(osc8Target('https://github.com:8443/', 'https://github.com/')).toBe('https://github.com/')
+  })
+
+  it('opens the label when the uri does not parse', () => {
+    expect(osc8Target('https://', 'https://github.com/')).toBe('https://github.com/')
+  })
+})
 
 const anchor = (line: number): { line: number; isDisposed: boolean; dispose(): void } => {
   const a = { line, isDisposed: false, dispose: () => (a.isDisposed = true) }

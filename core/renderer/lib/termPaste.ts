@@ -67,9 +67,11 @@ export function quotePaths(paths: string[], shell?: PathShell): string {
  * terminal forwarded did nothing on a fresh install; the owner's own
  * keybindings.json binds both, which hid it. MEASURED 2026-10-11 through the
  * bundled ConPTY: ESC v reaches Claude as alt+v (it ran chat:imagePaste).
- * Codex reads the image on ^V, and so does Claude under WSL, which the poll
- * sees as wsl.exe and never calls claude. EXACTLY ONE key: with both bound,
- * sending both pasted the image twice.
+ * Codex reads the image on ^V. Claude under WSL wants alt+v too (`O()` is
+ * "wsl" there, review 2026-10-11): the poll only sees wsl.exe, so a WSL tab
+ * gets ESC v once Claude's own title has armed `claude` (`agentArm`), and ^V
+ * before it. EXACTLY ONE key: with both bound, sending both pasted the image
+ * twice.
  */
 export function imagePasteKey(agent: DetectedAgent | null): string {
   return agent === 'claude' ? '\x1bv' : '\x16'
