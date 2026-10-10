@@ -1210,6 +1210,23 @@ export default function TerminalPanel({
       termApi().termResize(sessionId, s.term.cols, s.term.rows)
     }
     refit()
+    // A SECOND PASS ONCE THE RENDERER HAS RESUMED (#174, xterm.js #6117, open
+    // in 6.0.0). While the element was detached xterm's renderer was paused
+    // (its IntersectionObserver), and the viewport syncs its scroll range in a
+    // render callback; a tab resized while hidden could come back with a stale
+    // slider until the next scroll. After a frame plus a task the renderer runs
+    // again: fit once more (a no-op when the size already matches) and redraw
+    // every row, which runs the render callbacks the viewport's sync waits on.
+    // Public API only. NOT REPRODUCED before this landed (no e2e in the build
+    // group); the `hiddenResize` e2e is the guard either way.
+    let resumeTimer: ReturnType<typeof setTimeout> | undefined
+    const resumeFrame = requestAnimationFrame(() => {
+      resumeTimer = setTimeout(() => {
+        if (s.el.parentElement !== host) return
+        refit()
+        s.term.refresh(0, s.term.rows - 1)
+      }, 0)
+    })
     const ro = new ResizeObserver(refit)
     ro.observe(host)
     // Ctrl+scroll zooms this session's text - unpersisted, the Settings base
@@ -1228,6 +1245,8 @@ export default function TerminalPanel({
     }
     host.addEventListener('wheel', wheel, { passive: false, capture: true })
     return () => {
+      cancelAnimationFrame(resumeFrame)
+      if (resumeTimer) clearTimeout(resumeTimer)
       ro.disconnect()
       host.removeEventListener('wheel', wheel, { capture: true })
       // Detach, don't dispose: the shell runs on unseen.

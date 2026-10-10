@@ -2492,6 +2492,78 @@ const scenarios = {
     }
   },
 
+  /**
+   * A TAB RESIZED WHILE HIDDEN COMES BACK WITH A RIGHT SCROLL RANGE (#174,
+   * xterm.js #6117). Tab B runs a stand-in for Claude's fullscreen view: the
+   * alternate screen with mouse tracking on, every row drawn, redrawn on a
+   * resize. With B hidden the window shrinks; back on B, the alternate screen
+   * has no scrollback, so the vertical slider is invisible or as tall as its
+   * track, and the rows shown are the program's last frame. Written to fail on
+   * a stale range; if it never failed on the code before the fix, the scenario
+   * stays as the guard and #174 notes "not reproduced".
+   */
+  async hiddenResize(ok) {
+    const w = world()
+    const probe = join(w.beta, 'alt-probe.cjs')
+    writeFileSync(
+      probe,
+      [
+        'process.stdin.setRawMode(true)',
+        'process.stdin.resume()',
+        "const draw = () => { const r = process.stdout.rows, c = process.stdout.columns; let s = '\\x1b[H'; for (let i = 1; i <= r; i++) s += ('ALTROW ' + i + ' of ' + r).padEnd(c - 1).slice(0, c - 1) + (i < r ? '\\r\\n' : ''); process.stdout.write(s) }",
+        "process.stdout.on('resize', draw)",
+        "process.stdin.on('data', (b) => { if (b.toString() === 'q') { process.stdout.write('\\x1b[?1006l\\x1b[?1000l\\x1b[?1049l'); process.exit(0) } })",
+        "process.stdout.write('\\x1b[?1049h\\x1b[?1000h\\x1b[?1006h\\x1b[2J')",
+        'draw()'
+      ].join('\n')
+    )
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    const range = () =>
+      page.evaluate(() => {
+        const track = document.querySelector('.xterm .xterm-scrollable-element > .scrollbar.vertical')
+        const slider = track?.querySelector('.slider')
+        const t = track?.getBoundingClientRect()
+        const s = slider?.getBoundingClientRect()
+        const visible = !!slider && getComputedStyle(slider).display !== 'none' && (s?.height ?? 0) > 0 && getComputedStyle(track).visibility !== 'hidden'
+        const rows = [...document.querySelectorAll('.xterm .xterm-rows > div')].map((r) => (r.textContent ?? '').trim())
+        return { visible, track: Math.round(t?.height ?? 0), slider: Math.round(s?.height ?? 0), rows }
+      })
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open')
+      // Tab B (beta) is in front at launch.
+      await typeLine(page, `& '${process.execPath}' '${probe}'`)
+      ok(!!(await until(async () => (await range()).rows.some((t) => /^ALTROW 1 of \d+/.test(t)), 15000)), 'tab B is on the alternate screen, every row drawn')
+      await page.locator('[data-tab]').nth(0).click()
+      await sleep(500)
+      const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize())
+      await app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows()[0].setSize(s[0] - 300, s[1] - 300), size)
+      await sleep(1000)
+      await page.locator('[data-tab]').nth(1).click()
+      await page.mouse.move(400, 300)
+      // The program redraws for the new size; its last row says how many it has.
+      ok(
+        !!(await until(async () => {
+          const r = await range()
+          const last = r.rows.filter(Boolean).at(-1) ?? ''
+          const m = last.match(/^ALTROW (\d+) of (\d+)/)
+          return m && m[1] === m[2] && Number(m[2]) === r.rows.length
+        }, 10000)),
+        'back on tab B, the program drew a full frame for the new size'
+      )
+      await sleep(600)
+      const r = await range()
+      ok(!r.visible || r.slider >= r.track - 1, `no stale scroll range: the slider is hidden or fills its track (slider ${r.slider}px of ${r.track}px, visible ${r.visible})`)
+      await page.mouse.wheel(0, -200)
+      await sleep(300)
+      const top = (await range()).rows[0] ?? ''
+      ok(/^ALTROW 1 of/.test(top), `and nothing above the frame to scroll to (top row "${top.slice(0, 20)}")`)
+      await page.keyboard.type('q')
+    } finally {
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1100, 700)).catch(() => {})
+      await closeApp(app)
+    }
+  },
+
   async links(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
