@@ -12,6 +12,9 @@
 //   npm run diag -- --kinds page-stall,main-lag
 //   npm run diag -- --dir <logs folder> any folder holding a diag.jsonl
 //   npm run diag -- --n 50              how many problems (default 20)
+//   npm run diag -- --agent             the agent indicator's timeline: hooks,
+//                                       titles, marks and why, restores, tabs
+//   npm run diag -- --agent --tab t3    one tab's
 
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -35,12 +38,19 @@ const PROBLEMS = new Set([
   'logger-dropped',
   'mark'
 ])
+/** The agent indicator's record (#152): not problems, the context for one. */
+const AGENT = new Set(['agent-hook', 'agent-title', 'agent-mark', 'agent-restore'])
+/** The crumbs and lines an agent timeline (`--agent`) shows beside them. */
+const AGENT_CRUMBS = new Set(['tab-open', 'tab-close', 'tab-switch', 'shell-spawn', 'shell-exit'])
+const inAgentTimeline = (l) => AGENT.has(l.k) || l.k === 'session' || l.k === 'quit' || l.k === 'mark' || (l.k === 'crumb' && AGENT_CRUMBS.has(l.a))
+/** Context shown before a problem: the crumbs, and the marks' moves. */
+const isContext = (l) => l.k === 'crumb' || l.k === 'agent-mark' || l.k === 'agent-restore'
 const CRUMBS_BEFORE = 5
 /** A crumb older than this before a problem says nothing about it. */
 const CRUMB_WINDOW_MS = 120_000
 
 function args(argv) {
-  const out = { app: 'pt', since: null, all: false, kinds: null, dir: null, n: 20 }
+  const out = { app: 'pt', since: null, all: false, kinds: null, dir: null, n: 20, agent: false, tab: null }
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i]
     const next = () => argv[++i]
@@ -50,6 +60,8 @@ function args(argv) {
     else if (a === '--kinds') out.kinds = new Set(next().split(','))
     else if (a === '--dir') out.dir = next()
     else if (a === '--n') out.n = Number(next()) || 20
+    else if (a === '--agent') out.agent = true
+    else if (a === '--tab') out.tab = next()
     else if (a === '--help' || a === '-h') out.help = true
   }
   return out
@@ -131,6 +143,16 @@ function summary(l) {
       const { a, ...rest } = f
       return `${a} ${Object.keys(rest).length ? JSON.stringify(rest) : ''}`.trim()
     }
+    case 'agent-hook':
+      return `${l.id} ${l.state}${l.kind ? ` (${l.kind})` : ''}${l.repeats ? ` x${l.repeats} more` : ''}`
+    case 'agent-title':
+      return `${l.id} title ${l.state}${l.agent ? ` (${l.agent})` : ''}`
+    case 'agent-mark': {
+      const held = (l.held ?? []).filter((m) => m !== l.to)
+      return `${l.id} ${l.from} -> ${l.to}${held.length ? ` (holds ${held.join(', ')})` : ''}: ${l.why}${l.restored !== undefined ? `, ${(l.restored / 1000).toFixed(1)}s after restore` : ''}`
+    }
+    case 'agent-restore':
+      return `${l.id} restored with resume in ${l.cwd ?? '?'}`
     default:
       return JSON.stringify(f)
   }
@@ -147,7 +169,10 @@ function indent(text, n) {
 function main() {
   const o = args(process.argv.slice(2))
   if (o.help) {
-    console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 15).join('\n').replace(/^\/\/ ?/gm, ''))
+    // The header comment, however long it grows.
+    const head = readFileSync(new URL(import.meta.url), 'utf8').split(/\r?\n/).slice(1)
+    const end = head.findIndex((s) => !s.startsWith('//'))
+    console.log(head.slice(0, end).join('\n').replace(/^\/\/ ?/gm, ''))
     return
   }
   const dir = logDir(o)
@@ -165,18 +190,23 @@ function main() {
   if (last) console.log(`last session ${clock(last._ms)}: ${last.app} ${last.version}, pid ${last.pid}${last.verbose ? ', detailed' : ''}`)
   console.log(`${lines.length} lines${since === null ? '' : ` in the last ${o.since}`}, ${sessions.length} session(s)\n`)
 
-  if (o.all) {
-    for (const l of lines.filter((x) => !o.kinds || o.kinds.has(x.k)))
-      console.log(`${clock(l._ms)}  ${String(l.src ?? '?').padEnd(4)}  ${l.k.padEnd(14)}  ${summary(l)}`)
+  // A line of no tab (a session, a mark) stays in a tab's view.
+  const ofTab = (x) => !o.tab || x.id === undefined || x.id === o.tab
+  if (o.all || o.agent) {
+    // A tab's capped flood (#152): how many lines before this one were not written.
+    const dropped = (l) => (AGENT.has(l.k) && l.dropped ? `  [${l.dropped} dropped before]` : '')
+    const shown = lines.filter((x) => (o.kinds ? o.kinds.has(x.k) : !o.agent || inAgentTimeline(x)) && ofTab(x))
+    if (o.agent && !shown.some((x) => AGENT.has(x.k))) console.log('No agent indicator lines here (an app older than #152 writes none).\n')
+    for (const l of shown) console.log(`${clock(l._ms)}  ${String(l.src ?? '?').padEnd(4)}  ${l.k.padEnd(14)}  ${summary(l)}${dropped(l)}`)
     return
   }
 
-  const problems = lines.filter((l) => (o.kinds ? o.kinds.has(l.k) : isProblem(l))).slice(-o.n)
+  const problems = lines.filter((l) => (o.kinds ? o.kinds.has(l.k) : isProblem(l)) && ofTab(l)).slice(-o.n)
   if (problems.length === 0) {
     console.log('No stalls, errors or slow calls.')
     return
   }
-  const crumbs = all.filter((l) => l.k === 'crumb')
+  const crumbs = all.filter(isContext)
   for (const p of problems) {
     console.log(`${clock(p._ms)}  ${String(p.src ?? '?').padEnd(4)}  ${p.k.padEnd(14)}  ${summary(p)}`)
     const before = crumbs.filter((c) => c._ms <= p._ms && c._ms >= p._ms - CRUMB_WINDOW_MS).slice(-CRUMBS_BEFORE)

@@ -223,7 +223,7 @@ export default function App(): JSX.Element {
   const spawnSession = useCallback((id: string, cwd: string, resume?: string): void => {
     // A shell restored over an agent conversation launches straight into it:
     // the id rides the spawn, nothing is ever visibly typed.
-    if (resume) markResume(id, resume)
+    if (resume) markResume(id, resume, cwd)
     rememberRoot(cwd)
     const shellId = savedShellId()
     shellIds.current.set(id, shellId)
