@@ -15,7 +15,8 @@ import type { AgentSignal } from './agentHookSignal'
  *   idle title (the two race) still raises Finished.
  * - Whether an agent is there at all stays the process poll's.
  *
- * Marks are RAISED only on a tab nobody is looking at; the hook decides that.
+ * Finished and Failed are RAISED only on a tab nobody is looking at; the hook
+ * decides that. A question goes up on any tab (`raisedWhileSeen`).
  * Question outranks Failed, which outranks Finished (the strip draws one).
  */
 
@@ -62,4 +63,16 @@ export function hookStep(prev: HookSession | undefined, ev: HookEvent): HookOutc
       return { phase: 'failed', kind, working: false, raise: ['failed', 'finished'], clear: ['question'] }
     }
   }
+}
+
+/**
+ * WHETHER A MARK GOES UP ON THE TAB IN FRONT (#144; owner, 2026-10-09: the
+ * question line "should only disappear if you actually answered the
+ * question"). Finished and Failed are NEWS: a look tells it, so they go up
+ * only where nobody is looking and opening the tab takes them down. A question
+ * is a STATE: it lasts while the agent waits on you, so it goes up whoever is
+ * looking, and seeing the tab never takes it down; an answer does.
+ */
+export function raisedWhileSeen(mark: AttentionMark): boolean {
+  return mark === 'question'
 }

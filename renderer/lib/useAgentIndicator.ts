@@ -3,9 +3,9 @@ import type { DetectedAgent } from '../../shared/types'
 import { activitySuppressed, inputEcho, markBorn, startupOutput } from './termActivity'
 import { forgetAgentTitle, readAgentTitle } from './agentTitle'
 import { noteWorking } from './agentClock'
-import { onAgentSignal, onTitle, readScreenTail } from './termBus'
-import { looksLikeQuestion } from './agentQuestion'
-import { hookStep, type AttentionMark, type HookEvent, type HookSession } from './agentHookState'
+import { onAgentSignal, onTermKey, onTitle, readScreenTail } from './termBus'
+import { answersQuestion, looksLikeQuestion, questionAnswered } from './agentQuestion'
+import { hookStep, raisedWhileSeen, type AttentionMark, type HookEvent, type HookSession } from './agentHookState'
 import { termApi } from '../host'
 
 /**
@@ -24,7 +24,7 @@ export interface AgentIndicator {
   workingIds: ReadonlySet<string>
   doneIds: ReadonlySet<string>
   /** Sessions whose agent is waiting on YOU (a question or a permission
-   *  prompt), marked while you were not looking at them (2026-09-28). */
+   *  prompt), 2026-09-28. Marked until it is ANSWERED, looking or not (#144). */
   questionIds: ReadonlySet<string>
   /** Sessions whose turn ended on an error, told by Claude Code's own hook
    *  (#131), marked while you were not looking at them. */
@@ -50,6 +50,11 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
   const [workingIds, setWorkingIds] = useState<ReadonlySet<string>>(new Set())
   const [doneIds, setDoneIds] = useState<ReadonlySet<string>>(new Set())
   const [questionIds, setQuestionIds] = useState<ReadonlySet<string>>(new Set())
+  /** The pending questions, for a key handler to ask at the moment of the key. */
+  const questionsNow = useRef(questionIds)
+  useEffect(() => {
+    questionsNow.current = questionIds
+  }, [questionIds])
   const [failedIds, setFailedIds] = useState<ReadonlySet<string>>(new Set())
   const failedKinds = useRef(new Map<string, string>())
   /**
@@ -86,8 +91,16 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
    *  for a question only while its agent is idle. */
   const titleState = useRef(new Map<string, string>())
   const questionTimers = useRef(new Map<string, number>())
+  /** The screen reads pending after a key that may have answered a question.
+   *  A NEW question cancels them: its box may not be drawn yet, and a read in
+   *  that gap would take it down unanswered (review of #144). */
+  const answerTimers = useRef(new Map<string, number[]>())
+  const stopAnswerCheck = useCallback((id: string): void => {
+    for (const t of answerTimers.current.get(id) ?? []) clearTimeout(t)
+    answerTimers.current.delete(id)
+  }, [])
   /** Read the session's screen for Claude's question box: mark it when it
-   *  appears (unless you are looking), unmark it when it has gone. */
+   *  appears (on the tab in front too, #144), unmark it when it has gone. */
   const checkQuestion = useCallback((id: string): void => {
     if (questionTimers.current.has(id)) return
     questionTimers.current.set(
@@ -96,7 +109,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
         questionTimers.current.delete(id)
         const asking = titleState.current.get(id) === 'idle' && looksLikeQuestion(readScreenTail(id))
         setQuestionIds((prev) => {
-          if (asking && !prev.has(id) && !lookedAt(id)) return new Set(prev).add(id)
+          if (asking && !prev.has(id)) return new Set(prev).add(id)
           if (!asking && prev.has(id)) return without(prev, id)
           return prev
         })
@@ -129,8 +142,9 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     if (o.phase === 'failed' && o.kind) failedKinds.current.set(id, o.kind)
     else if (o.phase === 'failed' || o.clear.includes('failed')) failedKinds.current.delete(id)
     const away = !lookedAt(id)
+    if (o.raise.includes('question')) stopAnswerCheck(id)
     const marks = (mark: AttentionMark) => (prev: ReadonlySet<string>): ReadonlySet<string> => {
-      if (away && o.raise.includes(mark)) return prev.has(id) ? prev : new Set(prev).add(id)
+      if ((away || raisedWhileSeen(mark)) && o.raise.includes(mark)) return prev.has(id) ? prev : new Set(prev).add(id)
       return o.clear.includes(mark) ? without(prev, id) : prev
     }
     setDoneIds(marks('finished'))
@@ -140,7 +154,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
       if (prev.has(id) === o.working) return prev
       return o.working ? new Set(prev).add(id) : without(prev, id)
     })
-  }, [])
+  }, [stopAnswerCheck])
 
   useEffect(
     () =>
@@ -159,6 +173,8 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           forgetAgentTitle(id)
           stopFallback(id)
           setWorkingIds((prev) => without(prev, id))
+          // Nobody is left to answer a question (#144).
+          setQuestionIds((prev) => without(prev, id))
           failedKinds.current.delete(id)
           setFailedIds((prev) => without(prev, id))
         }
@@ -270,8 +286,10 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
         // Codex says it outright (#131). Any other state is the agent at work
         // again, so no question is pending.
         if (r.state === 'idle') checkQuestion(id)
-        else if (r.state === 'question')
-          setQuestionIds((prev) => (prev.has(id) || lookedAt(id) ? prev : new Set(prev).add(id)))
+        else if (r.state === 'question') {
+          if (!questionsNow.current.has(id)) stopAnswerCheck(id)
+          setQuestionIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+        }
         else setQuestionIds((prev) => without(prev, id))
         const working = r.state === 'working'
         setWorkingIds((prev) => {
@@ -282,7 +300,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           return next
         })
       }),
-    [stopFallback, checkQuestion, applyHook]
+    [stopFallback, checkQuestion, applyHook, stopAnswerCheck]
   )
 
   /**
@@ -307,6 +325,36 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
         applyHook(id, signal)
       }),
     [stopFallback, applyHook]
+  )
+
+  /**
+   * AN ANSWER NO HOOK REPORTS (#144). Turning a permission prompt down, or
+   * cancelling a question with Esc, ends the turn without a hook (no Stop on an
+   * interrupt), so a key that settles a box is heard here: the question is
+   * answered once the box has gone from the screen after it (`questionAnswered`).
+   * Read four times over five seconds, since the agent repaints a moment after
+   * the key and a busy machine can make that moment long: a hooked session's
+   * screen is read nowhere else, so a single late repaint would leave the line
+   * up until the next prompt (review of #144). A box still up is the next of
+   * several questions, still pending.
+   */
+  useEffect(
+    () =>
+      onTermKey((id, key) => {
+        if (!answersQuestion(key) || !questionsNow.current.has(id)) return
+        stopAnswerCheck(id)
+        answerTimers.current.set(
+          id,
+          [250, 1000, 2500, 5000].map((ms) =>
+            window.setTimeout(() => {
+              if (!questionAnswered(key, readScreenTail(id))) return
+              stopAnswerCheck(id)
+              setQuestionIds((prev) => without(prev, id))
+            }, ms)
+          )
+        )
+      }),
+    [stopAnswerCheck]
   )
 
   // Finished-while-away: an agent that STOPS working on a background tab
@@ -334,8 +382,16 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
       }
       return next ?? prev
     })
-    // A question, or a failure, you are now looking at has been seen.
-    setQuestionIds((prev) => (activeId && focused && prev.has(activeId) ? without(prev, activeId) : prev))
+    // A QUESTION IS NOT CLEARED BY A LOOK (#144; owner, 2026-10-09: "if you go
+    // on that tab and then just move to another tab without answering the
+    // question, the blue bar shouldn't disappear"). It goes when it is
+    // answered, or when no agent is left in the session to wait.
+    setQuestionIds((prev) => {
+      let next = prev
+      for (const id of prev) if (!agentIds.has(id)) next = without(next, id)
+      return next
+    })
+    // A failure you are now looking at has been seen.
     setFailedIds((prev) => {
       let next = prev
       for (const id of prev) if (seeing(id) || workingIds.has(id) || !agentIds.has(id)) next = without(next, id)
@@ -362,7 +418,8 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     const t = questionTimers.current.get(id)
     if (t !== undefined) clearTimeout(t)
     questionTimers.current.delete(id)
-  }, [stopFallback])
+    stopAnswerCheck(id)
+  }, [stopFallback, stopAnswerCheck])
 
   return { agentIds, workingIds, doneIds, questionIds, failedIds, failedKinds, agentKinds, forget }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { looksLikeQuestion } from './agentQuestion'
+import { answersQuestion, looksLikeQuestion, questionAnswered } from './agentQuestion'
 
 // The bottom of Claude Code's screen in each state (Claude Code 2.1.283,
 // 2026-09-28), trimmed to the rows that matter. The question box's footer and
@@ -52,5 +52,31 @@ describe('looksLikeQuestion', () => {
   it('does not take an answer that merely mentions the words for a question', () => {
     expect(looksLikeQuestion(['Press Esc to cancel a build.', 'Done.'])).toBe(false)
     expect(looksLikeQuestion(['Do you want to know more? Read the docs.'])).toBe(false)
+  })
+})
+
+// A QUESTION LASTS UNTIL IT IS ANSWERED (#144). No hook fires when a
+// permission prompt is turned down or a question is cancelled with Esc, so
+// the keys that settle a box, and the box gone after them, are the answer.
+describe('answersQuestion', () => {
+  it('Enter, Esc, Ctrl+C and a numbered choice settle a question box', () => {
+    for (const k of ['\r', '\x1b', '\x03', '1', '3', '9']) expect(answersQuestion(k)).toBe(true)
+  })
+  it('walking the choices or typing a letter does not', () => {
+    for (const k of ['\x1b[A', '\x1b[B', '\t', 'a', ' ', '0', '12', '']) expect(answersQuestion(k)).toBe(false)
+  })
+})
+
+describe('questionAnswered', () => {
+  it('an answering key with the box gone is an answer', () => {
+    expect(questionAnswered('\r', FINISHED)).toBe(true)
+    expect(questionAnswered('\x1b', ['PS C:\\Users\\me> '])).toBe(true)
+  })
+  it('the box still up (the next of several questions) is not', () => {
+    expect(questionAnswered('\r', QUESTION_BOX)).toBe(false)
+    expect(questionAnswered('1', PERMISSION)).toBe(false)
+  })
+  it('a key that answers nothing is not, whatever the screen says', () => {
+    expect(questionAnswered('\x1b[B', FINISHED)).toBe(false)
   })
 })
