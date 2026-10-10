@@ -30,6 +30,8 @@ npm run diag -- --app prism           Prism
 npm run diag -- --since 10m           only the last ten minutes (ms, s, m, h, d)
 npm run diag -- --all                 every line, not only problems
 npm run diag -- --kinds page-stall,main-lag
+npm run diag -- --agent               the agent indicator's timeline (hooks, titles, marks, why)
+npm run diag -- --agent --tab <id>    one tab's
 npm run diag -- --dir <folder>        any folder holding a diag.jsonl
 ```
 
@@ -90,6 +92,10 @@ Quiet level, always on:
 | `logger-error` | main | the log could not write, or could not rotate (once a session; a failed rotation keeps writing to the live file and tries again 30 s later) | `msg` |
 | `logger-dropped` | main | the writer's queue was full (2000 lines): the NEWEST were dropped | `n` |
 | `<name>-slow` | page | an app's own timing through `time()` (Prism: `sort-slow`, `guard-slow`) | `ms`, its own fields |
+| `agent-hook` | page (core) | a Claude Code hook signal (OSC 777 `prism-agent`) reached a tab. The first of a run of the same state on a tab is written at once; the rest are counted and written as ONE line with `repeats` when the tab's state changes, the tab closes, or 5 s pass with no signal from it (`t` is the last repeat's) | `id`, `state`, `kind` (a failure's), `repeats` |
+| `agent-title` | page (core) | the MEANING of a tab's agent title changed: `idle`, `working`, `starting`, `question`, or `none` (no agent's title now). Never each spinner frame, never the title's text | `id`, `state`, `agent` |
+| `agent-mark` | page (core) | the mark a tab's indicator holds moved (below) | `id`, `from`, `to`, `held`, `why`, `agent`, `restored` |
+| `agent-restore` | page (core) | a tab restored over an agent conversation (its resume rides the spawn) | `id`, `cwd`, `resume` |
 
 Detailed logging adds `ipc` (every call: `ch`, `ms`), `page-task` (long tasks from 50 ms: `ms`) and
 the high-rate crumbs (`often`).
@@ -100,6 +106,31 @@ between; at most 10 error lines per kind per 10 s whatever they say. An error th
 would otherwise roll the whole 10 MB over in about 75 s and take the first error with it. The
 page's own queue drops its newest lines past 200 the same way and says so with a `diag-dropped`
 crumb (`n`).
+
+## The agent indicator (#152)
+
+Written by `core/renderer/lib/agentDiag.ts`, called from `useAgentIndicator.ts` without changing a
+rule, so a wrong mark (#151: restored tabs showed Finished after a restart) is read, not guessed.
+`npm run diag -- --agent` is the timeline (these lines with the tab and shell crumbs, sessions and
+marks); `--tab <id>` keeps one tab's. They are not problems, so the default view leaves them out,
+but an `agent-mark` or `agent-restore` shows among the crumbs before a problem.
+
+`agent-mark`:
+- `from` / `to`: `none`, `working`, `question`, `failed`, `done`, the strip's order (working first).
+  The indicator's mark, before the host's Finished / Question / Failed switches and indicator style.
+- `held`: every attention mark the tab holds (a Finished can sit under a question).
+- `why`: the rules noted in the second before the move, joined with ` + `: `hook <state>` (with
+  `, box on screen` when the question box decided it, `, tab in front` when it was looked at),
+  `spinner after <phase>`, `idle title after work (an Esc)`, `title <state>` (a session without
+  hooks), `poll found agent` / `poll lost agent`, `screen read: question box` / `no question box`,
+  `answer key, box gone`, `output scored working` / `output went quiet` (the output fallback),
+  `stopped working while away`, `tab looked at`, `working again`, `agent gone`, `closed`.
+  `unknown` means no rule was noted (a bug in the record, or a path it does not cover yet).
+- `restored`: ms since this tab's `agent-restore`, within a minute of it.
+
+Never typed text, screen text, a title's text or anything of the conversation: states, rule
+names, tab ids and the folder. The `agentDiag` e2e puts a marker on the screen and in the title
+and checks it never reaches the file.
 
 ## Crumbs
 
