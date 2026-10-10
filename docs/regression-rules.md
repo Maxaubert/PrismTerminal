@@ -161,6 +161,17 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   the FIRST token too: a native `claude.exe` started by bare name has the command line `claude`.
 - <a id="only-command-is-resume"></a>**The only command the app writes into a shell is the agent resume**, as the shell's STARTUP
   command, with the id shape-checked in main (`validResume`). Never type into a user's shell.
+- <a id="replies-only-when-asked"></a>**THE APP ANSWERS A PROGRAM ONLY WHAT IT ASKED** (#168, #171, #172, #176; spec
+  `docs/superpowers/specs/2026-10-10-claude-code-compat-design.md` section 15). Every byte the core writes into a pty that
+  no key produced is a reply to a query in that pty's own stream (OSC 10/11 `?`, `CSI ? 996 n`, `CSI > q`, DECRQM 2031)
+  or the `?997` report the program turned on with `?2031h`, and only on a change. Replies hold no CR, LF or printable
+  command, go through `term.input(reply, false)` so `onData` and `looksTyped` treat them as the replies they are
+  ([typing on onKey](#typing-on-onkey)), and never read anything private: OSC 52 is write-only and a read gets no
+  answer. The pure half is `core/renderer/lib/termReplies.ts` (tested); the light/dark it reports is the chrome's own
+  measurement (`chromeTheme.test.ts` pins the two agree on every preset). MEASURED (Claude Code 2.1.296, 2026-10-10):
+  xterm had answered OSC 11 from the clear canvas as `rgb:0000/0000/0000`, so Claude was dark on every ground; Claude
+  writes `?2031h` without a DECRQM probe, never asks `?996n` or OSC 10, and on a pushed `?997;2n` re-asks OSC 11 and
+  turns light.
 - <a id="closing-window-quits"></a>**Closing the window QUITS; closing the last tab does not** (owner, 2026-09-18, after using the
   first build, which hid the window and stayed resident: "the app should actually close when you
   close it"). The last tab lands on the start screen (`EmptyState`, Tabby's shape by owner

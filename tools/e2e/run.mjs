@@ -2295,6 +2295,89 @@ const scenarios = {
     }
   },
 
+  // A PROGRAM IS TOLD THE GROUND IT SITS ON, AND HEARS A THEME SWITCH (#168,
+  // #172; rule replies-only-when-asked). A stand-in for Claude asks what
+  // Claude asks (MEASURED, 2.1.296: ?2031h, then OSC 11) plus OSC 10, ?996n
+  // and DECRQM 2031, then DA1 as a sentinel every terminal answers, and prints
+  // every chunk it reads as `IN <escaped>`. Before the fix OSC 11 came back
+  // rgb:0000/0000/0000 on every theme and a switch told the program nothing.
+  // Measured over bare node-pty and the bundled ConPTY (2026-10-11): every one
+  // of these queries and replies passes through ConPTY untouched.
+  async termReplies(ok) {
+    const w = world()
+    const probe = join(w.alpha, 'replies-probe.cjs')
+    writeFileSync(
+      probe,
+      [
+        'process.stdin.setRawMode(true)',
+        'process.stdin.resume()',
+        "const show = (s) => s.replace(/\\x1b/g, '\\\\e').replace(/\\x07/g, '\\\\a').replace(/\\r/g, '\\\\r').replace(/\\n/g, '\\\\n')",
+        "process.stdin.on('data', (b) => {",
+        '  const s = b.toString()',
+        "  if (s === 'q') process.exit(0)",
+        "  if (s === 't') { process.stdout.write('\\x1b]11;?\\x07\\x1b[?996n'); return }",
+        "  process.stdout.write('IN ' + show(s) + '\\r\\n')",
+        '})',
+        "process.stdout.write('\\x1b[?2031h\\x1b]11;?\\x07\\x1b]10;?\\x07\\x1b[?996n\\x1b[?2031$p\\x1b[c')"
+      ].join('\n')
+    )
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    // Chunks may coalesce on the way through ConPTY, so the screen is read as
+    // one text and the escaped replies are counted in it.
+    const heard = async () => (await termText(page)).replace(/\u00a0/g, ' ')
+    const count = (text, s) => text.split(s).length - 1
+    const PT_GROUND = '\\e]11;rgb:1212/1212/1212\\e\\'
+    const FAWN_GROUND = '\\e]11;rgb:e6e6/d8d8/c0c0\\e\\'
+    const DARK = '\\e[?997;1n'
+    const LIGHT = '\\e[?997;2n'
+    const backToShell = async () => {
+      await backToFirst(page)
+      // Focused without a click: a click on the input line would send the
+      // caret's arrow keys to the program (click to put the caret there).
+      await page.locator('.xterm-helper-textarea').first().focus()
+    }
+    try {
+      await typeLine(page, `& '${process.execPath}' '${probe}'`)
+      ok(!!(await until(async () => (await heard()).includes('\\e[?1;2c'), 15000)), 'the stand-in program heard its DA1 answer')
+      const first = await heard()
+      ok(first.includes(PT_GROUND), `OSC 11 answers PT Default's ground, not black (${first.match(/\\e\]11;[^\\]*/)?.[0]})`)
+      ok(!first.includes('rgb:0000/0000/0000'), 'and nothing answers transparent black')
+      const ink = first.match(/\\e\]10;(rgb:[0-9a-f/]+)/)?.[1]
+      ok(!!ink && ink !== 'rgb:1212/1212/1212', `OSC 10 answers the theme's text (${ink})`)
+      ok(first.includes(DARK), 'CSI ? 996 n answers dark on PT Default')
+      ok(first.includes('\\e[?2031;1$y'), 'DECRQM says 2031 is set once the program set it')
+      ok(first.lastIndexOf('\\e[?1;2c') > first.lastIndexOf('\\e[?2031;1$y'), 'and the DA1 answer comes LAST: the replies keep stream order')
+
+      await pickTheme(page, 'fawn')
+      await backToShell()
+      ok(!!(await until(async () => count(await heard(), LIGHT) >= 1, 5000)), 'picking Fawn tells the program light')
+      await sleep(800)
+      ok(count(await heard(), LIGHT) === 1, `exactly once (${count(await heard(), LIGHT)})`)
+      await page.keyboard.type('t')
+      ok(!!(await until(async () => (await heard()).includes(FAWN_GROUND), 5000)), "asked again, OSC 11 answers Fawn's ground")
+
+      await pickTheme(page, 'pt-default')
+      await backToShell()
+      ok(!!(await until(async () => count(await heard(), DARK) >= 2, 5000)), 'back to PT Default tells the program dark')
+      await sleep(800)
+      const settled = await heard()
+      // A font size change restyles every session and must tell nothing.
+      await gotoPref(page, 'term-font')
+      await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()
+      await page.locator('[role="listbox"] [role="option"]').filter({ hasText: /^\s*120%\s*$/ }).first().click()
+      await backToShell()
+      await sleep(1000)
+      const after = await heard()
+      ok(
+        count(after, DARK) === count(settled, DARK) && count(after, LIGHT) === count(settled, LIGHT),
+        'a font size change sends the program nothing'
+      )
+      await page.keyboard.type('q')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async links(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })

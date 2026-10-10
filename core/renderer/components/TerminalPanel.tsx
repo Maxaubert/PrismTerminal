@@ -34,6 +34,18 @@ import { parseAgentSignal } from '../lib/agentHookSignal'
 import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
 import { onGround } from '../lib/termGround'
 import { xtermTheme, type XtermTheme } from '../lib/termXterm'
+import {
+  THEME_REPORTS_OFF,
+  colourQueryReplies,
+  decrqmReply,
+  dsrThemeReply,
+  groundMode,
+  modeParams,
+  noteThemeMode,
+  themePush,
+  themeReports,
+  type GroundMode
+} from '../lib/termReplies'
 import { followsHostStyle, paintsGround, termApi, termHost } from '../host'
 import { findLinks, linkColor } from '../lib/termLinks'
 import { copyText } from '../lib/copyNotice'
@@ -92,6 +104,8 @@ interface Session {
   /** The folder the shell is in: where it started, then what its prompt
    *  last reported. A relative path on screen is relative to it (#99). */
   cwd(): string
+  /** The look changed to this mode: tell the program, if it asked (#172). */
+  tellTheme(mode: GroundMode): void
 }
 
 const sessions = new Map<string, Session>()
@@ -420,8 +434,12 @@ function applyLook(): void {
   const theme = currentTermTheme()
   const base = termBaseFontPx()
   const family = termFontStack()
+  // Measured once from the ground as painted (rule 15), told to each program
+  // that asked (?2031h) only when it differs from what it was last told.
+  const mode = groundMode(groundedTheme().background)
   for (const [id, s] of sessions) {
     s.term.options.theme = theme
+    s.tellTheme(mode)
     s.links.repaint() // the link colour is measured against the theme's ground
     const want = s.fontOverride ?? base
     const sizeChanged = s.term.options.fontSize !== want
@@ -765,6 +783,59 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     reportAgentSignal(id, signal)
     return true
   })
+  // THE PROGRAM IS TOLD THE GROUND IT REALLY SITS ON (#168, #172; rule
+  // replies-only-when-asked). MEASURED (Claude Code 2.1.296): xterm answered
+  // `ESC]11;?` as rgb:0000/0000/0000, read off the clear canvas the panel
+  // paints behind (rule 14), so Claude's "auto" theme was dark on Fawn too.
+  // Claude writes ?2031h without a DECRQM probe, and on a pushed ?997;2n asks
+  // OSC 11 again and turns light. Every reply goes through term.input(.., false):
+  // onData, in stream order with xterm's own replies (a DA1 right after stays
+  // after), and starting with ESC so `looksTyped` never counts it as typing.
+  // Anything these do not answer returns false and stays xterm's.
+  let reports = THEME_REPORTS_OFF
+  const reply = (r: string): void => term.input(r, false)
+  const modeNow = (): GroundMode => groundMode(groundedTheme().background)
+  const colourQuery = (ident: 10 | 11) => (data: string): boolean => {
+    const theme = groundedTheme()
+    const replies = colourQueryReplies(ident, data, { fg: theme.foreground, bg: theme.background })
+    if (!replies) return false
+    replies.forEach(reply)
+    // An answered ground tells the program the mode: no push for it later.
+    if (ident === 11 || replies.length > 1) reports = noteThemeMode(reports, groundMode(theme.background))
+    return true
+  }
+  term.parser.registerOscHandler(10, colourQuery(10))
+  term.parser.registerOscHandler(11, colourQuery(11))
+  // ?2031h / ?2031l, followed from the stream. False: xterm still applies
+  // whatever other modes ride the same sequence.
+  const trackReports = (on: boolean) => (params: (number | number[])[]): boolean => {
+    if (modeParams(params).includes(2031)) reports = themeReports(reports, on, modeNow())
+    return false
+  }
+  term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, trackReports(true))
+  term.parser.registerCsiHandler({ prefix: '?', final: 'l' }, trackReports(false))
+  // CSI ? 996 n: "which are you now?" xterm keeps every other DSR.
+  term.parser.registerCsiHandler({ prefix: '?', final: 'n' }, (params) => {
+    const p = modeParams(params)
+    if (p.length !== 1 || p[0] !== 996) return false
+    const mode = modeNow()
+    reply(dsrThemeReply(mode))
+    reports = noteThemeMode(reports, mode)
+    return true
+  })
+  // DECRQM for 2031, which xterm 6.0 does not know (it would say 0, "not
+  // recognised"); every other mode stays xterm's to report.
+  term.parser.registerCsiHandler({ prefix: '?', intermediates: '$', final: 'p' }, (params) => {
+    const p = modeParams(params)
+    if (p.length !== 1 || p[0] !== 2031) return false
+    reply(decrqmReply(2031, reports.on))
+    return true
+  })
+  const tellTheme = (mode: GroundMode): void => {
+    const r = themePush(reports, mode)
+    reports = r.state
+    if (r.send) reply(r.send)
+  }
   // A RESUMING TAB WEARS A SKELETON (#106), not a text spinner: the shell's
   // own words (its prompt, the resume command) are cleared the moment the
   // agent takes the console, and the terminal is shown once the agent has
@@ -937,7 +1008,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     return true
   })
 
-  const session: Session = { term, fit, search, links, el, unsub, cwd: () => cwdNow }
+  const session: Session = { term, fit, search, links, el, unsub, cwd: () => cwdNow, tellTheme }
   sessions.set(id, session)
 
   // A session restored over a Claude conversation launches straight into it:
