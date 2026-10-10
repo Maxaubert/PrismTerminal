@@ -9,7 +9,12 @@ import {
   type AgentIndicator
 } from '../host'
 import { liveThemeId } from './termThemeRetired'
-import { alphaOf, parseColour, toStored, withAlpha } from './colour'
+import { alphaOf, opaque, parseColour, toStored, withAlpha } from './colour'
+import { seeThroughAlpha } from './seeThrough'
+// A CYCLE, and a safe one: termTheme imports this module too, and neither reads
+// the other at module load (only inside functions, at call time), so either may
+// be evaluated first.
+import { resolveTermTheme } from './termTheme'
 
 export type { AgentIndicator }
 
@@ -419,13 +424,59 @@ function stored(c: unknown): string | null {
  * they write, but a stored or hand-edited `#12121205` must not paint an all
  * but invisible window. The floor is the byte 30% gives (0x4d), so every
  * value a picker or the migration writes reads unchanged.
+ *
+ * And there, with the see-through switch in force, an OPAQUE ground paints
+ * the default see-through (#156, `paintsAlpha`): a preset is no longer 1.
  */
 export function termGroundAlpha(): number {
   const a = rawGroundAlpha()
-  return hostOwnsWindowAcrylic() ? Math.max(GROUND_ALPHA_MIN, a) : a
+  if (!hostOwnsWindowAcrylic()) return a
+  // The ground is only looked up when the default can apply: resolving a
+  // theme on every read of an alpha that needs none would be waste.
+  const inForce = termAcrylicInForce()
+  return paintsAlpha(a, inForce && isOpaque(a) ? groundInForce() : '#000000', inForce)
 }
 /** The lowest window see-through: Opacity 30's byte, round(0.3 * 255). */
 export const GROUND_ALPHA_MIN = 0x4d / 255
+
+/**
+ * THE ONE RULE for what a ground paints where the terminal owns the window
+ * acrylic (#156), shared by the window (`termGroundAlpha`) and Save changes'
+ * dirty check (`useTermSetup`), so the two can never disagree about a saved
+ * setup. With the switch on, an OPAQUE ground paints the default see-through
+ * (Prism's levels, by the ground light or dark): on means see-through by
+ * itself, as Prism's switch does, where before #156 a preset stayed solid and
+ * the switch looked broken. A ground that carries an alpha keeps it, floored
+ * at 30% as the Opacity slider was.
+ */
+export function paintsAlpha(raw: number, ground: string, acrylicOn: boolean): number {
+  if (acrylicOn && isOpaque(raw)) return seeThroughAlpha(ground)
+  return Math.max(GROUND_ALPHA_MIN, raw)
+}
+/** Opaque BY THE BYTE: an alpha that stores as ff is opaque. */
+const isOpaque = (a: number): boolean => Math.round(a * 255) >= 255
+
+/** The ground in force, opaque, in the order the window paints it: the
+ *  host's picked one, else the theme's own (a Custom's `bg` included). */
+function groundInForce(): string {
+  return opaque(hostGround() ?? resolveTermTheme(termThemeId()).background)
+}
+
+/**
+ * Whether the window is see-through RIGHT NOW: the switch, except that High
+ * Contrast stays solid where the terminal owns the window acrylic (#156,
+ * Prism's rule: its contrast is measured on a solid ground, and glass would
+ * put an unmeasurable desktop under the text; this owner works zoomed in and
+ * relies on it). The stored choice is kept, so leaving High Contrast gives it
+ * back. In Prism the style owns the glass and the switch is read as it is.
+ */
+export function termAcrylicInForce(): boolean {
+  return termAcrylic() && !seeThroughBlocked()
+}
+/** The theme in force keeps the window solid whatever the switch says. */
+export function seeThroughBlocked(): boolean {
+  return hostOwnsWindowAcrylic() && termThemeId() === 'high-contrast'
+}
 function rawGroundAlpha(): number {
   const picked = hostGround()
   if (picked) return alphaOf(picked)
@@ -473,6 +524,13 @@ export function useTermFontId(): string {
 }
 export function useTermAcrylic(): boolean {
   return useSyncExternalStore(sub, termAcrylic)
+}
+/** The see-through in force (High Contrast stays solid, #156). */
+export function useTermAcrylicInForce(): boolean {
+  return useSyncExternalStore(sub, termAcrylicInForce)
+}
+export function useSeeThroughBlocked(): boolean {
+  return useSyncExternalStore(sub, seeThroughBlocked)
 }
 /** The ground's alpha, re-read when the look OR the host's window colours
  *  change (a picked background is the host's, not this store's). */

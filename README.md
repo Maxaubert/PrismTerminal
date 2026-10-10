@@ -29,7 +29,7 @@ session comes back when you reopen the app.
 | **Sessions that come back** | Close the app and reopen it: every tab returns in its folder, and agent conversations resume on their own. |
 | **Local dictation** | Hold `Right Alt` and speak. [whisper.cpp](https://github.com/ggml-org/whisper.cpp) runs on your PC, offline, and never presses Enter. |
 | **Command help** | Press `F1`, describe a task in plain words and copy the command. Works offline. |
-| **Themes that dress the window** | About forty themes, a theme editor, fifteen fonts and acrylic. The whole window follows the theme. |
+| **Themes that dress the window** | About forty themes, a theme editor, fifteen fonts and a see-through window. The whole window follows the theme. |
 | **Made for AI CLIs** | Images paste into Claude Code, dropped files type their path, and `Shift+Enter` is a newline. |
 | **Asks before it interrupts** | Closing a tab with a running agent asks first. A plain shell just closes. |
 | **Open terminal here** | Right-click any folder in Explorer to open it in a new tab. |

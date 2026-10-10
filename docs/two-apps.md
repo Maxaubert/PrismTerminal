@@ -315,8 +315,8 @@ so an update never silently changes what an existing user sees; the bridge to ma
   transcend" the theme's save, "so changing a theme should not reset the font and font size or if
   you use a minimal or full agent indicator, or edges. those options should be above the themes").
   Since #134 Appearance runs: the Window section (Tab width, Show title bar, Panel edges), then the
-  Theme section (the theme row with Save changes, the wall, what a theme SETS: Background, Accent,
-  Acrylic). The font and its size are Terminal's Text section; the indicator and the agent colours
+  Theme section (the theme row with Save changes, the wall, what a theme SETS: See-through window,
+  Background, Accent; the see-through row right under the wall since #156, as in Prism). The font and its size are Terminal's Text section; the indicator and the agent colours
   are on Agents, where Mark colours carries the SAME Save changes (both save the whole setup and
   light together, `theme/useTermSetup.ts`). A theme switch and Save
   as Custom leave the font and its size alone (`termExtraDefaults`, `resetTermExtras`,
@@ -368,7 +368,19 @@ so an update never silently changes what an existing user sees; the bridge to ma
   paint and maps a saved Opacity N to byte round(N / 100 * 255), which is exactly what N painted
   (snapshot `chromeTheme.opacity.test.ts`): the saved `Custom.opacity` folds into `Custom.bg`, the
   live value onto the picked Background. The ground alpha takes Opacity's place in Save changes'
-  dirty check, so a theme pick still asks first (#60). The Accent's alpha is for FILLS;
+  dirty check, so a theme pick still asks first (#60).
+  **ON MEANS SEE-THROUGH, BY ITSELF** (#156; owner, 2026-10-10, of Prism's "See-through window":
+  "i want it here too"). Before it the switch changed the material and left every preset's ground
+  opaque, so it looked broken. Now where `acrylic.kind` is 'window' an OPAQUE ground under the
+  switch paints Prism's own levels as they paint (level 70 dark = byte 0xb9, level 49 light =
+  0xd1, light measured as luminance > 0.4; `lib/seeThrough.ts`, and `paintsAlpha` in `termLook.ts`,
+  shared by the window and Save changes' dirty check). A ground with an alpha keeps it; under the
+  switch the Alpha stops at 95% (`SEE_THROUGH_MAX`: opaque is the switch's off). High Contrast
+  stays solid (`termAcrylicInForce`; the row is drawn off with "High contrast stays solid.").
+  In this app the row reads "See-through window" / "The desktop shows behind every surface."
+  (`acrylicLabel`, `acrylicSub`); Prism keeps "Acrylic terminal background", a terminal row under
+  its own app-level See-through window, and nothing there changes. The `seeThrough` e2e holds it.
+  The Accent's alpha is for FILLS;
   `--p-accent-solid` is the line (rules, spinner, progress, rings, an unpicked working colour),
   `--p-on-accent` is chosen 4.5:1 on the composite (`selectionFor`), and under a see-through
   ground the text fills are flattened over `--p-bg-solid`. The `opacityAlpha` and `accent` e2e

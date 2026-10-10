@@ -3566,7 +3566,8 @@ const scenarios = {
       // and the agent rows have pages of their own; Appearance keeps the
       // window's rows above the theme and what a theme sets under it.
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
-      const want = ['tab-width', 'tab-style', 'title-bar', 'window-edges', 'term-theme', 'window-background', 'window-accent', 'term-acrylic']
+      // The see-through row sits right under the wall since #156, as Prism's.
+      const want = ['tab-width', 'tab-style', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-accent']
       ok(JSON.stringify(rows) === JSON.stringify(want), `Appearance runs ${want.join(' > ')} (${rows.join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await gotoPref(page, 'term-font')
@@ -4242,6 +4243,98 @@ const scenarios = {
       ok(!!(await until(async () => (await sheet()) === '#1d1f21cc', 4000, 50)), `picking Custom again restores the saved 80 (${await sheet()})`)
       ok((await get('prism.window.background')) === null, 'and the live 60 went with the pick')
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/opacity-alpha-custom.png') }).catch(() => {})
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * THE SEE-THROUGH WINDOW (#156; owner, 2026-10-10: "add support for the see
+   * through window setting ... its in prism in style settings i want it here
+   * too"). The acrylic row IS it: named and worded as Prism's, right under the
+   * wall, and the switch ALONE makes the window see-through at Prism's own
+   * levels (0xb9 on a dark ground, 0xd1 on a light one), where before it
+   * changed the material and left a preset's ground opaque. The Background's
+   * Alpha shows what is in force and stops at 95 (opaque is the switch's off);
+   * a picked alpha wins; off is solid; High Contrast stays solid.
+   */
+  async seeThrough(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const sheet = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--p-bg').trim().toLowerCase())
+    const sw = page.locator('[data-pref="term-acrylic"] [role="switch"]')
+    const sub = () => page.locator('[data-pref="term-acrylic"] [title]').first().getAttribute('title')
+    const bgRow = page.locator('[data-pref="window-background"]')
+    const pop = page.locator('[data-colour-popover][role="dialog"]')
+    /** The Background picker's Alpha, read and closed again. */
+    const alphaReads = async () => {
+      await bgRow.scrollIntoViewIfNeeded()
+      await bgRow.locator('[data-colour-swatch]').click()
+      await pop.waitFor({ timeout: 3000 })
+      const a = pop.locator('[role="slider"][aria-label="Alpha"]')
+      const v = { now: await a.getAttribute('aria-valuenow'), max: await a.getAttribute('aria-valuemax') }
+      await page.keyboard.press('Escape')
+      await until(async () => (await pop.count()) === 0, 3000, 50)
+      return v
+    }
+    /** A theme pick, answering the unsaved-changes question if it asks. */
+    const pick = async (id) => {
+      await page.locator(`[data-term-card="${id}"]`).first().click()
+      const ask = page.locator('[data-theme-switch-ask]')
+      if (await until(async () => (await ask.count()) === 1, 1500, 50)) await page.locator('[data-ask-discard]').click()
+      await until(async () => (await page.locator(`[data-term-card="${id}"]`).first().getAttribute('aria-pressed')) === 'true', 4000, 50)
+    }
+    try {
+      await gotoPref(page, 'term-acrylic')
+      const more = page.locator('button[aria-label^="Show all"]')
+      if ((await more.count()) === 1) await more.click()
+      // Named and placed as Prism's: right under the wall, before the colours.
+      const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
+      const at = rows.indexOf('term-theme')
+      ok(rows[at + 1] === 'term-acrylic' && rows[at + 2] === 'window-background', `the row sits right under the wall (${rows.join(' > ')})`)
+      ok((await sw.getAttribute('aria-label')) === 'See-through window', `it is called See-through window (${await sw.getAttribute('aria-label')})`)
+      ok((await sub()) === 'The desktop shows behind every surface.', `with Prism's words (${await sub()})`)
+
+      // A dark preset: the switch alone paints 0xb9.
+      await pick('dracula')
+      ok(/^#[0-9a-f]{6}$/.test(await sheet()), `off, the window is solid (${await sheet()})`)
+      await sw.click()
+      ok(!!(await until(async () => /^#[0-9a-f]{6}b9$/.test(await sheet()), 4000, 50)), `on a dark preset the switch alone paints alpha b9 (${await sheet()})`)
+      const dark = await alphaReads()
+      ok(dark.now === '73' && dark.max === '95', `the Background's Alpha reads 73 and stops at 95 (${dark.now}, max ${dark.max})`)
+
+      // A picked alpha wins; Reset gives the default back.
+      const field = bgRow.locator('input:not([type])')
+      await field.fill('#1c233099')
+      await field.press('Enter')
+      ok(!!(await until(async () => (await sheet()) === '#1c233099', 4000, 50)), `a picked 60 wins (${await sheet()})`)
+      await page.locator('[data-follow-theme="background"]').click()
+      ok(!!(await until(async () => /^#[0-9a-f]{6}b9$/.test(await sheet()), 4000, 50)), `Reset gives the default back (${await sheet()})`)
+
+      // Off is solid.
+      await sw.click()
+      ok(!!(await until(async () => /^#[0-9a-f]{6}$/.test(await sheet()), 4000, 50)), `switched off, the window is solid (${await sheet()})`)
+
+      // A light preset: 0xd1. A theme pick resets the switch, as every extra.
+      await pick('paper')
+      await sw.click()
+      ok(!!(await until(async () => /^#[0-9a-f]{6}d1$/.test(await sheet()), 4000, 50)), `on Paper the switch paints alpha d1 (${await sheet()})`)
+      const light = await alphaReads()
+      ok(light.now === '82', `the Background's Alpha reads 82 (${light.now})`)
+      await sw.scrollIntoViewIfNeeded()
+      await sleep(400)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/see-through.png') }).catch(() => {})
+
+      // High Contrast stays solid, and the row says why.
+      await pick('high-contrast')
+      ok((await sw.isDisabled()) && (await sw.getAttribute('aria-checked')) === 'false', 'on High Contrast the switch is off and disabled')
+      ok((await sub()) === 'High contrast stays solid.', `and says why (${await sub()})`)
+      ok(/^#[0-9a-f]{6}$/.test(await sheet()), `and the window is solid (${await sheet()})`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/see-through-high-contrast.png') }).catch(() => {})
+
+      // Leave on a quiet preset, the switch off: nothing holds the close.
+      await pick('dracula')
+      ok(!(await sw.isDisabled()), 'off High Contrast the switch is offered again')
     } finally {
       await closeApp(app)
     }

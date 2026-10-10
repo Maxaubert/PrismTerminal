@@ -7,7 +7,7 @@ import {
   setTermThemeId,
   termThemeId,
   useCustomTermTheme,
-  useTermAcrylic,
+  useTermAcrylicInForce,
   useTermThemeId,
   withGroundAlpha,
   type CustomTermTheme
@@ -15,6 +15,7 @@ import {
 import { resolveCustomTheme, resolveTermTheme, watchTermTheme, TERM_PRESETS } from '../../lib/termTheme'
 import { luminance, normalizeColor } from '../../lib/termAnsi'
 import type { AlphaRange } from '../../lib/colour'
+import { SEE_THROUGH_MAX } from '../../lib/seeThrough'
 import { ColourField } from '../ColourPicker'
 import ThemeSwitchAsk from '../../components/ThemeSwitchAsk'
 import { ANSI_KEYS, cardAnsi, paletteOf, pickPreset, presetLook } from './palette'
@@ -284,7 +285,8 @@ const TWO_ROWS = 268
  */
 export function ThemeWall({ onThemePicked, className = '' }: { onThemePicked?: () => void; className?: string }): JSX.Element {
   const themeId = useTermThemeId()
-  const acrylicOn = useTermAcrylic()
+  // In force, not stored: High Contrast stays solid (#156), so its Alpha is inert.
+  const acrylicOn = useTermAcrylicInForce()
   const custom = useCustomTermTheme()
   const { dirty, save, extras } = useTermSetup()
   const noAcrylic = useNoAcrylic()
@@ -445,7 +447,18 @@ export function ThemeWall({ onThemePicked, className = '' }: { onThemePicked?: (
       {editing && (
         <TermThemeEditor
           seed={editing}
-          bgAlpha={windowAcrylic ? { alphaMin: 0.3, alphaDisabled: !acrylicOn || noAcrylic } : { alpha: false }}
+          // Opaque is the switch's off (#156): under it the Alpha stops at 95%,
+          // so the field and the window always agree. Only while the Alpha is
+          // live: an inert one must not clip an opaque ground it cannot move.
+          bgAlpha={
+            windowAcrylic
+              ? {
+                  alphaMin: 0.3,
+                  alphaMax: acrylicOn && !noAcrylic ? SEE_THROUGH_MAX : 1,
+                  alphaDisabled: !acrylicOn || noAcrylic
+                }
+              : { alpha: false }
+          }
           onSave={(t) => {
             // The Custom slot is the WHOLE setup (code review 2026-09-24,
             // #8): saved as a bare palette, the agent colours and

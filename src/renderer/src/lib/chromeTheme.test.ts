@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CHROME_COLOUR_TOKENS, chromeTokens } from './chromeTheme'
-import { TERM_PRESETS, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
+import { TERM_PRESETS, presetAccent, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
+import { SEE_THROUGH_ALPHA, seeThroughAlpha } from '@core/renderer/lib/seeThrough'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
 import { composite } from '@core/renderer/lib/colour'
 import { WINDOW_EDGES } from '@shared/windowEdges'
@@ -235,6 +236,18 @@ describe('a see-through accent', () => {
     // What the fill showed over the solid ground is what it shows now.
     const open = chromeTokens(resolveTermTheme(id), 1, undefined, 'hairline', '#e07a2f80').vars
     expect(vars['--p-sel-bg']).toBe(composite(open['--p-sel-bg'], vars['--p-bg-solid']))
+  })
+  // #156: the switch alone paints every preset at Prism's default see-through,
+  // so every preset is held to its text there, on the theme's own accent.
+  it.each(TERM_PRESETS.map((p) => [p.id, p.bg]))('%s: legible at its default see-through', (id, bg) => {
+    const a = seeThroughAlpha(bg)
+    const { vars } = chromeTokens(resolveTermTheme(id), a, presetAccent(id))
+    expect(vars['--p-bg']).toMatch(a === SEE_THROUGH_ALPHA.dark ? /^#[0-9a-f]{6}b9$/ : /^#[0-9a-f]{6}d1$/)
+    for (const t of ['--p-text', '--p-dim', '--p-on-accent', '--p-accent', '--p-sel-bg'])
+      expect(vars[t], t).toMatch(/^#[0-9a-f]{6}$/)
+    expect(contrastRatio(vars['--p-text'], vars['--p-bg-solid'])).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(vars['--p-on-accent'], vars['--p-accent'])).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(vars['--p-on-accent'], vars['--p-sel-bg'])).toBeGreaterThanOrEqual(4.5)
   })
   it('--p-bg-solid is always flat, whatever the ground alpha (main is only ever sent it)', () => {
     for (const a of [0.3, 0.5, 153 / 255, 1]) {

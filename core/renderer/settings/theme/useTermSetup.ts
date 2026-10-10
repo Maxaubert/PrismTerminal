@@ -3,6 +3,7 @@ import { hostOwnsWindowAcrylic, termHost } from '../../host'
 import {
   saveCustomTermTheme,
   setTermThemeId,
+  paintsAlpha,
   termExtraDefaults,
   termThemeId,
   useAgentColorChoice,
@@ -15,6 +16,7 @@ import {
   withGroundAlpha
 } from '../../lib/termLook'
 import { alphaOf } from '../../lib/colour'
+import { resolveTermTheme } from '../../lib/termTheme'
 import { paletteOf } from './palette'
 
 /**
@@ -70,12 +72,17 @@ export function useTermSetup(): TermSetup {
   // THE UNSAVED-CHANGES QUESTION SURVIVES THE SLIDER (#114, #60). Opacity was
   // one of the extras, so a changed one lit Save changes and a theme pick
   // asked before forgetting it. Its place is taken by the ground's alpha in
-  // force against the theme's own (a preset is opaque, a Custom has its bg's):
-  // a see-through picked Background lights Save changes in the same way.
-  // Only where that alpha is the window's (Prism has no such alpha).
-  const ownByte = src ? Math.round(alphaOf(src.bg) * 255) : 255
+  // force against what the theme's own setup paints: a see-through picked
+  // Background lights Save changes in the same way. Only where that alpha is
+  // the window's (Prism has no such alpha, and is not asked to resolve one).
+  // The theme's own is computed by the rule the window paints by (#156,
+  // `paintsAlpha`): an older Custom saved with acrylic on and an opaque `bg`
+  // paints the default see-through, so it is not dirty on pick. A preset's own
+  // setup has the host's default acrylic (off in Prism Terminal).
+  const ownByte = (): number =>
+    Math.round(paintsAlpha(src ? alphaOf(src.bg) : 1, src?.bg ?? resolveTermTheme(themeId).background, baseline.acrylic) * 255)
   const dirty =
-    JSON.stringify(extras) !== JSON.stringify(baseline) || (hostOwnsWindowAcrylic() && groundByte !== ownByte)
+    JSON.stringify(extras) !== JSON.stringify(baseline) || (hostOwnsWindowAcrylic() && groundByte !== ownByte())
   const save = (): void => {
     saveCustomTermTheme({ ...withGroundAlpha(paletteOf(termThemeId())), ...extras })
     setTermThemeId('custom')
