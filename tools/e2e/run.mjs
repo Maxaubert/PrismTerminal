@@ -166,11 +166,11 @@ const tabLabels = (page) =>
  * so a row moving between pages is one line here.
  */
 const PREF_PAGE = {
-  'tab-width': 'appearance', 'title-bar': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
+  'tab-width': 'appearance', 'tab-style': 'appearance', 'title-bar': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
   'window-background': 'appearance', 'window-accent': 'appearance', 'term-acrylic': 'appearance',
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
-  'agent-indicator': 'agents', 'agent-done-on': 'agents', 'agent-question-on': 'agents', 'agent-failed-on': 'agents',
+  'agent-indicator': 'agents', 'agent-done-on': 'agents', 'agent-rainbow': 'agents', 'agent-question-on': 'agents', 'agent-failed-on': 'agents',
   'taskbar-badge': 'agents', 'agent-hooks': 'agents', 'agent-color': 'agents', 'agent-done-color': 'agents',
   'agent-question-color': 'agents',
   'dictation-enabled': 'dictation', 'dictation-mode': 'dictation', 'dictation-hotkey': 'dictation', 'dictation-mic': 'dictation',
@@ -288,6 +288,106 @@ function ourSpeechServers() {
   }
 }
 
+/**
+ * THE MOCKUPS' STRIP (#143): six tabs, named as the mockups name them, for the
+ * tab style and indicator scenarios. Returned as launch folders.
+ */
+function markedFolders(w) {
+  const root = dirname(w.alpha)
+  return ['PrismTerminal', 'notes', 'api', 'web', 'infra', 'docs'].map((n) => {
+    const d = join(root, n)
+    mkdirSync(d, { recursive: true })
+    return d
+  })
+}
+
+/** Claude Code's hook sequence, as `agentHooks` writes it. */
+const hookSay = (state, extra = '') => `[Console]::Write([char]27 + ']777;prism-agent;state=${state}${extra}' + [char]7)`
+
+/**
+ * Put the six tabs into the mockups' states, left to right: in front and
+ * working, idle, working, finished, question, failed. Shells stand in for
+ * Claude through its hooks; the three endings land while the first tab is in
+ * front, so they are marks on tabs nobody is looking at.
+ */
+async function markStrip(page, ok) {
+  await until(async () => (await tabLabels(page)).length === 6, 30000)
+  const tab = (i) => page.locator('[data-tab]').nth(i)
+  await polled(page)
+  for (const i of [0, 2, 3, 4, 5]) {
+    await tab(i).click()
+    await typeLine(page, hookSay('working'))
+  }
+  await tab(3).click()
+  await typeLine(page, `Start-Sleep -Milliseconds 9000; ${hookSay('done')}`)
+  await tab(4).click()
+  await typeLine(page, `Start-Sleep -Milliseconds 8000; ${hookSay('question')}`)
+  await tab(5).click()
+  await typeLine(page, `Start-Sleep -Milliseconds 7000; ${hookSay('failed', ';kind=rate_limit')}; ${hookSay('failed')}`)
+  await tab(0).click()
+  const want = JSON.stringify(['working', null, 'working', 'done', 'question', 'failed'])
+  const states = () => page.evaluate(() => [...document.querySelectorAll('[data-tab]')].map((t) => t.getAttribute('data-agent-state')))
+  ok(!!(await until(async () => JSON.stringify(await states()) === want, 25000, 100)), `six tabs in the mockups' states (${JSON.stringify(await states())})`)
+}
+
+/** End with no agent mid-answer, so closing asks nothing. */
+async function quietStrip(page) {
+  await backToFirst(page)
+  const working = () => page.evaluate(() => [...document.querySelectorAll('[data-tab]')].findIndex((t) => t.getAttribute('data-agent-state') === 'working'))
+  for (let n = 0; n < 6; n += 1) {
+    const i = await working()
+    if (i < 0) return
+    await page.locator('[data-tab]').nth(i).click()
+    await typeLine(page, hookSay('done'))
+    await until(async () => (await working()) !== i, 5000, 50)
+  }
+}
+
+/** Put the first tab in front, then close Settings if it is open: closed while
+ *  in front it would hand the front to its neighbour, the last shell, which
+ *  then counts as looked at. And say the window is not focused, as a parked
+ *  window is not, so no click here counts as looking at a mark. */
+async function backToFirst(page) {
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+  await page.locator('[data-tab]').nth(0).click()
+  const settings = page.locator('[data-tab]').filter({ hasText: 'Settings' })
+  if ((await settings.count()) > 0) {
+    await settings.first().locator('[data-tab-close]').click({ force: true })
+    await until(async () => (await settings.count()) === 0, 4000, 50)
+  }
+  await page.locator('[data-tab]').nth(0).click()
+}
+
+/** Pick a segmented choice on a settings row. */
+async function setPref(page, id, seg) {
+  await (await gotoPref(page, id)).locator(`[data-seg="${seg}"]`).click()
+}
+
+/** Pick a theme from the wall. */
+async function pickTheme(page, id) {
+  await gotoPref(page, 'term-theme')
+  await page.locator(`[data-term-card="${id}"]`).first().click()
+  await sleep(300)
+}
+
+/** The tab strip alone, into .e2e-shots. */
+async function shotStrip(page, name) {
+  await sleep(150)
+  // Frozen as the mockups' own shots froze them (`#shot`): a working edge
+  // inside its full hold, a question still mostly on, the rest part way.
+  await page.evaluate(() =>
+    document.getAnimations().forEach((a) => {
+      const n = a.animationName ?? ''
+      if (!/^p-(mark|agent)/.test(n)) return
+      const d = Number(a.effect?.getTiming().duration) || 0
+      a.pause()
+      a.currentTime = d * (n === 'p-mark-grow' ? 0.56 : n === 'p-mark-breathe' ? 0.12 : 0.45)
+    })
+  )
+  await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), `.e2e-shots/${name}.png`) }).catch(() => {})
+  await page.evaluate(() => document.getAnimations().forEach((a) => /^p-(mark|agent)/.test(a.animationName ?? '') && a.play()))
+}
+
 const scenarios = {
   /** New terminal opens in the user's own folder with nothing asked (the
    *  default), Ctrl+T does the same from inside a shell, and "ask" asks. */
@@ -371,15 +471,31 @@ const scenarios = {
     })
     ok(mark.mode === 'minimal', `the indicator is minimal out of the box (${mark.mode})`)
     ok(!!mark.bar && mark.bar === mark.accent, `and its line is the theme's accent (${mark.bar} vs ${mark.accent})`)
-    // The finished mark is Full's alone: turn it up, the way a user would.
+    ok(await page.evaluate(() => !document.querySelector('[data-activity]')), 'no brain icon inside a working tab any more (#143)')
+    // FULL (#143): every marked tab NOT in front is filled solid; the tab in
+    // front never is, and shows Minimal's run instead.
     await page.locator('[data-title-settings]').click()
     // On Agents, with the marks and their colours (2026-10-05).
     await gotoPref(page, 'agent-indicator')
+    ok(
+      (await page.locator('[data-pref="agent-indicator"] [data-seg]').allTextContents()).join('|') === 'Off|Minimal|Ring|Full',
+      'the indicator offers Off, Minimal, Ring and Full'
+    )
     await page.locator('[data-pref="agent-indicator"] [data-seg="full"]').click()
+    await page.locator('[data-tab]').nth(0).click()
+    ok(
+      !!(await until(() => page.evaluate(() => !!document.querySelector('[data-agent-state="working"]:not([data-tab-active]) [data-mark="fill"]')))),
+      'Full fills a working tab that is not in front'
+    )
     await page.locator('[data-tab]').nth(1).click()
     ok(
-      await until(() => page.evaluate(() => document.querySelector('[data-agent-state="working"]')?.getAttribute('data-agent') === 'full')),
-      'Full fills the tab instead'
+      !!(await until(() =>
+        page.evaluate(() => {
+          const el = document.querySelector('[data-agent-state="working"]')
+          return !!el && el.hasAttribute('data-tab-active') && !el.querySelector('[data-mark="fill"]') && !!el.querySelector('[data-mark="run"]')
+        })
+      )),
+      'and never the tab in front, which shows the run'
     )
     // Walk away, then let it finish behind our back.
     await page.locator('[data-tab]').nth(0).click()
@@ -462,9 +578,16 @@ const scenarios = {
       ok(!!(await until(async () => (await state(0)) === 'question', 10000, 50)), 'a question asked on a background tab marks it')
       const q = await page.evaluate(() => {
         const line = document.querySelectorAll('[data-tab]')[0].querySelector('[data-attention]')
-        return { kind: line?.getAttribute('data-attention'), height: line ? Math.round(line.getBoundingClientRect().height) : 0 }
+        return {
+          kind: line?.getAttribute('data-attention'),
+          height: line ? Math.round(line.getBoundingClientRect().height) : 0,
+          motion: line ? getComputedStyle(line).animationName : null
+        }
       })
       ok(q.kind === 'question' && q.height === 3, `as a line along the bottom (${JSON.stringify(q)})`)
+      // THE GENTLE PULSE (#143; owner, 2026-10-10: "I like the gentle pulse too
+      // for questions. Make sure that's also applied to the minimal style").
+      ok(q.motion === 'p-mark-breathe', `that breathes (${q.motion})`)
       await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/attention-question.png') }).catch(() => {})
       ok(!!(await until(async () => (await badge()) === '1 tab needs a look', 4000, 50)), `and the taskbar badge counts it (${await badge()})`)
       // AS CRISP AS THE OTHER APPS' (#108; owner, 2026-10-01, beside
@@ -487,6 +610,27 @@ const scenarios = {
       await tab(1).click()
       ok(!!(await until(async () => (await state(2)) === 'done', 10000, 50)), 'an agent that finishes on a background tab marks it')
       ok(!!(await until(async () => (await badge()) === '1 tab needs a look', 4000, 50)), 'and is counted on the taskbar')
+      // THE RAINBOW FINISH (#143): the icon's colours, flowing, on by default.
+      const fin = () =>
+        page.evaluate(() => {
+          const l = document.querySelectorAll('[data-tab]')[2].querySelector('[data-attention="done"]')
+          if (!l) return null
+          const cs = getComputedStyle(l)
+          return { rainbow: l.hasAttribute('data-rainbow'), image: cs.backgroundImage, colour: cs.backgroundColor, motion: cs.animationName }
+        })
+      const rb = await fin()
+      ok(!!rb && rb.rainbow && rb.image.startsWith('linear-gradient') && rb.motion === 'p-mark-flow-x', `the finished line is the flowing rainbow (${JSON.stringify(rb)})`)
+      await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/attention-rainbow.png') }).catch(() => {})
+      await gotoPref(page, 'agent-rainbow')
+      const rbSwitch = page.locator('[data-pref="agent-rainbow"] [role="switch"]')
+      ok((await rbSwitch.getAttribute('aria-checked')) === 'true', 'Rainbow finished mark is on by default')
+      await rbSwitch.click()
+      const plain = await until(async () => {
+        const f = await fin()
+        return f && !f.rainbow && f.image === 'none' ? f : null
+      }, 4000, 50)
+      ok(!!plain && plain.motion === 'none', `switched off, the finished line is the finished colour, still (${JSON.stringify(plain)})`)
+      await rbSwitch.click()
       // Switched off, the finished mark goes, and the badge has nothing to count.
       await page.evaluate(() => localStorage.setItem('prism.term.agentDoneOn', '0'))
       await page.locator('[data-title-settings]').click()
@@ -1325,6 +1469,216 @@ const scenarios = {
     ok((await boxes()).map((b) => b.w).join('|') === before, 'picking another tab moves no tab')
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tabs-fixed.png') }).catch(() => {})
     await closeApp(app)
+  },
+
+  /**
+   * THE PROMPT TAB STYLE (#143; owner, 2026-10-10). Six tabs in the mockups'
+   * states: in front and working, idle, working, finished, question, failed.
+   * Measured: no line between tabs in either style; Prompt's segments are
+   * clipped and overlap by 9.5 px; a working background tab's edge band sits
+   * flush in the gap and grows; the tab in front wears its rule; Fixed and
+   * Dynamic both hold. Screenshots against the mockups.
+   */
+  async tabStyle(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: markedFolders(w) })
+    try {
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1100, 700))
+      await markStrip(page, ok)
+      const borders = () =>
+        page.evaluate(() =>
+          [...document.querySelectorAll('[data-tab]')].reduce(
+            (n, t) => n + parseFloat(getComputedStyle(t).borderRightWidth) + parseFloat(getComputedStyle(t).borderLeftWidth),
+            0
+          )
+        )
+      ok((await borders()) === 0, 'Classic: no line between tabs')
+      await shotStrip(page, 'tabs-classic')
+      // The row: right after Tab width, Classic by default.
+      const row = await gotoPref(page, 'tab-style')
+      const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
+      ok(order.indexOf('tab-style') === order.indexOf('tab-width') + 1, `Tab style is right after Tab width (${order.slice(0, 3).join(' > ')})`)
+      ok((await row.locator('[aria-pressed="true"]').getAttribute('data-seg')) === 'classic', 'Classic is the default')
+      ok((await row.locator('[data-seg]').allTextContents()).join('|') === 'Classic|Prompt', 'the choices are Classic and Prompt')
+      await row.locator('[data-seg="prompt"]').click()
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.tabStyle'))) === 'prompt', 'Prompt is stored')
+      await backToFirst(page)
+      ok((await page.locator('[data-tab-strip]').getAttribute('data-tab-style')) === 'prompt', 'the strip draws Prompt')
+      ok((await borders()) === 0, 'Prompt: no line between tabs')
+      const geo = await page.evaluate(() => {
+        const segs = [...document.querySelectorAll('[data-tab]')]
+        const boxes = segs.map((s) => s.getBoundingClientRect())
+        const shapes = segs.map((s) => getComputedStyle(s.querySelector('[data-prompt-shape]')).clipPath)
+        const working = segs[2]
+        const band = working.querySelector('[data-prompt-edge]')
+        const b = band?.getBoundingClientRect()
+        const rule = segs[0].querySelector('[data-prompt-rule]')
+        return {
+          overlaps: boxes.slice(0, -1).map((r, i) => Math.round((r.right - boxes[i + 1].left) * 10) / 10),
+          clipped: shapes.every((c) => c.startsWith('polygon')),
+          band: b ? { left: b.left - boxes[2].right, right: b.right - boxes[2].right, top: b.top - boxes[2].top, height: b.height - boxes[2].height } : null,
+          bandMotion: band ? getComputedStyle(band.firstElementChild).animationName : null,
+          rule: rule ? { w: rule.getBoundingClientRect().width - boxes[0].width, clip: getComputedStyle(rule).clipPath } : null,
+          edges: segs.map((s) => s.querySelector('[data-prompt-edge]')?.getAttribute('data-prompt-edge') ?? null)
+        }
+      })
+      ok(geo.clipped, 'every segment is clipped to its chevron')
+      ok(geo.overlaps.every((o) => Math.abs(o - 9.5) < 0.6), `neighbours overlap by 9.5 px (${geo.overlaps.join(', ')})`)
+      ok(
+        !!geo.band && Math.abs(geo.band.left + 13) < 0.6 && Math.abs(geo.band.right - 3.5) < 0.6 && Math.abs(geo.band.top) < 0.6 && Math.abs(geo.band.height) < 0.6,
+        `a working tab's edge band runs from 1 px inside its arrow to 1 px inside the next notch, the full height (${JSON.stringify(geo.band)})`
+      )
+      ok(geo.bandMotion === 'p-mark-grow', `and grows (${geo.bandMotion})`)
+      ok(JSON.stringify(geo.edges) === JSON.stringify(['working', null, 'working', 'done', 'question', 'failed']), `each marked tab's edge says its state (${geo.edges.join(', ')})`)
+      ok(!!geo.rule && Math.abs(geo.rule.w) < 0.6 && geo.rule.clip.startsWith('polygon'), `the tab in front wears its rule, cut along the slant (${JSON.stringify(geo.rule)})`)
+      // The grow moves: two samples of the band's scale differ.
+      const scale = () => page.evaluate(() => getComputedStyle(document.querySelectorAll('[data-tab]')[2].querySelector('[data-prompt-edge] i')).transform)
+      const s1 = await scale()
+      await sleep(330)
+      ok(s1 !== (await scale()), 'the working edge is moving')
+      await shotStrip(page, 'tabs-prompt')
+      // Fixed and Dynamic both hold.
+      const widths = () => page.evaluate(() => [...document.querySelectorAll('[data-tab]')].map((t) => Math.round(t.getBoundingClientRect().width)))
+      const dyn = await widths()
+      await (await gotoPref(page, 'tab-width')).locator('[data-seg="fixed"]').click()
+      await backToFirst(page)
+      const fixed = await widths()
+      ok(new Set(fixed).size === 1 && fixed[0] >= 112 && fixed[0] <= 124, `Prompt, Fixed: every segment one width (${fixed.join(' / ')})`)
+      ok(new Set(dyn).size > 1, `Prompt, Dynamic: sized to the name (${dyn.join(' / ')})`)
+      await shotStrip(page, 'tabs-prompt-fixed')
+      // A light theme.
+      await pickTheme(page, 'paper')
+      await backToFirst(page)
+      await shotStrip(page, 'tabs-prompt-light')
+      await quietStrip(page)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * THE INDICATOR STYLES (#143): Minimal, Ring and Full, on Volt and Paper, in
+   * both tab styles. Measured: Ring spins by a working tab's name and leaves
+   * the other states to Minimal; Full fills only tabs not in front, its names
+   * by the owner's 2:1 rule; the tab in front is told apart in every state;
+   * the rainbow flows, and under reduced motion nothing moves at all.
+   */
+  async indicatorStyles(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: markedFolders(w) })
+    try {
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1100, 700))
+      await markStrip(page, ok)
+      const rgb = (c) => (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
+      const lin = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+      const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+      const ratio = (x, y) => (Math.max(lum(x), lum(y)) + 0.05) / (Math.min(lum(x), lum(y)) + 0.05)
+      const look = () =>
+        page.evaluate(() => {
+          const probe = document.createElement('span')
+          probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-text')
+          document.body.appendChild(probe)
+          const text = getComputedStyle(probe).color
+          probe.remove()
+          return {
+            text,
+            tabs: [...document.querySelectorAll('[data-tab]')].map((t) => {
+              const fill = t.querySelector('[data-mark="fill"]')
+              return {
+                active: t.hasAttribute('data-tab-active'),
+                state: t.getAttribute('data-agent-state'),
+                marks: [...t.querySelectorAll('[data-mark]')].map((m) => m.getAttribute('data-mark')),
+                rule: !!t.querySelector('[data-prompt-rule]') || [...t.children].some((c) => c.tagName === 'SPAN' && c.getBoundingClientRect().height === 2 && c.getBoundingClientRect().top === t.getBoundingClientRect().top),
+                fill: fill ? getComputedStyle(fill).backgroundColor : null,
+                name: getComputedStyle(t.querySelector('[role="tab"]')).color
+              }
+            })
+          }
+        })
+      for (const theme of ['volt', 'paper']) {
+        await pickTheme(page, theme)
+        for (const style of ['classic', 'prompt']) {
+          await setPref(page, 'tab-style', style)
+          for (const ind of ['minimal', 'ring', 'full']) {
+            await setPref(page, 'agent-indicator', ind)
+            await backToFirst(page)
+            await sleep(250)
+            const l = await look()
+            const t = l.tabs
+            const tag = `${theme}, ${style}, ${ind}`
+            ok(t[0].active && t[0].rule, `${tag}: the tab in front wears its rule`)
+            ok(t.every((x) => !x.active || !x.fill), `${tag}: the tab in front is never filled`)
+            if (ind === 'ring') {
+              ok(t[0].marks.includes('ring') && t[2].marks.includes('ring'), `${tag}: a spinner by each working tab's name (${t[2].marks})`)
+              const minimal = style === 'prompt' ? 'edge' : 'line'
+              ok([3, 4, 5].every((i) => t[i].marks.includes(minimal)), `${tag}: finished, question and failed keep Minimal's ${minimal}`)
+            }
+            if (ind === 'full') {
+              ok([2, 3, 4, 5].every((i) => !!t[i].fill && rgb(t[i].fill).length === 3), `${tag}: every marked tab not in front is filled`)
+              ok(!t[1].fill, `${tag}: an idle tab is not`)
+              ok(t[1].name === l.text, `${tag}: an idle name is the theme's text (${t[1].name} vs ${l.text})`)
+              for (const i of [2, 3, 4, 5]) {
+                const r = ratio(rgb(l.text), rgb(t[i].fill))
+                const kept = t[i].name === l.text
+                ok(kept === r >= 2, `${tag}: ${t[i].state}'s name is the text unless it reads under 2:1 (${r.toFixed(2)}:1, ${kept ? 'kept' : 'flipped to ' + t[i].name})`)
+              }
+              if (theme === 'volt') ok(t[2].name !== l.text, `${tag}: on Volt the working fill flips its name`)
+            }
+            await shotStrip(page, `marks-${style}-${ind}-${theme}`)
+          }
+        }
+      }
+      // THE TAB IN FRONT, IN EVERY STATE (#143: "the active tab must stay
+      // obvious in every state"). The parked window is never focused, so
+      // opening a marked tab does not clear it: each state can be in front.
+      await setPref(page, 'agent-indicator', 'full')
+      for (const style of ['classic', 'prompt']) {
+        await setPref(page, 'tab-style', style)
+        for (const i of [3, 4, 5]) {
+          await backToFirst(page)
+          await page.locator('[data-tab]').nth(i).click()
+          await sleep(200)
+          const t = (await look()).tabs[i]
+          ok(t.active && t.rule && !t.fill && t.marks.length > 0, `${style}, Full: ${t.state} in front has its rule and its line, not a fill (${t.marks})`)
+        }
+      }
+      await setPref(page, 'agent-indicator', 'minimal')
+      await setPref(page, 'tab-style', 'classic')
+      await backToFirst(page)
+      // THE RAINBOW FLOWS: two samples of the finished line's position differ.
+      const pos = () => page.evaluate(() => getComputedStyle(document.querySelectorAll('[data-tab]')[3].querySelector('[data-attention="done"]')).backgroundPositionX)
+      const p1 = await pos()
+      await sleep(400)
+      const p2 = await pos()
+      ok(p1 !== p2, `the rainbow flows (${p1} then ${p2})`)
+      // REDUCED MOTION: everything still.
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await sleep(200)
+      const running = await page.evaluate(() =>
+        document.getAnimations().filter((a) => /^p-(mark|agent)/.test(a.animationName ?? '')).map((a) => a.animationName)
+      )
+      ok(running.length === 0, `with reduced motion no mark moves (${running.join(', ')})`)
+      const q1 = await pos()
+      await sleep(400)
+      ok(q1 === (await pos()), 'the rainbow stands still')
+      const still = await page.evaluate(() => {
+        const run = document.querySelector('[data-tab] .p-agent-run')
+        const strip = run?.parentElement
+        const q = document.querySelectorAll('[data-tab]')[4].querySelector('[data-attention="question"]')
+        return { run: run && strip ? Math.round(run.getBoundingClientRect().width) === Math.round(strip.getBoundingClientRect().width) : false, question: q ? getComputedStyle(q).opacity : null }
+      })
+      ok(still.run && still.question === '1', `the run is a full line and the question fully on (${JSON.stringify(still)})`)
+      await setPref(page, 'tab-style', 'prompt')
+      await backToFirst(page)
+      const edge = await page.evaluate(() => getComputedStyle(document.querySelectorAll('[data-tab]')[2].querySelector('[data-prompt-edge] i')).transform)
+      ok(edge === 'none', `and a working Prompt edge rests full (${edge})`)
+      await shotStrip(page, 'marks-reduced-motion')
+      await page.emulateMedia({ reducedMotion: 'no-preference' })
+      await setPref(page, 'tab-style', 'classic')
+      await quietStrip(page)
+    } finally {
+      await closeApp(app)
+    }
   },
 
   // NO TITLE BAR (#91; owner, 2026-09-28, "tabs in the top row"): Hidden
@@ -2477,8 +2831,11 @@ const scenarios = {
       [...readFileSync(resolve(process.cwd(), file), 'utf8').matchAll(/\{\s*id: '([a-z-]+)'[^}]*\}/g)]
         .filter((m) => keep(m[0]))
         .map((m) => ({ id: m[1], section: (m[0].match(/section: '([a-z]+)'/) ?? [])[1] ?? null }))
+    // The tab marks' own rows (#143) keep a list of their own, drawn here (this
+    // host declares tabMarks) right after the Finished switch.
+    const marks = entries('core/renderer/settings/markOptions.ts')
     const core = [
-      ...entries('core/renderer/settings/options.ts'),
+      ...entries('core/renderer/settings/options.ts').flatMap((e) => (e.id === 'agent-done-on' ? [e, ...marks] : [e])),
       ...entries('core/renderer/settings/dictationOptions.ts', (row) => !row.includes('onlyWhere')),
       // Command help (#12) keeps a list of its own, as dictation does.
       ...entries('core/renderer/settings/helpOptions.ts'),
@@ -2888,7 +3245,7 @@ const scenarios = {
     await until(async () => (await tabLabels(page)).length === 1)
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1600, 1000))
     const labelOf = {}
-    for (const file of ['core/renderer/settings/options.ts', 'core/renderer/settings/dictationOptions.ts', 'core/renderer/settings/helpOptions.ts', 'src/renderer/src/components/settings/appOptions.ts'])
+    for (const file of ['core/renderer/settings/options.ts', 'core/renderer/settings/markOptions.ts', 'core/renderer/settings/dictationOptions.ts', 'core/renderer/settings/helpOptions.ts', 'src/renderer/src/components/settings/appOptions.ts'])
       for (const m of readFileSync(resolve(process.cwd(), file), 'utf8').matchAll(/\{\s*id: '([a-z-]+)'[^}]*\}/g))
         if (!m[0].includes('onlyWhere')) labelOf[m[1]] = (m[0].match(/label: '([^']+)'/) ?? [])[1]
     const order = [...readFileSync(resolve(process.cwd(), 'src/renderer/src/components/settings/settingsIndex.ts'), 'utf8').matchAll(/'([a-z]+(?:-[a-z]+)+|[a-z]+-[a-z]+)'/g)].map((m) => m[1])
@@ -3070,7 +3427,7 @@ const scenarios = {
       // and the agent rows have pages of their own; Appearance keeps the
       // window's rows above the theme and what a theme sets under it.
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
-      const want = ['tab-width', 'title-bar', 'window-edges', 'term-theme', 'window-background', 'window-accent', 'term-acrylic']
+      const want = ['tab-width', 'tab-style', 'title-bar', 'window-edges', 'term-theme', 'window-background', 'window-accent', 'term-acrylic']
       ok(JSON.stringify(rows) === JSON.stringify(want), `Appearance runs ${want.join(' > ')} (${rows.join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await gotoPref(page, 'term-font')
@@ -3358,23 +3715,34 @@ const scenarios = {
       }, 3000, 50)
       ok(!!stored && stored.endsWith('80'), `the working colour is stored as hex8 (${stored})`)
       ok(/^#[0-9a-f]{8}$/.test(await field.inputValue()), `and the code field shows the eight digits (${await field.inputValue()})`)
+      // FULL FILLS SOLID, AND ONLY A TAB NOT IN FRONT (#143): Settings is the
+      // tab in front, so the working shell's tab is filled, OPAQUE, with the
+      // half-alpha colour laid on the ground; its name is the theme's text
+      // unless that reads under 2:1 on the fill (the owner's rule).
       const tab = await until(async () => {
         const l = await page.evaluate(() => {
-          const el = document.querySelector('[data-agent-state="working"]')
+          const el = document.querySelector('[data-agent-state="working"] [data-mark="fill"]')
           if (!el) return null
-          const cs = getComputedStyle(el)
-          return { bg: cs.backgroundColor, ink: cs.color, ground: getComputedStyle(document.documentElement).getPropertyValue('--p-bg-solid') }
+          const name = el.closest('[data-tab]').querySelector('[role="tab"]')
+          const root = getComputedStyle(document.documentElement)
+          const probe = document.createElement('span')
+          probe.style.color = root.getPropertyValue('--p-text')
+          document.body.appendChild(probe)
+          const text = getComputedStyle(probe).color
+          probe.remove()
+          return { bg: getComputedStyle(el).backgroundColor, ink: getComputedStyle(name).color, text, ground: root.getPropertyValue('--p-bg-solid') }
         })
-        // Settled, not mid-transition: the fill eases between colours.
-        return l && Math.abs(rgba(l.bg).a - 128 / 255) < 0.01 ? l : null
+        return l && rgba(l.bg).a === 1 ? l : null
       }, 4000, 50)
-      ok(!!tab, `the Full tab's fill carries the alpha (${tab?.bg})`)
-      if (tab) {
-        const f = rgba(tab.bg)
+      ok(!!tab, `the Full tab's fill is opaque (${tab?.bg})`)
+      if (tab && stored) {
         const g = hexRgb(tab.ground)
-        const seen = f.rgb.map((v, i) => g[i] + (v - g[i]) * f.a)
-        const r = ratio(rgba(tab.ink).rgb, seen)
-        ok(r >= 4.5, `the Full tab's text reads on the composite (${r.toFixed(1)}:1, ${tab.ink} on ${tab.bg} over ${tab.ground.trim()})`)
+        const want = hexRgb(stored).map((v, i) => Math.round(g[i] + (v - g[i]) * (0x80 / 255)))
+        const got = rgba(tab.bg).rgb
+        ok(got.every((v, i) => Math.abs(v - want[i]) <= 1), `the half-alpha colour laid on the ground (${got} vs ${want})`)
+        const textRatio = ratio(rgba(tab.text).rgb, got)
+        const keeps = rgba(tab.ink).rgb.join() === rgba(tab.text).rgb.join()
+        ok(keeps === textRatio >= 2, `the name is the theme's text unless it reads under 2:1 (${textRatio.toFixed(2)}:1, ${keeps ? 'kept' : 'flipped'})`)
       }
       await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/colour-picker-full-tab.png') }).catch(() => {})
       await shot('alpha')
@@ -3835,7 +4203,8 @@ const scenarios = {
     const w = world()
     // Two tabs, so there IS a line between tabs to measure.
     let { app, page } = await launch(w, { args: [w.alpha, w.beta] })
-    ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open, so a tab separator exists')
+    // NO LINE BETWEEN TABS (#143): two tabs, so a separator WOULD show if one came back.
+    ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open')
     const probe = (pg) =>
       pg.evaluate(() => {
         const parts = (c) => (c.match(/[\d.]+/g) ?? []).map(Number)
@@ -3860,7 +4229,6 @@ const scenarios = {
         const second = document.querySelector('[data-pref="title-bar"]')
         const css = (el, prop) => (el ? getComputedStyle(el)[prop] : null)
         const edges = {
-          tab: css(tab, 'borderRightColor'),
           title: css(title, 'borderBottomColor'),
           rail: css(rail, 'borderRightColor'),
           row: css(panel, 'borderTopColor'),
@@ -3874,16 +4242,19 @@ const scenarios = {
             divider: getComputedStyle(document.documentElement).getPropertyValue('--p-divider').trim(),
             line: getComputedStyle(document.documentElement).getPropertyValue('--p-line').trim()
           },
-          tab: edges.tab === null ? null : alpha(edges.tab),
-          tabInk: edges.tab === null ? null : rgb(edges.tab),
           title: edges.title === null ? null : alpha(edges.title),
+          titleInk: edges.title === null ? null : rgb(edges.title),
           rail: edges.rail === null ? null : alpha(edges.rail),
           row: edges.row === null ? null : alpha(edges.row),
           rule: edges.rule === null ? null : alpha(edges.rule),
           // A border keeps its pixel whatever its colour: nothing may move.
           tabWidth: tab ? tab.getBoundingClientRect().width : 0,
           titleHeight: title ? title.getBoundingClientRect().height : 0,
-          tabBorder: css(tab, 'borderRightWidth'),
+          // Every tab's own side borders, summed: none since #143.
+          tabBorder: [...document.querySelectorAll('[data-tab]')].reduce(
+            (n, t) => n + parseFloat(getComputedStyle(t).borderRightWidth) + parseFloat(getComputedStyle(t).borderLeftWidth),
+            0
+          ),
           pressed: document.querySelector('[data-pref="window-edges"] [aria-pressed="true"]')?.getAttribute('data-seg') ?? null,
           stored: localStorage.getItem('prism.window.edges')
         }
@@ -3894,7 +4265,7 @@ const scenarios = {
     const settled = (pg, also = () => true, ms = 15000) =>
       until(async () => {
         const p = await probe(pg)
-        const chrome = [p.tab, p.title, ...(p.rail === null ? [] : [p.rail])]
+        const chrome = [p.title, ...(p.rail === null ? [] : [p.rail])]
         const arrived = chrome.every((a) => near(a, p.divider)) && (p.row === null || near(p.row, p.line)) && (p.rule === null || near(p.rule, p.line))
         return arrived && also(p) ? p : null
       }, ms)
@@ -3908,7 +4279,8 @@ const scenarios = {
       first?.raw.divider === '#ffffff12' && first?.raw.line === '#ffffff17',
       `the default is exactly the look before the setting existed (${first?.raw.divider}, ${first?.raw.line})`
     )
-    ok(near(first?.tab ?? null, 0.07), `the line between tabs is the 7% hairline it always was (${first?.tab})`)
+    ok(near(first?.title ?? null, 0.07), `the title bar's rule is the 7% hairline it always was (${first?.title})`)
+    ok(first?.tabBorder === 0, `and there is no line between tabs (#143; ${first?.tabBorder}px of tab border)`)
     ok((await page.evaluate(() => window.prism.e2eWindowEdges())) === 'hairline', 'main holds a hairline for the window border')
 
     await page.locator('[data-title-settings]').click()
@@ -3943,29 +4315,29 @@ const scenarios = {
     ok(all, 'all four options were measured')
     if (all) {
       const { none, faint, hairline, solid } = seen
-      for (const edge of ['tab', 'title', 'rail', 'row', 'rule']) {
+      for (const edge of ['title', 'rail', 'row', 'rule']) {
         ok(none[edge] === 0, `none: the ${edge} edge is transparent (alpha ${none[edge]})`)
         ok(
           faint[edge] > 0 && faint[edge] < hairline[edge] && hairline[edge] < solid[edge],
           `${edge}: faint < hairline < solid (${faint[edge]} < ${hairline[edge]} < ${solid[edge]})`
         )
       }
-      ok(near(hairline.tab, 0.07) && near(hairline.row, 0.09), 'going back to Hairline is going back to the old look')
-      ok(solid.tabInk === '255,255,255', `on a dark ground the line is white ink (${solid.tabInk})`)
+      ok(near(hairline.title, 0.07) && near(hairline.row, 0.09), 'going back to Hairline is going back to the old look')
+      ok(solid.titleInk === '255,255,255', `on a dark ground the line is white ink (${solid.titleInk})`)
       // Transparent, not absent: the border keeps its width, so nothing shifts.
       // The width is whatever one CSS pixel snaps to on this display (MEASURED
       // 0.888889px at 225% scaling), so it is compared, never assumed to be 1px.
       const widths = new Set(Object.values(seen).map((p) => `${p.tabWidth}|${p.titleHeight}|${p.tabBorder}`))
       ok(
-        widths.size === 1 && parseFloat(none.tabBorder) > 0,
-        `no option moves the layout, and "none" keeps its border's width (${[...widths].join(' ; ')})`
+        widths.size === 1 && none.tabBorder === 0,
+        `no option moves the layout, and none brings a line between tabs back (${[...widths].join(' ; ')})`
       )
     }
 
     // A light theme: the same choice, in black ink at the light ground's alpha.
     await page.locator('[data-term-card="paper"]').first().click()
     const lightSolid = await settled(page, (q) => q.ink === '0,0,0' && q.pressed === 'solid')
-    ok(!!lightSolid && near(lightSolid.tab, 0.18), `on a light theme Solid is black ink at 18% (${lightSolid?.tabInk} @ ${lightSolid?.tab})`)
+    ok(!!lightSolid && near(lightSolid.title, 0.18), `on a light theme Solid is black ink at 18% (${lightSolid?.titleInk} @ ${lightSolid?.title})`)
 
     // AND IT SURVIVES A RELAUNCH: quit properly (localStorage is flushed on the
     // way out), come back, and measure before Settings is even opened.
@@ -3984,8 +4356,8 @@ const scenarios = {
     ok(exited, 'the app quits when it is asked to, before anything relaunches it')
     ;({ app, page } = await launch(w))
     ok(await until(async () => (await tabLabels(page)).length === 2, 20000), 'a relaunch brings the tabs back')
-    const back = await settled(page, (q) => q.stored === 'solid' && near(q.tab, 0.18), 30000)
-    ok(!!back, `the relaunched window draws Solid edges before Settings is opened (tab ${back?.tab}, stored ${back?.stored})`)
+    const back = await settled(page, (q) => q.stored === 'solid' && near(q.title, 0.18), 30000)
+    ok(!!back, `the relaunched window draws Solid edges before Settings is opened (title ${back?.title}, stored ${back?.stored})`)
     ok(
       (await until(async () => (await page.evaluate(() => window.prism.e2eWindowEdges())) === 'solid', 5000)) === true,
       'and main was told again at launch'
@@ -5265,7 +5637,7 @@ function collectStalls(scenario) {
   }
 }
 /** Scenarios that honestly take longer than the default limit. */
-const SLOW = { dictation: 360000, dictationParakeet: 360000, helpPanel: 300000, updateWindow: 300000 }
+const SLOW = { dictation: 360000, dictationParakeet: 360000, helpPanel: 300000, updateWindow: 300000, indicatorStyles: 360000 }
 reapStrays()
 for (const [name, run] of Object.entries(scenarios)) {
   if (only.length && !only.some((o) => name.toLowerCase().includes(o.toLowerCase()))) continue
