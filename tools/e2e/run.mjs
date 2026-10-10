@@ -2469,6 +2469,105 @@ const scenarios = {
   },
 
   /**
+   * AN IMAGE ON CTRL+V SENDS THE AGENT'S OWN KEY (#170). Claude Code on
+   * Windows pastes an image on Alt+V, not ^V (read in its binary), so with
+   * Claude in the tab the terminal sends ESC v, exactly one key; in a plain
+   * shell it stays ^V. A node probe that prints every byte it reads in hex
+   * stands in for both: saved as `claude` (no extension) the process poll's
+   * rule sees `...\claude` on its command line and calls it Claude; saved as
+   * `probe.cjs` it is no agent. Shift+Enter to the poll's Claude is Ctrl+J
+   * (#175, measured), and once the poll has seen it leave, a plain probe that
+   * titles itself "✳ Claude Code" arms it within 1 s, the title alone (#175).
+   * The clipboard is saved and put back, as `termClipboard` does.
+   */
+  async imagePaste(ok) {
+    const w = world()
+    const src = [
+      'process.stdin.setRawMode(true)',
+      'process.stdin.resume()',
+      "const tag = process.argv[2] || '?'",
+      "process.stdin.on('data', (b) => {",
+      "  if (b.toString() === 'q') process.exit(0)",
+      "  if (b.toString() === 't') { process.stdout.write('\\x1b]0;\\u2733 Claude Code\\x07TITLED\\r\\n'); return }",
+      "  process.stdout.write('IN ' + tag + ' ' + [...b].map((x) => x.toString(16).padStart(2, '0')).join(' ') + '\\r\\n')",
+      '})',
+      "process.stdout.write('READY ' + tag + '\\r\\n')"
+    ].join('\n')
+    const asClaude = join(w.alpha, 'claude')
+    const plain = join(w.alpha, 'probe.cjs')
+    writeFileSync(asClaude, src)
+    writeFileSync(plain, src)
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const held = await app.evaluate(({ clipboard }) => ({
+      text: clipboard.readText(),
+      html: clipboard.readHTML(),
+      rtf: clipboard.readRTF(),
+      image: clipboard.readImage().isEmpty() ? null : clipboard.readImage().toDataURL(),
+      formats: clipboard.availableFormats()
+    }))
+    const putImage = () =>
+      app.evaluate(({ clipboard, nativeImage }) =>
+        clipboard.writeImage(nativeImage.createFromBitmap(Buffer.alloc(16, 255), { width: 2, height: 2 }))
+      )
+    const text = async () => (await termText(page)).replace(/\u00a0/g, ' ')
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      await polled(page) // the poll's first "no agent" verdict, so the next one is a change
+
+      // A plain program: ^V.
+      await typeLine(page, `& '${process.execPath}' '${plain}' P`)
+      ok(!!(await until(async () => (await text()).includes('READY P'), 15000)), 'the plain probe is running')
+      await putImage()
+      await page.locator('.xterm-helper-textarea').first().focus()
+      await page.keyboard.press('Control+v')
+      ok(!!(await until(async () => /IN P 16\b/.test(await text()), 5000)), 'an image on Ctrl+V sends ^V to a program that is no agent')
+      await page.keyboard.type('q')
+
+      // Claude, as the poll sees it: ESC v, and only that.
+      await typeLine(page, `& '${process.execPath}' '${asClaude}' C`)
+      ok(!!(await until(async () => (await text()).includes('READY C'), 15000)), 'the stand-in for Claude is running')
+      ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-agent-present]')), 30000, 100)), 'and the poll calls it an agent')
+      await putImage()
+      await page.locator('.xterm-helper-textarea').first().focus()
+      await page.keyboard.press('Control+v')
+      ok(!!(await until(async () => /IN C 1b 76\b/.test(await text()), 5000)), 'an image on Ctrl+V sends Alt+V (ESC v) to Claude')
+      await sleep(500)
+      ok(!/IN C 16\b/.test(await text()), 'and no ^V with it: one key, one paste')
+      await page.keyboard.press('Shift+Enter')
+      ok(!!(await until(async () => /IN C 0a\b/.test(await text()), 5000)), "Shift+Enter is Ctrl+J, Claude's own newline (#175)")
+      await page.keyboard.type('q')
+      ok(!!(await until(() => page.evaluate(() => !document.querySelector('[data-agent-present]')), 45000, 200)), 'the poll sees the agent leave')
+
+      // #175: Claude's TITLE arms Shift+Enter before any poll could. The probe
+      // is no agent to the poll, so only the title can have armed it.
+      await typeLine(page, `& '${process.execPath}' '${plain}' T`)
+      ok(!!(await until(async () => (await text()).includes('READY T'), 15000)), 'a plain probe again')
+      await page.locator('.xterm-helper-textarea').first().focus()
+      await page.keyboard.press('Shift+Enter')
+      ok(!!(await until(async () => /IN T 0d\b/.test(await text()), 5000)), 'with no agent, Shift+Enter is Enter (CR)')
+      await page.keyboard.type('t')
+      await until(async () => (await text()).includes('TITLED'), 5000, 50)
+      await page.keyboard.press('Shift+Enter')
+      ok(!!(await until(async () => /IN T 0a\b/.test(await text()), 1000, 50)), 'once it titles itself "✳ Claude Code", Shift+Enter is Ctrl+J within 1 s')
+      await page.keyboard.type('q')
+    } finally {
+      await app
+        .evaluate(({ clipboard, nativeImage }, was) => {
+          const data = {}
+          if (was.text) data.text = was.text
+          if (was.html) data.html = was.html
+          if (was.rtf) data.rtf = was.rtf
+          if (was.image) data.image = nativeImage.createFromDataURL(was.image)
+          if (Object.keys(data).length) clipboard.write(data)
+          else clipboard.clear()
+        }, held)
+        .catch(() => {})
+      if (held.formats.some((f) => /FileName|uri-list/i.test(f))) console.log('  (the clipboard held copied FILES, which cannot be put back; it is empty now)')
+      await closeApp(app)
+    }
+  },
+
+  /**
    * THE BELL FLASHES THE TASKBAR WHILE THE WINDOW IS UNFOCUSED (#177; owner's
    * delegation). The parked window is never focused, so a bell counts one
    * flash; under --e2e main COUNTS it on `__e2eFlashes` and flashes nothing.

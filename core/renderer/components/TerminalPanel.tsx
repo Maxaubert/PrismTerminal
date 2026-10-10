@@ -4,7 +4,9 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
-import { decidePaste, sanitizePaste, type PathShell } from '../lib/termPaste'
+import { decidePaste, imagePasteKey, newlineKey, sanitizePaste, type PathShell } from '../lib/termPaste'
+import { titleArmsAgent } from '../lib/agentTitle'
+import type { DetectedAgent } from '../../shared/types'
 import { shellOfShellId } from '../../shared/help/shells'
 import {
   onResumingChange,
@@ -1012,11 +1014,17 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     if (r.clearAt < 0) term.write(data)
     else term.write(data.slice(0, r.clearAt) + CLEAR + data.slice(r.clearAt))
   }
+
+  // Whether an agent runs in this shell right now, and which, for Shift+Enter
+  // and an image on Ctrl+V below: a resumed session is its agent from its
+  // first moment, and main's process poll says when one arrives or leaves.
+  let agentHere = Boolean(resume)
+  let agentKind: DetectedAgent | null = resume ? agentOfResume(resume) : null
   /**
    * The one paste. Bracketed for text - without that framing a multi-line
    * paste reaches the shell as a run of Enter presses, so the first line runs
-   * and the rest are typed after it - and the ^V KEYSTROKE for an image,
-   * which is what lets the TUI read the clipboard itself.
+   * and the rest are typed after it - and, for an image, the agent's own
+   * image-paste KEYSTROKE, which lets the TUI read the clipboard itself.
    *
    * Named and registered so a right-click Paste calls THIS rather than
    * growing a second, wrong copy of it.
@@ -1025,24 +1033,38 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     const decision = decidePaste(termApi().readClipboard(), pathShell)
     if (decision.kind === 'key') {
       markTouched(id)
-      termApi().termInput(id, '')
+      // The AGENT's image-paste key, Alt+V to Claude on Windows (#170).
+      termApi().termInput(id, imagePasteKey(agentKind))
     } else if (decision.kind === 'text') {
       markTouched(id) // a paste is typing; bracketed, it starts with ESC
       term.paste(decision.data)
     }
   }
 
-  // Whether an agent runs in this shell right now, for Shift+Enter below: a
-  // resumed session is Claude from its first moment, and main's process poll
-  // says when one arrives or leaves.
-  let agentHere = Boolean(resume)
+  // THE TITLE ARMS IT BEFORE THE POLL (#175): the poll's first verdict comes
+  // 2.5 s at the earliest (backing off to 20 s), and until then Shift+Enter
+  // SUBMITTED a half-written message. Only Claude's own glyphs and Codex's
+  // "Action Required" arm it (`titleArmsAgent`). Only the poll's "left" takes
+  // it back (the #73 rule), and a stale title does not re-arm, since it does
+  // not change again.
+  term.onTitleChange((t) => {
+    const named = titleArmsAgent(t)
+    if (named) {
+      agentHere = true
+      agentKind = named
+    }
+  })
   const unsub = [
     attachClickCaret(term, el, id),
     // A path this session asked about turned out to exist: paint the lines
     // that asked (#167; it used to be every line of every tab).
     onPathsFound(id, () => links.revisit()),
-    termApi().onTermAgent((forId, present) => {
-      if (forId === id) agentHere = present
+    termApi().onTermAgent((forId, present, kind) => {
+      if (forId !== id) return
+      agentHere = present
+      // The poll knows a process, the title its agent: an 'other' process
+      // (a wrapper) does not undo the title's claude or codex.
+      agentKind = !present ? null : kind === 'other' && agentKind ? agentKind : kind
     }),
     termApi().onTermData((forId, data) => {
       if (forId === id) writeOutput(data)
@@ -1103,13 +1125,14 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     // to xterm, Ctrl+` became a NUL, which counted as the user typing.
     if (termHost().ownsKey(e)) return false
     if (e.key === 'Enter' && e.shiftKey && agentHere) {
-      // Newline-without-submit, the continuation form Claude Code accepts
-      // everywhere. This is what /terminal-setup exists to configure; here it
+      // Newline-without-submit, in the bytes the agent reads as one
+      // (`newlineKey`, measured #175: Ctrl+J for Claude, `\` + Enter
+      // otherwise). This is what /terminal-setup exists to configure; here it
       // simply works. ONLY where an agent runs (code review 2026-09-24, #21):
       // at a plain prompt `\` then Enter RAN the line with a backslash on its
       // end, a command nobody wrote. There Shift+Enter is Enter, as xterm sends it.
       markTouched(id) // input like any other: its repaint is echo, not work
-      termApi().termInput(id, '\\\r')
+      termApi().termInput(id, newlineKey(agentKind))
       return false
     }
     // ONE CTRL+V IS ONE PASTE (owner, 2026-09-22: "when I copy text and paste
@@ -1119,7 +1142,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     // event too. So every paste arrived twice, once from here and once from
     // there. preventDefault cancels the native one; this handler is the paste,
     // since it is the one that knows about images (Claude Code reads those
-    // itself when it gets the ^V keystroke) and bracketed framing.
+    // itself when it gets its image-paste keystroke) and bracketed framing.
     if (isKey(e, 'v') && e.ctrlKey && !e.shiftKey && !e.altKey) {
       e.preventDefault()
       pasteHere()

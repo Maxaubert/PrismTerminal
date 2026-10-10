@@ -51,8 +51,8 @@ export interface TermPreloadApi {
   onTermExit(cb: (id: string) => void): () => void
   /**
    * What the clipboard holds RIGHT NOW, for the terminal's paste rule. An
-   * image forwards the ^V key (a clipboard-aware TUI like Claude Code reads
-   * the image itself); text becomes a bracketed paste; copied files paste as
+   * image forwards the agent's image-paste key (a clipboard-aware TUI like
+   * Claude Code reads the image itself); text becomes a bracketed paste; copied files paste as
    * quoted paths. The decision itself is pure and lives in lib/termPaste.
    * Synchronous, as the key handler that calls it has to be; main does the
    * reading, since a sandboxed preload has no clipboard module.

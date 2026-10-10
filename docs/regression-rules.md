@@ -24,8 +24,12 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   that turns a screen cell into a place in the line's TEXT goes through `lib/termCells.ts`
   (`cellText`'s index), never by counting cells or `text.length`: the resize carry and link
   hit-testing were each one off after a trailing space, a wide character or an emoji. Ctrl+C and
-  Ctrl+V match `e.code` too (a Russian layout's C is 'с'). Shift+Enter sends the `\` continuation
-  ONLY where an agent runs; at a plain prompt it is Enter. The panel's attach is keyed on the
+  Ctrl+V match `e.code` too (a Russian layout's C is 'с'). Shift+Enter sends a newline ONLY where an
+  agent runs, at a plain prompt it is Enter: Ctrl+J to Claude and the `\` continuation otherwise
+  (`newlineKey`, measured: Codex 0.153.2 drops a bare LF), armed by Claude's title glyphs or Codex's
+  Action Required before the poll, never a bare braille spinner, and disarmed only by the poll (#175).
+  An image on Ctrl+V sends the AGENT's key, Alt+V to Claude and ^V otherwise, exactly one, since a
+  keybindings.json binding both would paste twice (`imagePasteKey`, #170). The panel's attach is keyed on the
   session alone (a `cd` must not re-attach it and take the focus). Under a question or the update
   window the tab chords do nothing (Ctrl+W keeps its rule). A kill while a spawn is pending wins,
   and a warm shell's exit removes only itself. A stop during transcribing is not heard, so a clip is
