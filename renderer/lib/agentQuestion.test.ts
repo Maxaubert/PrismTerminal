@@ -80,3 +80,86 @@ describe('questionAnswered', () => {
     expect(questionAnswered('\x1b[B', FINISHED)).toBe(false)
   })
 })
+
+// MEASURED for #148 (Claude Code 2.1.296, 2026-10-10, a real claude.exe in a
+// ConPTY pty, 140 x 45): the rows `readScreenTail` returns, rendered from the
+// captured bytes. Case A at 13800 ms, the permission box up; the same session at
+// 22900 ms, 40 ms after Yes, the box repainted away; case G2 at 30000 ms, a
+// background subagent's box with two agents running; and G2 after its Yes.
+const RULE = '╌'.repeat(40)
+const A_BOX = [
+  '  ⎿  Waiting…',
+  '',
+  '─'.repeat(40),
+  ' Bash command',
+  ' Run a 25-second sleep via PowerShell',
+  RULE,
+  ' powershell -NoProfile -Command Start-Sleep 25',
+  RULE,
+  ' Permission rule Bash(powershell *) requires confirmation for this command.',
+  ' /permissions to update rules',
+  '',
+  ' Do you want to proceed?',
+  ' ❯ 1. Yes',
+  '   2. No',
+  '',
+  ' Esc to cancel · Tab to amend'
+]
+const A_AFTER_YES = [
+  '❯ Use the Bash tool to run exactly this command once, nothing else, then reply OK: powershell -NoProfile -Command Start-Sleep 25',
+  '',
+  '● Bash(powershell -NoProfile -Command Start-Sleep 25)',
+  '  ⎿  Running…',
+  '',
+  '✻ Cultivating… (4s · ↓ 220 tokens)',
+  '',
+  '─'.repeat(40),
+  '❯ ',
+  '─'.repeat(40),
+  '  ⏸ manual mode on · esc to interrupt · ← 3 agents                                       ◐ medium · /effort'
+]
+const G2_BOX = [
+  '✻ Waiting for 2 background agents to finish',
+  '',
+  '─'.repeat(40),
+  ' Bash command · from the general-purpose agent',
+  ' Run a 25-second sleep via PowerShell',
+  RULE,
+  ' powershell -NoProfile -Command Start-Sleep 25',
+  RULE,
+  ' Permission rule Bash(powershell *) requires confirmation for this command.',
+  ' /permissions to update rules',
+  '',
+  ' Do you want to proceed?',
+  ' ❯ 1. Yes',
+  '   2. No',
+  '',
+  ' Esc to cancel · Tab to amend · ctrl+x ctrl+k twice to stop background agents'
+]
+const G2_AFTER_YES = [
+  '✻ Waiting for 2 background agents to finish',
+  '',
+  '─'.repeat(40),
+  '❯ ',
+  '─'.repeat(40),
+  '  ⏸ manual mode on · ? for shortcuts · ← 3 agents · ↓ to manage                        ◐ medium · /effort',
+  '',
+  '  ● main',
+  '  ◯ general-purpose  Run 25s sleep command                                     19s · ↓ 34.6k tokens',
+  '  ◯ general-purpose  Run five sequential echo calls                            19s · ↓ 37.3k tokens'
+]
+
+describe('looksLikeQuestion, on the screens measured for #148', () => {
+  it('the permission box is seen, the main agent\'s and a subagent\'s', () => {
+    expect(looksLikeQuestion(A_BOX)).toBe(true)
+    expect(looksLikeQuestion(G2_BOX)).toBe(true)
+  })
+  it('the repaint after Yes is not a question, agents footer and all', () => {
+    expect(looksLikeQuestion(A_AFTER_YES)).toBe(false)
+    expect(looksLikeQuestion(G2_AFTER_YES)).toBe(false)
+  })
+  it('the box fits the 16 rows the indicator reads', () => {
+    expect(A_BOX.length).toBeLessThanOrEqual(16)
+    expect(G2_BOX.length).toBeLessThanOrEqual(16)
+  })
+})

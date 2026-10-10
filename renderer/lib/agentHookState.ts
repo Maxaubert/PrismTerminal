@@ -13,6 +13,12 @@ import type { AgentSignal } from './agentHookSignal'
  *   last said `working` is an interrupt: the tab stops working and shows no
  *   Finished line, since an Esc is not a finish. A Stop that arrives after the
  *   idle title (the two race) still raises Finished.
+ * - THE WORK A YES APPROVED (#148). After a permission prompt is answered no
+ *   hook fires until the tool ENDS (MEASURED, Claude Code 2.1.296: PostToolUse
+ *   26 s after Yes for a 25 s sleep), but the spinner title is back 34 ms after
+ *   the key and repeats about every 960 ms. So a spinner after a question, or
+ *   after an Esc's stop, is Working. Not the answer key: Enter on "2. No" is the
+ *   same key as Enter on "1. Yes", and after a No or an Esc the title stays idle.
  * - Whether an agent is there at all stays the process poll's.
  *
  * Finished and Failed are RAISED only on a tab nobody is looking at; the hook
@@ -37,11 +43,34 @@ export interface HookOutcome extends HookSession {
   clear: AttentionMark[]
 }
 
-export type HookEvent = AgentSignal | { state: 'idle-title' }
+export type HookEvent = AgentSignal | { state: 'idle-title' } | { state: 'working-title' }
+
+/** What the screen showed when the step was taken (`screenDecides` says when it is read). */
+export interface HookSeen {
+  /** Claude's question or permission box is on screen (`looksLikeQuestion`). */
+  questionOnScreen: boolean
+}
 
 /** What one event does, or null when it changes nothing. */
-export function hookStep(prev: HookSession | undefined, ev: HookEvent): HookOutcome | null {
+export function hookStep(prev: HookSession | undefined, ev: HookEvent, seen?: HookSeen): HookOutcome | null {
+  // WHILE THE BOX IS ON SCREEN, THE QUESTION STANDS (#148). Subagents' hooks
+  // write the same signal as the main agent's, so a sibling's tool call or the
+  // main turn's Stop took a pending question down 1 to 4 s after it went up
+  // (MEASURED, case G2: up for 3.9 s of the 14 s the box waited). The box is
+  // drawn before the question signal and repainted away after the answer, so
+  // it brackets the wait exactly, whoever drew it.
+  if (seen?.questionOnScreen && screenDecides(prev, ev)) {
+    // Finished goes up under the question (which outranks it), so a No to the
+    // box still leaves the finish the main turn made.
+    if (ev.state === 'done') return { phase: 'question', working: false, raise: ['finished'], clear: [] }
+    return null
+  }
   switch (ev.state) {
+    case 'working-title':
+      // Not after a Stop or a failure: a new turn always says UserPromptSubmit
+      // first, and a last spinner frame racing a Stop must not relight it.
+      if (prev?.phase !== 'question' && prev?.phase !== 'stopped') return null
+      return { phase: 'working', working: true, raise: [], clear: ['question'] }
     case 'idle-title':
       // Only an interrupt is the title's to say; after a question, a finish or
       // a failure the idle title is just the agent at rest.
@@ -63,6 +92,14 @@ export function hookStep(prev: HookSession | undefined, ev: HookEvent): HookOutc
       return { phase: 'failed', kind, working: false, raise: ['failed', 'finished'], clear: ['question'] }
     }
   }
+}
+
+/**
+ * Whether `hookStep` needs to know if the box is on screen (#148): only work
+ * or a Stop while a question is pending. Every other step reads nothing.
+ */
+export function screenDecides(prev: HookSession | undefined, ev: HookEvent): boolean {
+  return prev?.phase === 'question' && (ev.state === 'working' || ev.state === 'working-title' || ev.state === 'done')
 }
 
 /**
