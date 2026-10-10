@@ -49,9 +49,10 @@ import {
   type GroundMode
 } from '../lib/termReplies'
 import { TERM_CORE_VERSION, XTERM_VERSION } from '../../shared/termVersion'
+import { OSC52_MAX, parseOsc52 } from '../lib/termOsc52'
 import { followsHostStyle, paintsGround, termApi, termHost } from '../host'
 import { findLinks, linkColor } from '../lib/termLinks'
-import { copyText } from '../lib/copyNotice'
+import { announceCopied, copyText } from '../lib/copyNotice'
 import { arrowKeys, caretClickAllowed, caretDelta, type ClickGate } from '../lib/termClickCaret'
 import {
   linkAt,
@@ -937,6 +938,23 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   term.parser.registerCsiHandler({ prefix: '>', final: 'q' }, (params) => {
     if (!xtversionAsked(modeParams(params))) return false
     reply(xtversionReply(TERM_CORE_VERSION, XTERM_VERSION))
+    return true
+  })
+  // OSC 52, WRITE-ONLY (#176; termOsc52.ts says why). Every OSC 52 is handled
+  // (true), written or refused, so none is drawn as stray text; a READ is
+  // swallowed and NEVER answered. A copy goes through main (a background tab
+  // or an unfocused window still copies) and raises the Copied badge only when
+  // it landed, so a program's copy is never silent.
+  term.parser.registerOscHandler(52, (data) => {
+    const p = parseOsc52(data, OSC52_MAX)
+    if (p?.kind === 'write') {
+      void termApi()
+        .writeClipboardFromTerm?.(p.text)
+        .then((ok) => {
+          if (ok) announceCopied()
+        })
+        .catch(() => undefined)
+    }
     return true
   })
   // A RESUMING TAB WEARS A SKELETON (#106), not a text spinner: the shell's

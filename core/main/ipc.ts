@@ -1,4 +1,5 @@
 import { CH } from '../shared/channels'
+import { OSC52_MAX } from '../shared/termLimits'
 import { validResume } from './agentResume'
 import { pollAgentsNow, pollAgentsSoon, startAgentPoll } from './agentPoll'
 import { detectShells } from './shells'
@@ -159,6 +160,21 @@ export function registerTermIpc(deps: TermIpcDeps): () => void {
   // trimmed command is a different command.
   ipcMain.handle(CH.clipboardWrite, (_e: unknown, text: unknown) => {
     if (typeof text !== 'string' || text.length === 0 || text.length > CLIPBOARD_WRITE_MAX) return false
+    try {
+      deps.clipboard.writeText(text)
+      return true
+    } catch {
+      return false
+    }
+  })
+
+  // A PROGRAM'S COPY, OSC 52 (#176). Not clipboard:write, whose 4000 cap is
+  // right for a command and wrong for an answer Claude's /copy puts there.
+  // Checked again here (the page is never trusted with a limit), refused, not
+  // trimmed, over OSC52_MAX. Through main so a background tab or an unfocused
+  // window still copies. There is no read channel: OSC 52 is write-only.
+  ipcMain.handle(CH.clipboardTerm, (_e: unknown, text: unknown) => {
+    if (typeof text !== 'string' || text.length === 0 || text.length > OSC52_MAX) return false
     try {
       deps.clipboard.writeText(text)
       return true

@@ -2388,6 +2388,86 @@ const scenarios = {
     }
   },
 
+  /**
+   * OSC 52 IS WRITE-ONLY (#176; rule replies-only-when-asked). A program puts
+   * text on the clipboard with `ESC]52;c;<base64>BEL` (Claude Code's /copy,
+   * anything over ssh), the "Copied" badge says so; a READ (`c;?`) gets no
+   * reply and leaves the clipboard alone, and a `p` selection changes nothing.
+   * Before the fix xterm 6.0.0 dropped every OSC 52. The clipboard is saved
+   * and put back, as `paste` does.
+   */
+  async termClipboard(ok) {
+    const w = world()
+    const probe = join(w.alpha, 'osc52-probe.cjs')
+    const b64 = (s) => Buffer.from(s, 'utf8').toString('base64')
+    writeFileSync(
+      probe,
+      [
+        'process.stdin.setRawMode(true)',
+        'process.stdin.resume()',
+        "const show = (s) => s.replace(/\\x1b/g, '\\\\e').replace(/\\x07/g, '\\\\a')",
+        "process.stdin.on('data', (b) => {",
+        '  const s = b.toString()',
+        "  if (s === 'q') process.exit(0)",
+        `  if (s === '1') { process.stdout.write('\\x1b]52;c;${b64('OSC52 æ')}\\x07W1\\r\\n'); return }`,
+        "  if (s === '2') { process.stdout.write('\\x1b]52;c;?\\x07R2\\r\\n'); return }",
+        `  if (s === '3') { process.stdout.write('\\x1b]52;p;${b64('PSEL52')}\\x07P3\\r\\n'); return }`,
+        "  process.stdout.write('IN ' + show(s) + '\\r\\n')",
+        '})',
+        "process.stdout.write('READY52\\r\\n')"
+      ].join('\n')
+    )
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const held = await app.evaluate(({ clipboard }) => ({
+      text: clipboard.readText(),
+      html: clipboard.readHTML(),
+      rtf: clipboard.readRTF(),
+      image: clipboard.readImage().isEmpty() ? null : clipboard.readImage().toDataURL(),
+      formats: clipboard.availableFormats()
+    }))
+    const clip = () => app.evaluate(({ clipboard }) => clipboard.readText())
+    const shown = () => page.evaluate(() => !!document.querySelector('[data-copied-badge="shown"]'))
+    try {
+      await app.evaluate(({ clipboard }) => clipboard.writeText('BEFORE-52'))
+      await typeLine(page, `& '${process.execPath}' '${probe}'`)
+      ok(!!(await until(async () => (await termText(page)).includes('READY52'), 15000)), 'the stand-in program is running')
+      await page.locator('.xterm-helper-textarea').first().focus()
+
+      await page.keyboard.type('1')
+      ok(!!(await until(async () => (await clip()) === 'OSC52 æ', 5000)), `a program's OSC 52 write lands on the clipboard, UTF-8 intact (${JSON.stringify(await clip())})`)
+      ok(!!(await until(shown, 3000)), 'and the "Copied" badge says so')
+      ok(!(await termText(page)).includes(']52;'), 'nothing of the sequence is drawn')
+
+      await app.evaluate(({ clipboard }) => clipboard.writeText('HELD-52'))
+      await page.keyboard.type('2')
+      await until(async () => (await termText(page)).includes('R2'), 5000)
+      await sleep(1000)
+      const afterRead = (await termText(page)).replace(/\u00a0/g, ' ')
+      ok(!afterRead.includes('IN \\e]52'), 'a READ gets no reply: the program hears nothing')
+      ok((await clip()) === 'HELD-52', 'and the clipboard is left as it was')
+
+      await page.keyboard.type('3')
+      await until(async () => (await termText(page)).includes('P3'), 5000)
+      await sleep(800)
+      ok((await clip()) === 'HELD-52', 'a "p" selection changes nothing')
+      await page.keyboard.type('q')
+    } finally {
+      await app
+        .evaluate(({ clipboard, nativeImage }, was) => {
+          const data = {}
+          if (was.text) data.text = was.text
+          if (was.html) data.html = was.html
+          if (was.rtf) data.rtf = was.rtf
+          if (was.image) data.image = nativeImage.createFromDataURL(was.image)
+          if (Object.keys(data).length) clipboard.write(data)
+          else clipboard.clear()
+        }, held)
+        .catch(() => {})
+      if (held.formats.some((f) => /FileName|uri-list/i.test(f))) console.log('  (the clipboard held copied FILES, which cannot be put back; it is empty now)')
+      await closeApp(app)
+    }
+  },
+
   async links(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })

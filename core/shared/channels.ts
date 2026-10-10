@@ -17,6 +17,8 @@ export const CH = {
   exit: 'term:exit',
   clipboardRead: 'clipboard:read',
   clipboardWrite: 'clipboard:write',
+  /** A program's OSC 52 copy (#176): its own channel and its own cap. */
+  clipboardTerm: 'clipboard:term-write',
   openExternal: 'shell:open-external',
   pathKinds: 'term:path-kinds',
   openPath: 'term:open-path'

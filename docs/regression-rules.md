@@ -175,7 +175,10 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   <version>)` (the constants in `core/shared/termVersion.ts`, held to the package files by `termVersion.test.ts`); the
   name must NOT start with `xterm.js`, which Claude reads as VS Code's terminal. MEASURED (Claude Code 2.1.296 --model
   haiku, bundled ConPTY, one streamed answer, 2026-10-11): no reply, `synchronizedOutput=no` and 0 `?2026h`; with the
-  reply, `synchronizedOutput=yes` and 65 frames wrapped in `?2026h`/`?2026l`.
+  reply, `synchronizedOutput=yes` and 65 frames wrapped in `?2026h`/`?2026l`. OSC 52 (#176) is WRITE-ONLY: only the
+  `c` (or empty) selection, base64 of strict UTF-8, at most 1 MB (`OSC52_MAX`), through main
+  (`clipboard:term-write`, its own channel and cap, opaque to the diagnostics log), with the Copied badge; a read
+  (`?`) is swallowed and never answered, a clear is ignored, every OSC 52 is handled so none is drawn.
 - <a id="closing-window-quits"></a>**Closing the window QUITS; closing the last tab does not** (owner, 2026-09-18, after using the
   first build, which hid the window and stayed resident: "the app should actually close when you
   close it"). The last tab lands on the start screen (`EmptyState`, Tabby's shape by owner

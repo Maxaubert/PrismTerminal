@@ -66,6 +66,12 @@ export interface TermPreloadApi {
    * and main caps its length. Answers whether it was written.
    */
   writeClipboard(text: string): Promise<boolean>
+  /**
+   * A program's OSC 52 copy (#176): its own channel, capped at OSC52_MAX
+   * (1 MB) rather than the help panel's 4000. Write-only: nothing in the
+   * bridge lets a program read the clipboard. Answers whether it landed.
+   */
+  writeClipboardFromTerm(text: string): Promise<boolean>
   /** The web-links addon's click-through: external URLs go to the OS browser. */
   openExternal(url: string): void
   /** Which of these texts name a file or a folder from `cwd` (#99). Main
@@ -99,6 +105,7 @@ export function createTermApi(ipc: IpcRendererLike): TermPreloadApi {
     onTermExit: (cb) => on(CH.exit, cb),
     readClipboard: () => ipc.sendSync(CH.clipboardRead) as ClipboardRead,
     writeClipboard: (text) => ipc.invoke(CH.clipboardWrite, text) as Promise<boolean>,
+    writeClipboardFromTerm: (text) => ipc.invoke(CH.clipboardTerm, text) as Promise<boolean>,
     openExternal: (url) => {
       if (/^https?:/i.test(url)) ipc.send(CH.openExternal, url)
     },

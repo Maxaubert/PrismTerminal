@@ -46,6 +46,15 @@ nothing, and write no file. It is passed through an environment variable of the 
 written into your Claude Code settings. Settings > Appearance > "Exact status from Claude Code"
 turns it off for every terminal opened afterwards.
 
+## What programs in a tab can do
+
+A program running in a tab (Claude Code's /copy, or anything you reach over ssh) can put text ON
+your clipboard with the standard OSC 52 sequence, up to 1 MB, and a "Copied" badge shows when it
+does. Nothing in a tab can READ your clipboard that way: such a request gets no answer. The text a
+program copies is never written to the diagnostics log. When a program asks, the terminal also
+tells it its own name and version (XTVERSION) and the colours it is painted in, so it can draw to
+match; that answer goes only to the program that asked, on your PC.
+
 This file is the privacy statement the [code signing policy](README.md#code-signing-policy) refers
 to. If the app ever gains a request that is not listed here, this file changes in the same pull
 request.
