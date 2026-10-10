@@ -9,7 +9,12 @@ import { describe, expect, it } from 'vitest'
 // quit e2e only catches the race sometimes; this catches the pin every run.
 const PIN = '1.2.0-beta.15'
 const root = join(__dirname, '..', '..')
-const json = (f: string): Record<string, any> => JSON.parse(readFileSync(join(root, f), 'utf8'))
+interface Pkg {
+  dependencies: Record<string, string>
+  peerDependencies: Record<string, string>
+  packages: Record<string, { version: string }>
+}
+const json = (f: string): Pkg => JSON.parse(readFileSync(join(root, f), 'utf8')) as Pkg
 
 describe('node-pty pin (#159)', () => {
   it('package.json asks for exactly the pinned build', () => {
