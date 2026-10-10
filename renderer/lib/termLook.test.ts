@@ -249,3 +249,58 @@ describe('colours with alpha', () => {
     expect(termGroundAlpha()).toBeCloseTo(0x80 / 255)
   })
 })
+
+describe('the indicator choices a host draws (#143)', () => {
+  const host = (tabMarks?: TermHostConfig['tabMarks']): TermHostConfig =>
+    ({
+      api: {} as TermHostConfig['api'],
+      defaults: { theme: 'prism', acrylic: false, indicator: 'minimal', agentColor: '', agentDoneColor: '' },
+      followsHostStyle: false,
+      paintsGround: true,
+      themedAgentColors: () => ({ working: '#5b5bd6', finished: '#22c55e' }),
+      acrylic: { kind: 'style' },
+      ownsKey: () => false,
+      ...(tabMarks ? { tabMarks } : {})
+    }) as TermHostConfig
+  const ALL = ['off', 'minimal', 'ring', 'full'] as const
+  const OLD = ['off', 'minimal', 'full'] as const
+
+  it('reads a stored value the host draws as itself, a stored Full as the (new) Full', () => {
+    expect(termLook.readIndicator('full', ALL, 'minimal')).toBe('full')
+    expect(termLook.readIndicator('ring', ALL, 'minimal')).toBe('ring')
+    expect(termLook.readIndicator('ring', OLD, 'minimal')).toBe('minimal')
+    for (const raw of [null, '', 'loud', 3]) expect(termLook.readIndicator(raw, ALL, 'minimal')).toBe('minimal')
+  })
+
+  it('never answers Ring in a host without tabMarks, even when stored', () => {
+    configureTermCore(host())
+    localStorage.setItem('prism.term.agentIndicator', 'ring')
+    expect(agentIndicator()).toBe('minimal')
+    configureTermCore(host({ indicators: ALL, rainbow: true }))
+    expect(agentIndicator()).toBe('ring')
+    resetTermCore()
+  })
+
+  it('does not write a saved Custom Ring over the choice where the host draws none', () => {
+    configureTermCore(host())
+    setAgentIndicator('off')
+    applyCustomExtras({ bg: '#000000', fg: '#ffffff', cursor: '#ffffff', ansi: {}, indicator: 'ring' })
+    expect(localStorage.getItem('prism.term.agentIndicator')).toBe('off')
+    configureTermCore(host({ indicators: ALL, rainbow: true }))
+    applyCustomExtras({ bg: '#000000', fg: '#ffffff', cursor: '#ffffff', ansi: {}, indicator: 'ring' })
+    expect(agentIndicator()).toBe('ring')
+    resetTermCore()
+  })
+
+  it('keeps the rainbow on by default, off only for 0, and a theme pick leaves it alone', () => {
+    expect(termLook.agentRainbow()).toBe(true)
+    localStorage.setItem('prism.term.agentRainbow', 'nonsense')
+    expect(termLook.agentRainbow()).toBe(true)
+    termLook.setAgentRainbow(false)
+    expect(localStorage.getItem('prism.term.agentRainbow')).toBe('0')
+    resetTermExtras()
+    expect(termLook.agentRainbow()).toBe(false)
+    termLook.setAgentRainbow(true)
+    expect(termLook.agentRainbow()).toBe(true)
+  })
+})

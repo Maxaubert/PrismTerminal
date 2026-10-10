@@ -1,5 +1,13 @@
 import { useSyncExternalStore } from 'react'
-import { followsHostStyle, hostDefaults, hostGround, hostOwnsWindowAcrylic, onHostChromeChange, type AgentIndicator } from '../host'
+import {
+  followsHostStyle,
+  hostDefaults,
+  hostGround,
+  hostIndicators,
+  hostOwnsWindowAcrylic,
+  onHostChromeChange,
+  type AgentIndicator
+} from '../host'
 import { liveThemeId } from './termThemeRetired'
 import { alphaOf, parseColour, toStored, withAlpha } from './colour'
 
@@ -135,14 +143,24 @@ export const LEGACY_OPACITY_KEY = OPACITY_KEY
 const AGENT_IND_KEY = 'prism.term.agentIndicator'
 
 
-/** How a working agent shows on its tab: not at all, a line under the tab,
- *  or the whole tab turning. MINIMAL is the default (owner, 2026-09-18; it was
- *  full in Prism and in the first build): the line says it, and a filled tab
- *  is the loud version you opt into. Idle always looks default; only WORKING
- *  paints. */
+/**
+ * A stored indicator as the host can draw it (#143): a value among `allowed`
+ * reads as itself, anything else (never set, nonsense, or a choice this host's
+ * strip does not draw, such as Ring in Prism) as `fallback`. A stored `full`
+ * reads as `full`: where the host draws the new marks that IS the new Full,
+ * the migration being the meaning, so nothing is rewritten.
+ */
+export function readIndicator(raw: unknown, allowed: readonly AgentIndicator[], fallback: AgentIndicator): AgentIndicator {
+  return typeof raw === 'string' && (allowed as readonly string[]).includes(raw) ? (raw as AgentIndicator) : fallback
+}
+
+/** How an agent shows on its tab: not at all, a line under the tab (Minimal),
+ *  a spinner by the name (Ring, #143), or the tabs you are not on filled
+ *  (Full). MINIMAL is the default (owner, 2026-09-18; it was full in Prism and
+ *  in the first build): the line says it, and a filled tab is the loud version
+ *  you opt into. */
 export function agentIndicator(): AgentIndicator {
-  const v = localStorage.getItem(AGENT_IND_KEY)
-  return v === 'full' || v === 'minimal' || v === 'off' ? v : hostDefaults().indicator
+  return readIndicator(localStorage.getItem(AGENT_IND_KEY), hostIndicators(), hostDefaults().indicator)
 }
 
 export function setAgentIndicator(v: AgentIndicator): void {
@@ -175,6 +193,22 @@ export function agentQuestionOn(): boolean {
 }
 export function setAgentQuestionOn(on: boolean): void {
   localStorage.setItem(QUESTION_ON_KEY, on ? '1' : '0')
+  notify()
+}
+
+const RAINBOW_KEY = 'prism.term.agentRainbow'
+
+/**
+ * THE RAINBOW FINISH (#143; owner, 2026-10-10): a finished tab wears the app
+ * icon's colours, flowing. A switch, ON by default; off is the finished
+ * colour, still. Not a theme setting: a theme pick never touches it. Drawn
+ * only where the host's strip draws it (`tabMarks.rainbow`).
+ */
+export function agentRainbow(): boolean {
+  return localStorage.getItem(RAINBOW_KEY) !== '0'
+}
+export function setAgentRainbow(on: boolean): void {
+  localStorage.setItem(RAINBOW_KEY, on ? '1' : '0')
   notify()
 }
 
@@ -322,7 +356,9 @@ export function applyCustomExtras(t: CustomTermTheme | null): void {
   if (!t) return
   // The font and its size belong to no theme (2026-09-28): an older save that
   // carries them does not put them back.
-  if (t.indicator) localStorage.setItem(AGENT_IND_KEY, t.indicator)
+  // Through the same reader as the store (#143): a saved Ring in a host that
+  // draws none is not written over the user's choice.
+  if (t.indicator && hostIndicators().includes(t.indicator)) localStorage.setItem(AGENT_IND_KEY, t.indicator)
   // A saved setup that followed the theme goes back to following it.
   // Validated as every other writer is: a colour that is not one follows the
   // theme rather than landing in storage unchecked (#112).
@@ -468,6 +504,9 @@ export function useAgentDoneOn(): boolean {
 }
 export function useAgentQuestionOn(): boolean {
   return useSyncExternalStore(sub, agentQuestionOn)
+}
+export function useAgentRainbow(): boolean {
+  return useSyncExternalStore(sub, agentRainbow)
 }
 export function useAgentFailedOn(): boolean {
   return useSyncExternalStore(sub, agentFailedOn)

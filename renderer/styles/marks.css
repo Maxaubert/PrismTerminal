@@ -1,0 +1,97 @@
+/* THE TAB MARKS' MOTION, written once (#143). Each host imports this file
+   (Prism Terminal's index.css; Prism once it adopts the marks); a host that
+   does not simply gets still marks. `lib/tabMark.ts` names a motion, the strip
+   puts its class on the mark, and `marks.test.ts` holds every motion to a rule
+   here AND a reduced-motion rule below: a missing keyframe is otherwise a still
+   mark nobody notices. Timings are the approved mockups'
+   (research/prism-terminal/mockups/2026-10-10-*). */
+
+/* run: the Minimal working bar, a loading tab's line (owner pick, 2026-08-23). */
+@keyframes p-agent-run {
+  0% { left: -42% }
+  100% { left: 100% }
+}
+.p-agent-run { animation: p-agent-run 1.25s ease-in-out infinite }
+
+/* grow: the Prompt edge while working (owner, 2026-10-10: "the pulsation
+   effect is also now exactly what I want"). Empty 0.2 s, from the tip out to
+   both corners 0.6 s, full 0.2 s, back 0.6 s. A solid fill scaled from the
+   tip's row; the chevron's clip shapes it, so both arms reach their corners on
+   the same frame. */
+@keyframes p-mark-grow {
+  0%, 12.5% { transform: scaleY(0); animation-timing-function: cubic-bezier(.45, 0, .55, 1) }
+  50%, 62.5% { transform: scaleY(1); animation-timing-function: cubic-bezier(.45, 0, .55, 1) }
+  100% { transform: scaleY(0) }
+}
+.p-mark-grow { transform-origin: 50% 50%; animation: p-mark-grow 1.6s linear infinite }
+
+/* breathe: a question fades all the way to the ground and back, 2 s (owner:
+   "I like the gentle pulse too for questions"). Linear keyframes sampled from
+   a cosine: smooth, and a Full tab's name never follows the fade. */
+@keyframes p-mark-breathe {
+  0% { opacity: 1 } 10% { opacity: .905 } 20% { opacity: .655 } 30% { opacity: .345 } 40% { opacity: .095 }
+  50% { opacity: 0 } 60% { opacity: .095 } 70% { opacity: .345 } 80% { opacity: .655 } 90% { opacity: .905 } 100% { opacity: 1 }
+}
+.p-mark-breathe { animation: p-mark-breathe 2s linear infinite }
+
+/* flow: the rainbow slides one whole tile per lap, so the mark itself never
+   moves, only its colours travel along it. A line 8 s a lap (tile 114 px, one
+   tab), an edge 7 s (tile = the edge's height). */
+@keyframes p-mark-flow-x {
+  from { background-position: 0 0 }
+  to { background-position: var(--tile-x, 114px) 0 }
+}
+@keyframes p-mark-flow-y {
+  from { background-position: 0 0 }
+  to { background-position: 0 var(--tile-y, 32px) }
+}
+.p-mark-flow-x {
+  background-size: var(--tile-x, 114px) 100%;
+  background-repeat: repeat-x;
+  animation: p-mark-flow-x 8s linear infinite;
+}
+.p-mark-flow-y {
+  background-size: 100% var(--tile-y, 32px);
+  background-repeat: repeat-y;
+  animation: p-mark-flow-y 7s linear infinite;
+}
+
+/* ride: Full's working tab, a 2 px bar riding along its foot in the name's
+   own ink (`--mark-ink`), 40% of the tab, 1.4 s. */
+@keyframes p-mark-ride {
+  from { background-position: 200% 0 }
+  to { background-position: -100% 0 }
+}
+.p-mark-ride {
+  background: linear-gradient(90deg, transparent 0 30%, var(--mark-ink) 30% 70%, transparent 70%) no-repeat;
+  background-size: 200% 100%;
+  animation: p-mark-ride 1.4s cubic-bezier(.45, 0, .55, 1) infinite;
+}
+
+/* spin: Ring's spinner beside the name, the resume ring's own second. */
+@keyframes p-mark-spin {
+  to { transform: rotate(360deg) }
+}
+.p-mark-spin { animation: p-mark-spin 1s linear infinite }
+
+/* REDUCED MOTION: everything still. The run and the ride are a full line, a
+   working edge rests full, the question fully on, the rainbow stands still,
+   the ring a still arc with two coloured sides. `!important` and a class
+   selector, so the window's own "*" rule (a 0.01 ms single run, which would
+   END a grow at empty) never reaches a mark. */
+@media (prefers-reduced-motion: reduce) {
+  .p-agent-run,
+  .p-mark-grow,
+  .p-mark-breathe,
+  .p-mark-flow-x,
+  .p-mark-flow-y,
+  .p-mark-ride,
+  .p-mark-spin {
+    animation: none !important;
+  }
+  .p-agent-run { left: 0; width: 100% }
+  .p-mark-grow { transform: none }
+  .p-mark-breathe { opacity: 1 }
+  .p-mark-ride { background: var(--mark-ink) }
+  .p-mark-spin { border-right-color: var(--mark-c) }
+}

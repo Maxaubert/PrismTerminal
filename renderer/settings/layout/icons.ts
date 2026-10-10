@@ -33,6 +33,10 @@ export const SETTING_ICONS = {
   fail: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7.5v5.5M12 16.5h.01',
   taskbar: 'M3 15h18v5H3zM6.5 17.5h.01M10 17.5h4M17 4.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z',
   hook: 'M8 3v6a4 4 0 0 0 8 0V3M12 13v3a5 5 0 0 1-5 5',
+  // The tab marks (#143): an arc for the rainbow finish, a chevron for the
+  // Prompt tab style.
+  rainbow: 'M3 17a9 9 0 0 1 18 0M6.5 17a5.5 5.5 0 0 1 11 0M10 17a2 2 0 0 1 4 0',
+  prompt: 'M3 6h11l5 6-5 6H3l5-6z',
   hand: 'M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11.5V4.5a1.5 1.5 0 0 1 3 0V12M14 11.5V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1a5 5 0 0 1-4.2-2.3L4.5 14a1.5 1.5 0 0 1 2.5-1.6L8 14',
   key: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10',
   mic: 'M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3ZM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21',

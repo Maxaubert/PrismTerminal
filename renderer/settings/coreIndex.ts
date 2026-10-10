@@ -1,6 +1,7 @@
 import { DIAGNOSTICS_OPTIONS } from './diagnosticsOptions'
 import { dictationOptionIds } from './dictationOptions'
 import { HELP_OPTIONS } from './helpOptions'
+import { MARK_OPTIONS } from './markOptions'
 import { terminalOptionIds } from './options'
 import type { SettingsIndexEntry } from './layout/search'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './sectionIds'
@@ -18,16 +19,22 @@ export function coreSettingsIndex({
   pageOf,
   nvidia,
   help = true,
-  diagnostics = false
+  diagnostics = false,
+  marks = false
 }: {
   pageOf: (section: SettingsSectionId) => string
   nvidia: boolean
   help?: boolean
   /** The Diagnostics page (#140): only in a host that wired the log. */
   diagnostics?: boolean
+  /** The tab marks' own rows (#143): only in a host whose strip draws them,
+   *  where the Agents page draws them, after the Finished switch. */
+  marks?: boolean
 }): SettingsIndexEntry[] {
   const ids = [
-    ...terminalOptionIds({ windowAcrylic: false }),
+    ...terminalOptionIds({ windowAcrylic: false }).flatMap((id) =>
+      id === 'agent-done-on' && marks ? [id, ...MARK_OPTIONS.map((o) => o.id)] : [id]
+    ),
     ...dictationOptionIds({ nvidia }),
     ...(help ? HELP_OPTIONS.map((o) => o.id) : []),
     ...(diagnostics ? DIAGNOSTICS_OPTIONS.map((o) => o.id) : [])

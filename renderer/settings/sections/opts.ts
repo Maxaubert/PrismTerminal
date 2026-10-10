@@ -2,6 +2,7 @@ import { followsHostStyle, hostOwnsWindowAcrylic } from '../../host'
 import { DIAGNOSTICS_OPTIONS, type DiagnosticsOption } from '../diagnosticsOptions'
 import { DICTATION_OPTIONS, type DictationOption } from '../dictationOptions'
 import { HELP_OPTIONS, type HelpOption } from '../helpOptions'
+import { MARK_OPTIONS, type MarkOption } from '../markOptions'
 import { TERMINAL_OPTIONS, type TerminalOption } from '../options'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from '../sectionIds'
 
@@ -9,10 +10,10 @@ import { SETTINGS_SECTIONS, type SettingsSectionId } from '../sectionIds'
 // resting subtext are read from its list entry, so the page and Find a setting
 // can never word a row two ways.
 
-type AnyOption = TerminalOption | DictationOption | HelpOption | DiagnosticsOption
+type AnyOption = TerminalOption | DictationOption | HelpOption | DiagnosticsOption | MarkOption
 
 const byId = new Map<string, AnyOption>(
-  [...TERMINAL_OPTIONS, ...DICTATION_OPTIONS, ...HELP_OPTIONS, ...DIAGNOSTICS_OPTIONS].map((o) => [o.id, o])
+  [...TERMINAL_OPTIONS, ...MARK_OPTIONS, ...DICTATION_OPTIONS, ...HELP_OPTIONS, ...DIAGNOSTICS_OPTIONS].map((o) => [o.id, o])
 )
 
 /** A core option by id. Throws on a typo, which the unit suite then finds. */
