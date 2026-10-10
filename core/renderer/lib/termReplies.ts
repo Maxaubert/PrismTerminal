@@ -1,7 +1,7 @@
 import { opaque } from './colour'
 import { luminance } from './termAnsi'
 
-// WHAT THE TERMINAL ANSWERS A PROGRAM THAT ASKS (#168, #172). Pure: the panel
+// WHAT THE TERMINAL ANSWERS A PROGRAM THAT ASKS (#168, #172, #171). Pure: the panel
 // registers the parser handlers and writes these through `term.input(reply,
 // false)`, the path xterm's own replies take. Rule `replies-only-when-asked`
 // (docs/regression-rules.md): every byte here answers a query in the pty's own
@@ -98,6 +98,29 @@ export function themeReports(s: ThemeReports, on: boolean, now: GroundMode): The
 /** A query answered (OSC 11, `?996n`): the program now knows `mode`. */
 export function noteThemeMode(s: ThemeReports, mode: GroundMode): ThemeReports {
   return { ...s, last: mode }
+}
+
+/**
+ * XTVERSION's answer (#171): `DCS > | name ST`. MEASURED (Claude Code
+ * 2.1.296 --model haiku over the bundled ConPTY, xterm 6.0's other replies
+ * stood in, one streamed four-paragraph answer, 45 s, 2026-10-11): with no
+ * reply Claude logs "XTVERSION: no reply" and `synchronizedOutput=no`, and
+ * wraps 0 frames in `?2026` (synchronized output), so a frame can tear
+ * mid-draw; with this reply it logs `terminal identified as "PrismTerminal
+ * 0.32.0 (xterm.js 6.0.0)"`, `synchronizedOutput=yes (probe: DECRPM 2026
+ * status=2)`, and wraps 65 frames (65 `?2026h`, 65 `?2026l`). The name must NOT
+ * start with "xterm.js": Claude reads that as VS Code's terminal and applies
+ * its VS Code scroll tuning. The emulator IS this core in both apps, so both
+ * answer `PrismTerminal <core version>` (spec decision 5).
+ */
+export function xtversionReply(core: string, xterm: string): string {
+  return `${ESC}P>|PrismTerminal ${core} (xterm.js ${xterm})${ST}`
+}
+
+/** `CSI > q` and `CSI > 0 q` ask for the version; any other parameter is not
+ *  XTVERSION and is left to xterm. */
+export function xtversionAsked(params: number[]): boolean {
+  return params.length === 0 || (params.length === 1 && params[0] === 0)
 }
 
 /** The look changed: the report to push, only while the program asked for

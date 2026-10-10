@@ -288,7 +288,9 @@ Nobody does, by hand (PrismTerminal #23; owner, 2026-09-19: "that compiled copy
 needs to be auto bumped when a new Prism Terminal release or merge to main
 happens"). Land the change through a PR in Prism Terminal, WITH a bump of
 `core/package.json`'s version (CI fails the PR otherwise: a released tag is never
-moved). On merge, `.github/workflows/core-release.yml`:
+moved). Bump `core/shared/termVersion.ts` (`TERM_CORE_VERSION`, what XTVERSION
+reports, #171) with `core/package.json`, and `XTERM_VERSION` with xterm:
+`termVersion.test.ts` fails otherwise. On merge, `.github/workflows/core-release.yml`:
 
 1. re-splits this folder into `core-dist` and tags `core-v<version>`. Tags are
    `core-v*` for the core and `v*` for the app, since this repo is both;

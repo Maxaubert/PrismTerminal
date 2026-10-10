@@ -44,8 +44,11 @@ import {
   noteThemeMode,
   themePush,
   themeReports,
+  xtversionAsked,
+  xtversionReply,
   type GroundMode
 } from '../lib/termReplies'
+import { TERM_CORE_VERSION, XTERM_VERSION } from '../../shared/termVersion'
 import { followsHostStyle, paintsGround, termApi, termHost } from '../host'
 import { findLinks, linkColor } from '../lib/termLinks'
 import { copyText } from '../lib/copyNotice'
@@ -928,6 +931,14 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     reports = r.state
     if (r.send) reply(r.send)
   }
+  // XTVERSION, `CSI > q` / `CSI > 0 q` (#171; termReplies.ts has the
+  // measurement): xterm 6.0.0 has no handler, and without a reply Claude never
+  // turns on synchronized output. Any other parameter stays xterm's.
+  term.parser.registerCsiHandler({ prefix: '>', final: 'q' }, (params) => {
+    if (!xtversionAsked(modeParams(params))) return false
+    reply(xtversionReply(TERM_CORE_VERSION, XTERM_VERSION))
+    return true
+  })
   // A RESUMING TAB WEARS A SKELETON (#106), not a text spinner: the shell's
   // own words (its prompt, the resume command) are cleared the moment the
   // agent takes the console, and the terminal is shown once the agent has

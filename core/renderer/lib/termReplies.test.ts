@@ -9,7 +9,9 @@ import {
   noteThemeMode,
   oscColour,
   themePush,
-  themeReports
+  themeReports,
+  xtversionAsked,
+  xtversionReply
 } from './termReplies'
 import { resolveTermTheme } from './termTheme'
 
@@ -100,5 +102,28 @@ describe('themePush', () => {
     let s = themeReports(THEME_REPORTS_OFF, true, 'dark')
     s = noteThemeMode(s, 'light')
     expect(themePush(s, 'light').send).toBeNull()
+  })
+})
+
+describe('xtversionReply (#171)', () => {
+  it('names this terminal, then the xterm.js under it, as DCS >| ... ST', () => {
+    expect(xtversionReply('0.32.0', '6.0.0')).toBe('\x1bP>|PrismTerminal 0.32.0 (xterm.js 6.0.0)\x1b\\')
+  })
+  it('never starts the name with "xterm.js": Claude would apply its VS Code tuning', () => {
+    const name = xtversionReply('0.32.0', '6.0.0').slice('\x1bP>|'.length)
+    expect(name.startsWith('xterm.js')).toBe(false)
+  })
+  it('holds no CR, LF or BEL a shell could act on', () => {
+    const r = xtversionReply('0.32.0', '6.0.0')
+    for (const c of ['\r', '\n', '\x07']) expect(r.includes(c)).toBe(false)
+  })
+})
+
+describe('xtversionAsked', () => {
+  it('answers CSI > q and CSI > 0 q only', () => {
+    expect(xtversionAsked([])).toBe(true)
+    expect(xtversionAsked([0])).toBe(true)
+    expect(xtversionAsked([1])).toBe(false)
+    expect(xtversionAsked([0, 0])).toBe(false)
   })
 })

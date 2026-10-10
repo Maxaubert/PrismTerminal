@@ -171,7 +171,11 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   measurement (`chromeTheme.test.ts` pins the two agree on every preset). MEASURED (Claude Code 2.1.296, 2026-10-10):
   xterm had answered OSC 11 from the clear canvas as `rgb:0000/0000/0000`, so Claude was dark on every ground; Claude
   writes `?2031h` without a DECRQM probe, never asks `?996n` or OSC 10, and on a pushed `?997;2n` re-asks OSC 11 and
-  turns light.
+  turns light. XTVERSION (#171) answers `CSI > q` and `CSI > 0 q` only, as `PrismTerminal <core version> (xterm.js
+  <version>)` (the constants in `core/shared/termVersion.ts`, held to the package files by `termVersion.test.ts`); the
+  name must NOT start with `xterm.js`, which Claude reads as VS Code's terminal. MEASURED (Claude Code 2.1.296 --model
+  haiku, bundled ConPTY, one streamed answer, 2026-10-11): no reply, `synchronizedOutput=no` and 0 `?2026h`; with the
+  reply, `synchronizedOutput=yes` and 65 frames wrapped in `?2026h`/`?2026l`.
 - <a id="closing-window-quits"></a>**Closing the window QUITS; closing the last tab does not** (owner, 2026-09-18, after using the
   first build, which hid the window and stayed resident: "the app should actually close when you
   close it"). The last tab lands on the start screen (`EmptyState`, Tabby's shape by owner

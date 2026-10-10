@@ -2318,9 +2318,13 @@ const scenarios = {
         "  if (s === 't') { process.stdout.write('\\x1b]11;?\\x07\\x1b[?996n'); return }",
         "  process.stdout.write('IN ' + show(s) + '\\r\\n')",
         '})',
-        "process.stdout.write('\\x1b[?2031h\\x1b]11;?\\x07\\x1b]10;?\\x07\\x1b[?996n\\x1b[?2031$p\\x1b[c')"
+        // XTVERSION three ways (#171): `> q` and `> 0 q` ask, `> 1 q` does not.
+        "process.stdout.write('\\x1b[?2031h\\x1b]11;?\\x07\\x1b]10;?\\x07\\x1b[?996n\\x1b[?2031$p\\x1b[>q\\x1b[>0q\\x1b[>1q\\x1b[c')"
       ].join('\n')
     )
+    const coreVersion = JSON.parse(readFileSync(resolve(process.cwd(), 'core/package.json'), 'utf8')).version
+    const xtermVersion = JSON.parse(readFileSync(resolve(process.cwd(), 'node_modules/@xterm/xterm/package.json'), 'utf8')).version
+    const XTVERSION = `\\eP>|PrismTerminal ${coreVersion} (xterm.js ${xtermVersion})\\e\\`
     const { app, page } = await launch(w, { args: [w.alpha] })
     // Chunks may coalesce on the way through ConPTY, so the screen is read as
     // one text and the escaped replies are counted in it.
@@ -2347,6 +2351,12 @@ const scenarios = {
       ok(first.includes(DARK), 'CSI ? 996 n answers dark on PT Default')
       ok(first.includes('\\e[?2031;1$y'), 'DECRQM says 2031 is set once the program set it')
       ok(first.lastIndexOf('\\e[?1;2c') > first.lastIndexOf('\\e[?2031;1$y'), 'and the DA1 answer comes LAST: the replies keep stream order')
+      ok(
+        count(first, XTVERSION) === 2,
+        `XTVERSION answers CSI > q and CSI > 0 q, and not CSI > 1 q (${count(first, XTVERSION)} of ${XTVERSION})`
+      )
+      ok(count(first, '\\eP>|') === 2, 'and nothing else answers as a version')
+      ok(first.lastIndexOf('\\e[?1;2c') > first.lastIndexOf(XTVERSION), 'the version answers come before DA1, in stream order')
 
       await pickTheme(page, 'fawn')
       await backToShell()
