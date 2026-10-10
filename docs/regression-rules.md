@@ -101,7 +101,8 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   A tab whose agent finished, or waits on you, while you were NOT LOOKING (another tab in front, or
   the window unfocused) gets a static 3 px line along its bottom: Finished colour, or Question
   colour (default blue) which outranks it; each behind its own switch (`agent-done-on`,
-  `agent-question-on`, both on). Opening the tab clears it. Full's fill is for working alone now.
+  `agent-question-on`, both on). Opening the tab clears it. Since #143 (below) a question BREATHES
+  (fades to the ground and back, 2 s) and a finish is the icon's flowing rainbow, in every style.
   CLAUDE GIVES NO SIGNAL FOR A QUESTION (MEASURED in a pty: the title is `✳` exactly as when done, no
   bell, no OSC 9), so `agentQuestion.looksLikeQuestion` reads the last text rows of the screen
   (through termBus, never by importing the panel) for its footer when the title goes idle and as
@@ -127,8 +128,37 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   chrome's own `--p-accent`, finished = the theme's green moved to the contrast floor (the fallback
   green when a palette's green IS its accent, since two states in one colour is no indicator).
   Picking a theme gives both back to the theme; a pick of your own shows a "Follow theme" button.
-  Settings calls them "Agent working indicator" and "Agent finished indicator". The finished mark
-  is Full's alone, so the e2e turns the volume up before it looks for one.
+  Settings calls them "Agent working indicator" and "Agent finished indicator".
+- <a id="indicator-styles"></a>**FOUR INDICATOR STYLES, ONE RULE, THE RAINBOW FINISH** (#143; owner, 2026-10-10: "Let's just keep
+  the like that border that moves slowly. The pulsation effect is also now exactly what I want it. And I
+  like the gentle pulse too for questions. Make sure that's also applied to the minimal style for normal
+  tabs"; spec `docs/superpowers/specs/2026-10-10-indicator-styles-design.md`). Off, Minimal, Ring, Full.
+  WHICH mark a tab wears is ONE pure rule, the core's `lib/tabMark.ts` `resolveTabMark`; the strip only
+  draws it. Minimal: working is the running bar, finished/question/failed a straight 3 px line. Ring: the
+  spinner by the name while working, Minimal's marks after. Full: every marked tab NOT in front is filled
+  SOLID (a see-through working colour laid on the ground first); the tab in front is NEVER filled and
+  shows Minimal's mark, so it is obvious in every state; finished is the icon's dark badge `#383c44`
+  with the rainbow along its foot. FULL'S NAME (owner, 2026-10-10): every name is the theme's text, idle
+  ones too; a fill flips it to the opposite only when the text reads under 2:1 on that state's full
+  colour (`lib/nameInk.ts`), chosen once per colour, never per frame. The brain icon is gone, and so is
+  the line between tabs. The RAINBOW (`lib/markColours.ts`) is `build/icon-source.png`'s seven, each
+  moved to 3:1 on every ground it sits on, keeping its hue; "Rainbow finished mark" (`agent-rainbow`, on)
+  turns it off for the plain finished colour. All motion is `core/renderer/styles/marks.css` (run, grow,
+  breathe, flow, ride, spin), and under reduced motion NOTHING moves (a working edge rests full, the
+  question fully on): the window's own `*` rule would end a grow at empty, so the marks override it.
+  `indicatorStyles` measures it on Volt and Paper, `attention` the breathe and the rainbow.
+- <a id="prompt-tabs"></a>**PROMPT TABS: THE ARROW EDGE IS THE MARK** (#143; Settings > Appearance > Tab style, `tab-style`,
+  `prism.window.tabStyle`, Classic by default). Chevron segments (`lib/promptGeometry.ts`, MEASURED in
+  the approved mockup): a 12 px arrow, the next segment's notch parallel to it, overlapping by 9.5 px, so
+  the ground-coloured EDGE between them is 2.5 px across, the top rule's own 2 px square to the slant.
+  The edge band is drawn BEHIND the segments, from 1 px inside this segment's arrow to 1 px inside the
+  next notch (the last one stops where a next notch would be), so both shapes cut it and it fills the
+  gap flush, tip to both corners. Working GROWS it from the tip (empty 0.2 s, out 0.6 s, full 0.2 s, back
+  0.6 s); on the tab in front in the rule's colour, so rule and edge read as one line bending down. The
+  rule runs 0.5 px past the slant (the mockup's measured seam). The wrapper lets the pointer through, so
+  a click lands on the segment's SHAPE and the notch belongs to the tab whose arrow fills it.
+  `--p-seg` / `--p-seg-on` are the text over the strip at 4% / 11% (at that ALPHA on glass). The
+  `tabStyle` e2e measures the overlap, the band and the rule.
 - <a id="process-poll"></a>**The process poll** (`agentPoll.ts`) asks only after a pty printed something and backs off 2.5s to
   20s. It reports CHANGES, so its first verdict on a shell is said once; the e2e waits for it.
   A title that claims an agent the poll has not reported asks for a look NOW (`termAgentLook`,
@@ -181,7 +211,8 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   validates it; `edgeFor` scales its step, and none is DWMWA_COLOR_NONE, what a maximized window
   already gets). That half is unit-tested only: the DWM helper is off under `--e2e`, so the e2e
   asserts what main HEARD, and how the border looks is on the hands-on list. The `edges` e2e
-  measures real edges (a tab separator, the title bar's rule, the settings rail, a settings row),
+  measures real edges (the title bar's rule, the settings rail, a settings row; and that no tab has a
+  side border, since #143 drew no line between tabs),
   WAITING for each to arrive, since the strip's border colour transitions over 550ms.
 - <a id="accent-and-background"></a>**THE ACCENT AND THE BACKGROUND ARE SETTINGS, AND UNSET IS THE THEME'S** (owner, 2026-09-22:
   "an accent colour option which would pick the accents you see, like the blue highlight effect
