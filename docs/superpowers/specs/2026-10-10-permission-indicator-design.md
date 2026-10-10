@@ -1,8 +1,14 @@
 # Permission prompts and the agent indicator (#148)
 
-Status: proposed, for one owner approval together with the plan
-(`docs/superpowers/plans/2026-10-10-permission-indicator.md`). Core change, so a Prism change too
-(section 7).
+Status: APPROVED by the owner on 2026-10-10, together with the plan
+(`docs/superpowers/plans/2026-10-10-permission-indicator.md`), with the recommended answer to every
+decision in section 9: (1) a), Working after Yes comes from Claude's own spinner title (a
+`working-title` step in phase `question` or `stopped`), never from the answer key; (2) a), a pending
+Question survives working and done signals while `looksLikeQuestion` still sees the box, with no
+plugin change; (3) the early Finished with background subagents running is OUT of scope, now issue
+#149; (4) auto mode's prompts from ask rules and asking hooks (cases C and E) count as the
+classifier criterion, since the classifier never prompts on 2.1.296 (C3). Core change, so a Prism
+change too (section 7).
 
 Evidence: `C:\Users\Admin\Documents\Claude\research\prism-terminal\2026-10-10-permission-indicator.md`
 (every case's raw timeline and its replay through main at `bded1e2`). Background: the hooks spec

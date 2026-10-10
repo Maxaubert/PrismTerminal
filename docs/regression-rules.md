@@ -87,10 +87,24 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   (`agent-hooks`, on) is on; a warm shell is adopted only with the same answer. Prism passes no dir, so
   nothing changes there until it ships the files. The reader: `lib/agentHookSignal` (parse, our prefix
   only, else `false` so other OSC 777 users are untouched), termBus, `lib/agentHookState` (the pure
-  rules), `useAgentIndicator`. A HOOKED session is never scored from output nor read for a question;
-  its title only says an Esc (no hook fires on one, MEASURED: idle title 72 ms after): an idle title
+  rules), `useAgentIndicator`. A HOOKED session is never scored from output; its screen is read
+  only to HOLD a Question its hooks raised, while the box is on screen, never to raise one. Its title
+  says an Esc (no hook fires on one, MEASURED: idle title 72 ms after): an idle title
   after `working` with no Stop is idle with NO Finished line, and a Stop that lands after it still
-  finishes. The poll still decides presence. **Failed** is a third line (`agent-failed-on`, on), the
+  finishes. The poll still decides presence. **A SPINNER AFTER A QUESTION IS THE WORK THE YES
+  APPROVED** (#148; spec `docs/superpowers/specs/2026-10-10-permission-indicator-design.md`): no
+  hook fires between the answer and PostToolUse (MEASURED, Claude Code 2.1.296: spinner title 34 ms
+  after Yes, PostToolUse 26 s later for a 25 s sleep; the tab showed nothing all that time), so a
+  `working-title` in phase `question` or `stopped` is Working; never in `done` or `failed`, and never
+  from the answer key (Enter on No is Enter on Yes; after No or Esc the title stays `✳`). The first
+  spinner lands 6 ms BEFORE the repaint erasing the box, so one held by the box is read again 250 ms
+  later. **WHILE THE BOX IS ON SCREEN, THE QUESTION STANDS** (#148): subagents' hooks write the same
+  signal, and a sibling's PreToolUse / PostToolUse or the main turn's Stop took a pending Question
+  down 1 to 4 s after it went up (MEASURED, case G2: up 3.9 s of the 14 s the box waited); so with
+  phase `question` and `looksLikeQuestion` seeing the box, `working` and `working-title` change
+  nothing and `done` raises Finished UNDER the Question (`screenDecides`, `hookStep`'s `seen`). The
+  measured timelines are replayed in `agentHookState.timelines.test.ts`. Finished too early while
+  background agents still run is #149, not this rule. **Failed** is a third line (`agent-failed-on`, on), the
   theme's red apart from the accent by hue (`marksApart`), over Finished and under Question, counted by
   the badge, its kind on the tab's tooltip ("Failed: rate limit"); it raises Finished under it, so
   with the switch off the tab reads as before. Sessions that never send a signal (Codex, an older
@@ -106,7 +120,7 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   another tab without answering the question, the blue bar shouldn't disappear ... it should only
   disappear if you actually answered the question"): it goes up on the tab in front too
   (`raisedWhileSeen`), a look never takes it down, and the badge counts it until it goes: work
-  again (a hook or title), another hook state, the agent leaving, the tab closing, or a key that
+  again (a hook or title; another agent's signal does not count while the box shows, #148), another hook state, the agent leaving, the tab closing, or a key that
   settles the box (Enter, Esc, Ctrl+C, a digit; `answersQuestion`) with the box gone after it, the
   one way a "No" or an Esc is heard, since no hook fires for those. Since #143 (below) a question BREATHES
   (fades to the ground and back, 2 s) and a finish is the icon's flowing rainbow, in every style.
