@@ -4370,6 +4370,18 @@ const scenarios = {
         return { cards, below: row ? Math.round(y(row) * 10) / 10 : -1 }
       })
     const first = await measure()
+    // THE ORDER (#157, owner 2026-10-10): PT Default leads, then the neutral
+    // grounds black to white, then the coloured ones. The expected list is the
+    // unit test's snapshot of orderTermThemes, read here so the two never
+    // disagree (this runner cannot import the TypeScript).
+    const snap = readFileSync(resolve(process.cwd(), 'core/renderer/lib/__snapshots__/themeOrder.test.ts.snap'), 'utf8')
+    const computed = [...snap.matchAll(/^\s+"([a-z0-9-]+)",?$/gm)].map((m) => m[1])
+    const wantOrder = ['pt-default', ...computed.filter((id) => id !== 'pt-default')]
+    const wallOrder = first.cards.map((c) => c.id).filter((id) => id !== 'custom')
+    ok(
+      computed.length >= 40 && wallOrder.join(',') === wantOrder.join(','),
+      `the wall runs PT Default, neutrals black to white, then coloured (${wallOrder.slice(0, 14).join(' ')} ...)`
+    )
     const rowTops = [...new Set(first.cards.map((c) => c.top))]
     ok(rowTops.length >= 2, `the wall has two rows to pick across (${rowTops.length})`)
     const inRow = (top) => first.cards.find((c) => c.top === top)?.id

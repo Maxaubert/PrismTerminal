@@ -13,7 +13,7 @@ import {
   type CustomTermTheme
 } from '../../lib/termLook'
 import { resolveCustomTheme, resolveTermTheme, watchTermTheme, TERM_PRESETS } from '../../lib/termTheme'
-import { luminance, normalizeColor } from '../../lib/termAnsi'
+import { orderTermThemes } from '../../lib/themeOrder'
 import type { AlphaRange } from '../../lib/colour'
 import { SEE_THROUGH_MAX } from '../../lib/seeThrough'
 import { ColourField } from '../ColourPicker'
@@ -278,7 +278,7 @@ const TWO_ROWS = 268
 
 /**
  * The wall itself: Custom, the host's default, Follow style where the host
- * has styles, then every preset by brightness; the pencil on the chosen card;
+ * has styles, then every preset neutral-first, black to white (#157); the pencil on the chosen card;
  * Show all; the question when a pick would drop unsaved changes; the editor.
  * `onThemePicked`: a pick landed (Custom included), for a host whose own rows
  * follow the theme (Prism Terminal forgets its picked background and accent).
@@ -298,25 +298,19 @@ export function ThemeWall({ onThemePicked, className = '' }: { onThemePicked?: (
   // style repaints :root. Only a host WITH styles has one (Prism).
   const [styleTheme, setStyleTheme] = useState(() => resolveTermTheme(followsHostStyle() ? 'style' : termThemeId()))
   useEffect(() => (followsHostStyle() ? watchTermTheme(setStyleTheme) : undefined), [])
-  // Presets ordered by brightness, the themes nearest your own look leading:
-  // on a light theme the wall runs light to dark, on a dark one dark to light.
-  // The direction is MEASURED off the theme worn when the page opened, and
-  // read once: the chrome follows the theme now, so re-sorting on every pick
-  // would shuffle the wall under the pointer that just clicked a card.
-  const [lightFirst] = useState(
-    () => luminance(normalizeColor(resolveTermTheme(termThemeId()).background, '#000000')) > 0.4
-  )
   // CUSTOM LEADS THE WALL, then THE HOST'S OWN DEFAULT (owner, 2026-09-22: "it
   // should be first in the list"; then 2026-09-23: "custom should come before
   // default"). Prism Terminal's default is a preset (PT Default); Prism's is
   // 'style', which is no preset, so there Custom leads Follow style.
   const defaultPreset = TERM_PRESETS.find((p) => p.id === hostDefaults().theme)
-  const sortedPresets = useMemo(() => {
-    const lum = (bg: string): number => luminance(normalizeColor(bg, '#000000'))
-    return TERM_PRESETS.filter((p) => p !== defaultPreset).sort((a, b) =>
-      lightFirst ? lum(b.bg) - lum(a.bg) : lum(a.bg) - lum(b.bg)
-    )
-  }, [lightFirst, defaultPreset])
+  // Then every other preset in ONE fixed order (#157, owner 2026-10-10): the
+  // neutral grounds black to white, then the coloured ones black to white,
+  // measured in lib/themeOrder. Fixed, so a pick never reshuffles the wall
+  // (the old light-first flip read the worn theme once for that reason).
+  const sortedPresets = useMemo(
+    () => orderTermThemes(TERM_PRESETS.filter((p) => p !== defaultPreset)),
+    [defaultPreset]
+  )
   // The editor popup, seeded from the SELECTED theme. Presets never change -
   // editing always lands in the Custom slot.
   const [editing, setEditing] = useState<CustomTermTheme | null>(null)

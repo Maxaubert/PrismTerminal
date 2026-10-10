@@ -145,6 +145,9 @@ share; `termAcrylicInForce` / `useTermAcrylicInForce` is the switch with High
 Contrast held solid (`seeThroughBlocked`), which is what a host paints by; the
 row is named by `acrylicLabel()` ("See-through window" there, the list's label
 in Prism) and drawn right under the wall, before `afterTheme`.
+Since 0.31.0 (#157) the wall orders the presets after its leading cards with
+`orderTermThemes` (`lib/themeOrder.ts`): neutral grounds first, then coloured,
+each black to white by OKLab L; neutral is chroma below `NEUTRAL_CHROMA`.
 Spec:
 `docs/superpowers/specs/2026-10-03-colour-picker-alpha-design.md`.
 

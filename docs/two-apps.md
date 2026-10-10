@@ -234,6 +234,14 @@ so an update never silently changes what an existing user sees; the bridge to ma
   Horizon). NO INVISIBLE TEXT is a test (`termTheme.legible.test.ts`): text 4.5:1, cursor and
   accent 3:1, all sixteen 3:1 against the theme's own ground. It caught Catppuccin Latte's own
   cursor at 2.3:1, which is its mauve here. Original themes give base colours only.
+  **THE WALL'S ORDER IS MEASURED** (#157; owner, 2026-10-10: "first black to white then
+  coloured"): after the leading cards (Custom, the host's default, Follow style in Prism), core
+  `orderTermThemes` (`lib/themeOrder.ts`) puts the neutral grounds first, then the coloured ones,
+  each black to white by OKLab L. Neutral is OKLab chroma below `NEUTRAL_CHROMA` 0.0125, measured
+  in the widest gap of the forty grounds (Monokai 0.0109, Sage 0.0147), so Cinder, a blue slate,
+  files with the coloured. One fixed order in both apps (it replaced the light-first flip);
+  `themeOrder.test.ts` snapshots it and keeps every ground 0.001 off the threshold, and the
+  `themeCards` e2e reads that snapshot against the wall.
   **VOLT TOOK INK'S PLACE** (#93; owner, 2026-09-28, with a screenshot: "make one of the black
   themes this colour scheme with black and that yellow greenish colour, kind of cyberpunk"):
   `#d8ff26` on `#050706`; Ink, the blue-black next to Prism and Tokyo Night, retired to `prism`.
