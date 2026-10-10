@@ -741,6 +741,46 @@ const scenarios = {
       ok(!!(await until(async () => (await state(0)) === 'working', 10000, 50)), 'a working hook after it answers it')
       ok((await line(0)) === null, 'and no line is left')
 
+      // A PERMISSION PROMPT, ANSWERED YES (#148): case A's bytes. The box, the
+      // idle title, the question; then the box goes and Claude's spinner title
+      // comes back with NO hook (MEASURED: none fires until PostToolUse, 26 s
+      // later), a frame about every 960 ms; then PostToolUse and Stop.
+      const BOX = "Write-Host 'Do you want to proceed?'; Write-Host ' 1. Yes'; Write-Host ' 2. No'"
+      const spin = (g) => `$Host.UI.RawUI.WindowTitle = [char]0x${g} + ' Claude Code'`
+      const frames = Array.from({ length: 8 }, (_, i) => `${spin(i % 2 ? '25D1' : '25D0')}; Start-Sleep -Milliseconds 900`).join('; ')
+      await at(0, say('working'))
+      await at(0, `${BOX}; ${IDLE}; ${say('question')}; Start-Sleep -Milliseconds 2500; Clear-Host; ${frames}; ${say('working')}; Start-Sleep -Milliseconds 500; ${say('done')}`)
+      ok(!!(await until(async () => (await state(0)) === 'question', 8000, 50)), 'a permission prompt raises the Question line')
+      ok(!!(await until(async () => (await state(0)) === 'working', 6000, 50)), 'the spinner after the answer is Working again')
+      // Held through the tool: sampled every 250 ms for 5 s, never blank.
+      const blank = []
+      for (let t = 0; t < 20; t++) {
+        const s = await state(0)
+        if (s !== 'working') blank.push(s)
+        await sleep(250)
+      }
+      ok(blank.length === 0, `Working holds through the long tool, with no hook (${JSON.stringify(blank)})`)
+      await tab(1).click()
+      ok(!!(await until(async () => (await state(0)) === 'done', 10000, 50)), 'and Stop on a background tab is Finished')
+      await look(0)
+      await until(async () => (await state(0)) === null, 4000, 50)
+
+      // ANOTHER AGENT'S WORK DOES NOT TAKE THE QUESTION DOWN (#148): case G2's
+      // bytes. A background subagent's box is up; its sibling's PreToolUse and
+      // PostToolUse, and the main turn's Stop, arrive while it waits.
+      await at(0, say('working'))
+      await at(0, `${BOX}; ${IDLE}; ${say('question')}; Start-Sleep -Milliseconds 1500; ${say('working')}; Start-Sleep -Milliseconds 1000; ${say('done')}; Start-Sleep -Milliseconds 1000; ${say('working')}; Start-Sleep -Milliseconds 3000; Clear-Host; ${spin('25D0')}; ${say('working')}`)
+      ok(!!(await until(async () => (await state(0)) === 'question', 8000, 50)), 'a subagent asks: the Question line')
+      const lost = []
+      for (let t = 0; t < 14; t++) {
+        const s = await state(0)
+        if (s !== 'question') lost.push(s)
+        await sleep(250)
+      }
+      ok(lost.length === 0, `other agents' signals leave it up while the box shows (${JSON.stringify(lost)})`)
+      ok(!!(await until(async () => (await state(0)) === 'working', 8000, 50)), 'answered, the box gone, it is Working')
+      await at(0, say('done'))
+
       // DONE on a background tab: the Finished line.
       await at(0, say('working'))
       await at(0, later(say('done')))
