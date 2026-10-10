@@ -163,15 +163,44 @@ export function attachLinkPaint(
     }
   }
 
+  /** Watches the rows for redraws that fire no `onRender` (below). */
+  let watch: MutationObserver | undefined
+
   const inkDrawn = (start: number, end: number): void => {
     if (dead || term.buffer.active.type !== 'alternate') return
-    const rows = term.element?.querySelector('.xterm-rows')?.children
-    if (!rows) return
+    const box = term.element?.querySelector('.xterm-rows')
+    if (!box) return
+    watchRows(box)
+    const rows = box.children
     const ink = color()
     for (let r = start; r <= end; r += 1) {
       const row = rows[r]
       if (row) inkRow(row, ink)
     }
+  }
+
+  // A HOVER REDRAWS A ROW BEHIND onRender's BACK (#163; owner's recording,
+  // 2026-10-10: a hovered link in Claude Code's fullscreen view turned white
+  // and stayed white until a scroll). xterm's DOM renderer underlines a hovered
+  // link, and takes the underline off again, by REPLACING the row's contents
+  // (`_setCellUnderline`), and that fires no onRender. So any row whose
+  // contents are replaced and that holds no ink is inked again here. Inking
+  // itself is a mutation too, but the row then holds ink and is left alone.
+  const watchRows = (box: Element): void => {
+    if (watch) return
+    watch = new MutationObserver((records) => {
+      if (dead || term.buffer.active.type !== 'alternate') return
+      const seen = new Set<Element>()
+      for (const rec of records) {
+        let row: Node | null = rec.target
+        while (row && row.parentNode !== box) row = row.parentNode
+        if (row instanceof Element) seen.add(row)
+      }
+      if (!seen.size) return
+      const ink = color()
+      for (const row of seen) if (!row.querySelector('[data-link-ink]')) inkRow(row, ink)
+    })
+    watch.observe(box, { childList: true, subtree: true })
   }
 
   const scan = (): void => {
@@ -223,6 +252,7 @@ export function attachLinkPaint(
     repaint: startOver,
     dispose: () => {
       dead = true
+      watch?.disconnect()
       if (timer !== undefined) window.clearTimeout(timer)
       subs.forEach((s) => s.dispose())
       forgetFrom(0)
