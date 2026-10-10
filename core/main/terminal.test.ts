@@ -90,6 +90,23 @@ describe('ptyEnv', () => {
     expect(env.ANTHROPIC_API_KEY).toBe('k')
   })
 
+  // #173: Claude Code prints its links as OSC 8 hyperlinks only when told the
+  // terminal takes them; without it a link is "label (long url)".
+  it('tells programs the terminal takes hyperlinks', () => {
+    expect(ptyEnv({}).FORCE_HYPERLINK).toBe('1')
+  })
+
+  it("keeps the user's own FORCE_HYPERLINK, 0 included", () => {
+    expect(ptyEnv({ FORCE_HYPERLINK: '0' }).FORCE_HYPERLINK).toBe('0')
+  })
+
+  it('writes FORCE_HYPERLINK under no second spelling', () => {
+    // Windows names are case-blind: two spellings would be one variable twice.
+    const env = ptyEnv({ force_hyperlink: '0' })
+    expect(env.force_hyperlink).toBe('0')
+    expect(Object.keys(env).filter((k) => k.toUpperCase() === 'FORCE_HYPERLINK')).toEqual(['force_hyperlink'])
+  })
+
   it('passes everything else through untouched, undefined aside', () => {
     const env = ptyEnv({ FOO: 'bar', GONE: undefined })
     expect(env.FOO).toBe('bar')

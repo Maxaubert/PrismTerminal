@@ -178,6 +178,15 @@ export function ptyEnv(
   }
   env.TERM = PTY_OPTS.name
   env.COLORTERM = 'truecolor'
+  // THE PANEL TAKES OSC 8 HYPERLINKS (#173), and opens them on a left click
+  // (#169). Claude Code prints them only when told: MEASURED (2.1.296, bundled
+  // ConPTY, 2026-10-11) one OSC 8 link with FORCE_HYPERLINK=1, none without,
+  // where it printed "label (long url)" instead. Who reads it, MEASURED the
+  // same day: Claude Code (its bundled supports-hyperlinks; its own
+  // `hyperlinks` setting still wins) and the vercel CLI; not Codex, and no
+  // package in this repo's node_modules. A user's own value, 0 included, is
+  // their choice and stays, under the spelling they gave it.
+  if (!Object.keys(env).some((k) => k.toUpperCase() === 'FORCE_HYPERLINK')) env.FORCE_HYPERLINK = '1'
   // cmd reports its folder through PROMPT (#99), in front of whatever prompt
   // the user already had.
   if (shellId === 'cmd') env.PROMPT = cmdPrompt(prompt)

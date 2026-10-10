@@ -319,7 +319,10 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   painted from the stream (`lib/termOsc8.ts`: the cursor at the open and at the close, MEASURED to
   bracket Claude Code's label through the bundled ConPTY) while their text stands, on both screens,
   and the menu's Copy link / Open link take their uri. A reflow or a buffer switch forgets them.
-  The `osc8Links` e2e holds it.
+  `FORCE_HYPERLINK=1` is set for every shell unless the user set it, any value kept (#173; `ptyEnv`;
+  MEASURED 2026-10-11: Claude Code prints OSC 8 only with it, its own `hyperlinks` setting still
+  winning; the vercel CLI reads it too; Codex and this repo's `node_modules` do not). It came after
+  the handler, so no link is ever a dead confirm box. The `osc8Links` e2e holds both.
 - <a id="path-links"></a>**A PATH ON SCREEN IS A LINK WHEN IT EXISTS** (#99; owner, 2026-09-29: "clickable links that would
   open the file or folder", then "go ahead"). `lib/termPaths` finds what COULD be a path (relative or
   absolute, sentence punctuation and `:12` taken off); main's `termPathOpen` answers which exist from

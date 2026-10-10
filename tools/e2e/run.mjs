@@ -2556,6 +2556,9 @@ const scenarios = {
       await page.mouse.click(at.x, at.y, { button })
     }
     try {
+      // #173: every shell is told the terminal takes hyperlinks.
+      await typeLine(page, 'Write-Host "FH-$env:FORCE_HYPERLINK-END"')
+      ok(!!(await until(async () => (await termText(page)).includes('FH-1-END'), 8000)), 'FORCE_HYPERLINK is 1 in the shell')
       const esc = (s) => `[char]27 + '${s}'`
       const osc8 = (uri, text) => `[Console]::Write(${esc(`]8;;${uri}`)} + [char]7 + '${text}' + ${esc(']8;;')} + [char]7); Write-Host ''`
       await typeLine(page, `cls; ${osc8(URL8, 'OSC8LABEL')}`)
