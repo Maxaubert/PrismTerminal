@@ -179,6 +179,13 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   `c` (or empty) selection, base64 of strict UTF-8, at most 1 MB (`OSC52_MAX`), through main
   (`clipboard:term-write`, its own channel and cap, opaque to the diagnostics log), with the Copied badge; a read
   (`?`) is swallowed and never answered, a clear is ignored, every OSC 52 is handled so none is drawn.
+- <a id="bell-flashes"></a>**The bell flashes the taskbar only while the window is unfocused** (#177; decided under the
+  owner's delegation, spec decision 1). At most one bell a second per tab reaches main (`bellGate`), which flashes
+  the taskbar button (`src/main/bellFlash.ts`) only while the window is NOT focused, stops it on focus, and never
+  makes a sound: a bell while focused is most often the user's own bad key (PSReadLine rings on one). A bridge
+  member (`TermApi.termBell?`, `TermIpcDeps.attention?`), not a `TermHostConfig` field; a host that passes no
+  `attention` (Prism, until its one line) stays silent. Under `--e2e` it is counted on `__e2eFlashes`, never
+  flashed (e2e `bell`).
 - <a id="closing-window-quits"></a>**Closing the window QUITS; closing the last tab does not** (owner, 2026-09-18, after using the
   first build, which hid the window and stayed resident: "the app should actually close when you
   close it"). The last tab lands on the start screen (`EmptyState`, Tabby's shape by owner

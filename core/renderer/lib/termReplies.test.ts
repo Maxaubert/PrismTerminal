@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BELL_GAP_MS,
   THEME_REPORTS_OFF,
+  bellGate,
   colourQueryReplies,
   decrqmReply,
   dsrThemeReply,
@@ -125,5 +127,20 @@ describe('xtversionAsked', () => {
     expect(xtversionAsked([0])).toBe(true)
     expect(xtversionAsked([1])).toBe(false)
     expect(xtversionAsked([0, 0])).toBe(false)
+  })
+})
+
+describe('bellGate (#177)', () => {
+  it('lets the first bell through', () => {
+    expect(bellGate(null, 5000)).toBe(true)
+  })
+  it('drops a bell 300 ms after the last one, lets one 1.1 s after through', () => {
+    expect(bellGate(5000, 5300)).toBe(false)
+    expect(bellGate(5000, 6100)).toBe(true)
+  })
+  it('is a one-second gap', () => {
+    expect(BELL_GAP_MS).toBe(1000)
+    expect(bellGate(0, 999)).toBe(false)
+    expect(bellGate(0, 1000)).toBe(true)
   })
 })

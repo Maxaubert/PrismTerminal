@@ -52,6 +52,8 @@ export interface TermApi {
    *  Optional so an older host bridge still builds; the copy is then dropped,
    *  as it was before. Write-only: there is no read. */
   writeClipboardFromTerm?(text: string): Promise<boolean>
+  /** A session rang the bell (#177). Optional; without it the bell is silent. */
+  termBell?(id: string): void
   openExternal(url: string): void
   /** Paths (#99). Optional so a host bridge without them still builds; the
    *  terminal then paints and opens no paths. */

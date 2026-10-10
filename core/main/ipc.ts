@@ -73,6 +73,14 @@ export interface TermIpcDeps {
    * environment is touched, whatever the page says.
    */
   claudePluginDir?: string
+  /**
+   * A session rang the bell (#177): the host draws the user's eye to its
+   * window (Prism Terminal flashes the taskbar button while the window is not
+   * focused). A bridge member, not a TermHostConfig field: the behaviour is
+   * the same in both apps, and the host only lends its window, as it lends
+   * `openExternal`. Absent: the bell is silent, as it always was.
+   */
+  attention?(): void
 }
 
 /** Registers every terminal channel and starts the agent poll. Returns the
@@ -182,6 +190,10 @@ export function registerTermIpc(deps: TermIpcDeps): () => void {
       return false
     }
   })
+
+  // The bell (#177). The page already let at most one a second per tab
+  // through; what it means is the host's (`attention`), silence without one.
+  ipcMain.on(CH.bell, () => deps.attention?.())
 
   // A link clicked in the terminal. The page is never trusted with a scheme.
   ipcMain.on(CH.openExternal, (_e: unknown, url: unknown) => {

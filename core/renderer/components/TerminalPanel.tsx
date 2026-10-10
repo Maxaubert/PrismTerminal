@@ -36,6 +36,7 @@ import { onGround } from '../lib/termGround'
 import { xtermTheme, type XtermTheme } from '../lib/termXterm'
 import {
   THEME_REPORTS_OFF,
+  bellGate,
   colourQueryReplies,
   decrqmReply,
   dsrThemeReply,
@@ -956,6 +957,16 @@ function createSession(id: string, root: string, shellId: string | undefined): S
         .catch(() => undefined)
     }
     return true
+  })
+  // THE BELL (#177): at most one a second per tab reaches the host (a `cat` of
+  // a binary rings hundreds of times), which flashes the taskbar while the
+  // window is unfocused (spec decision 1). Never a sound.
+  let lastBell: number | null = null
+  term.onBell(() => {
+    const now = performance.now()
+    if (!bellGate(lastBell, now)) return
+    lastBell = now
+    termApi().termBell?.(id)
   })
   // A RESUMING TAB WEARS A SKELETON (#106), not a text spinner: the shell's
   // own words (its prompt, the resume command) are cleared the moment the

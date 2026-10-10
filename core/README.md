@@ -48,6 +48,12 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
    the page's setting to `termPrewarm`; one that passes no folder changes no
    shell's environment. Its strip draws `failedIds` as a third line, and its
    `themedAgentColors` may name `failed` (else `FAILED_RED`).
+   **The bell and OSC 52** (#177, #176) ride the bridge, not `TermHostConfig`.
+   A program's OSC 52 copy needs nothing from a host: `createTermApi` and
+   `registerTermIpc` carry `clipboard:term-write` (write-only, 1 MB). The bell
+   needs ONE line: a host wires it by passing `attention` to `registerTermIpc`
+   (Prism Terminal flashes its taskbar button while the window is unfocused,
+   `src/main/bellFlash.ts`); a host that passes none stays silent.
    **AND WHAT THE TWO APPS MUST SHOW IDENTICALLY, TERMINAL OR NOT** (#28, owner,
    2026-09-19). This WIDENS the core, on purpose, from "the terminal" to "what
    the two apps share". Asked to build the update window (*"when you click the

@@ -2468,6 +2468,30 @@ const scenarios = {
     }
   },
 
+  /**
+   * THE BELL FLASHES THE TASKBAR WHILE THE WINDOW IS UNFOCUSED (#177; owner's
+   * delegation). The parked window is never focused, so a bell counts one
+   * flash; under --e2e main COUNTS it on `__e2eFlashes` and flashes nothing.
+   * Ten bells in a burst count one: at most one a second per tab.
+   */
+  async bell(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const flashes = async () => (await app.evaluate(() => globalThis.__e2eFlashes?.count)) ?? -1
+    try {
+      await page.waitForFunction(() => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()), null, { timeout: 45000 })
+      ok((await flashes()) === 0, `no flash before a bell (${await flashes()})`)
+      await typeLine(page, '[Console]::Write([char]7)')
+      ok(!!(await until(async () => (await flashes()) === 1, 5000)), `one bell, one flash (${await flashes()})`)
+      await sleep(1300) // past the one-second gate
+      await typeLine(page, '1..10 | % { [Console]::Write([char]7); Start-Sleep -Milliseconds 20 }')
+      await sleep(1500)
+      ok((await flashes()) === 2, `ten bells in a burst flash once (${(await flashes()) - 1})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async links(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })

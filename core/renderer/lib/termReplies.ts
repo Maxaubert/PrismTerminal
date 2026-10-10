@@ -123,6 +123,16 @@ export function xtversionAsked(params: number[]): boolean {
   return params.length === 0 || (params.length === 1 && params[0] === 0)
 }
 
+/** The least time between two bells that reach the host (#177): a `cat` of a
+ *  binary file rings hundreds of times, and a taskbar flash per ring is noise. */
+export const BELL_GAP_MS = 1000
+
+/** Whether a bell at `now` gets through, given the last one that did (null:
+ *  none yet). Per session. */
+export function bellGate(last: number | null, now: number): boolean {
+  return last === null || now - last >= BELL_GAP_MS
+}
+
 /** The look changed: the report to push, only while the program asked for
  *  them and only when the mode differs from what it was last told. */
 export function themePush(s: ThemeReports, mode: GroundMode): { send: string | null; state: ThemeReports } {
