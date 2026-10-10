@@ -3395,7 +3395,11 @@ const scenarios = {
           chosen: chosen ? parse(getComputedStyle(chosen).backgroundColor) : null,
           hoverHi: parse(root.getPropertyValue('--p-hover-hi').trim()),
           accent: parse(root.getPropertyValue('--p-accent').trim()),
-          accentButtons: accentFilled.map((b) => (b.hasAttribute('data-save-term') ? 'save' : b.textContent.trim())),
+          // An ON switch wears the accent too, on purpose (#138, #139), so it
+          // is named and allowed; any other accent-filled button is a miss.
+          accentButtons: accentFilled.map((b) =>
+            b.hasAttribute('data-save-term') ? 'save' : b.getAttribute('role') === 'switch' && b.getAttribute('aria-checked') === 'true' ? 'switch' : b.textContent.trim()
+          ),
           sideways: document.querySelector('[data-settings-page]').scrollWidth > document.querySelector('[data-settings-page]').clientWidth + 1
         }
       })
@@ -3417,7 +3421,7 @@ const scenarios = {
           if (m.warn !== null) ok(m.warn >= 4.5, `${scheme} ${p}: a warning subtext reads 4.5:1 (${m.warn.toFixed(1)}:1)`)
           ok(!!m.chosen && m.chosen.rgb.join() === m.hoverHi.rgb.join() && Math.abs(m.chosen.a - m.hoverHi.a) < 0.02, `${scheme} ${p}: the chosen rail page is the grey fill (${JSON.stringify(m.chosen)})`)
           ok(!!m.chosen && m.chosen.rgb.join() !== m.accent.rgb.join(), `${scheme} ${p}: and not the accent`)
-          ok(m.accentButtons.every((b) => b === 'save'), `${scheme} ${p}: the only accent-filled buttons are Save changes (${JSON.stringify(m.accentButtons)})`)
+          ok(m.accentButtons.every((b) => b === 'save' || b === 'switch'), `${scheme} ${p}: the only accent-filled buttons are Save changes and on switches (${JSON.stringify(m.accentButtons)})`)
           ok(!m.sideways, `${scheme} ${p}: nothing scrolls sideways at 1600px`)
           await page.screenshot({ path: resolve(process.cwd(), `.e2e-shots/settings-${p}-${scheme}.png`) }).catch(() => {})
         }
@@ -3486,6 +3490,9 @@ const scenarios = {
     for (const file of ['core/renderer/settings/options.ts', 'core/renderer/settings/markOptions.ts', 'core/renderer/settings/dictationOptions.ts', 'core/renderer/settings/helpOptions.ts', 'src/renderer/src/components/settings/appOptions.ts'])
       for (const m of readFileSync(resolve(process.cwd(), file), 'utf8').matchAll(/\{\s*id: '([a-z-]+)'[^}]*\}/g))
         if (!m[0].includes('onlyWhere')) labelOf[m[1]] = (m[0].match(/label: '([^']+)'/) ?? [])[1]
+    // options.ts keeps Prism's name for this row; Prism Terminal draws and
+    // indexes it as the see-through window (#156, `acrylicLabel`).
+    labelOf['term-acrylic'] = 'See-through window'
     const order = [...readFileSync(resolve(process.cwd(), 'src/renderer/src/components/settings/settingsIndex.ts'), 'utf8').matchAll(/'([a-z]+(?:-[a-z]+)+|[a-z]+-[a-z]+)'/g)].map((m) => m[1])
     const ids = [...new Set(order.filter((id) => labelOf[id]))]
     ok(ids.length >= 30, `the index covers every row drawn on this PC (${ids.length})`)
@@ -4972,12 +4979,13 @@ const scenarios = {
     )
 
     // BACKGROUND AND ACCENT SIT RIGHT UNDER THE THEME WALL (2026-09-28: a
-    // theme sets them, so they follow it; they sat under Font size before).
+    // theme sets them, so they follow it; they sat under Font size before),
+    // after the see-through window, which moved up to the wall in #156.
     const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
     const at = order.indexOf('term-theme')
     ok(
-      at >= 0 && order[at + 1] === 'window-background' && order[at + 2] === 'window-accent',
-      `Background and Accent come right after the theme wall (${order.slice(Math.max(0, at - 1), at + 4).join(' > ')})`
+      at >= 0 && order[at + 1] === 'term-acrylic' && order[at + 2] === 'window-background' && order[at + 3] === 'window-accent',
+      `See-through, Background and Accent come right after the theme wall (${order.slice(Math.max(0, at - 1), at + 5).join(' > ')})`
     )
 
     // THE BACKGROUND (owner: "let background colour be a setting"): the
