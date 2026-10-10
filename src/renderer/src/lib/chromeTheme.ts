@@ -1,6 +1,7 @@
 import type { TermTheme } from '@core/renderer/lib/termTheme'
 import { contrastRatio, ensureContrast, luminance, mixHex, normalizeColor } from '@core/renderer/lib/termAnsi'
 import { alphaHex, alphaOf, composite, selectionFor } from '@core/renderer/lib/colour'
+import { switchKnob } from '@core/renderer/lib/switchKnob'
 import { EDGE_ALPHA, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 
 // The window wears the terminal's theme. Every chrome colour is derived from
@@ -25,9 +26,6 @@ const FALLBACK_FG = '#e7e7ee'
 // on the same colour, and the active tab is told from the rest by its INK.
 const TEXT_FLOOR = 4.5
 const QUIET_FLOOR = 3
-/** How much text a Prompt segment carries over the strip, and the tab in front. */
-export const SEG_MIX = 0.04
-export const SEG_ON_MIX = 0.11
 
 /** Every COLOUR token the components read. Radius, font and size tokens are
  *  index.css's, since no theme changes them. */
@@ -57,8 +55,7 @@ export const CHROME_COLOUR_TOKENS = [
   '--p-preview',
   '--p-sel-bg',
   '--p-tree-folder',
-  '--p-seg',
-  '--p-seg-on'
+  '--p-switch-knob'
 ] as const
 
 export interface ChromeTokens {
@@ -231,12 +228,12 @@ export function chromeTokens(
     // The folder in the + menu's list of places: the accent's brighter cut,
     // already held to the non-text floor on the panel it is drawn on.
     '--p-tree-folder': accentHi,
-    // THE PROMPT SEGMENTS (#143): the theme's text laid on the strip at 4%, and
-    // at 11% for the tab in front (the approved mockups' values). Solid on an
-    // opaque window; on glass the same text at that ALPHA, so a segment is the
-    // same step over the strip's sheet and never a second coat of the ground.
-    '--p-seg': glass ? fg + alphaHex(SEG_MIX) : mixHex(bg, fg, SEG_MIX),
-    '--p-seg-on': glass ? fg + alphaHex(SEG_ON_MIX) : mixHex(bg, fg, SEG_ON_MIX)
+    // THE ON SWITCH'S KNOB (owner, 2026-10-10: "keep that to being black on
+    // dark themes and white on light themes ... only when the color is very
+    // close"): the theme's own ink, measured off the ground, flipped only where
+    // it reads under 2:1 on the ON track (`--p-sel-bg`, as the eye sees it over
+    // the ground: a see-through accent's fill is measured composited).
+    '--p-switch-knob': switchKnob(composite(selBg, bg), !light)
   }
   return { mode, vars }
 }

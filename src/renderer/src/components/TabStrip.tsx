@@ -21,7 +21,6 @@ import {
 } from '@core/renderer/lib/termLook'
 import { failedLabel } from '@core/renderer/lib/agentHookSignal'
 import { useAgentColors } from '@core/renderer/lib/agentColors'
-import { composite } from '@core/renderer/lib/colour'
 import { markPalette } from '@core/renderer/lib/markPalette'
 import { resolveTabMark, type MarkColour, type MarkState } from '@core/renderer/lib/tabMark'
 import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from '@core/renderer/lib/recentRoots'
@@ -130,7 +129,7 @@ export function TabStrip({
 }): JSX.Element | null {
   const indicator = useAgentIndicator()
   const width = useTabWidth()
-  // The tab style (#143): Classic, the flat strip, or Prompt's chevrons.
+  // The tab style (#143): Classic, the flat strip, or Powerline's chevrons.
   const prompt = useTabStyle() === 'prompt'
   // The user's pick where there is one, else the theme's accent and green.
   const colours = useAgentColors()
@@ -140,23 +139,27 @@ export function TabStrip({
   const rainbow = useAgentRainbow()
   // EVERY MARK'S COLOUR (#143), from what the window paints NOW: App paints
   // the chrome synchronously on every look change, before this re-renders.
-  // Held to 3:1 on every ground a mark can sit on: the strip, and under Prompt
+  // Held to 3:1 on every ground a mark can sit on: the strip, and under Powerline
   // both segment shades (composited, since on glass they are see-through).
   const root = getComputedStyle(document.documentElement)
   const read = (name: string, fallback: string): string => root.getPropertyValue(name).trim() || fallback
   const solidGround = read('--p-bg-solid', '#0b0b0f')
-  const grounds = prompt
-    ? [solidGround, composite(read('--p-seg', solidGround), solidGround), composite(read('--p-seg-on', solidGround), solidGround)]
-    : [solidGround]
+  // Powerline's segments are the strip's own ground now (2026-10-10 rework: idle
+  // paints nothing, the tab in front is --p-tab-active, exactly Classic's), so
+  // every mark sits on the one ground in both styles.
+  const grounds = [solidGround]
+  // Whether the tab in front PAINTS: --p-tab-active is the ground on an opaque
+  // window and fully transparent on glass (chromeTokens).
+  const activePaints = !/^#[0-9a-f]{6}00$/i.test(read('--p-tab-active', solidGround))
   const text = read('--p-text', '#e7e7ee')
   // Worked out again only when what it is made of changes: the strip renders on
-  // every pointer move of a tab drag, and flooring eighteen colours on three
-  // grounds each time is work the frame does not need.
+  // every pointer move of a tab drag, and flooring colours each time is work
+  // the frame does not need.
   const paletteKey = `${colours.working}|${colours.finished}|${colours.question}|${colours.failed}|${grounds.join(',')}|${solidGround}|${text}|${rainbow}`
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the key IS every input, as text
   const palette = useMemo(() => markPalette({ colours, grounds, solidGround, text, rainbow }), [paletteKey])
   /** A mark's colour role as a CSS background: the rainbow runs along a line
-   *  (`x`) or down a Prompt edge (`y`); the rule is the active rule's token. */
+   *  (`x`) or down a Powerline edge (`y`); the rule is the active rule's token. */
   const paint = (role: MarkColour | null, axis: 'x' | 'y'): string => {
     switch (role) {
       case 'working':
@@ -171,12 +174,36 @@ export function TabStrip({
         return palette.line.question
       case 'failed':
         return palette.line.failed
-      case 'badge':
-        return palette.fill.done
       default:
         return 'transparent'
     }
   }
+  // Every tab's state and mark, worked out before any is drawn: a Powerline edge
+  // needs to know whether the NEXT segment paints (below).
+  const looks = tabs.map((t) => {
+    const on = t.id === activeId
+    // The agent's state on this tab. A tab IS its shell here, so the tab's
+    // id is the session's. Working shows on any tab, the one in front
+    // included; the other three only on a tab nobody is looking at (App's
+    // sets), each behind its own switch.
+    const working = indicator !== 'off' && agentIds.has(t.id) && workingIds.has(t.id)
+    // THE ATTENTION MARKS (2026-09-28; owner: a finished indicator, "a
+    // static colour like a green border on the bottom ... until you click
+    // the tab", and "a question indicator ... blue"): a question outranks
+    // a plain finish.
+    const question = questionOn && !working && questionIds.has(t.id)
+    // FAILED (#131): a turn that ended on an error, said by Claude Code's
+    // own hook. Under a question, over a plain finish.
+    const failed = failedOn && !working && !question && !!failedIds?.has(t.id)
+    const done = doneOn && !working && !question && !failed && doneIds.has(t.id)
+    const state: MarkState | null = working ? 'working' : question ? 'question' : failed ? 'failed' : done ? 'done' : null
+    // WHICH MARK, from the core's one rule (#143): the strip only draws it.
+    const mark = resolveTabMark({ indicator, tabStyle: prompt ? 'prompt' : 'flat', state, active: on, rainbow })
+    // Whether its segment covers what lies under it: a Full fill, or the tab
+    // in front on an opaque window. An idle segment paints nothing.
+    const paints = mark.place === 'fill' || (on && activePaints)
+    return { failed, state, mark, paints }
+  })
   // A tab being carried (#71 follow-up): the strip animates it rather than
   // drawing a hairline - the tab lifts out and its neighbours slide across to
   // open the gap it would drop into, which is what "picked up" looks like.
@@ -307,7 +334,7 @@ export function TabStrip({
     if (dropAt <= carry.from && i >= dropAt && i < carry.from) return carry.width
     return 0
   }
-  // The strip's height, for the Prompt rule's cut along the slant and the
+  // The strip's height, for the Powerline rule's cut along the slant and the
   // rainbow's tile down an edge: 32 px under a title bar, the title row's
   // height without one (#91).
   const [stripH, setStripH] = useState(32)
@@ -365,23 +392,7 @@ export function TabStrip({
     >
       {tabs.map((t, i) => {
         const on = t.id === activeId
-        // The agent's state on this tab. A tab IS its shell here, so the tab's
-        // id is the session's. Working shows on any tab, the one in front
-        // included; the other three only on a tab nobody is looking at (App's
-        // sets), each behind its own switch.
-        const working = indicator !== 'off' && agentIds.has(t.id) && workingIds.has(t.id)
-        // THE ATTENTION MARKS (2026-09-28; owner: a finished indicator, "a
-        // static colour like a green border on the bottom ... until you click
-        // the tab", and "a question indicator ... blue"): a question outranks
-        // a plain finish.
-        const question = questionOn && !working && questionIds.has(t.id)
-        // FAILED (#131): a turn that ended on an error, said by Claude Code's
-        // own hook. Under a question, over a plain finish.
-        const failed = failedOn && !working && !question && !!failedIds?.has(t.id)
-        const done = doneOn && !working && !question && !failed && doneIds.has(t.id)
-        const state: MarkState | null = working ? 'working' : question ? 'question' : failed ? 'failed' : done ? 'done' : null
-        // WHICH MARK, from the core's one rule (#143): the strip only draws it.
-        const mark = resolveTabMark({ indicator, tabStyle: prompt ? 'prompt' : 'flat', state, active: on, rainbow })
+        const { failed, state, mark } = looks[i]
         const filled = mark.place === 'fill' && state !== null
         const ink = filled ? palette.ink[state] : undefined
         const first = i === 0
@@ -391,14 +402,14 @@ export function TabStrip({
         // Elsewhere the tab in front is told by its brighter ink, as always.
         const nameInk = on || indicator === 'full' ? 'text-[var(--p-text)]' : 'text-[var(--p-dim)] hover:text-[var(--p-text)]'
         // What a flat tab's own mark draws (run, line, fill); the ring sits by
-        // the name, and a Prompt edge is drawn by the segment's band.
+        // the name, and a Powerline edge is drawn by the segment's band.
         const flatMark =
           state && (mark.place === 'run' || mark.place === 'line' || mark.place === 'fill') ? (
             <TabMark
               mark={mark}
               state={state}
               background={filled ? palette.fill[state] : paint(mark.colour, 'x')}
-              foot={mark.colour === 'badge' ? palette.badgeFoot : undefined}
+              overlay={mark.overlay === 'run' ? palette.overlay.run : undefined}
               ink={ink}
             />
           ) : null
@@ -518,8 +529,16 @@ export function TabStrip({
           // belongs to the tab whose arrow fills it. The band sits BEHIND the
           // segment and is cut by this segment and the next one, so it fills
           // the gap flush, tip to both corners (lib/promptGeometry).
-          const band = edgeBand(last)
+          // The band tucks 1 px under each segment it meets so the seam never
+          // shows, but only under one that PAINTS: an idle segment is see-
+          // through now, and a tuck under it would widen the 2.5 px edge to
+          // 4.5 (the ground-coloured seam is invisible there anyway).
+          const band = edgeBand(last, { self: looks[i].paints, next: !last && looks[i + 1].paints })
           const rule = ruleClip(stripH, first)
+          // The edge this segment wears: Minimal's own. A Full working fill has
+          // none (owner, 2026-10-10: the pulsing arrow is for the tab you are on).
+          const edge =
+            mark.place === 'edge' && state ? { motion: mark.motion, background: paint(mark.colour, 'y') } : null
           return (
             <div
               key={t.id}
@@ -530,32 +549,34 @@ export function TabStrip({
               }`}
               style={{ ...motion, marginRight: last ? 4 : -OVERLAP }}
             >
-              {mark.place === 'edge' && state && (
+              {edge && state && (
                 <span
                   data-mark="edge"
                   data-prompt-edge={state}
-                  data-mark-motion={mark.motion ?? undefined}
+                  data-mark-motion={edge.motion ?? undefined}
+                  data-mark-overlay={mark.overlay}
                   data-attention={state !== 'working' ? state : undefined}
-                  data-rainbow={mark.colour === 'rainbow' ? '' : undefined}
+                  data-rainbow={mark.place === 'edge' && mark.colour === 'rainbow' ? '' : undefined}
                   aria-hidden
                   className="pointer-events-none absolute inset-y-0 z-0"
                   style={{ right: band.right, width: band.width, clipPath: band.clip }}
                 >
                   <i
-                    className={`absolute inset-0 ${motionClass(mark.motion, 'y')}`}
+                    className={`absolute inset-0 ${motionClass(edge.motion, 'y')}`}
                     style={{
-                      background: paint(mark.colour, 'y'),
-                      ...(mark.motion === 'flow' ? { backgroundSize: `100% ${stripH}px`, ['--tile-y' as string]: `${stripH}px` } : {})
+                      background: edge.background,
+                      ...(edge.motion === 'flow' ? { backgroundSize: `100% ${stripH}px`, ['--tile-y' as string]: `${stripH}px` } : {})
                     }}
                   />
                 </span>
               )}
               <div
                 data-prompt-shape
+                // ON THE THEME'S OWN GROUND (2026-10-10 rework): an idle
+                // segment paints nothing over the strip and the tab in front is
+                // --p-tab-active, exactly Classic's; a hover is Classic's too.
                 className={`pointer-events-auto relative z-[1] flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden transition-colors ${nameInk} ${
-                  on
-                    ? 'bg-[var(--p-seg-on)]'
-                    : 'bg-[var(--p-seg)] group-hover:bg-[color-mix(in_srgb,var(--p-seg-on)_55%,var(--p-seg))]'
+                  on ? 'bg-[var(--p-tab-active)]' : 'group-hover:bg-[var(--p-hover)]'
                 }`}
                 style={{ clipPath: segmentClip(first), padding: `0 22px 0 ${first ? 10 : 14}px` }}
               >

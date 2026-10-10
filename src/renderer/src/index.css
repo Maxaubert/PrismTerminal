@@ -54,8 +54,7 @@ body,
   --p-track: #5a5a5e;
   --p-sel-bg: #4aa5f0;
   --p-tree-folder: #71b6f0;
-  --p-seg: #141418;
-  --p-seg-on: #232328;
+  --p-switch-knob: #0b0b0f;
 
   /* Shape and type. No theme changes these, so they live here and nowhere
      else. --p-radius-sm is SHARED, not styled: small controls keep one shape
