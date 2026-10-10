@@ -91,7 +91,7 @@ build agents; e2e only in the Gate task, one run at a time.
    - Any other Ctrl chord handled in `onKey` first commits a running walk.
    - `keyup` (capture) on window: `e.key === 'Control'` commits; `blur` on window commits. Commit =
      `walk = null; mru = touchMru(mru, activeId)`. Remove both listeners in the cleanup.
-4. `appOptions.ts`: `{ id: 'tab-switch', label: 'Tab switching', sub: 'Where Ctrl+Tab goes next.',
+4. `appOptions.ts`: `{ id: 'tab-switch', label: 'Tab switching', sub: 'Which tab comes next when you switch.',
    section: 'window', page: 'appearance', icon: 'key', keywords: 'ctrl tab mru recent order cycle
    switch next previous last used', store: ['prism.window.tabSwitch'] }`, after `tab-style`.
 5. `AppearancePage.tsx` Window section: a `SettingRow id="tab-switch"` with

@@ -3,7 +3,6 @@ import { followsHostStyle, hostDefaults, hostOwnsWindowAcrylic } from '../../hos
 import {
   applyCustomExtras,
   customTermTheme,
-  saveCustomTermTheme,
   setTermThemeId,
   termThemeId,
   useCustomTermTheme,
@@ -19,7 +18,7 @@ import { SEE_THROUGH_MAX } from '../../lib/seeThrough'
 import { ColourField } from '../ColourPicker'
 import ThemeSwitchAsk from '../../components/ThemeSwitchAsk'
 import { ANSI_KEYS, cardAnsi, paletteOf, pickPreset, presetLook } from './palette'
-import { useNoAcrylic, useTermSetup } from './useTermSetup'
+import { saveAsCustom, useNoAcrylic, useTermSetup } from './useTermSetup'
 
 // THE THEME WALL, once for both layouts of the theme section (2026-10-05):
 // the cards, Show all, the switch question and the colour editor. Extracted
@@ -288,7 +287,7 @@ export function ThemeWall({ onThemePicked, className = '' }: { onThemePicked?: (
   // In force, not stored: High Contrast stays solid (#156), so its Alpha is inert.
   const acrylicOn = useTermAcrylicInForce()
   const custom = useCustomTermTheme()
-  const { dirty, save, extras } = useTermSetup()
+  const { dirty, save } = useTermSetup()
   const noAcrylic = useNoAcrylic()
   const windowAcrylic = hostOwnsWindowAcrylic()
   // The Custom card draws what the terminal draws (#113 review), not the raw
@@ -459,8 +458,7 @@ export function ThemeWall({ onThemePicked, className = '' }: { onThemePicked?: (
             // acrylic it held were gone for good. And it is a theme pick like
             // a card's (#29), so the host forgets its own window colours and
             // the edited background is the one that shows.
-            saveCustomTermTheme({ ...t, ...extras })
-            setTermThemeId('custom')
+            saveAsCustom(t)
             setEditing(null)
             onThemePicked?.()
           }}

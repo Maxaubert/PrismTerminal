@@ -183,8 +183,9 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   Shift goes the other way. The list is reordered ONLY when the hold ends: Control's keyup
   (window, capture), the window's blur, or any other Ctrl chord. Reordering on each press makes
   the second Tab flip straight back (a ping-pong) and the oldest tabs unreachable. Any other
-  activation (a click, Ctrl+1..9, a new tab, a close handing over) is a use at once; closed tabs
-  leave the list. Not persisted. Listens to Control's keyup only, never `onData` (rule 10). Held by
+  activation (a click, Ctrl+1..9, a new tab, a close handing over) is a use at once, and one during
+  a hold (a click with Ctrl still down, a tab opened or closed) ends the hold (`walkHolds`); closed
+  tabs leave the list. Not persisted. Listens to Control's keyup only, never `onData` (rule 10). Held by
   `tabMru.test.ts`, `tabSwitchPrefs.test.ts` and the `tabSwitch` e2e.
 - <a id="window-edge-hairline"></a>**The window's edge is a faint hairline that follows the theme** (owner, same day;
   `windowEdge.ts` + Prism's `dwmHelper.ts`). DWM's border is always one physical pixel, so it cannot

@@ -57,3 +57,16 @@ export function stepWalk(walk: Walk, dir: 1 | -1): Walk {
 export function walkTarget(walk: Walk): string {
   return walk.list[walk.at]
 }
+
+/**
+ * Whether a hold still walks the strip as it is (review of #158). Only while
+ * the tab in front is the one the walk landed on and the strip holds exactly
+ * the snapshot's tabs: a click on another tab mid-hold is a use like any
+ * other, and a tab opened or closed without a Ctrl key (a folder from
+ * Explorer) is one the next Tab press would otherwise walk away from, or to.
+ */
+export function walkHolds(walk: Walk, tabIds: readonly string[], activeId: string | null): boolean {
+  if (activeId !== walkTarget(walk) || tabIds.length !== walk.list.length) return false
+  const open = new Set(tabIds)
+  return walk.list.every((id) => open.has(id))
+}

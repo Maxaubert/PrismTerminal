@@ -467,8 +467,11 @@ function groundInForce(): string {
  * Contrast stays solid where the terminal owns the window acrylic (#156,
  * Prism's rule: its contrast is measured on a solid ground, and glass would
  * put an unmeasurable desktop under the text; this owner works zoomed in and
- * relies on it). The stored choice is kept, so leaving High Contrast gives it
- * back. In Prism the style owns the glass and the switch is read as it is.
+ * relies on it). A theme pick resets the switch with the rest of the setup
+ * (`resetTermExtras`, "the theme is the whole setup"), so a stored on under
+ * High Contrast only comes from before #156; Save changes judges and saves
+ * this, not the stored value (`termSetupState`). In Prism the style owns the
+ * glass and the switch is read as it is.
  */
 export function termAcrylicInForce(): boolean {
   return termAcrylic() && !seeThroughBlocked()
@@ -493,10 +496,16 @@ function rawGroundAlpha(): number {
  * the colour editor opens on, so a see-through window stays see-through
  * through a save (the Opacity slider was carried in the setup the same way).
  * Where the host's style owns the glass (Prism), the palette as it is.
+ *
+ * The default see-through is measured from the PALETTE's own ground, not the
+ * picked Background (review of #156): a dark Custom saved under an opaque
+ * white pick keeps the dark level, the one it paints by itself, and the one
+ * Save changes' dirty check expects. Without an opaque pick the two are the
+ * same ground, so this is `termGroundAlpha()`.
  */
 export function withGroundAlpha<T extends { bg: string }>(palette: T): T {
   if (!hostOwnsWindowAcrylic()) return palette
-  return { ...palette, bg: withAlpha(palette.bg, termGroundAlpha()) }
+  return { ...palette, bg: withAlpha(palette.bg, paintsAlpha(rawGroundAlpha(), opaque(palette.bg), termAcrylicInForce())) }
 }
 
 export function saveCustomTermTheme(theme: CustomTermTheme): void {

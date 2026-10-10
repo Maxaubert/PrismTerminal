@@ -384,7 +384,8 @@ so an update never silently changes what an existing user sees; the bridge to ma
   0xd1, light measured as luminance > 0.4; `lib/seeThrough.ts`, and `paintsAlpha` in `termLook.ts`,
   shared by the window and Save changes' dirty check). A ground with an alpha keeps it; under the
   switch the Alpha stops at 95% (`SEE_THROUGH_MAX`: opaque is the switch's off). High Contrast
-  stays solid (`termAcrylicInForce`; the row is drawn off with "High contrast stays solid.").
+  stays solid (`termAcrylicInForce`; the row is drawn off with "High contrast stays solid."), and Save
+  changes judges and saves the switch in force there, not the stored one (`termSetupState`).
   In this app the row reads "See-through window" / "The desktop shows behind every surface."
   (`acrylicLabel`, `acrylicSub`); Prism keeps "Acrylic terminal background", a terminal row under
   its own app-level See-through window, and nothing there changes. The `seeThrough` e2e holds it.

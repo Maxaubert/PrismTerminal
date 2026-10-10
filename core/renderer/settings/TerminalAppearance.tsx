@@ -22,7 +22,7 @@ import { ColourField } from './ColourPicker'
 import { AgentIndicatorSetting, AttentionSettings } from './TerminalBehaviour'
 import { ThemeWall } from './theme/ThemeWall'
 import { useNoAcrylic, useTermSetup } from './theme/useTermSetup'
-import { acrylicLabel } from './sections/opts'
+import { acrylicLabel, saveSetupTitle } from './sections/opts'
 
 // THE TERMINAL'S LOOK, as one settings section for both hosts (#15): the theme
 // wall and its editor, font, size, acrylic, and the two agent indicator
@@ -126,7 +126,7 @@ export function TerminalAppearanceSettings({
             <SaveButton
               dirty={termDirty}
               onClick={saveTermSetup}
-              title="Saves the theme, agent colours and acrylic as Custom"
+              title={saveSetupTitle()}
             />
           }
         />

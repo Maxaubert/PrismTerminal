@@ -14,7 +14,7 @@ import { TabStrip } from './components/TabStrip'
 import TitleBar, { TitleButtons } from './components/TitleBar'
 import { useTitleBarMode } from './lib/titleBarPrefs'
 import { tabSwitch } from './lib/tabSwitchPrefs'
-import { startWalk, stepWalk, syncMru, touchMru, walkTarget, type Mru, type Walk } from './lib/tabMru'
+import { startWalk, stepWalk, syncMru, touchMru, walkHolds, walkTarget, type Mru, type Walk } from './lib/tabMru'
 import EmptyState from './components/EmptyState'
 import type { SettingsPage } from './components/settings/Settings'
 import { Dialog } from './components/Dialog'
@@ -231,10 +231,11 @@ export default function App(): JSX.Element {
       tabs.map((t) => t.id),
       activeId
     )
-    // A tab closed under a walk could be its next stop: the hold ends there.
-    if (walk.current && walk.current.list.some((id) => !tabs.some((t) => t.id === id))) walk.current = null
-    // Any activation that is not the walk's (a click, Ctrl+1..9, a new tab, a
-    // close handing over) is a use at once.
+    // The hold ends on anything that is not its own step (walkHolds): a click
+    // on another tab while Ctrl is still down, or a tab opened or closed under
+    // it. Then the activation is a use at once, as it is outside a hold (a
+    // click, Ctrl+1..9, a new tab, a close handing over).
+    if (walk.current && !walkHolds(walk.current, tabs.map((t) => t.id), activeId)) walk.current = null
     if (!walk.current && activeId) mru.current = touchMru(mru.current, activeId)
   }, [tabs, activeId])
   useEffect(() => {

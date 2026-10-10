@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { configureTermCore, resetTermCore, type TermHostConfig } from '../../host'
 import { setTermAcrylic, setTermThemeId, seeThroughBlocked } from '../../lib/termLook'
 import { coreSettingsIndex } from '../coreIndex'
-import { acrylicLabel, acrylicSub, opt } from './opts'
+import { acrylicLabel, acrylicSub, opt, saveSetupTitle } from './opts'
 
 // #156: where the terminal owns the window acrylic (Prism Terminal), the
 // acrylic row IS the see-through window and is worded as Prism words its own;
@@ -57,5 +57,11 @@ describe('the acrylic row, per host (#156)', () => {
     expect(row).toMatchObject({ label: 'See-through window', sub: 'The desktop shows behind every surface.' })
     // "see through" still finds it by its keywords in Prism's wording too.
     expect(row?.keywords).toContain('see through')
+  })
+  it('Save changes names the setting as the page does, per host', () => {
+    configureTermCore(WINDOW)
+    expect(saveSetupTitle()).toBe('Saves the theme, agent colours and see-through window as Custom')
+    configureTermCore(STYLE)
+    expect(saveSetupTitle()).toBe('Saves the theme, agent colours and acrylic as Custom')
   })
 })

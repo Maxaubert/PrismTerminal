@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { startWalk, stepWalk, syncMru, touchMru, walkTarget, type Walk } from './tabMru'
+import { startWalk, stepWalk, syncMru, touchMru, walkHolds, walkTarget, type Walk } from './tabMru'
 
 /** A hold of Ctrl: the walk started from `mru`, then each Tab (1) or
  *  Shift+Tab (-1) pressed while it is held. Returns the tab landed on. */
@@ -79,6 +79,18 @@ describe('the walk (Most recent, #158)', () => {
     const walk = stepWalk(startWalk(list)!, 1)
     expect(list).toEqual(['c', 'b', 'a'])
     expect(walkTarget(walk)).toBe('b')
+  })
+
+  it('the walk holds only while the tab in front is its own and the strip is its snapshot', () => {
+    const walk = stepWalk(startWalk(['d', 'c', 'b', 'a'])!, 1) // landed on c
+    expect(walkHolds(walk, ['a', 'b', 'c', 'd'], 'c')).toBe(true)
+    // A click on another tab mid-hold is a use, not a step: the hold ends.
+    expect(walkHolds(walk, ['a', 'b', 'c', 'd'], 'a')).toBe(false)
+    // A tab opened without Ctrl (a folder from Explorer) is not in the snapshot.
+    expect(walkHolds(walk, ['a', 'b', 'c', 'd', 'x'], 'x')).toBe(false)
+    expect(walkHolds(walk, ['a', 'b', 'c', 'd', 'x'], 'c')).toBe(false)
+    // A closed tab could be its next stop.
+    expect(walkHolds(walk, ['b', 'c', 'd'], 'c')).toBe(false)
   })
 
   it('over one tab or none there is nothing to walk', () => {

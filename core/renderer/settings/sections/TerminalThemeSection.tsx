@@ -6,10 +6,7 @@ import { SettingRow } from '../layout/SettingRow'
 import { SettingsSection } from '../layout/SettingsSection'
 import { ThemeWall } from '../theme/ThemeWall'
 import { useNoAcrylic, useTermSetup } from '../theme/useTermSetup'
-import { acrylicLabel, acrylicSub, opt, sectionTitle, themeSub } from './opts'
-
-/** What the Save changes button says it does, in both places it is drawn. */
-export const SAVE_SETUP_TITLE = 'Saves the theme, agent colours and acrylic as Custom'
+import { acrylicLabel, acrylicSub, opt, saveSetupTitle, sectionTitle, themeSub } from './opts'
 
 /**
  * THE THEME, as one section (2026-10-05): the theme row with Save changes, the
@@ -38,15 +35,17 @@ export function TerminalThemeSection({
   return (
     <SettingsSection id="theme" title={sectionTitle('theme')}>
       <SettingRow id="term-theme" icon={theme.icon} label={theme.label} sub={themeSub()}>
-        <SaveButton dirty={dirty} onClick={save} title={SAVE_SETUP_TITLE} />
+        <SaveButton dirty={dirty} onClick={save} title={saveSetupTitle()} />
       </SettingRow>
       <SettingBlock pad data-term-wall="">
         <ThemeWall onThemePicked={onThemePicked} />
       </SettingBlock>
       {/* The material does not exist before Windows 11, so there the row says
           why instead of offering a switch that would do nothing. High Contrast
-          keeps the window solid (#156), and says so the same way; the stored
-          choice is kept for the next theme. */}
+          keeps the window solid (#156), and says so the same way. A theme
+          pick resets the switch with the rest of the setup, so a stored on
+          here is only one from before #156, and Save changes ignores it
+          (`termSetupState`). */}
       <SettingRow
         id="term-acrylic"
         icon={acrylic.icon}

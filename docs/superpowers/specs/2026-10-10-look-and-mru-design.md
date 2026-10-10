@@ -102,13 +102,18 @@ PT already has the switch, under another name and with a gap that makes it look 
    when the theme in force is `high-contrast`, the row is drawn off and disabled with the sub
    "High contrast stays solid.", and the window paints solid whatever is stored
    (`termAcrylicInForce()` in `termLook.ts` = `termAcrylic()` and not that case; `paintChrome`,
-   the Background row and the editor read it). The stored choice is kept, so leaving High Contrast
-   gives it back.
+   the Background row and the editor read it). A theme pick resets the switch with the rest of the
+   setup (`resetTermExtras`), so a stored on under High Contrast only comes from before #156; Save
+   changes judges and saves the switch IN FORCE (review: a hidden stored on lit it, and a save
+   carried it into a Custom that was no longer held solid).
 7. **Save changes** keeps working: the switch is a theme extra already (`termExtraDefaults().acrylic`),
    and Save as Custom stores `withGroundAlpha(...)`, which now carries the default alpha, so a saved
    Custom stays see-through. `useTermSetup`'s dirty check compares the ground alpha in force with
    the alpha the saved setup paints, computed by the SAME rule (an older Custom saved with
-   `acrylic: true` and an opaque `bg` paints the default, so it is not dirty on pick).
+   `acrylic: true` and an opaque `bg` paints the default, so it is not dirty on pick). The default
+   level is measured from the ground the window measures from, the picked Background first, so an
+   opaque pick does not light Save changes by its lightness; `withGroundAlpha` measures from the
+   palette's own ground, so a save keeps the Custom's own level.
 8. **Contrast.** Chrome text fills are already flattened under a see-through ground
    (`chromeTheme.ts`, #114). Unit-test every preset at the two default alphas (text 4.5:1 on the
    composite, as the existing `under a see-through ground` test does at its alpha).
@@ -171,8 +176,8 @@ other. `termHost.ts:70` claims Ctrl+Tab from xterm. There is no other next/previ
 
 - Setting **"Tab switching"** (`tab-switch`), a Segmented control, **"In order"** (default) /
   **"Most recent"**, in Settings > Appearance > Window, right after Tab style (the strip's other
-  rows). Sub at rest "Where Ctrl+Tab goes next."; live sub "Ctrl+Tab follows the strip." /
-  "Ctrl+Tab goes to the tab you used last." Icon `key`. Store `prism.window.tabSwitch`
+  rows). Sub at rest "Which tab comes next when you switch."; live sub "The next tab along the
+  strip." / "Back to the tab you used last." (as built: settings text names no keys). Icon `key`. Store `prism.window.tabSwitch`
   (`'order' | 'recent'`, anything else reads 'order'), in a new `src/renderer/src/lib/tabSwitchPrefs.ts`
   shaped like `tabWidthPrefs.ts`. Never touched: In order, so nobody's keys change on update.
 - In **Most recent**, Ctrl+Tab and Ctrl+Shift+Tab walk the most-recently-used list, as browsers and
@@ -185,13 +190,14 @@ other. `termHost.ts:70` claims Ctrl+Tab from xterm. There is no other next/previ
     Ctrl+Tab flips between the last two tabs, and repeated presses walk instead of ping-ponging.
   - Any other activation (a click, Ctrl+1..9, Ctrl+T, Ctrl+, , a close handing over) moves the tab
     in front to the head of the list at once. Any other Ctrl chord pressed during a walk ends the
-    walk first (commit), then acts.
+    walk first (commit), then acts. A click on another tab, or a tab opened or closed, while Ctrl is
+    still held ends the walk too (`walkHolds`): that activation is a use at once.
   - Closed tabs leave the list; new tabs enter it (at the front, as they are activated). At launch
     the list is the active tab, then the rest in strip order (not persisted: history across launches
     is not a thing the owner asked for). The Settings tab takes part, as in In order.
   - Under a close question or the update window the chords still do nothing (rule from #10).
 - Pure `src/renderer/src/lib/tabMru.ts`: `touchMru`, `syncMru(mru, tabIds, activeId)`,
-  `startWalk`, `stepWalk`, `walkTarget`. App holds the list and the walk in refs and listens to
+  `startWalk`, `stepWalk`, `walkTarget`, `walkHolds`. App holds the list and the walk in refs and listens to
   keyup (capture) and window blur. In order keeps `stepTab` exactly.
 - Regression rule 10 is untouched: this listens to the Control keyup only, never to `onData`.
 

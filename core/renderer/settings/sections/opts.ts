@@ -43,6 +43,14 @@ export const themeSub = (): string =>
 export const acrylicLabel = (): string =>
   hostOwnsWindowAcrylic() ? 'See-through window' : opt('term-acrylic').label
 
+/** The setting as the rest of the page names it in a sentence (review of
+ *  #156): Save changes' tooltip and the theme switch question said "acrylic"
+ *  in Prism Terminal, where no row on the page is called that any more. */
+export const acrylicWord = (): string => (hostOwnsWindowAcrylic() ? 'see-through window' : 'acrylic')
+
+/** What Save changes says it does, in every place it is drawn. */
+export const saveSetupTitle = (): string => `Saves the theme, agent colours and ${acrylicWord()} as Custom`
+
 /** The acrylic row's subtext, by what acrylic means in this host: the
  *  window's own material, or the app style's let through the terminal.
  *  `blocked`: the theme in force keeps the window solid (High Contrast,
