@@ -10,7 +10,7 @@ import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPref
  *
  * Everything that is the terminal lives in `core/` and is shared with Prism.
  * This file is the whole of what this app says differently, and each line is an
- * owner decision recorded in CLAUDE.md: the terminal theme drives the window
+ * owner decision recorded in docs/regression-rules.md: the terminal theme drives the window
  * (so there is no host style to follow), the panel paints the ground, the
  * indicator is quiet and wears the theme by default, and the app claims only
  * the chords a shell never uses.
