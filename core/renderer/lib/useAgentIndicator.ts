@@ -5,7 +5,7 @@ import { forgetAgentTitle, readAgentTitle } from './agentTitle'
 import { noteWorking } from './agentClock'
 import { onAgentSignal, onTermKey, onTitle, readScreenTail } from './termBus'
 import { answersQuestion, looksLikeQuestion, questionAnswered } from './agentQuestion'
-import { hookStep, raisedWhileSeen, type AttentionMark, type HookEvent, type HookSession } from './agentHookState'
+import { hookStep, raisedWhileSeen, screenDecides, type AttentionMark, type HookEvent, type HookSession } from './agentHookState'
 import { termApi } from '../host'
 
 /**
@@ -59,9 +59,10 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
   const failedKinds = useRef(new Map<string, string>())
   /**
    * SESSIONS THAT SPEAK THROUGH HOOKS (#131), and the phase each last said.
-   * For these the hooks are the agent's word: the title only says an Esc
-   * (`agentHookState`), the output is never scored, and the screen is never
-   * read for a question. A session that never sends one keeps everything
+   * For these the hooks are the agent's word: the title says an Esc and the
+   * work a Yes approved (`agentHookState`), the output is never scored, and
+   * the screen is read only to HOLD a question the hooks raised while its box
+   * is up (#148), never to raise one. A session that never sends one keeps everything
    * below as it was: Codex, a Claude started before the update, a folder not
    * trusted yet, plugins blocked by policy, or the setting off.
    */
@@ -132,17 +133,50 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     }
   }, [])
 
-  /** One hook signal, or an idle title, for a hooked session: the rules are
+  /**
+   * A SPINNER HELD BY THE BOX, READ AGAIN (#148). MEASURED: the first spinner
+   * title after a Yes came 6 ms BEFORE the repaint that erased the box (22860
+   * and 22866 ms), so the title alone would wait for the next frame, about
+   * 960 ms. One re-read per session, 250 ms on; a new question, the agent
+   * leaving or the session ending cancels it.
+   */
+  const titleRecheck = useRef(new Map<string, number>())
+  const stopTitleRecheck = useCallback((id: string): void => {
+    const t = titleRecheck.current.get(id)
+    if (t !== undefined) clearTimeout(t)
+    titleRecheck.current.delete(id)
+  }, [])
+  /** The re-read calls the current `applyHook`, which is declared below it. */
+  const applyHookRef = useRef<(id: string, ev: HookEvent) => void>(() => {})
+
+  /** One hook signal, or a title, for a hooked session: the rules are
    *  `agentHookState`'s; this only carries them out. A mark is raised only on
    *  a tab nobody is looking at, as every mark is. */
   const applyHook = useCallback((id: string, ev: HookEvent): void => {
-    const o = hookStep(hooked.current.get(id), ev)
-    if (!o) return
+    const prev = hooked.current.get(id)
+    // The screen is read only when the box decides the step: a question pending.
+    const boxUp = screenDecides(prev, ev) && looksLikeQuestion(readScreenTail(id))
+    const o = hookStep(prev, ev, boxUp ? { questionOnScreen: true } : undefined)
+    if (!o) {
+      if (boxUp && ev.state === 'working-title' && !titleRecheck.current.has(id)) {
+        titleRecheck.current.set(
+          id,
+          window.setTimeout(() => {
+            titleRecheck.current.delete(id)
+            if (titleState.current.get(id) === 'working') applyHookRef.current(id, { state: 'working-title' })
+          }, 250)
+        )
+      }
+      return
+    }
     hooked.current.set(id, { phase: o.phase, kind: o.kind })
     if (o.phase === 'failed' && o.kind) failedKinds.current.set(id, o.kind)
     else if (o.phase === 'failed' || o.clear.includes('failed')) failedKinds.current.delete(id)
     const away = !lookedAt(id)
-    if (o.raise.includes('question')) stopAnswerCheck(id)
+    if (o.raise.includes('question')) {
+      stopAnswerCheck(id)
+      stopTitleRecheck(id)
+    }
     const marks = (mark: AttentionMark) => (prev: ReadonlySet<string>): ReadonlySet<string> => {
       if ((away || raisedWhileSeen(mark)) && o.raise.includes(mark)) return prev.has(id) ? prev : new Set(prev).add(id)
       return o.clear.includes(mark) ? without(prev, id) : prev
@@ -154,7 +188,10 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
       if (prev.has(id) === o.working) return prev
       return o.working ? new Set(prev).add(id) : without(prev, id)
     })
-  }, [stopAnswerCheck])
+  }, [stopAnswerCheck, stopTitleRecheck])
+  useEffect(() => {
+    applyHookRef.current = applyHook
+  }, [applyHook])
 
   useEffect(
     () =>
@@ -172,6 +209,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           titled.current.delete(id)
           forgetAgentTitle(id)
           stopFallback(id)
+          stopTitleRecheck(id)
           setWorkingIds((prev) => without(prev, id))
           // Nobody is left to answer a question (#144).
           setQuestionIds((prev) => without(prev, id))
@@ -199,7 +237,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           return next
         })
       }),
-    [stopFallback]
+    [stopFallback, stopTitleRecheck]
   )
 
   useEffect(
@@ -277,9 +315,11 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
         if (!agentKinds.current.has(id)) agentKinds.current.set(id, r.kind)
         setAgentIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
         titleState.current.set(id, r.state)
-        // A session speaking through hooks: the title only says an Esc (#131).
+        // A session speaking through hooks: the title says an Esc (#131), and
+        // a spinner after a question is the work its Yes approved (#148).
         if (hooked.current.has(id)) {
           if (r.state === 'idle') applyHook(id, { state: 'idle-title' })
+          else if (r.state === 'working') applyHook(id, { state: 'working-title' })
           return
         }
         // Idle is where a question is asked: read the screen for its box.
@@ -419,7 +459,8 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     if (t !== undefined) clearTimeout(t)
     questionTimers.current.delete(id)
     stopAnswerCheck(id)
-  }, [stopFallback, stopAnswerCheck])
+    stopTitleRecheck(id)
+  }, [stopFallback, stopAnswerCheck, stopTitleRecheck])
 
   return { agentIds, workingIds, doneIds, questionIds, failedIds, failedKinds, agentKinds, forget }
 }
