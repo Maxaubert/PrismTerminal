@@ -20,6 +20,7 @@ import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { setWindowEdges, useWindowEdges } from '../../lib/edgesPrefs'
 import { setTabWidth, useTabWidth, type TabWidth } from '../../lib/tabWidthPrefs'
 import { setTabStyle, useTabStyle, type TabStyle } from '../../lib/tabStylePrefs'
+import { setTabSwitch, useTabSwitch, type TabSwitch } from '../../lib/tabSwitchPrefs'
 import { setTitleBarMode, useTitleBarMode } from '../../lib/titleBarPrefs'
 import { setWindowAccent, useWindowAccent } from '../../lib/accentPrefs'
 import { onWindowBackgroundChange, setWindowBackground, useWindowBackground, windowBackground } from '../../lib/backgroundPrefs'
@@ -64,6 +65,12 @@ const TAB_WIDTH_OPTIONS: Array<{ id: TabWidth; name: string }> = [
 const TAB_STYLE_OPTIONS: Array<{ id: TabStyle; name: string }> = [
   { id: 'classic', name: 'Classic' },
   { id: 'prompt', name: 'Powerline' }
+]
+
+// In order first: it is the default, Ctrl+Tab as it always was (#158).
+const TAB_SWITCH_OPTIONS: Array<{ id: TabSwitch; name: string }> = [
+  { id: 'order', name: 'In order' },
+  { id: 'recent', name: 'Most recent' }
 ]
 
 /** What the THEME in force would give the window, which is what a swatch
@@ -196,6 +203,8 @@ export function AppearancePage(): JSX.Element {
   const titleBar = useTitleBarMode()
   const tab = appOpt('tab-width')
   const shape = appOpt('tab-style')
+  const switching = useTabSwitch()
+  const swap = appOpt('tab-switch')
   const bar = appOpt('title-bar')
   const edge = appOpt('window-edges')
   return (
@@ -207,6 +216,17 @@ export function AppearancePage(): JSX.Element {
         {/* The tab style (#143): the flat strip, or Powerline's chevrons. */}
         <SettingRow id="tab-style" icon={shape.icon} label={shape.label} sub={shape.sub}>
           <Segmented value={style} onChange={setTabStyle} options={TAB_STYLE_OPTIONS} />
+        </SettingRow>
+        {/* Where Ctrl+Tab goes (#158): the strip, or the tab used last. The
+            sub says what the choice in force does, so the row answers it
+            without trying the keys; settings copy names no key (settingsCopy). */}
+        <SettingRow
+          id="tab-switch"
+          icon={swap.icon}
+          label={swap.label}
+          sub={switching === 'recent' ? 'Back to the tab you used last.' : 'The next tab along the strip.'}
+        >
+          <Segmented value={switching} onChange={setTabSwitch} options={TAB_SWITCH_OPTIONS} />
         </SettingRow>
         {/* A switch over the same store the segmented control wrote: on is
             `shown`, the default, the window as it always was (#91). */}

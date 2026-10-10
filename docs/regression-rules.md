@@ -174,6 +174,18 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   **Ctrl+W closes a tab, in BOTH apps** (owner, 2026-09-19, reversing the first build's
   Ctrl+Shift+W, which still works). Known cost, accepted: the shell loses delete-word on that chord;
   Ctrl+Backspace does the same job.
+- <a id="most-recent-commits-on-release"></a>**MOST RECENT COMMITS ON CTRL RELEASE** (#158; owner, 2026-10-10: "add a
+  new tab switching mode called most recent. so you can either switch chronologically or by most
+  recently used"). Settings > Appearance > Window > Tab switching, `prism.window.tabSwitch`:
+  `order` (In order, the DEFAULT, `stepTab` exactly as before) or `recent`. In Most recent,
+  Ctrl+Tab walks a SNAPSHOT of the used list taken at the hold's first press (`lib/tabMru.ts`):
+  one press flips to the tab used before, more presses while Ctrl is held go further back,
+  Shift goes the other way. The list is reordered ONLY when the hold ends: Control's keyup
+  (window, capture), the window's blur, or any other Ctrl chord. Reordering on each press makes
+  the second Tab flip straight back (a ping-pong) and the oldest tabs unreachable. Any other
+  activation (a click, Ctrl+1..9, a new tab, a close handing over) is a use at once; closed tabs
+  leave the list. Not persisted. Listens to Control's keyup only, never `onData` (rule 10). Held by
+  `tabMru.test.ts`, `tabSwitchPrefs.test.ts` and the `tabSwitch` e2e.
 - <a id="window-edge-hairline"></a>**The window's edge is a faint hairline that follows the theme** (owner, same day;
   `windowEdge.ts` + Prism's `dwmHelper.ts`). DWM's border is always one physical pixel, so it cannot
   be thinner; what reads as thickness is contrast, so it is drawn a small step off the theme's own

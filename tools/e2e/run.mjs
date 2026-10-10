@@ -166,7 +166,7 @@ const tabLabels = (page) =>
  * so a row moving between pages is one line here.
  */
 const PREF_PAGE = {
-  'tab-width': 'appearance', 'tab-style': 'appearance', 'title-bar': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
+  'tab-width': 'appearance', 'tab-style': 'appearance', 'tab-switch': 'appearance', 'title-bar': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
   'window-background': 'appearance', 'window-accent': 'appearance', 'term-acrylic': 'appearance',
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
@@ -1636,6 +1636,105 @@ const scenarios = {
       await backToFirst(page)
       await shotStrip(page, 'tabs-prompt-light')
       await quietStrip(page)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * TAB SWITCHING, MOST RECENT (#158; owner, 2026-10-10: "so you can either
+   * switch chronologically or by most recently used"). In order stays the
+   * default and steps the strip. Most recent walks the used list as browsers
+   * do: one Ctrl+Tab flips to the tab used before, Tab again while Ctrl is held
+   * goes further back, and the order changes only when Ctrl is let go, so
+   * repeated presses never ping-pong. A closed tab leaves the list, a new one
+   * enters it at the front.
+   */
+  async tabSwitch(ok) {
+    const w = world()
+    const gamma = join(dirname(w.alpha), 'gamma')
+    const delta = join(dirname(w.alpha), 'delta')
+    mkdirSync(gamma)
+    mkdirSync(delta)
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta, gamma], pick: delta })
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 3), 'three tabs open')
+      const front = () =>
+        page.evaluate(() => {
+          const t = [...document.querySelectorAll('[data-tab]')].find(
+            (el) => el.getAttribute('aria-selected') === 'true' || el.querySelector('[aria-selected="true"]')
+          )
+          return (t?.textContent ?? '').trim()
+        })
+      const lands = async (name, said) => ok(!!(await until(async () => (await front()).startsWith(name), 4000, 50)), `${said} (${await front()})`)
+      const visit = async (i) => {
+        await page.locator('[data-tab]').nth(i).click()
+        await sleep(150)
+      }
+      // A hold: Ctrl down, Tab (or Shift+Tab) per step, Ctrl up.
+      const hold = async (steps) => {
+        await page.keyboard.down('Control')
+        for (const s of steps) {
+          if (s < 0) await page.keyboard.down('Shift')
+          await page.keyboard.press('Tab')
+          if (s < 0) await page.keyboard.up('Shift')
+          await sleep(120)
+        }
+        await page.keyboard.up('Control')
+        await sleep(150)
+      }
+
+      // IN ORDER, the default: the strip, left to right, wrapping.
+      await visit(0)
+      await hold([1])
+      await lands('beta', 'In order: Ctrl+Tab steps to the next tab in the strip')
+      await hold([-1])
+      await lands('alpha', 'and Ctrl+Shift+Tab back')
+
+      // The row: right after Tab style, In order by default.
+      const row = await gotoPref(page, 'tab-switch')
+      const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
+      ok(order.indexOf('tab-switch') === order.indexOf('tab-style') + 1, `Tab switching is right after Tab style (${order.slice(0, 4).join(' > ')})`)
+      ok((await row.locator('[aria-pressed="true"]').getAttribute('data-seg')) === 'order', 'In order is the default')
+      ok((await row.locator('[data-seg]').allTextContents()).join('|') === 'In order|Most recent', 'the choices are In order and Most recent')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-tab-switch.png') }).catch(() => {})
+      await row.locator('[data-seg="recent"]').click()
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.tabSwitch'))) === 'recent', 'Most recent is stored')
+      await backToFirst(page)
+
+      // MOST RECENT: used alpha, beta, gamma, in that order.
+      for (const i of [0, 1, 2]) await visit(i)
+      await hold([1])
+      await lands('beta', 'one Ctrl+Tab goes to the tab used before this one')
+      await hold([1])
+      await lands('gamma', 'and the next flips back: the last two used')
+      await hold([1, 1])
+      await lands('alpha', 'Tab twice in one hold goes two back, no ping-pong')
+      await hold([1])
+      await lands('gamma', 'released there, alpha is now the latest, so the next flip is gamma')
+      await hold([-1])
+      await lands('beta', 'Ctrl+Shift+Tab on a fresh hold goes to the oldest')
+
+      // A CLOSED TAB LEAVES THE LIST: close gamma (idle, so nothing asks).
+      await visit(2)
+      await lands('gamma', 'gamma in front')
+      await page.keyboard.press('Control+w')
+      ok(await until(async () => (await tabLabels(page)).length === 2), 'Ctrl+W closes it')
+      const after = await front()
+      await hold([1])
+      const flip = await front()
+      ok(!flip.startsWith('gamma') && flip !== after && flip.length > 0, `Ctrl+Tab goes to the other open tab, never the closed one (${after} > ${flip})`)
+
+      // A NEW TAB ENTERS AT THE FRONT: opened (asked, the chooser answers delta),
+      // one flip goes to the tab before it, the next comes back to it.
+      await page.evaluate(() => localStorage.setItem('prism.newtab.mode', 'ask'))
+      await page.locator('[aria-label="New tab"]').click()
+      ok(await until(async () => (await tabLabels(page)).length === 3), 'a new tab opens')
+      await lands('delta', 'and is in front')
+      await hold([1])
+      await lands(flip, 'one Ctrl+Tab goes to the tab used before the new one')
+      await hold([1])
+      await lands('delta', 'and the next comes back to the new tab')
     } finally {
       await closeApp(app)
     }
@@ -3567,7 +3666,7 @@ const scenarios = {
       // window's rows above the theme and what a theme sets under it.
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
       // The see-through row sits right under the wall since #156, as Prism's.
-      const want = ['tab-width', 'tab-style', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-accent']
+      const want = ['tab-width', 'tab-style', 'tab-switch', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-accent']
       ok(JSON.stringify(rows) === JSON.stringify(want), `Appearance runs ${want.join(' > ')} (${rows.join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await gotoPref(page, 'term-font')

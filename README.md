@@ -25,7 +25,7 @@ session comes back when you reopen the app.
 | | |
 |---|---|
 | **Agent indicator on every tab** | A tab lights the moment Claude Code or Codex starts working and shows when the answer has landed, a question is waiting, or a turn failed. Pick Minimal, Ring or Full; a finished tab wears the app icon's rainbow, flowing. |
-| **Two tab styles** | Classic flat tabs, or Powerline: chevron segments whose arrow edge is the agent's mark. |
+| **Two tab styles** | Classic flat tabs, or Powerline: chevron segments whose arrow edge is the agent's mark. `Ctrl+Tab` goes along the strip or back to the tab you used last. |
 | **Sessions that come back** | Close the app and reopen it: every tab returns in its folder, and agent conversations resume on their own. |
 | **Local dictation** | Hold `Right Alt` and speak. [whisper.cpp](https://github.com/ggml-org/whisper.cpp) runs on your PC, offline, and never presses Enter. |
 | **Command help** | Press `F1`, describe a task in plain words and copy the command. Works offline. |
@@ -52,7 +52,7 @@ Works with PowerShell 7, Windows PowerShell, Command Prompt and any installed WS
 | Key | Action |
 |---|---|
 | `Ctrl+T` / `Ctrl+W` | New tab / close tab |
-| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab, in strip order or most recently used (Settings > Appearance > Tab switching) |
 | `Ctrl+1` to `Ctrl+9` | Jump to a tab |
 | `Ctrl+F` | Find in the scrollback (`Ctrl+Shift+F` too; in vim or less, `Ctrl+F` stays page down) |
 | `Ctrl+,` | Settings |
