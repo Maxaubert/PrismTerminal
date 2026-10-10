@@ -298,7 +298,11 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   wrapped in a span of the link colour; xterm replaces a row's contents when it draws it, so a
   rewritten row starts clean. Per row, since a TUI places its own text. Columns are counted in
   CELLS, since a wide character is one character and two cells. xterm splits a row into spans as
-  it likes, so the e2e finds a link's span by POSITION, never by its text.
+  it likes, so the e2e finds a link's span by POSITION, never by its text. **NO PASS HOLDS THE
+  PAGE** (#167; MEASURED 2 s stalls before, 2009 ms and 2046 ms in `scan`, Stable's diag log
+  2026-10-10): a full pass paints the live screen, then the scrollback bottom up in slices of 8 ms
+  or less (`lib/linkScanPlan.ts`, a marker as the cursor), and a found path repaints only the tab
+  and the lines that asked (`revisit`). The `linkPaintStall` e2e holds it.
 - <a id="path-links"></a>**A PATH ON SCREEN IS A LINK WHEN IT EXISTS** (#99; owner, 2026-09-29: "clickable links that would
   open the file or folder", then "go ahead"). `lib/termPaths` finds what COULD be a path (relative or
   absolute, sentence punctuation and `:12` taken off); main's `termPathOpen` answers which exist from
@@ -310,7 +314,9 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   stat). A prompt (`PS C:\x>`, `C:\x>`) is not a link. Menu: Open, Show in Explorer, Copy path.
   Under `--e2e` main records (`__e2eOpenedPaths`) and opens nothing. A host without `paths` in its
   main deps (Prism, until wired) paints no paths at all; `TermHostConfig.openPath` is where Prism
-  opens them inside Prism. The `pathLinks` e2e holds it.
+  opens them inside Prism. A found path repaints only the tab that asked and only the lines that
+  asked (#167: `linkRanges(text, cwd, owner)`, `onPathsFound(owner, fn)`, `takeAsked`); waking
+  every tab's full repaint froze the window 2 s (MEASURED). The `pathLinks` e2e holds it.
 - <a id="file-drop-and-menu"></a>**A file dropped on the terminal types its quoted path, and the terminal answers a right-click**
   (2026-09-19, #16). Both lived in Prism's `TermDock.tsx`, the split dock, and went with it when
   the dock was stripped, while the README, the spec and PR #3 went on listing the drop as shipped

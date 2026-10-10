@@ -2206,6 +2206,95 @@ const scenarios = {
     }
   },
 
+  /**
+   * A FOUND PATH NEVER FREEZES THE WINDOW (#167). One tab's found path woke
+   * every tab's painter, and each repainted its whole scrollback in one task:
+   * MEASURED in Stable's diag log (2026-10-10 16:58Z), 2009 ms and 2046 ms
+   * page stacks in the painter. Written to FAIL on the code before the fix
+   * (the 10,000 lines in tab B were repainted in one task when tab A found a
+   * path); the Gate confirms it on the parent commit if asked.
+   */
+  async linkPaintStall(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    const INK = '121,167,216' // LINK_BLUE on the default theme
+    const inked = () =>
+      page.evaluate((want) => {
+        const norm = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).join(',')
+        return [...document.querySelectorAll('.xterm .xterm-rows > div')].map((row) =>
+          [...row.querySelectorAll('span')]
+            .filter((sp) => norm(getComputedStyle(sp).color) === want)
+            .map((sp) => sp.textContent ?? '')
+            .join('')
+        )
+      }, INK)
+    const rowsText = () => page.evaluate(() => [...document.querySelectorAll('.xterm .xterm-rows > div')].map((r) => r.textContent ?? ''))
+    /** The longest task that STARTED after `since` (performance.now()). */
+    const longest = (since) =>
+      page.evaluate((s) => Math.max(0, ...(window.__longTasks ?? []).filter((t) => t.at >= s).map((t) => t.ms)), since)
+    const now = () => page.evaluate(() => performance.now())
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open')
+      // Tab B (beta, in front at launch): 10,000 lines, each with a path that
+      // names nothing (asked about, so painted lines wait on it) and a web
+      // link (painted at once, so the backlog's progress can be seen).
+      await typeLine(page, '1..10000 | % { "line $_ see docs/x.md at https://e.x/n$_" }')
+      ok(
+        !!(await until(async () => (await rowsText()).some((t) => t.includes('https://e.x/n10000')), 180000, 500)),
+        'tab B printed its 10,000 lines'
+      )
+      await page.waitForFunction(
+        () => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()),
+        null,
+        { timeout: 60000 }
+      )
+      await sleep(1500) // its own painting settles
+      await page.evaluate(() => {
+        window.__longTasks = []
+        new PerformanceObserver((list) => {
+          for (const e of list.getEntries()) window.__longTasks.push({ at: e.startTime, ms: Math.round(e.duration) })
+        }).observe({ type: 'longtask' })
+      })
+      // Tab A finds a path.
+      await page.locator('[data-tab]').nth(0).click()
+      await typeLine(page, "cls; Set-Content found-167.txt x; Write-Host 'made found-167.txt here'")
+      ok(
+        !!(await until(async () => (await inked()).some((t) => t.includes('found-167.txt')), 8000, 100)),
+        'the path tab A printed wears the link colour'
+      )
+      const lit = await now()
+      await sleep(5000)
+      const afterFind = await longest(lit - 500)
+      ok(afterFind < 200, `and no task held the window 200 ms or more while it lit up (longest ${afterFind} ms)`)
+
+      // A full pass over B's 10,000 lines: a theme, and back.
+      const before = await now()
+      await pickTheme(page, 'fawn')
+      await sleep(2000)
+      await pickTheme(page, 'prism')
+      await sleep(3000)
+      const afterTheme = await longest(before)
+      ok(afterTheme < 200, `a theme switch with 10,000 lines in a tab holds the window under 200 ms (longest ${afterTheme} ms)`)
+      await backToFirst(page)
+      await page.locator('[data-tab]').nth(1).click()
+      // B's oldest lines are painted by the backlog, a slice at a time.
+      const box = await page.locator('.xterm').first().boundingBox()
+      if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      for (let i = 0; i < 40; i += 1) await page.mouse.wheel(0, -20000)
+      ok(
+        !!(await until(async () => {
+          const text = await rowsText()
+          const ink = await inked()
+          const top = text.findIndex((t) => t.includes('https://e.x/n'))
+          return top >= 0 && ink[top].includes('https://e.x/n') ? text[top].trim() : null
+        }, 10000, 200)),
+        "and B's oldest lines are painted within 10 s (the backlog finished)"
+      )
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async links(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
@@ -5733,7 +5822,7 @@ function collectStalls(scenario) {
   }
 }
 /** Scenarios that honestly take longer than the default limit. */
-const SLOW = { dictation: 360000, dictationParakeet: 360000, helpPanel: 300000, updateWindow: 300000, indicatorStyles: 360000 }
+const SLOW = { linkPaintStall: 300000, dictation: 360000, dictationParakeet: 360000, helpPanel: 300000, updateWindow: 300000, indicatorStyles: 360000 }
 reapStrays()
 for (const [name, run] of Object.entries(scenarios)) {
   if (only.length && !only.some((o) => name.toLowerCase().includes(o.toLowerCase()))) continue

@@ -45,7 +45,7 @@ import {
   type SelectionGate
 } from '../lib/termSelectionEdit'
 import { attachLinkPaint, type LinkPainter } from '../lib/termLinkPaint'
-import { knownPath, linkRanges, onPathsFound, pathCandidates, type PathHit } from '../lib/termPathLinks'
+import { knownPath, linkRanges, onPathsFound, pathCandidates, takeAsked, type PathHit } from '../lib/termPathLinks'
 import {
   initialCaretHold,
   onCaretKey,
@@ -644,7 +644,11 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // The folder this shell is in (#99): where it started, then the prompt's
   // own report below. Paths on screen are read against it.
   let cwdNow = root
-  const links = attachLinkPaint(term, currentLinkColor, (text) => linkRanges(text, cwdNow))
+  // Paths are asked about as THIS session (#167): a found one repaints only
+  // this terminal, and only the lines that were waiting for it.
+  const links = attachLinkPaint(term, currentLinkColor, (text) => linkRanges(text, cwdNow, id), {
+    asked: () => takeAsked(id)
+  })
   // A PATH IS A LINK TOO, when it exists (#99). The painter colours it; this
   // makes it clickable, with the pointer and the underline of a link. A left
   // click opens it; the right one is the menu's (Open, Show in Explorer, Copy
@@ -831,8 +835,9 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   let agentHere = Boolean(resume)
   const unsub = [
     attachClickCaret(term, el, id),
-    // A path asked about turned out to exist: paint it now.
-    onPathsFound(() => links.repaint()),
+    // A path this session asked about turned out to exist: paint the lines
+    // that asked (#167; it used to be every line of every tab).
+    onPathsFound(id, () => links.revisit()),
     termApi().onTermAgent((forId, present) => {
       if (forId === id) agentHere = present
     }),
