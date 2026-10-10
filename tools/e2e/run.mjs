@@ -4843,12 +4843,14 @@ const scenarios = {
     await page.locator('[data-settings-tab="appearance"]').click()
     await page.locator('[data-term-card="pt-default"]').first().click()
     await until(async () => (await page.locator('[data-term-card="pt-default"]').first().getAttribute('aria-pressed')) === 'true', 4000, 50)
-    const deep = await accentThen('#2a2c3080', 'settings-switch-dark-deep')
-    const dk = knobOk(deep, 'PT Default, a very dark accent')
-    ok(deep.knob === WHITE && dk.r < 2, `there it flips to white: black would read ${dk.r.toFixed(2)}:1`)
+    // The opaque pick first: typing six digits over a see-through pick keeps
+    // the field's alpha, and the theme switch above cleared the accent.
     const deepSolid = await accentThen('#2a2c30', 'settings-switch-dark-solid')
     knobOk(deepSolid, 'PT Default, a very dark opaque accent')
     ok(deepSolid.knob === BLACK, `an opaque one is floored off the ground and keeps the black knob (${deepSolid.track})`)
+    const deep = await accentThen('#2a2c3080', 'settings-switch-dark-deep')
+    const dk = knobOk(deep, 'PT Default, a very dark accent')
+    ok(deep.knob === WHITE && dk.r < 2, `there it flips to white: black would read ${dk.r.toFixed(2)}:1`)
     await closeApp(app)
   },
 
