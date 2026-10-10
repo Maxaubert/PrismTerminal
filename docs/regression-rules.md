@@ -49,6 +49,8 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   `ThreadSafeFunction::CallJS` -> abort). So every kill goes through `killPty` and `will-quit` holds
   the quit on `shellsGone` (3 s cap). It waits for the agent's `exitCode`, set by the native callback,
   not the exit EVENT, which lags 1-2.7 s for a pwsh killed mid-start (a warm shell). `quitManyShells`.
+  The pin was LOST once (#159, 2026-10-10): an icon PR's merge put `^1.1.0` back and the dialog
+  returned for the owner. `src/main/nodePtyPin.test.ts` now fails on any build without the pin.
 - <a id="title-bar-style-hidden"></a>**`titleBarStyle: 'hidden'`, never `frame: false`**: DWM will not composite acrylic behind a
   frameless window.
 - <a id="material-before-colour"></a>**Material before colour** (`material.ts`, measured on Electron 43): `setBackgroundMaterial('none')`
