@@ -12,11 +12,11 @@ const THEMES = ['pt-default', 'prism', 'github', 'dracula', 'paper']
 const toAlpha = (n: number): number => Math.round((n / 100) * 255) / 255
 /** The tokens as the old code published them: `--p-accent-solid` is new in
  *  #114, and for an opaque accent it is `--p-accent` itself (asserted here);
- *  the Prompt segments' two (#143) are new tokens, not a change to any old one. */
+ *  the switch knob (2026-10-10) is a new token, not a change to any old one. */
 const before = (vars: Record<string, string>): Record<string, string> => {
-  const { ['--p-accent-solid']: solid, ['--p-seg']: seg, ['--p-seg-on']: segOn, ...rest } = vars
+  const { ['--p-accent-solid']: solid, ['--p-switch-knob']: knob, ...rest } = vars
   expect(solid).toBe(vars['--p-accent'])
-  expect(seg && segOn).toBeTruthy()
+  expect(knob).toBeTruthy()
   return rest
 }
 

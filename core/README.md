@@ -221,6 +221,13 @@ host's own filled tab, and no rainbow row, so a host that has not adopted the
 marks sees no change. That row's list is `settings/markOptions.ts`, NOT
 `TERMINAL_OPTIONS`; `coreSettingsIndex({ marks: true })` indexes it. Its
 switch is `agentRainbow()` (`prism.term.agentRainbow`, on; no theme resets it).
+Since #154 Full's working fill carries Minimal's mark on top (`overlay`: the
+run in the name's ink, or the Prompt edge in `shadeOn`'s shade) and finished is
+the rainbow across the whole tab (`rainbowInk` picks its name's ink).
+
+**THE ON SWITCH'S KNOB (#154)** is `--p-switch-knob` where the host defines it
+(`lib/switchKnob.ts`: the theme's black or white, flipped only under 2:1 on
+the track), else `--p-on-accent` as before. Prism has not defined it.
 
 ## Rules for code in here (lint-enforced in Prism Terminal's `eslint.config.js`)
 

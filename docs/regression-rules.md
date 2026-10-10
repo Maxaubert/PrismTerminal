@@ -233,15 +233,25 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   THE THEME'S ACCENT** (#138; owner, 2026-10-07: "toggles differ in look i like the teal with black
   not the green and white", then "yes option 1 but it should depend on the theme so only teal on the
   teal theme"). This narrows #42 for switches only: `SWITCH_ON` is `--p-sel-bg` (the accent as a
-  fill, moved until `--p-on-accent` clears 4.5:1 on it, the update chip's pair) and
-  `SWITCH_KNOB_ON` is `--p-on-accent` (near-black on a bright accent, white on a dark one); dimmed
+  fill, moved until `--p-on-accent` clears 4.5:1 on it, the update chip's pair). **THE KNOB FOLLOWS
+  THE THEME, NOT THE ACCENT** (#154; owner, 2026-10-10: "keep that to being black on dark themes and
+  white on light themes ... only when the color is very close"): `SWITCH_KNOB_ON` is
+  `var(--p-switch-knob, var(--p-on-accent))`, and `--p-switch-knob` (`chromeTokens`, rule in
+  `core/renderer/lib/switchKnob.ts`) is near-black `#0b0b0f` when the GROUND is dark (luminance 0.4 or
+  under, measured, never a name) and white when it is light, flipped to the opposite only where that
+  reads under 2:1 on the ON track as the eye sees it. Decided per colour, never per frame. An opaque
+  accent is held to 3:1 on the ground, which keeps it off the default knob, so the flip shows on a
+  see-through accent (a pale one on Paper: black; a deep one on PT Default: white). Prism defines no
+  `--p-switch-knob` yet and keeps its `--p-on-accent` knob. Dimmed
   when disabled, lifted on hover; off is the grey track and white knob as before. Still accented, since they are not
   buttons: Reset links, the chosen theme card, the dropdown's chosen item, the badges, progress, the
   hotkey capture while it listens, a found row's flash. NOT the rail's chosen page any more (#134,
   owner: no accent bar): a grey `--p-hover-hi` fill; and focus in the new rows is a fill and a
   lighter edge, not an accent ring (Prism #272). `neutralControls.test.ts` holds the
   source; the `accent` e2e asserts a picked accent moves neither the row button nor the segment, and that an
-  on switch is `--p-sel-bg` with an `--p-on-accent` knob on PT Default, a picked accent and Paper.
+  on switch is `--p-sel-bg` with the `--p-switch-knob` rule's knob on PT Default, a picked accent,
+  Paper, a very light see-through accent on Paper and a very dark one (see-through and opaque) on PT
+  Default; `switchKnob.test.ts` and `switchAccent.test.ts` hold the rule on every preset.
 - <a id="pt-default-theme"></a>**PT DEFAULT IS THE DEFAULT THEME HERE, AND FIRST IN THE WALL** (owner, 2026-09-22, handing over the palette he had saved as
   Custom: "let this be the default theme ... for prism terminal"): Wombat's colours on #121212, the
   two blacks lifted, the icon's orange `#fe8f34` as the accent. A core preset like any other, and

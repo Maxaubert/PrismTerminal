@@ -53,6 +53,49 @@ export function rainbowGradient(cols: readonly string[], axis: 'x' | 'y'): strin
   return `linear-gradient(${axis === 'x' ? '90deg' : '180deg'}, ${[...cols, cols[0]].join(', ')})`
 }
 
+/** The icon's seven, RAW, across a whole Full fill as a looping gradient
+ *  (2026-10-10 rework, choice 1A: "the solid flowing rainbow across the whole
+ *  finished tab"). Not floored: a fill is the colour itself, and the name's ink
+ *  is what is held to the rule (`rainbowInk`). */
+export function rainbowFillX(): string {
+  return rainbowGradient(ICON_RAINBOW, 'x')
+}
+
+/**
+ * THE PROMPT EDGE ON A WORKING FILL (2026-10-10 rework, variant 2A, kept for
+ * Prompt only). The edge sits in the gap between two segments, which is the
+ * strip's GROUND, so the name's ink (black on Volt) would vanish there; it is
+ * the least 2% step of the working colour toward black or white that clears
+ * 3:1 on BOTH the fill and the ground (the mockup's `shade()`: Volt
+ * `#798f15`, 3.2 / 5.5; Paper `#1c3e59`, 3.1 / 10.1). Of the two directions
+ * the one that gets there in fewer steps wins; if neither does, the step that
+ * came nearest, never an error.
+ */
+export function shadeOn(fill: string, ground: string, floor = 3): string {
+  let best = fill
+  let bestScore = 0
+  let bestSteps = Infinity
+  for (const to of ['#000000', '#ffffff']) {
+    for (let i = 1; i <= 50; i += 1) {
+      const m = mixHex(fill, to, i * 0.02)
+      const score = Math.min(contrastRatio(m, fill), contrastRatio(m, ground))
+      if (score >= floor) {
+        if (i < bestSteps || bestScore < floor) {
+          best = m
+          bestScore = score
+          bestSteps = i
+        }
+        break
+      }
+      if (bestScore < floor && score > bestScore) {
+        best = m
+        bestScore = score
+      }
+    }
+  }
+  return best
+}
+
 /** A see-through colour as the opaque one it shows over the solid ground: Full
  *  fills a tab SOLID (owner, 2026-10-10), so a half-alpha working colour (#112)
  *  is laid on the window's own ground first. */

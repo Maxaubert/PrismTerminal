@@ -1608,8 +1608,10 @@ const scenarios = {
       ok(geo.clipped, 'every segment is clipped to its chevron')
       ok(geo.overlaps.every((o) => Math.abs(o - 9.5) < 0.6), `neighbours overlap by 9.5 px (${geo.overlaps.join(', ')})`)
       ok(
-        !!geo.band && Math.abs(geo.band.left + 13) < 0.6 && Math.abs(geo.band.right - 3.5) < 0.6 && Math.abs(geo.band.top) < 0.6 && Math.abs(geo.band.height) < 0.6,
-        `a working tab's edge band runs from 1 px inside its arrow to 1 px inside the next notch, the full height (${JSON.stringify(geo.band)})`
+        // Both segments are idle under Minimal, so they paint nothing since
+        // the 2026-10-10 rework: no tuck under either, the band is the gap.
+        !!geo.band && Math.abs(geo.band.left + 12) < 0.6 && Math.abs(geo.band.right - 2.5) < 0.6 && Math.abs(geo.band.top) < 0.6 && Math.abs(geo.band.height) < 0.6,
+        `a working tab's edge band runs from its arrow to the next notch, no tuck under see-through segments, the full height (${JSON.stringify(geo.band)})`
       )
       ok(geo.bandMotion === 'p-mark-grow', `and grows (${geo.bandMotion})`)
       ok(JSON.stringify(geo.edges) === JSON.stringify(['working', null, 'working', 'done', 'question', 'failed']), `each marked tab's edge says its state (${geo.edges.join(', ')})`)
@@ -1658,26 +1660,43 @@ const scenarios = {
       const ratio = (x, y) => (Math.max(lum(x), lum(y)) + 0.05) / (Math.min(lum(x), lum(y)) + 0.05)
       const look = () =>
         page.evaluate(() => {
-          const probe = document.createElement('span')
-          probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-text')
-          document.body.appendChild(probe)
-          const text = getComputedStyle(probe).color
-          probe.remove()
+          const css = (name) => {
+            const probe = document.createElement('span')
+            probe.style.color = getComputedStyle(document.documentElement).getPropertyValue(name)
+            document.body.appendChild(probe)
+            const c = getComputedStyle(probe).color
+            probe.remove()
+            return c
+          }
           return {
-            text,
+            text: css('--p-text'),
+            ground: css('--p-bg-solid'),
+            tabActive: css('--p-tab-active'),
             tabs: [...document.querySelectorAll('[data-tab]')].map((t) => {
               const fill = t.querySelector('[data-mark="fill"]')
+              const run = t.querySelector('[data-mark-overlay="run"] > span')
+              const grow = t.querySelector('[data-prompt-edge][data-mark-overlay="grow"] i')
+              const shape = t.querySelector('[data-prompt-shape]')
               return {
                 active: t.hasAttribute('data-tab-active'),
                 state: t.getAttribute('data-agent-state'),
                 marks: [...t.querySelectorAll('[data-mark]')].map((m) => m.getAttribute('data-mark')),
                 rule: !!t.querySelector('[data-prompt-rule]') || [...t.children].some((c) => c.tagName === 'SPAN' && c.getBoundingClientRect().height === 2 && c.getBoundingClientRect().top === t.getBoundingClientRect().top),
                 fill: fill ? getComputedStyle(fill).backgroundColor : null,
+                fillImage: fill ? getComputedStyle(fill).backgroundImage : null,
+                ride: !!t.querySelector('[data-mark-ride], .p-mark-ride, [data-mark-foot]'),
+                run: run ? getComputedStyle(run).backgroundColor : null,
+                grow: grow ? getComputedStyle(grow).backgroundColor : null,
+                growMotion: grow ? grow.className : null,
+                shape: shape ? getComputedStyle(shape).backgroundColor : null,
                 name: getComputedStyle(t.querySelector('[role="tab"]')).color
               }
             })
           }
         })
+      const SEVEN = ['#12cee5', '#2179fa', '#945af5', '#e84fd2', '#fb7f6c', '#f0a934', '#e8d021'].map(
+        (h) => `rgb(${[1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(', ')})`
+      )
       for (const theme of ['volt', 'paper']) {
         await pickTheme(page, theme)
         for (const style of ['classic', 'prompt']) {
@@ -1696,16 +1715,41 @@ const scenarios = {
               const minimal = style === 'prompt' ? 'edge' : 'line'
               ok([3, 4, 5].every((i) => t[i].marks.includes(minimal)), `${tag}: finished, question and failed keep Minimal's ${minimal}`)
             }
+            // PROMPT ON THE THEME'S OWN GROUND (2026-10-10 rework): an idle
+            // segment paints nothing, the tab in front is --p-tab-active.
+            if (style === 'prompt') {
+              ok(t[1].shape === 'rgba(0, 0, 0, 0)', `${tag}: an idle segment paints nothing (${t[1].shape})`)
+              ok(t[0].shape === l.tabActive, `${tag}: the tab in front is --p-tab-active (${t[0].shape} vs ${l.tabActive})`)
+            }
             if (ind === 'full') {
-              ok([2, 3, 4, 5].every((i) => !!t[i].fill && rgb(t[i].fill).length === 3), `${tag}: every marked tab not in front is filled`)
+              ok([2, 4, 5].every((i) => !!t[i].fill && rgb(t[i].fill).length === 3), `${tag}: every marked tab not in front is filled`)
               ok(!t[1].fill, `${tag}: an idle tab is not`)
               ok(t[1].name === l.text, `${tag}: an idle name is the theme's text (${t[1].name} vs ${l.text})`)
-              for (const i of [2, 3, 4, 5]) {
+              ok(t.every((x) => !x.ride), `${tag}: no ride, no badge foot`)
+              for (const i of [2, 4, 5]) {
                 const r = ratio(rgb(l.text), rgb(t[i].fill))
                 const kept = t[i].name === l.text
                 ok(kept === r >= 2, `${tag}: ${t[i].state}'s name is the text unless it reads under 2:1 (${r.toFixed(2)}:1, ${kept ? 'kept' : 'flipped to ' + t[i].name})`)
               }
               if (theme === 'volt') ok(t[2].name !== l.text, `${tag}: on Volt the working fill flips its name`)
+              // FINISHED: the icon's seven across the whole tab (choice 1A).
+              ok(/linear-gradient/.test(t[3].fillImage ?? '') && SEVEN.every((c) => t[3].fillImage.includes(c)), `${tag}: finished is the rainbow across the whole tab`)
+              ok(
+                theme === 'volt' ? t[3].name !== l.text : t[3].name === l.text,
+                `${tag}: the rainbow's name is ${theme === 'volt' ? 'flipped on Volt' : "the text on Paper"} (${t[3].name})`
+              )
+              // WORKING: Minimal's own mark on top of the fill.
+              if (style === 'classic') {
+                // Owner, 2026-10-10: "the working bar ... should be black and
+                // not like a faded arc yellow": the run is the name's ink.
+                ok(!!t[2].run && t[2].run === t[2].name, `${tag}: the run on a working fill is the name's ink (${t[2].run} vs ${t[2].name})`)
+                if (theme === 'volt') ok(rgb(t[2].run).every((v) => v < 20), `${tag}: black on Volt's yellow (${t[2].run})`)
+              } else {
+                ok(!!t[2].grow && /p-mark-grow/.test(t[2].growMotion ?? ''), `${tag}: the working fill grows its arrow edge`)
+                const rf = ratio(rgb(t[2].grow), rgb(t[2].fill))
+                const rg = ratio(rgb(t[2].grow), rgb(l.ground))
+                ok(rf >= 3 && rg >= 3, `${tag}: in a shade that clears 3:1 on the fill and the ground (${t[2].grow}: ${rf.toFixed(2)} / ${rg.toFixed(2)})`)
+              }
             }
             await shotStrip(page, `marks-${style}-${ind}-${theme}`)
           }
@@ -1725,6 +1769,21 @@ const scenarios = {
           ok(t.active && t.rule && !t.fill && t.marks.length > 0, `${style}, Full: ${t.state} in front has its rule and its line, not a fill (${t.marks})`)
         }
       }
+      // THE FULL RAINBOW FLOWS across the whole finished tab, and stands still
+      // under reduced motion.
+      await setPref(page, 'tab-style', 'classic')
+      await backToFirst(page)
+      const fillPos = () => page.evaluate(() => getComputedStyle(document.querySelectorAll('[data-tab]')[3].querySelector('[data-mark="fill"]')).backgroundPositionX)
+      const f1 = await fillPos()
+      await sleep(400)
+      const f2 = await fillPos()
+      ok(f1 !== f2, `the finished fill's rainbow flows (${f1} then ${f2})`)
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await sleep(200)
+      const f3 = await fillPos()
+      await sleep(400)
+      ok(f3 === (await fillPos()), `and stands still under reduced motion (${f3})`)
+      await page.emulateMedia({ reducedMotion: 'no-preference' })
       await setPref(page, 'agent-indicator', 'minimal')
       await setPref(page, 'tab-style', 'classic')
       await backToFirst(page)
@@ -4510,7 +4569,10 @@ const scenarios = {
     // button and a pressed segment must not move. AN ON SWITCH DOES (#138;
     // owner, 2026-10-07: "yes option 1 but it should depend on the theme so
     // only teal on the teal theme"): its track is the accent's fill
-    // (--p-sel-bg) and its knob the ink on it (--p-on-accent), both times.
+    // (--p-sel-bg), both times. ITS KNOB FOLLOWS THE THEME (owner, 2026-10-10:
+    // "keep that to being black on dark themes and white on light themes ...
+    // only when the color is very close"): --p-switch-knob, black on a dark
+    // ground, white on a light one, the opposite only under 2:1 on the track.
     const controls = () =>
       page.evaluate(() => {
         const look = (el) => {
@@ -4533,16 +4595,43 @@ const scenarios = {
           track: sw ? getComputedStyle(sw).backgroundColor : null,
           knob: sw?.firstElementChild ? getComputedStyle(sw.firstElementChild).backgroundColor : null,
           selBg: token('--p-sel-bg'),
-          onAccent: token('--p-on-accent')
+          onAccent: token('--p-on-accent'),
+          switchKnob: token('--p-switch-knob'),
+          ground: token('--p-bg-solid')
         }
       })
+    // The knob rule, measured: the theme's ink (dark or light from the GROUND's
+    // luminance, chromeTokens' 0.4) unless it reads under 2:1 on the track as
+    // the eye sees it (a see-through track composited on the ground).
+    const kNums = (c) => (c.match(/[\d.]+/g) ?? []).map(Number)
+    const kLin = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+    const kLum = ([r, g, b]) => 0.2126 * kLin(r) + 0.7152 * kLin(g) + 0.0722 * kLin(b)
+    const kRatio = (x, y) => (Math.max(kLum(x), kLum(y)) + 0.05) / (Math.min(kLum(x), kLum(y)) + 0.05)
+    const BLACK = 'rgb(11, 11, 15)'
+    const WHITE = 'rgb(255, 255, 255)'
+    const knobRule = (c) => {
+      const g = kNums(c.ground).slice(0, 3)
+      const t = kNums(c.track)
+      const a = t.length > 3 ? t[3] : 1
+      const seen = t.slice(0, 3).map((v, i) => g[i] + (v - g[i]) * a)
+      const dark = kLum(g) <= 0.4
+      const ink = dark ? BLACK : WHITE
+      const r = kRatio(kNums(ink), seen)
+      return { want: r >= 2 ? ink : dark ? WHITE : BLACK, dark, r, seen, onTrack: kRatio(kNums(c.knob ?? ink), seen) }
+    }
+    const knobOk = (c, tag) => {
+      const k = knobRule(c)
+      ok(c.knob === c.switchKnob && c.knob === k.want, `${tag}: the knob is ${k.want === BLACK ? 'black' : 'white'} on a ${k.dark ? 'dark' : 'light'} theme (${c.knob}, the theme's ink at ${k.r.toFixed(2)}:1 on the track)`)
+      ok(k.onTrack >= 2, `${tag}: and it reads at least 2:1 on the track (${k.onTrack.toFixed(2)}:1)`)
+      return k
+    }
     await gotoPref(page, 'newtab-mode')
     await page.locator('[data-choose-folder]').waitFor({ state: 'visible', timeout: 10000 })
     await sleep(700)
     const plain = await controls()
     ok(!!plain.button && !!plain.segment && !!plain.track, 'a row button, a pressed segment and an on switch are on the Terminal page')
     ok(plain.track === plain.selBg, `an on switch's track is the theme's accent fill (${plain.track} vs ${plain.selBg})`)
-    ok(plain.knob === plain.onAccent, `and its knob is the ink on the accent (${plain.knob} vs ${plain.onAccent})`)
+    knobOk(plain, 'PT Default')
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-switch-pt-default.png') }).catch(() => {})
     await page.locator('[data-settings-tab="appearance"]').click()
     const row = page.locator('[data-pref="window-accent"]')
@@ -4656,7 +4745,7 @@ const scenarios = {
       ok(!after[k].split('|').includes(accentRgb), `and the ${k} wears no accent`)
     }
     ok(after.track !== plain.track && after.track === after.selBg, `an on switch's track follows the picked accent (${plain.track} -> ${after.track})`)
-    ok(after.knob === after.onAccent, `and its knob is the ink on it (${after.knob})`)
+    knobOk(after, 'a picked accent')
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-neutral-controls.png') }).catch(() => {})
     await page.locator('[data-settings-tab="appearance"]').click()
     await row.waitFor({ state: 'visible', timeout: 10000 })
@@ -4727,8 +4816,39 @@ const scenarios = {
     await sleep(700)
     const light = await controls()
     ok(light.track === light.selBg && light.track !== plain.track, `on a light theme the on switch is its accent (${light.track})`)
-    ok(light.knob === light.onAccent, `with the ink on it as the knob (${light.knob})`)
+    knobOk(light, 'Paper')
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-switch-light.png') }).catch(() => {})
+
+    // THE FLIP, "only when the color is very close". An opaque accent is held
+    // to 3:1 on the ground, which keeps it clear of the default knob; a
+    // see-through one is a fill that can sit right on it. Very light on Paper:
+    // a black knob; very dark on PT Default: a white one. An opaque very dark
+    // accent, lifted by the floor, keeps the black knob.
+    const accentThen = async (hex, shot) => {
+      await gotoPref(page, 'window-accent')
+      const f = page.locator('[data-pref="window-accent"] input:not([type])')
+      await f.fill(hex)
+      await f.press('Enter')
+      await until(async () => (await page.evaluate(() => localStorage.getItem('prism.window.accent'))) === hex, 6000, 50)
+      await gotoPref(page, 'newtab-mode')
+      await page.locator('[data-choose-folder]').waitFor({ state: 'visible', timeout: 10000 })
+      await sleep(700)
+      const c = await controls()
+      await page.screenshot({ path: resolve(process.cwd(), `.e2e-shots/${shot}.png`) }).catch(() => {})
+      return c
+    }
+    const pale = await accentThen('#cfe4ff80', 'settings-switch-light-pale')
+    const pk = knobOk(pale, 'Paper, a very light accent')
+    ok(pale.knob === BLACK && pk.r < 2, `there it flips to black: white would read ${pk.r.toFixed(2)}:1`)
+    await page.locator('[data-settings-tab="appearance"]').click()
+    await page.locator('[data-term-card="pt-default"]').first().click()
+    await until(async () => (await page.locator('[data-term-card="pt-default"]').first().getAttribute('aria-pressed')) === 'true', 4000, 50)
+    const deep = await accentThen('#2a2c3080', 'settings-switch-dark-deep')
+    const dk = knobOk(deep, 'PT Default, a very dark accent')
+    ok(deep.knob === WHITE && dk.r < 2, `there it flips to white: black would read ${dk.r.toFixed(2)}:1`)
+    const deepSolid = await accentThen('#2a2c30', 'settings-switch-dark-solid')
+    knobOk(deepSolid, 'PT Default, a very dark opaque accent')
+    ok(deepSolid.knob === BLACK, `an opaque one is floored off the ground and keeps the black knob (${deepSolid.track})`)
     await closeApp(app)
   },
 

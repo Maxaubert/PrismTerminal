@@ -40,12 +40,22 @@ export function segmentClip(first: boolean): string {
  * reaches `o` past the arrow line, 1 px inside the next segment's notch. The
  * last segment has no neighbour: its band stops exactly on the notch line a
  * next one would have.
+ *
+ * Since the 2026-10-10 rework an idle segment paints NOTHING (the strip shows
+ * through), so a tuck under it would show and widen the edge from 2.5 px to
+ * 4.5. `paints` says which of the two segments covers its tuck; a side that
+ * does not gets none. Both default to painting, the geometry as measured.
  */
-export function edgeBand(last: boolean): { right: number; width: number; o: number; clip: string } {
-  const o = TUCK + GAP + (last ? 0 : TUCK)
+export function edgeBand(
+  last: boolean,
+  paints: { self: boolean; next: boolean } = { self: true, next: true }
+): { right: number; width: number; o: number; clip: string } {
+  const inSelf = paints.self ? TUCK : 0
+  const inNext = last || !paints.next ? 0 : TUCK
+  const o = inSelf + GAP + inNext
   return {
-    // From the segment's right edge, the band's right edge sits o - TUCK out.
-    right: -(o - TUCK),
+    // From the segment's right edge, the band's right edge sits o - inSelf out.
+    right: -(o - inSelf),
     width: ARROW + o,
     o,
     clip: `polygon(0 0, ${o}px 0, ${o + ARROW}px 50%, ${o}px 100%, 0 100%, ${ARROW}px 50%)`

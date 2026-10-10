@@ -244,25 +244,61 @@ describe('a see-through accent', () => {
   })
 })
 
-describe('the Prompt segments (#143)', () => {
-  it('are the text over the strip at 4% and 11%, solid on an opaque window', () => {
+// PROMPT ON THE THEME'S OWN GROUND (2026-10-10 rework): the segments' own two
+// greys are gone. An idle segment paints nothing and the tab in front is
+// --p-tab-active, exactly Classic's, so no token of their own remains.
+describe('the Prompt segments', () => {
+  it('have no tokens of their own any more, nor :root fallbacks', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
     const v = chromeTokens(resolveTermTheme('prism')).vars
-    expect(v['--p-seg']).toBe(v['--p-side-flat'])
-    expect(contrastRatio(v['--p-seg-on'], v['--p-bg'])).toBeGreaterThan(contrastRatio(v['--p-seg'], v['--p-bg']))
+    expect(v['--p-seg']).toBeUndefined()
+    expect(v['--p-seg-on']).toBeUndefined()
+    expect((CHROME_COLOUR_TOKENS as readonly string[]).filter((n) => n.startsWith('--p-seg'))).toEqual([])
+    expect(readFileSync(join(__dirname, '..', 'index.css'), 'utf8')).not.toMatch(/--p-seg/)
   })
 
-  it('on glass are the text at that alpha, so a segment is one step over the sheet', () => {
-    const v = chromeTokens(resolveTermTheme('prism'), 0.6).vars
-    expect(v['--p-seg']).toBe(v['--p-text'] + '0a')
-    expect(v['--p-seg-on']).toBe(v['--p-text'] + '1c')
-    expect(composite(v['--p-seg'], v['--p-bg-solid'])).toBe(chromeTokens(resolveTermTheme('prism')).vars['--p-seg'])
+  it('wear --p-tab-active in front and nothing at rest, in the strip source', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const src = readFileSync(join(__dirname, '..', 'components', 'TabStrip.tsx'), 'utf8')
+    expect(src).not.toMatch(/--p-seg/)
+    const shape = src.slice(src.indexOf('data-prompt-shape'), src.indexOf('style={{ clipPath: segmentClip'))
+    expect(shape).toMatch(/on \? 'bg-\[var\(--p-tab-active\)\]' : 'group-hover:bg-\[var\(--p-hover\)\]'/)
+  })
+})
+
+// THE ON SWITCH'S KNOB (owner, 2026-10-10: "keep that to being black on dark
+// themes and white on light themes ... only when the color is very close").
+describe('the switch knob token', () => {
+  it('is black on a dark theme, white on a light one, on the presets', () => {
+    expect(chromeTokens(resolveTermTheme('pt-default')).vars['--p-switch-knob']).toBe('#0b0b0f')
+    expect(chromeTokens(resolveTermTheme('paper')).vars['--p-switch-knob']).toBe('#ffffff')
   })
 
-  it('match the :root fallbacks index.css carries for the default prism preset', async () => {
+  it('flips only where the default reads under 2:1 on the ON track', () => {
+    // Every preset's knob reads at least 2:1 on its track.
+    for (const p of TERM_PRESETS) {
+      const v = chromeTokens(resolveTermTheme(p.id)).vars
+      expect(contrastRatio(v['--p-switch-knob'], v['--p-sel-bg']), p.id).toBeGreaterThanOrEqual(2)
+    }
+    // An opaque accent is held to 3:1 on the ground, which keeps it clear of the
+    // default knob too; a SEE-THROUGH one (#114) is a fill that can sit close
+    // to it. A very light blue on a light theme: a black knob.
+    const track = (v: Record<string, string>): string => composite(v['--p-sel-bg'], v['--p-bg-solid'])
+    const pale = chromeTokens(resolveTermTheme('paper'), 1, undefined, 'hairline', '#cfe4ff80').vars
+    expect(contrastRatio('#ffffff', track(pale))).toBeLessThan(2)
+    expect(pale['--p-switch-knob']).toBe('#0b0b0f')
+    // A very dark grey accent on a dark theme: a white knob.
+    const dark = chromeTokens(resolveTermTheme('pt-default'), 1, undefined, 'hairline', '#2a2c3080').vars
+    expect(contrastRatio('#0b0b0f', track(dark))).toBeLessThan(2)
+    expect(dark['--p-switch-knob']).toBe('#ffffff')
+  })
+
+  it('matches the :root fallback index.css carries for the default prism preset', async () => {
     const { readFileSync } = await import('node:fs')
     const { join } = await import('node:path')
     const css = readFileSync(join(__dirname, '..', 'index.css'), 'utf8')
-    const v = chromeTokens(resolveTermTheme('prism')).vars
-    for (const name of ['--p-seg', '--p-seg-on']) expect(css).toContain(`${name}: ${v[name]};`)
+    expect(css).toContain(`--p-switch-knob: ${chromeTokens(resolveTermTheme('prism')).vars['--p-switch-knob']};`)
   })
 })
