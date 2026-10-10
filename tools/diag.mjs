@@ -193,9 +193,11 @@ function main() {
   // A line of no tab (a session, a mark) stays in a tab's view.
   const ofTab = (x) => !o.tab || x.id === undefined || x.id === o.tab
   if (o.all || o.agent) {
+    // A tab's capped flood (#152): how many lines before this one were not written.
+    const dropped = (l) => (AGENT.has(l.k) && l.dropped ? `  [${l.dropped} dropped before]` : '')
     const shown = lines.filter((x) => (o.kinds ? o.kinds.has(x.k) : !o.agent || inAgentTimeline(x)) && ofTab(x))
     if (o.agent && !shown.some((x) => AGENT.has(x.k))) console.log('No agent indicator lines here (an app older than #152 writes none).\n')
-    for (const l of shown) console.log(`${clock(l._ms)}  ${String(l.src ?? '?').padEnd(4)}  ${l.k.padEnd(14)}  ${summary(l)}`)
+    for (const l of shown) console.log(`${clock(l._ms)}  ${String(l.src ?? '?').padEnd(4)}  ${l.k.padEnd(14)}  ${summary(l)}${dropped(l)}`)
     return
   }
 
