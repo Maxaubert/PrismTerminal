@@ -243,3 +243,26 @@ describe('a see-through accent', () => {
     }
   })
 })
+
+describe('the Prompt segments (#143)', () => {
+  it('are the text over the strip at 4% and 11%, solid on an opaque window', () => {
+    const v = chromeTokens(resolveTermTheme('prism')).vars
+    expect(v['--p-seg']).toBe(v['--p-side-flat'])
+    expect(contrastRatio(v['--p-seg-on'], v['--p-bg'])).toBeGreaterThan(contrastRatio(v['--p-seg'], v['--p-bg']))
+  })
+
+  it('on glass are the text at that alpha, so a segment is one step over the sheet', () => {
+    const v = chromeTokens(resolveTermTheme('prism'), 0.6).vars
+    expect(v['--p-seg']).toBe(v['--p-text'] + '0a')
+    expect(v['--p-seg-on']).toBe(v['--p-text'] + '1c')
+    expect(composite(v['--p-seg'], v['--p-bg-solid'])).toBe(chromeTokens(resolveTermTheme('prism')).vars['--p-seg'])
+  })
+
+  it('match the :root fallbacks index.css carries for the default prism preset', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const css = readFileSync(join(__dirname, '..', 'index.css'), 'utf8')
+    const v = chromeTokens(resolveTermTheme('prism')).vars
+    for (const name of ['--p-seg', '--p-seg-on']) expect(css).toContain(`${name}: ${v[name]};`)
+  })
+})

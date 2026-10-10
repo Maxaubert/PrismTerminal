@@ -108,7 +108,8 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   (`raisedWhileSeen`), a look never takes it down, and the badge counts it until it goes: work
   again (a hook or title), another hook state, the agent leaving, the tab closing, or a key that
   settles the box (Enter, Esc, Ctrl+C, a digit; `answersQuestion`) with the box gone after it, the
-  one way a "No" or an Esc is heard, since no hook fires for those. Full's fill is for working alone now.
+  one way a "No" or an Esc is heard, since no hook fires for those. Since #143 (below) a question BREATHES
+  (fades to the ground and back, 2 s) and a finish is the icon's flowing rainbow, in every style.
   CLAUDE GIVES NO SIGNAL FOR A QUESTION (MEASURED in a pty: the title is `✳` exactly as when done, no
   bell, no OSC 9), so `agentQuestion.looksLikeQuestion` reads the last text rows of the screen
   (through termBus, never by importing the panel) for its footer when the title goes idle and as

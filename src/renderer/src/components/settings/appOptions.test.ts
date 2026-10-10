@@ -4,12 +4,13 @@ import { describe, expect, it } from 'vitest'
 import { DIAGNOSTICS_OPTIONS } from '@core/renderer/settings/diagnosticsOptions'
 import { DICTATION_OPTIONS } from '@core/renderer/settings/dictationOptions'
 import { HELP_OPTIONS } from '@core/renderer/settings/helpOptions'
+import { MARK_OPTIONS } from '@core/renderer/settings/markOptions'
 import { isSettingIcon } from '@core/renderer/settings/layout/icons'
 import { TERMINAL_OPTIONS } from '@core/renderer/settings/options'
 import { APP_OPTIONS, APP_SECTIONS } from './appOptions'
 import { ROW_ORDER, SETTINGS_PAGES, settingsIndex } from './settingsIndex'
 
-const CORE = [...TERMINAL_OPTIONS, ...DICTATION_OPTIONS, ...HELP_OPTIONS, ...DIAGNOSTICS_OPTIONS]
+const CORE = [...TERMINAL_OPTIONS, ...MARK_OPTIONS, ...DICTATION_OPTIONS, ...HELP_OPTIONS, ...DIAGNOSTICS_OPTIONS]
 
 describe("this app's own settings rows", () => {
   it('have unique ids, none of them a core row', () => {
@@ -32,6 +33,7 @@ describe("this app's own settings rows", () => {
     expect(APP_OPTIONS.map((o) => `${o.id}=${Array.isArray(o.store) ? o.store.join('+') : String(o.store)}`)).toMatchInlineSnapshot(`
       [
         "tab-width=prism.window.tabWidth",
+        "tab-style=prism.window.tabStyle",
         "title-bar=prism.window.titleBar",
         "window-edges=prism.window.edges",
         "window-background=prism.window.background",
@@ -70,9 +72,19 @@ describe('Find a setting', () => {
     expect(at['window-accent']).toBe('appearance/Theme')
     expect(at['term-shell']).toBe('terminal/Shell')
     expect(at['taskbar-badge']).toBe('agents/Tab marks')
+    expect(at['agent-rainbow']).toBe('agents/Tab marks')
+    expect(at['tab-style']).toBe('appearance/Window')
     expect(at['agent-hooks']).toBe('agents/Claude Code')
     expect(at['dictation-enabled']).toBe('dictation/')
     expect(at['app-version']).toBe('about/')
     expect(at['diag-verbose']).toBe('diagnostics/')
+  })
+
+  it('finds the tab style by its shape and puts it right after Tab width (#143)', () => {
+    const ids = settingsIndex(true).map((e) => e.id)
+    expect(ids.indexOf('tab-style')).toBe(ids.indexOf('tab-width') + 1)
+    expect(ids.indexOf('agent-rainbow')).toBe(ids.indexOf('agent-done-on') + 1)
+    const style = settingsIndex(true).find((e) => e.id === 'tab-style')
+    expect(style?.keywords).toContain('chevron')
   })
 })

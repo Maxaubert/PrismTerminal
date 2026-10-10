@@ -49,6 +49,9 @@ configureTermCore({
   // Nothing else owns the window, so the terminal setting switches its material.
   acrylic: { kind: 'window', supported: () => window.prism.acrylicSupported() },
   paintsGround: true,
+  // THE TAB MARKS (#143; owner, 2026-10-10): this strip draws the core's
+  // marks, so the Agents page offers all four styles and the rainbow finish.
+  tabMarks: { indicators: ['off', 'minimal', 'ring', 'full'], rainbow: true },
   // DICTATION (#13). A press only counts over a shell, and App already hands
   // the controller null when the start screen or Settings is in front, so
   // there is nothing further for this app to refuse.

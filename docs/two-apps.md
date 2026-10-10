@@ -42,6 +42,17 @@ so an update never silently changes what an existing user sees; the bridge to ma
   (`settingsIndex.ts`), and the `settingsSearch` e2e opens each one by its label. The old
   components (`TerminalAppearanceSettings` and friends) stay exported, unchanged, until Prism has
   moved (spec 3.0); do not build on them.
+- <a id="tab-marks"></a>**THE TAB MARKS ARE THE CORE'S; WHICH ONES A HOST DRAWS IS DECLARED** (#143, 2026-10-10). The
+  rules (`lib/tabMark.ts`, `markColours.ts`, `nameInk.ts`, `markPalette.ts`), the flat tab's marks
+  (`components/TabMark.tsx`) and all their motion (`styles/marks.css`, which a host imports) are
+  written once. `TermHostConfig.tabMarks` (optional; an owner decision named in #143's PR) says what
+  the host's STRIP draws: this app passes Off, Minimal, Ring, Full and the rainbow; Prism passes
+  nothing, so it keeps Off, Minimal and its own Full, a stored Ring reads as its default
+  (`readIndicator`), and no rainbow row is drawn there. The "Rainbow finished mark" row is in its own
+  list, `markOptions.ts`, NOT in `TERMINAL_OPTIONS`, for `helpOptions.ts`'s reason: Prism's gate reads
+  that file as text and its unit test orders every id in it. Verified before the PR against Prism
+  `952e309` (typecheck, unit suite, `terminal`, `termOptions`, `termColourPicker`, `settingsLook`,
+  `tabs`, `agentTitle`, `promptLayout`). Prism adopting the marks is a later owner decision.
 - <a id="product-for-others"></a>**THIS IS A PRODUCT FOR OTHER PEOPLE** (owner, 2026-09-19: "this isn't an app for just me. keep
   that in mind with all things you implement"). A feature bundles or fetches what it needs and works
   on a fresh Windows install: never lean on the owner's GPU, tools, caches or installed runtimes.

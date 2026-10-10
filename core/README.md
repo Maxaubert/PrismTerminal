@@ -105,7 +105,8 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
    [`renderer/host.ts`](renderer/host.ts): the default each untouched setting
    reads as, whether there is a host style to follow, who paints the ground,
    what an unpicked indicator colour resolves to, what "acrylic" means as a
-   terminal setting, which chords the app owns. If a difference is not on that page, it is a fork,
+   terminal setting, which chords the app owns, which tab marks its strip draws
+   (`tabMarks`, #143). If a difference is not on that page, it is a fork,
    and a fork is what this exists to end. Adding a field is an owner decision.
 4. **Defaults are per host on purpose.** An update must never silently change
    what an existing user sees. Where the owner picks one value for both apps,
@@ -201,6 +202,26 @@ is `settings/sections/DiagnosticsPage.tsx` (props only), its rows
 `diagnosticsOptions.ts`. Schema and how to read it: Prism Terminal's
 `docs/diagnostics.md`.
 
+**THE TAB MARKS (#143, 2026-10-10)** are the sixth: how a tab says its agent
+is working, finished, asking or failed. `renderer/lib/tabMark.ts`
+(`resolveTabMark`, the one rule: which mark, in which colour role, with which
+motion, for Off, Minimal, Ring and Full on a flat or a Prompt tab),
+`markColours.ts` (the icon's rainbow, `floorMark` to 3:1 on every ground),
+`nameInk.ts` (Full's name: the theme's text unless under 2:1 on the fill),
+`markPalette.ts` (every colour a strip's marks wear, pure),
+`components/TabMark.tsx` (a flat tab's run, line, ring and fill, props only)
+and `styles/marks.css`, the motion, which a host IMPORTS
+(`prism-term-core/renderer/styles/marks.css`; without it the marks stand still).
+**`tabMarks`** on `TermHostConfig` declares what the host's strip draws: the
+indicator choices (`hostIndicators()`; a stored value outside them reads as the
+host's default, `readIndicator`) and whether it draws the rainbow
+(`hostRainbow()`, which also decides whether `AgentMarksSection` draws the
+"Rainbow finished mark" row). Absent: Off, Minimal and Full, Full being the
+host's own filled tab, and no rainbow row, so a host that has not adopted the
+marks sees no change. That row's list is `settings/markOptions.ts`, NOT
+`TERMINAL_OPTIONS`; `coreSettingsIndex({ marks: true })` indexes it. Its
+switch is `agentRainbow()` (`prism.term.agentRainbow`, on; no theme resets it).
+
 ## Rules for code in here (lint-enforced in Prism Terminal's `eslint.config.js`)
 
 - **Relative imports only.** No `@shared` / `@renderer` / `@core` aliases: a
@@ -218,8 +239,10 @@ is `settings/sections/DiagnosticsPage.tsx` (props only), its rows
   the three preload members it needs (`UpdateBridge`), so the same components
   drop into a host whose terminal is not even mounted.
 - CSS: the core uses Tailwind utilities and the `--p-*` tokens both apps define,
-  plus the classes `.p-agent-run` and `.p-scroll` and the `.xterm` rules in each
-  app's `index.css`. A new token or class needed here must be added to BOTH.
+  plus the class `.p-scroll` and the `.xterm` rules in each app's `index.css`. A
+  new token or class needed here must be added to BOTH. The marks' classes
+  (`.p-agent-run`, `.p-mark-*`) live in the core's own `styles/marks.css` since
+  #143, which each host imports.
 
 ## How each app consumes it
 

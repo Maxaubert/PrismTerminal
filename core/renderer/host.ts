@@ -55,7 +55,14 @@ export interface TermApi {
   termOpenPath?(cwd: string, text: string, mode: 'open' | 'reveal'): void
 }
 
-export type AgentIndicator = 'off' | 'minimal' | 'full'
+/** How a tab marks its agent (#143 added `ring`). What a host's strip can
+ *  DRAW is its `tabMarks.indicators`; a stored value outside it reads as the
+ *  host's default (`readIndicator`). */
+export type AgentIndicator = 'off' | 'minimal' | 'ring' | 'full'
+
+/** The choices a host that has not declared `tabMarks` draws: its own Off,
+ *  Minimal and Full (Prism, whose Full is its own filled tab). */
+export const LEGACY_INDICATORS: readonly AgentIndicator[] = ['off', 'minimal', 'full']
 
 export interface TermHostConfig {
   api: TermApi
@@ -162,6 +169,16 @@ export interface TermHostConfig {
    * gives a file, Explorer for a folder, never a program run).
    */
   openPath?(target: { abs: string; kind: 'file' | 'dir'; mode: 'open' | 'reveal' }): boolean
+
+  /**
+   * WHAT THE HOST'S TAB STRIP DRAWS (#143; owner decision, 2026-10-10, named
+   * in its PR). `indicators`: the choices the Agents page offers and the store
+   * accepts, in order; `rainbow`: the strip draws the rainbow finish, so the
+   * "Rainbow finished mark" row is offered. Absent: Off, Minimal and Full,
+   * where Full is the host's own filled tab, and no rainbow row (Prism, until
+   * it adopts the core's marks), so an update changes nothing it draws.
+   */
+  tabMarks?: { indicators: readonly AgentIndicator[]; rainbow: boolean }
 }
 
 let host: TermHostConfig | null = null
@@ -207,6 +224,11 @@ export const hostOwnsWindowAcrylic = (): boolean => host?.acrylic.kind === 'wind
 /** Hear the host's window colours change (`onChromeChange`); a no-op where the
  *  host has none, or none has spoken. */
 export const onHostChromeChange = (cb: () => void): (() => void) => host?.onChromeChange?.(cb) ?? (() => {})
+/** The indicator choices the host's strip draws (`tabMarks`), the legacy three
+ *  where it has not declared them or no host has spoken. */
+export const hostIndicators = (): readonly AgentIndicator[] => host?.tabMarks?.indicators ?? LEGACY_INDICATORS
+/** Whether the host's strip draws the rainbow finish (`tabMarks.rainbow`). */
+export const hostRainbow = (): boolean => host?.tabMarks?.rainbow ?? false
 
 /** For tests, and for a host that tears down. */
 export function resetTermCore(): void {

@@ -1,4 +1,8 @@
 @import 'tailwindcss';
+/* The tab marks' motion (#143): the running bar, the Prompt edge's grow, the
+   question's breathe, the rainbow's flow, Full's ride and Ring's spin, with
+   their reduced-motion rules. The core's file, written once for both apps. */
+@import '../../../core/renderer/styles/marks.css';
 /* THE CORE IS OUTSIDE THE FOLDER TAILWIND SCANS (#20). Tailwind looks for class
    names from the renderer root down, and the terminal lives in core/ at the
    repo root, so a utility used ONLY there is never generated - silently. It
@@ -11,20 +15,6 @@
   color-scheme: dark;
 }
 
-/* The MINIMAL agent indicator (owner pick, 2026-08-23): an indeterminate bar
-   running along the bottom edge of a tab while its agent works - the way a
-   loading browser tab reads. Working only; the finished colour belongs to the
-   full indicator alone. */
-@keyframes p-agent-run {
-  0% { left: -42% }
-  100% { left: 100% }
-}
-.p-agent-run { animation: p-agent-run 1.25s ease-in-out infinite }
-@media (prefers-reduced-motion: reduce) {
-  /* No travelling bar for anyone who asked for stillness: the edge simply
-     carries the colour instead. */
-  .p-agent-run { left: 0; width: 100%; animation: none }
-}
 html,
 body,
 #root {
@@ -64,6 +54,8 @@ body,
   --p-track: #5a5a5e;
   --p-sel-bg: #4aa5f0;
   --p-tree-folder: #71b6f0;
+  --p-seg: #141418;
+  --p-seg-on: #232328;
 
   /* Shape and type. No theme changes these, so they live here and nowhere
      else. --p-radius-sm is SHARED, not styled: small controls keep one shape
