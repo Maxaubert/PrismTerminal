@@ -2495,6 +2495,117 @@ const scenarios = {
   },
 
   /**
+   * OSC 8 LINKS (#169): a left click opens an http(s) one, with no confirm()
+   * box (xterm's default asked one, then opened a blank window main denied);
+   * a right click is the menu's, with Copy link; any other scheme opens
+   * nothing. Their cells wear the link colour, found by POSITION as in
+   * `links`, on the normal screen and on the alternate one (where Claude
+   * Code's fullscreen view prints "PR #165").
+   */
+  async osc8Links(ok) {
+    const w = world()
+    const URL8 = 'https://example.com/osc8'
+    const probe = join(w.alpha, 'osc8-probe.cjs')
+    writeFileSync(
+      probe,
+      [
+        'process.stdin.setRawMode(true)',
+        'process.stdin.resume()',
+        "process.stdin.on('data', (b) => { if (b.toString() === 'q') { process.stdout.write('\\x1b[?1049l'); process.exit(0) } })",
+        `process.stdout.write('\\x1b[?1049h\\x1b[2J\\x1b[5;3H\\x1b]8;;${URL8}\\x07ALTLABEL\\x1b]8;;\\x07\\x1b[9;1H')`
+      ].join('\n')
+    )
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const dialogs = []
+    page.on('dialog', (d) => {
+      dialogs.push(d.message())
+      d.dismiss().catch(() => {})
+    })
+    const BLUE = '121,167,216' // the link colour on PT Default
+    const opened = async () => (await app.evaluate(() => globalThis.__e2eOpenedLinks)) ?? []
+    // The row that holds exactly `label`: its first character's box and colour.
+    const label = (needle) =>
+      page.evaluate((n) => {
+        const norm = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).join(',')
+        const rows = [...document.querySelectorAll('.xterm .xterm-rows > div')]
+        for (let i = rows.length - 1; i >= 0; i -= 1) {
+          const text = (rows[i].textContent ?? '').replace(/\u00a0/g, ' ')
+          if (text.trim() !== n) continue
+          const at = text.indexOf(n)
+          const walker = document.createTreeWalker(rows[i], NodeFilter.SHOW_TEXT)
+          let left = at
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (left < node.textContent.length) {
+              const range = document.createRange()
+              range.setStart(node, left)
+              range.setEnd(node, left + 1)
+              const b = range.getBoundingClientRect()
+              return { x: b.left + b.width / 2, y: b.top + b.height / 2, color: norm(getComputedStyle(node.parentElement).color) }
+            }
+            left -= node.textContent.length
+          }
+        }
+        return null
+      }, needle)
+    // xterm finds a link only when the pointer comes onto it and rests.
+    const click = async (at, button = 'left') => {
+      await page.mouse.move(at.x + 60, at.y + 60)
+      await sleep(200)
+      await page.mouse.move(at.x, at.y)
+      await sleep(400)
+      await page.mouse.click(at.x, at.y, { button })
+    }
+    try {
+      const esc = (s) => `[char]27 + '${s}'`
+      const osc8 = (uri, text) => `[Console]::Write(${esc(`]8;;${uri}`)} + [char]7 + '${text}' + ${esc(']8;;')} + [char]7); Write-Host ''`
+      await typeLine(page, `cls; ${osc8(URL8, 'OSC8LABEL')}`)
+      const at = await until(async () => {
+        const l = await label('OSC8LABEL')
+        return l && l.color === BLUE ? l : null
+      }, 8000)
+      ok(!!at, `an OSC 8 label wears the link colour (${JSON.stringify(await label('OSC8LABEL'))})`)
+      if (at) {
+        await click(at, 'right')
+        const rows = await until(async () => {
+          const t = await page.locator('[role="menu"] [role="menuitem"]').allTextContents()
+          return t.length ? t : null
+        }, 4000)
+        await sleep(400)
+        ok(!!rows && rows.some((r) => r.includes('Copy link')), `a right click on it offers Copy link (${JSON.stringify(rows)})`)
+        ok((await opened()).length === 0, 'and opens nothing')
+        await page.keyboard.press('Escape')
+        await click(at)
+        ok(!!(await until(async () => (await opened()).filter((u) => u === URL8).length === 1, 4000)), 'a left click opens it, once (recorded under --e2e)')
+      }
+      // Any other scheme stays inert: xterm drops it, and nothing is painted.
+      await typeLine(page, `cls; ${osc8('file:///C:/x', 'FILELABEL')}`)
+      const file = await until(() => label('FILELABEL'), 8000)
+      if (file) {
+        ok(file.color !== BLUE, 'a file:// OSC 8 label is not painted as a link')
+        await click(file)
+        await sleep(600)
+        ok((await opened()).length === 1, `and a click on it opens nothing (${JSON.stringify(await opened())})`)
+      } else ok(false, 'the file:// label is on screen')
+      // The alternate screen, as in Claude Code's fullscreen view.
+      await typeLine(page, `& '${process.execPath}' '${probe}'`)
+      const alt = await until(async () => {
+        const l = await label('ALTLABEL')
+        return l && l.color === BLUE ? l : null
+      }, 8000)
+      ok(!!alt, `on the alternate screen an OSC 8 label wears the link colour too (${JSON.stringify(await label('ALTLABEL'))})`)
+      if (alt) {
+        await click(alt)
+        ok(!!(await until(async () => (await opened()).filter((u) => u === URL8).length === 2, 4000)), 'and a left click opens it')
+      }
+      await page.locator('.xterm-helper-textarea').first().focus()
+      await page.keyboard.type('q')
+      ok(dialogs.length === 0, `no dialog ever (${JSON.stringify(dialogs)})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
    * KEYS AND FOCUS (code review 2026-09-24, PR 2), each in a real pwsh, each
    * failing on the code before the fix:
    *  - #21 Shift+Enter at a plain prompt is Enter: the line runs as typed, no

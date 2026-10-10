@@ -313,7 +313,13 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   PAGE** (#167; MEASURED 2 s stalls before, 2009 ms and 2046 ms in `scan`, Stable's diag log
   2026-10-10): a full pass paints the live screen, then the scrollback bottom up in slices of 8 ms
   or less (`lib/linkScanPlan.ts`, a marker as the cursor), and a found path repaints only the tab
-  and the lines that asked (`revisit`). The `linkPaintStall` e2e holds it.
+  and the lines that asked (`revisit`). The `linkPaintStall` e2e holds it. **OSC 8 LINKS** (#169)
+  open on a LEFT click, http(s) only, never through a confirm (the `linkHandler` option; xterm's
+  default asked `confirm()` and opened a blank window main denied, on any button). Their cells are
+  painted from the stream (`lib/termOsc8.ts`: the cursor at the open and at the close, MEASURED to
+  bracket Claude Code's label through the bundled ConPTY) while their text stands, on both screens,
+  and the menu's Copy link / Open link take their uri. A reflow or a buffer switch forgets them.
+  The `osc8Links` e2e holds it.
 - <a id="path-links"></a>**A PATH ON SCREEN IS A LINK WHEN IT EXISTS** (#99; owner, 2026-09-29: "clickable links that would
   open the file or folder", then "go ahead"). `lib/termPaths` finds what COULD be a path (relative or
   absolute, sentence punctuation and `:12` taken off); main's `termPathOpen` answers which exist from

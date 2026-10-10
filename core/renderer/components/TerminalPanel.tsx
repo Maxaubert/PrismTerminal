@@ -66,6 +66,7 @@ import {
   type CaretPos
 } from '../lib/termCaretHold'
 import { cellFrom, cellText, type CellInfo } from '../lib/termCells'
+import { bufferRowCells, isWebLink, Osc8Spans, parseOsc8, spanText, type SpanAnchor } from '../lib/termOsc8'
 import {
   onTermLookChange,
   termBaseFontPx,
@@ -106,6 +107,9 @@ interface Session {
   cwd(): string
   /** The look changed to this mode: tell the program, if it asked (#172). */
   tellTheme(mode: GroundMode): void
+  /** The uri of the OSC 8 link over buffer cell (`line`, `x`) of the screen in
+   *  front, while it still stands (#169). */
+  oscLink(line: number, x: number): string | null
 }
 
 const sessions = new Map<string, Session>()
@@ -415,7 +419,9 @@ export function termContextAt(
   const line = logicalLine(term, y)
   const target = (y - line.first) * term.cols + col
   const at = line.index[Math.min(target, line.index.length - 1)]
-  const link = linkAt(line.text, at)
+  // An OSC 8 label ("PR #165") is a link though its text is not (#169); its
+  // uri is what a left click opens, so it is what the menu copies and opens.
+  const link = s.oscLink(y, col) ?? linkAt(line.text, at)
   return { selection, link, path: link ? null : pathAt(line.text, at, s.cwd()) }
 }
 
@@ -637,7 +643,19 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     // The bundled dll is newer than any inbox conhost; to xterm only
     // "21376 or later" matters, which keeps its reflow ON and grows the
     // scrollback the way ConPTY expects when rows are added.
-    windowsPty: { backend: 'conpty', buildNumber: 22621 }
+    windowsPty: { backend: 'conpty', buildNumber: 22621 },
+    // OSC 8 LINKS OPEN ON A LEFT CLICK (#169). Without a handler xterm 6.0
+    // asks confirm() and then opens a blank window, which main denies (only
+    // http(s) navigates), on a click of ANY button: the right one belongs to
+    // the menu, as for every other link (owner, 2026-09-28). No confirm, ever.
+    // Only http(s): xterm drops any other scheme with allowNonHttpProtocols
+    // off, and this checks again, as do the preload and main.
+    linkHandler: {
+      activate: (e, uri) => {
+        if (e.button === 0 && isWebLink(uri)) termApi().openExternal(uri)
+      },
+      allowNonHttpProtocols: false
+    }
   })
   const fit = new FitAddon()
   term.loadAddon(fit)
@@ -664,8 +682,12 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   let cwdNow = root
   // Paths are asked about as THIS session (#167): a found one repaints only
   // this terminal, and only the lines that were waiting for it.
+  // The OSC 8 links this session's programs printed (#169), followed from the
+  // stream below; the painter colours them on both screens.
+  const osc8 = new Osc8Spans()
   const links = attachLinkPaint(term, currentLinkColor, (text) => linkRanges(text, cwdNow, id), {
-    asked: () => takeAsked(id)
+    asked: () => takeAsked(id),
+    spans: (first, last) => osc8.overlapping(first, last, term.buffer.active.type === 'alternate')
   })
   // A PATH IS A LINK TOO, when it exists (#99). The painter colours it; this
   // makes it clickable, with the pointer and the underline of a link. A left
@@ -782,6 +804,76 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     if (!signal) return false
     reportAgentSignal(id, signal)
     return true
+  })
+  // OSC 8 LINKS, FOLLOWED FROM THE STREAM (#169; termOsc8.ts says why and what
+  // was measured). The handler only LOOKS: it returns false, so xterm still
+  // records the link and its own provider makes it clickable (linkHandler).
+  // The cursor at the open and at the close bracket the label; a marker holds
+  // the open's line on the normal screen while the buffer trims under it.
+  let osc8Open: { anchor: SpanAnchor; x: number; uri: string; alt: boolean } | null = null
+  const osc8Drop = (): void => {
+    osc8Open?.anchor.dispose?.()
+    osc8Open = null
+  }
+  const osc8Close = (): void => {
+    const open = osc8Open
+    osc8Open = null
+    if (!open) return
+    const b = term.buffer.active
+    const alt = b.type === 'alternate'
+    const rows = b.baseY + b.cursorY - open.anchor.line
+    const endX = Math.min(b.cursorX, term.cols)
+    // A label is a few cells on a row or two; anything else (the program
+    // moved the cursor between the open and the close) is not a label.
+    if (open.alt !== alt || open.anchor.isDisposed || rows < 0 || rows > 16 || (rows === 0 && endX <= open.x)) {
+      open.anchor.dispose?.()
+      return
+    }
+    const span = { anchor: open.anchor, x: open.x, rows, endX, uri: open.uri, text: '', alt }
+    const text = spanText(span, term.cols, (line) => bufferRowCells(b.getLine(line), term.cols))
+    if (!text?.trim()) {
+      open.anchor.dispose?.()
+      return
+    }
+    osc8.add({ ...span, text })
+    // A row drawn before the close arrived (a write split mid-label) is
+    // drawn again, so the alternate screen's inker sees the span.
+    if (alt) {
+      const top = open.anchor.line - b.viewportY
+      term.refresh(Math.max(0, top), Math.min(term.rows - 1, top + rows))
+    }
+  }
+  term.parser.registerOscHandler(8, (data) => {
+    const p = parseOsc8(data)
+    if (!p) return false
+    // An open while one is still open ends the first one there, as OSC 8 has it.
+    osc8Close()
+    if (!p.uri || !isWebLink(p.uri)) return false
+    const b = term.buffer.active
+    const alt = b.type === 'alternate'
+    let x = b.cursorX
+    let down = 0
+    // The cursor waits past the last cell (a pending wrap): the label's first
+    // character lands at the start of the next row.
+    if (x >= term.cols) {
+      x = 0
+      down = 1
+    }
+    const anchor: SpanAnchor | undefined = alt
+      ? { line: b.baseY + b.cursorY + down }
+      : term.registerMarker(down)
+    if (anchor) osc8Open = { anchor, x, uri: p.uri, alt }
+    return false
+  })
+  term.buffer.onBufferChange(() => {
+    // The alternate screen's links leave with it, and a new one starts bare.
+    osc8Drop()
+    osc8.clear(true)
+  })
+  term.onResize(() => {
+    // A reflow moves the cells out from under every span.
+    osc8Drop()
+    osc8.clear()
   })
   // THE PROGRAM IS TOLD THE GROUND IT REALLY SITS ON (#168, #172; rule
   // replies-only-when-asked). MEASURED (Claude Code 2.1.296): xterm answered
@@ -1008,7 +1100,13 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     return true
   })
 
-  const session: Session = { term, fit, search, links, el, unsub, cwd: () => cwdNow, tellTheme }
+  const oscLink = (line: number, x: number): string | null => {
+    const sp = osc8.at(line, x, term.buffer.active.type === 'alternate')
+    if (!sp) return null
+    const now = spanText(sp, term.cols, (l) => bufferRowCells(term.buffer.active.getLine(l), term.cols))
+    return now === sp.text ? sp.uri : null
+  }
+  const session: Session = { term, fit, search, links, el, unsub, cwd: () => cwdNow, tellTheme, oscLink }
   sessions.set(id, session)
 
   // A session restored over a Claude conversation launches straight into it:

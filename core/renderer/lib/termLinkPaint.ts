@@ -2,6 +2,8 @@ import type { IBufferLine, IDecoration, IDisposable, IMarker, Terminal } from '@
 import { crumb } from './diag'
 import { sliceRows, type RowPlan } from './linkScanPlan'
 import { findLinks } from './termLinks'
+import { cellText } from './termCells'
+import { bufferRowCells, spanRows, spanText, spanTextRange, type Osc8Span } from './termOsc8'
 
 /**
  * Paints the links in a terminal's buffer (owner, 2026-09-19). xterm's link
@@ -34,6 +36,10 @@ import { findLinks } from './termLinks'
  * TUI rewrites starts clean and is inked again only if it still holds a link:
  * no smear to clean up. Per row: a program that owns the screen places its own
  * text, and a link it breaks over two rows is two pieces of text there.
+ *
+ * OSC 8 LINKS ARE PAINTED FROM THE STREAM (#169): the panel notes where each
+ * one was printed (`termOsc8.ts`) and hands them over as `opts.spans`; both
+ * screens paint them like any link, while their cells hold the same text.
  */
 export interface LinkPainter extends IDisposable {
   /** The colour changed (a theme, a custom ground): paint everything again. */
@@ -47,6 +53,11 @@ export interface LinkPaintOptions {
   /** Whether the `find` call just made left a question open (a path not yet
    *  known): that line is remembered and painted again by `revisit`. */
   asked?: () => boolean
+  /** The OSC 8 links (#169) with a cell on buffer lines `first` to `last` of
+   *  the screen in front. Their labels ("PR #165") are neither URLs nor paths,
+   *  so `find` never sees them; each is painted while its cells still hold
+   *  the text it was printed with. */
+  spans?: (first: number, last: number) => Osc8Span[]
 }
 
 interface Painted {
@@ -93,6 +104,13 @@ export function attachLinkPaint(
     const b = term.buffer.active
     return term.registerMarker(line - (b.baseY + b.cursorY))
   }
+
+  const rowCells = (line: number): ReturnType<typeof bufferRowCells> =>
+    bufferRowCells(term.buffer.active.getLine(line), term.cols)
+
+  /** An OSC 8 link stands while its cells hold what was printed there: a
+   *  TUI that writes something else over them took the link away. */
+  const standing = (s: Osc8Span): boolean => spanText(s, term.cols, rowCells) === s.text
 
   /** Drop what was painted on lines `first` to `last` (and anything trimmed). */
   const forgetLines = (first: number, last: number): void => {
@@ -149,6 +167,12 @@ export function attachLinkPaint(
       rows.push(line)
       quick += line.translateToString(r === last)
     }
+    // OSC 8 links first: their labels need not look like links at all.
+    for (const s of opts.spans?.(first, last) ?? []) {
+      if (!standing(s)) continue
+      for (const p of spanRows(s, term.cols))
+        if (p.line >= first && p.line <= last) paintRow(p.line, p.x, p.width, ink)
+    }
     if (!/[\\/.]/.test(quick)) return // no URL and no path can be here
     // Built cell by cell, because a wide character is one character and TWO
     // cells: an index into the string is not a column once a line holds one.
@@ -179,11 +203,39 @@ export function attachLinkPaint(
     }
   }
 
-  /** Ink the links in one drawn row of the alternate screen. */
-  const inkRow = (row: Element, ink: string): void => {
+  /**
+   * Where the OSC 8 links on screen row `r` sit in that row's drawn text.
+   * Columns become text offsets cell by cell (rule 11), and a piece is kept
+   * only where the drawn text there is the cells' text, so a row xterm drew
+   * differently is left alone rather than inked in the wrong place.
+   */
+  const spanRanges = (r: number, text: string): Array<{ start: number; end: number }> => {
+    const line = term.buffer.active.viewportY + r
+    const spans = opts.spans?.(line, line) ?? []
+    if (!spans.length) return []
+    const cells = rowCells(line)
+    if (!cells) return []
+    const own = cellText(cells).text
+    const out: Array<{ start: number; end: number }> = []
+    for (const s of spans) {
+      if (!standing(s)) continue
+      for (const p of spanRows(s, term.cols)) {
+        if (p.line !== line) continue
+        const { start, end } = spanTextRange(cells, p.x, p.x + p.width)
+        if (end > start && text.slice(start, end) === own.slice(start, end)) out.push({ start, end })
+      }
+    }
+    return out
+  }
+
+  /** Ink the links in one drawn row (screen row `r`) of the alternate screen. */
+  const inkRow = (row: Element, ink: string, r: number): void => {
     const text = row.textContent ?? ''
-    if (!/[\\/.]/.test(text)) return
-    const links = find(text)
+    const found = /[\\/.]/.test(text) ? find(text) : []
+    // An OSC 8 label that is itself a URL is inked once, as the URL.
+    const spans = spanRanges(r, text).filter((s) => !found.some((l) => l.start < s.end && s.start < l.end))
+    // In order along the row: the pieces are wrapped last first, below.
+    const links = [...found, ...spans].sort((a, b) => a.start - b.start)
     if (!links.length) return
     // Where each text node starts in the row's text.
     const nodes: Array<{ node: Text; at: number }> = []
@@ -227,7 +279,7 @@ export function attachLinkPaint(
     const ink = color()
     for (let r = start; r <= end; r += 1) {
       const row = rows[r]
-      if (row) inkRow(row, ink)
+      if (row) inkRow(row, ink, r)
     }
   }
 
@@ -250,7 +302,8 @@ export function attachLinkPaint(
       }
       if (!seen.size) return
       const ink = color()
-      for (const row of seen) if (!row.querySelector('[data-link-ink]')) inkRow(row, ink)
+      const all = Array.from(box.children)
+      for (const row of seen) if (!row.querySelector('[data-link-ink]')) inkRow(row, ink, all.indexOf(row))
     })
     watch.observe(box, { childList: true, subtree: true })
   }
