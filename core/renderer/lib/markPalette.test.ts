@@ -57,15 +57,6 @@ describe('the marks palette (#143)', () => {
     expect(paper().overlay.run).toBe(PAPER_TEXT)
   })
 
-  it('draws Prompt\'s edge on a working fill in a shade clearing 3:1 on fill and ground', () => {
-    expect(volt().overlay.grow).toBe('#798f15')
-    expect(paper().overlay.grow).toBe('#1c3e59')
-    for (const [p, g] of [[volt(), GROUND], [paper(), PAPER_GROUND]] as const) {
-      expect(contrastRatio(p.overlay.grow, p.fill.working)).toBeGreaterThanOrEqual(3)
-      expect(contrastRatio(p.overlay.grow, g)).toBeGreaterThanOrEqual(3)
-    }
-  })
-
   it('loops both rainbow gradients', () => {
     const p = volt()
     expect(p.rainbowX.startsWith('linear-gradient(90deg, #12cee5')).toBe(true)

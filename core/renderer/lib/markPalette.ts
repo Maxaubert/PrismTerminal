@@ -1,4 +1,4 @@
-import { floorMark, opaqueOver, rainbowFillX, rainbowGradient, rainbowOn, shadeOn } from './markColours'
+import { floorMark, opaqueOver, rainbowFillX, rainbowGradient, rainbowOn } from './markColours'
 import { groundIsDark, nameInk, rainbowInk } from './nameInk'
 import type { MarkOverlay, MarkState } from './tabMark'
 
@@ -20,9 +20,8 @@ import type { MarkOverlay, MarkState } from './tabMark'
  * - The OVERLAY is Minimal's working mark on a working fill. Classic's run is
  *   the NAME'S ink (owner, 2026-10-10: "if the tab is yellow ... the working bar
  *   that is on that tab, like the minimal bar, should be black and not like a
- *   faded arc yellow"). Prompt's edge sits in the ground-coloured gap, where
- *   black would vanish on a dark theme, so it is a shade of the working colour
- *   clearing 3:1 on the fill and the ground (`shadeOn`, variant 2A).
+ *   faded arc yellow"). A working Powerline fill has no overlay: its edge
+ *   pulses only on the tab in front (owner, 2026-10-10).
  */
 export interface MarkPalette {
   line: Record<MarkState, string>
@@ -77,6 +76,6 @@ export function markPalette({
     rainbowY: rainbowGradient(seven, 'y'),
     fill,
     ink,
-    overlay: { run: ink.working, grow: shadeOn(solid.working, solidGround) }
+    overlay: { run: ink.working }
   }
 }

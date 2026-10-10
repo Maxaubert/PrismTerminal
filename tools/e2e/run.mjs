@@ -1675,7 +1675,7 @@ const scenarios = {
             tabs: [...document.querySelectorAll('[data-tab]')].map((t) => {
               const fill = t.querySelector('[data-mark="fill"]')
               const run = t.querySelector('[data-mark-overlay="run"] > span')
-              const grow = t.querySelector('[data-prompt-edge][data-mark-overlay="grow"] i')
+              const edge = t.querySelector('[data-prompt-edge]')
               const shape = t.querySelector('[data-prompt-shape]')
               return {
                 active: t.hasAttribute('data-tab-active'),
@@ -1686,8 +1686,7 @@ const scenarios = {
                 fillImage: fill ? getComputedStyle(fill).backgroundImage : null,
                 ride: !!t.querySelector('[data-mark-ride], .p-mark-ride, [data-mark-foot]'),
                 run: run ? getComputedStyle(run).backgroundColor : null,
-                grow: grow ? getComputedStyle(grow).backgroundColor : null,
-                growMotion: grow ? grow.className : null,
+                edge: !!edge,
                 shape: shape ? getComputedStyle(shape).backgroundColor : null,
                 name: getComputedStyle(t.querySelector('[role="tab"]')).color
               }
@@ -1745,10 +1744,8 @@ const scenarios = {
                 ok(!!t[2].run && t[2].run === t[2].name, `${tag}: the run on a working fill is the name's ink (${t[2].run} vs ${t[2].name})`)
                 if (theme === 'volt') ok(rgb(t[2].run).every((v) => v < 20), `${tag}: black on Volt's yellow (${t[2].run})`)
               } else {
-                ok(!!t[2].grow && /p-mark-grow/.test(t[2].growMotion ?? ''), `${tag}: the working fill grows its arrow edge`)
-                const rf = ratio(rgb(t[2].grow), rgb(t[2].fill))
-                const rg = ratio(rgb(t[2].grow), rgb(l.ground))
-                ok(rf >= 3 && rg >= 3, `${tag}: in a shade that clears 3:1 on the fill and the ground (${t[2].grow}: ${rf.toFixed(2)} / ${rg.toFixed(2)})`)
+                // Owner, 2026-10-10: no pulsing arrow on a tab you are not on.
+                ok(!t[2].edge, `${tag}: a working Powerline fill has no pulsing edge`)
               }
             }
             await shotStrip(page, `marks-${style}-${ind}-${theme}`)

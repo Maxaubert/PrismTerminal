@@ -43,7 +43,7 @@ ground, and none lighter exists. There `shadeOn` hands back the nearest step (me
 
 | indicator | state | Classic, not in front | Prompt, not in front | in front (both) |
 |---|---|---|---|---|
-| Full | working | fill (working) + Minimal's run in the name's ink | fill on the segment + the growing edge in `overlay.grow` | Minimal's |
+| Full | working | fill (working) + Minimal's run in the name's ink | the fill alone, no edge (owner, later on 2026-10-10: the pulsing arrow is only for the tab you are on) | Minimal's |
 | Full | done | the rainbow across the whole tab, flowing (`p-mark-flow-fill`, tile 228 px, 14 s) | same, inside the segment's shape | Minimal's |
 | Full | question | fill breathe (name ink fixed) | same | Minimal's |
 | Full | failed | fill still | same | Minimal's |
@@ -52,15 +52,14 @@ Everything else (Minimal, Ring, Off) is unchanged. With the rainbow off, finishe
 colour, still.
 
 - `resolveTabMark` (core `lib/tabMark.ts`): a Full working tab not in front is
-  `{ place: 'fill', colour: 'working', motion: null, overlay: 'run' | 'grow' }`; finished is
+  `{ place: 'fill', colour: 'working', motion: null, overlay: 'run' }` on a flat tab and no overlay on Powerline; finished is
   `fill / rainbow / flow`. `badge` (colour) and `ride` (motion) are gone.
 - `markPalette` (core): `fill.done` with the rainbow on is the icon's seven, RAW, as a horizontal
   looping gradient (`rainbowFillX`; a fill is the colour itself, not floored). `ink.done` on the
   rainbow is `rainbowInk(text, dark)`: judged on the WORST colour that can sit under the name (the
   seven stops and the blends at 25/50/75% between them); the text is kept if its worst is 2:1 or
   better, else the opposite if its worst is better (Volt: text 1.4:1 worst, black 4.6:1, so it
-  flips; Paper: text 3.5:1, kept). `overlay.run` is `ink.working`; `overlay.grow` is
-  `shadeOn(working fill, ground)`. `badgeFoot` and `MARK_BADGE` are gone.
+  flips; Paper: text 3.5:1, kept). `overlay.run` is `ink.working`. `badgeFoot` and `MARK_BADGE` are gone.
 - `marks.css`: `p-mark-ride` is gone; `p-mark-flow-fill` added with its reduced-motion rule.
 - `TabMark.tsx`: a fill with `overlay: 'run'` draws the run's own markup on top in the `overlay`
   colour (`data-mark-overlay="run"`); a rainbow fill flows.

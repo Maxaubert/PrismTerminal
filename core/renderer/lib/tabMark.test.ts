@@ -46,11 +46,12 @@ describe('which mark a tab wears (#143)', () => {
 
   // The 2026-10-10 rework (owner: "I really liked the new full style look"):
   // working is the fill with Minimal's own working mark on top (the run on
-  // Classic, the growing edge on Prompt), finished the rainbow over the whole
+  // Classic; on Powerline the fill alone, owner: the pulsing arrow is only for
+  // the tab you are on), finished the rainbow over the whole
   // tab, flowing. No badge, no ride.
   it('Full fills every marked tab NOT in front, in either style', () => {
     expect(m('full', 'flat', 'working', false)).toBe('fill/working/-+run')
-    expect(m('full', 'prompt', 'working', false)).toBe('fill/working/-+grow')
+    expect(m('full', 'prompt', 'working', false)).toBe('fill/working/-')
     for (const s of ['flat', 'prompt'] as const) {
       expect(m('full', s, 'done', false)).toBe('fill/rainbow/flow')
       expect(m('full', s, 'question', false)).toBe('fill/question/breathe')

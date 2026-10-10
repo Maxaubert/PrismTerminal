@@ -535,15 +535,10 @@ export function TabStrip({
           // 4.5 (the ground-coloured seam is invisible there anyway).
           const band = edgeBand(last, { self: looks[i].paints, next: !last && looks[i + 1].paints })
           const rule = ruleClip(stripH, first)
-          // The edge this segment wears: Minimal's own, or on a Full working
-          // fill the growing edge in its shade (`overlay.grow`, which clears
-          // 3:1 on the fill and on the ground the edge sits in).
+          // The edge this segment wears: Minimal's own. A Full working fill has
+          // none (owner, 2026-10-10: the pulsing arrow is for the tab you are on).
           const edge =
-            mark.place === 'edge' && state
-              ? { motion: mark.motion, background: paint(mark.colour, 'y') }
-              : mark.overlay === 'grow'
-                ? { motion: 'grow' as const, background: palette.overlay.grow }
-                : null
+            mark.place === 'edge' && state ? { motion: mark.motion, background: paint(mark.colour, 'y') } : null
           return (
             <div
               key={t.id}

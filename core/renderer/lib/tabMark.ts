@@ -13,8 +13,9 @@ import type { AgentIndicator } from '../host'
  *   edge (Prompt) in their colour.
  * - Ring: the spinner beside the name while working; everything else Minimal's.
  * - Full: a tab NOT in front is filled edge to edge in its state colour. Working
- *   carries Minimal's own working mark on top (`overlay`: the run on a flat
- *   tab, the growing edge on Prompt); finished is the icon's rainbow, solid,
+ *   on a flat tab carries Minimal's run on top (`overlay`); a working Powerline
+ *   segment is the fill alone, its edge still (owner, 2026-10-10: the pulsing
+ *   arrow belongs to the tab you are on). Finished is the icon's rainbow, solid,
  *   flowing (owner, 2026-10-10, choice 1A). The tab in front is never filled
  *   and shows Minimal's mark, so it stays obvious in every state.
  * - Off: no working mark; the attention marks as Minimal.
@@ -30,7 +31,7 @@ export type MarkColour = 'working' | 'rule' | 'done' | 'rainbow' | 'question' | 
 export type MarkMotion = 'run' | 'grow' | 'breathe' | 'flow' | 'spin' | 'still'
 /** Minimal's working mark drawn ON a Full working fill: the run (flat) or the
  *  growing edge (Prompt). */
-export type MarkOverlay = 'run' | 'grow'
+export type MarkOverlay = 'run'
 
 export interface TabMark {
   place: MarkPlace
@@ -61,7 +62,7 @@ export function resolveTabMark({
     if (indicator === 'off') return NO_MARK
     if (indicator === 'ring') return { place: 'ring', colour: 'working', motion: 'spin' }
     // The fill itself stands still; the mark on top of it moves.
-    if (filled) return { place: 'fill', colour: 'working', motion: null, overlay: prompt ? 'grow' : 'run' }
+    if (filled) return prompt ? { place: 'fill', colour: 'working', motion: null } : { place: 'fill', colour: 'working', motion: null, overlay: 'run' }
     // On the tab in front the growing edge wears the top rule's colour, so at
     // full length rule and edge read as one line bending down.
     if (prompt) return { place: 'edge', colour: active ? 'rule' : 'working', motion: 'grow' }

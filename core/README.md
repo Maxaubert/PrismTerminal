@@ -221,8 +221,8 @@ host's own filled tab, and no rainbow row, so a host that has not adopted the
 marks sees no change. That row's list is `settings/markOptions.ts`, NOT
 `TERMINAL_OPTIONS`; `coreSettingsIndex({ marks: true })` indexes it. Its
 switch is `agentRainbow()` (`prism.term.agentRainbow`, on; no theme resets it).
-Since #154 Full's working fill carries Minimal's mark on top (`overlay`: the
-run in the name's ink, or the Powerline edge in `shadeOn`'s shade) and finished is
+Since #154 Full's working fill on a flat tab carries Minimal's run on top
+(`overlay`, in the name's ink; a Powerline fill has no overlay) and finished is
 the rainbow across the whole tab (`rainbowInk` picks its name's ink).
 
 **THE ON SWITCH'S KNOB (#154)** is `--p-switch-knob` where the host defines it
