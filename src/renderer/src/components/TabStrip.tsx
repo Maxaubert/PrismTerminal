@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type JSX,
@@ -8,14 +9,26 @@ import {
 } from 'react'
 import { tabLabels, type Tab } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
-import { useAgentDoneOn, useAgentFailedOn, useAgentIndicator, useAgentQuestionOn } from '@core/renderer/lib/termLook'
+import { TabMark } from '@core/renderer/components/TabMark'
+import { motionClass } from '@core/renderer/components/markClasses'
+import {
+  useAgentDoneOn,
+  useAgentFailedOn,
+  useAgentIndicator,
+  useAgentQuestionOn,
+  useAgentRainbow
+} from '@core/renderer/lib/termLook'
 import { failedLabel } from '@core/renderer/lib/agentHookSignal'
 import { useAgentColors } from '@core/renderer/lib/agentColors'
-import { inkOn } from '@core/renderer/lib/colour'
+import { composite } from '@core/renderer/lib/colour'
+import { markPalette } from '@core/renderer/lib/markPalette'
+import { resolveTabMark, type MarkColour, type MarkState } from '@core/renderer/lib/tabMark'
 import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from '@core/renderer/lib/recentRoots'
 import { ContextMenu } from './ContextMenu'
 import { MenuIcon } from './MenuIcon'
 import { useTabWidth } from '../lib/tabWidthPrefs'
+import { useTabStyle } from '../lib/tabStylePrefs'
+import { OVERLAP, edgeBand, ruleClip, segmentClip } from '../lib/promptGeometry'
 import { dropSlot, type Lane } from '../lib/tabDrop'
 
 /**
@@ -116,19 +129,47 @@ export function TabStrip({
 }): JSX.Element | null {
   const indicator = useAgentIndicator()
   const width = useTabWidth()
+  // The tab style (#143): Classic, the flat strip, or Prompt's chevrons.
+  const prompt = useTabStyle() === 'prompt'
   // The user's pick where there is one, else the theme's accent and green.
-  const { working: agentColor, finished: doneColor, question: questionColor, failed: failedColor } = useAgentColors()
+  const colours = useAgentColors()
   const doneOn = useAgentDoneOn()
   const questionOn = useAgentQuestionOn()
   const failedOn = useAgentFailedOn()
-  // Full mode fills the tab with the colour. Text biases WHITE: strict
-  // contrast maths picks black on a mid orange or indigo, but white on a
-  // saturated fill is the look; black only wins on genuinely light fills
-  // (contrast vs black of 12 is a ~0.55 luminance threshold). A SEE-THROUGH
-  // working colour (#112) is judged as laid on the strip's own opaque ground,
-  // where it takes whichever of the two reads better (the core's `inkOn`).
-  const onTint = (c: string): string =>
-    inkOn(c, getComputedStyle(document.documentElement).getPropertyValue('--p-bg-solid').trim())
+  const rainbow = useAgentRainbow()
+  // EVERY MARK'S COLOUR (#143), from what the window paints NOW: App paints
+  // the chrome synchronously on every look change, before this re-renders.
+  // Held to 3:1 on every ground a mark can sit on: the strip, and under Prompt
+  // both segment shades (composited, since on glass they are see-through).
+  const root = getComputedStyle(document.documentElement)
+  const read = (name: string, fallback: string): string => root.getPropertyValue(name).trim() || fallback
+  const solidGround = read('--p-bg-solid', '#0b0b0f')
+  const grounds = prompt
+    ? [solidGround, composite(read('--p-seg', solidGround), solidGround), composite(read('--p-seg-on', solidGround), solidGround)]
+    : [solidGround]
+  const palette = markPalette({ colours, grounds, solidGround, text: read('--p-text', '#e7e7ee'), rainbow })
+  /** A mark's colour role as a CSS background: the rainbow runs along a line
+   *  (`x`) or down a Prompt edge (`y`); the rule is the active rule's token. */
+  const paint = (role: MarkColour | null, axis: 'x' | 'y'): string => {
+    switch (role) {
+      case 'working':
+        return palette.line.working
+      case 'rule':
+        return 'var(--p-accent-hi)'
+      case 'done':
+        return palette.line.done
+      case 'rainbow':
+        return axis === 'x' ? palette.rainbowX : palette.rainbowY
+      case 'question':
+        return palette.line.question
+      case 'failed':
+        return palette.line.failed
+      case 'badge':
+        return palette.fill.done
+      default:
+        return 'transparent'
+    }
+  }
   // A tab being carried (#71 follow-up): the strip animates it rather than
   // drawing a hairline - the tab lifts out and its neighbours slide across to
   // open the gap it would drop into, which is what "picked up" looks like.
@@ -259,6 +300,20 @@ export function TabStrip({
     if (dropAt <= carry.from && i >= dropAt && i < carry.from) return carry.width
     return 0
   }
+  // The strip's height, for the Prompt rule's cut along the slant and the
+  // rainbow's tile down an edge: 32 px under a title bar, the title row's
+  // height without one (#91).
+  const [stripH, setStripH] = useState(32)
+  const hasTabs = tabs.length > 0
+  useLayoutEffect(() => {
+    const el = strip.current
+    if (!el) return
+    const measure = (): void => setStripH(el.clientHeight || 32)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [hasTabs])
   if (!tabs.length) return null
   const labels = tabLabels(tabs)
   // Middle-click closes, the way every tab strip does. `auxclick` rather than
@@ -296,187 +351,63 @@ export function TabStrip({
       // icon slot and an X, each with a cursor of its own, and letting them
       // answer for themselves made it flicker under the moving pointer.
       data-tab-strip
+      data-tab-style={prompt ? 'prompt' : 'classic'}
       className={`${dragInFlight ? 'no-drag' : 'drag'} p-styled-font relative flex ${inTitleRow ? 'min-w-0 flex-1' : 'h-8 shrink-0 border-b border-[var(--p-divider)]'} items-stretch gap-0 overflow-x-auto bg-[var(--p-tabs)] pr-1 text-[12px] transition-[background-color,border-color] duration-[550ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
         carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''
       }`}
     >
       {tabs.map((t, i) => {
         const on = t.id === activeId
-        // The agent indicator: paints while the agent is genuinely working
-        // (the working colour) or finished behind another tab (the finished
-        // colour, until visited) - the whole tab filled (full) or the brain
-        // icon plus edge bar tinted (minimal). Idle shows nothing.
-        // A tab IS its shell here, so the tab's id is the session's.
+        // The agent's state on this tab. A tab IS its shell here, so the tab's
+        // id is the session's. Working shows on any tab, the one in front
+        // included; the other three only on a tab nobody is looking at (App's
+        // sets), each behind its own switch.
         const working = indicator !== 'off' && agentIds.has(t.id) && workingIds.has(t.id)
         // THE ATTENTION MARKS (2026-09-28; owner: a finished indicator, "a
         // static colour like a green border on the bottom ... until you click
-        // the tab", and "a question indicator ... blue"). A static line along
-        // the bottom, the same in Minimal and Full, each behind its own
-        // switch; a question outranks a plain finish. Full's fill is for
-        // WORKING alone now: the finished fill it used to have is this line.
+        // the tab", and "a question indicator ... blue"): a question outranks
+        // a plain finish.
         const question = questionOn && !working && questionIds.has(t.id)
         // FAILED (#131): a turn that ended on an error, said by Claude Code's
         // own hook. Under a question, over a plain finish.
         const failed = failedOn && !working && !question && !!failedIds?.has(t.id)
         const done = doneOn && !working && !question && !failed && doneIds.has(t.id)
-        const mark = question ? questionColor : failed ? failedColor : done ? doneColor : null
-        const tint = working ? agentColor : mark
-        const loud = working && indicator === 'full'
-        return (
-          <div
-            key={t.id}
-            data-agent={tint ? indicator : undefined}
-            data-agent-state={working ? 'working' : question ? 'question' : failed ? 'failed' : done ? 'done' : undefined}
-            data-agent-present={agentIds.has(t.id) ? '' : undefined}
-            // Hairline side edges in the divider token: they separate flush
-            // tabs when the style draws edges, and vanish (the token goes
-            // transparent) when it doesn't. Right edges only: the first tab
-            // sits flush against the window's left side, no line before it.
-            // EVERY TAB IS ONE WIDTH (owner, 2026-09-21: "make tabs in both
-            // apps have a fixed size, and not dynamically adjust based on the
-            // content"). A tab was as wide as its label, up to 14rem, so opening
-            // a folder with a long name shoved every tab after it sideways and
-            // the close button was never in the same place twice. Now it is
-            // 114px (owner, 2026-09-21/22: "way smaller... around the size the
-            // Explorer tab had in Prism... around 60% of what it is now"), and
-            // it SHRINKS - all of them equally - only when the strip
-            // runs out of room, which is what a browser does: the label
-            // truncates inside, the whole path is on the tooltip.
-            // AND IT IS A SETTING (owner, 2026-09-23: "fixed size or dynamic
-            // ... the user can pick"; then "dynamic ... the default"): Tab
-            // width > Dynamic (the DEFAULT) puts back the
-            // strip from before, each tab as wide as its name up to 14rem
-            // (the cap is on the label), shrinking only when out of room.
-            data-tab-fixed={width === 'fixed' || undefined}
-            data-tab-dynamic={width === 'dynamic' || undefined}
-            className={`no-drag group relative flex items-center gap-1.5 border-r border-[color:var(--p-divider)] px-2.5 transition-colors ${
-              // Dynamic has a floor too (owner, 2026-09-28: "so it's not too
-              // small when there's a tab with only one letter ... maybe like 4
-              // letters"): never narrower than its own content, whose label
-              // is at least four characters wide.
-              width === 'fixed' ? 'min-w-[64px] flex-[0_1_114px]' : 'min-w-min shrink'
-            } ${
-              loud
-                ? ''
-                : on
-                  ? // THE SECONDARY COLOUR (owner, 2026-09-03): the strip, the
-                    // tabs at rest and this one are all --p-tabs, one surface
-                    // with the title bar. --p-tab-active is kept as a token
-                    // (it equals --p-tabs on an opaque window and paints
-                    // nothing on an acrylic one, where a second coat would be
-                    // a fill by accident) and the active tab is told by its
-                    // ink, not a fill.
-                    'bg-[var(--p-tab-active)] text-[var(--p-text)]'
-                  : // --p-hover, not a white film: the theme may be a light
-                    // one, where white over paper is no hover at all.
-                    'text-[var(--p-dim)] hover:bg-[var(--p-hover)] hover:text-[var(--p-text)]'
-            }`}
-            style={{
-              ...(loud && tint ? { background: tint, color: onTint(tint) } : {}),
-              transform: `translateX(${carry?.id === t.id ? carry.dx : slide(i)}px)`,
-              zIndex: carry?.id === t.id ? 5 : undefined,
-              // What you carry is a COPY - Chromium's own drag snapshot - so
-              // the tab you picked up stays exactly where it was, solid, and
-              // the strip only really rearranges when the drop lands. The
-              // neighbours sliding open the gap are the preview.
-              transition:
-                carry && carry.id !== t.id ? 'transform 170ms cubic-bezier(.23,1,.32,1)' : undefined
-            }}
-            // The WHOLE tab is the click target, not just the label: the
-            // padding, the icon slot and the slack around a short name all
-            // pick the tab. The close button stops propagation to opt out.
-            onClick={() => {
-              // A press that travelled is a drag, not a pick.
-              if (dragging.current) {
-                dragging.current = false
-                return
-              }
-              onPick(t.id)
-            }}
-            onAuxClick={(e) => auxClose(e, t.id)}
-            // The tab's own menu (2026-08-30). The wrapper owns it, not the
-            // inner button: the padding and the icon slot are part of the
-            // target, the same reasoning the click handler gives. A right
-            // click cannot start a carry - onTabPointerDown ignores button 2.
-            onContextMenu={(e) => {
-              e.preventDefault()
-              setTabMenu({
-                x: e.clientX,
-                y: e.clientY,
-                id: t.id,
-                cwd: t.kind === 'settings' ? '' : t.cwd
-              })
-            }}
-            // Tabs reorder by dragging (#70): the half of the tab the pointer
-            // is over decides which side of it the dragged tab lands.
-            data-tab
-            onPointerDown={(e) => onTabPointerDown(e, t.id, i)}
-            onPointerMove={onTabPointerMove}
-            onPointerUp={onTabPointerUp}
-            onPointerCancel={() => carry && endDrag()}
-          >
-            {/* The active mark: an accent rule along the top. It yields while
-                the working fill is up - two signals on one tab would fight. */}
-            {on && !loud && <span className="absolute inset-x-0 top-0 h-0.5 bg-[var(--p-accent-hi)]" aria-hidden />}
-            {/* Minimal mark: a bar running along the BOTTOM edge while the
-                agent works, the way a loading tab reads. It sits under the
-                label rather than beside it, so a narrow tab loses none of its
-                name to it. */}
-            {mark && (
-              <span
-                data-attention={question ? 'question' : failed ? 'failed' : 'done'}
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px]"
-                style={{ background: mark }}
-                aria-hidden
-              />
-            )}
-            {working && indicator === 'minimal' && (
-              <span className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] overflow-hidden" aria-hidden>
-                <span
-                  className="p-agent-run absolute inset-y-0 w-[42%] rounded-full"
-                  style={{ background: agentColor }}
-                />
-              </span>
-            )}
-            {/* A permanent icon slot: the brain appears in it while the
-                agent works or waits unseen, and it is transparent otherwise -
-                so the tab NEVER changes width while an agent runs.
-                FULL ALONE (owner, 2026-09-09). Minimal is the animated bar and
-                nothing else: it was the bar AND the brain, which is two marks
-                for the one thing minimal says, and the louder of the two is
-                the icon - so the quiet volume read almost as loud as the other
-                one. A mode that can never fill the slot does not reserve it
-                either, which is why the slot itself goes with the icon; the
-                widths only settle differently, and only when the setting is
-                deliberately changed. */}
-            {indicator === 'full' && (
-            <span className="grid h-[13px] w-[13px] shrink-0 place-items-center" aria-hidden={!tint}>
-              {tint && (
-                <svg
-                  data-activity={working ? 'working' : 'done'}
-                  viewBox="0 0 24 24"
-                  width={13}
-                  height={13}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.9"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-label={working ? 'Agent working' : 'Agent finished'}
-                >
-                  <path d="M9.5 4a2.7 2.7 0 0 0-2.7 2.7c-1.5.3-2.6 1.6-2.6 3.2 0 .8.3 1.6.8 2.1a3.2 3.2 0 0 0 1.3 5.4A2.9 2.9 0 0 0 9.2 20c.5 0 1-.1 1.3-.4V4.5A2.6 2.6 0 0 0 9.5 4zM14.5 4a2.7 2.7 0 0 1 2.7 2.7c1.5.3 2.6 1.6 2.6 3.2 0 .8-.3 1.6-.8 2.1a3.2 3.2 0 0 1-1.3 5.4A2.9 2.9 0 0 1 14.8 20c-.5 0-1-.1-1.3-.4V4.5a2.6 2.6 0 0 1 1-.5z" />
-                </svg>
-              )}
-            </span>
-            )}
+        const state: MarkState | null = working ? 'working' : question ? 'question' : failed ? 'failed' : done ? 'done' : null
+        // WHICH MARK, from the core's one rule (#143): the strip only draws it.
+        const mark = resolveTabMark({ indicator, tabStyle: prompt ? 'prompt' : 'flat', state, active: on, rainbow })
+        const filled = mark.place === 'fill' && state !== null
+        const ink = filled ? palette.ink[state] : undefined
+        const first = i === 0
+        const last = i === tabs.length - 1
+        // FULL: ONE NAME COLOUR (owner, 2026-10-10: "Every tab name in Full
+        // uses the theme's own text colour, on every tab, idle ones included").
+        // Elsewhere the tab in front is told by its brighter ink, as always.
+        const nameInk = on || indicator === 'full' ? 'text-[var(--p-text)]' : 'text-[var(--p-dim)] hover:text-[var(--p-text)]'
+        // What a flat tab's own mark draws (run, line, fill); the ring sits by
+        // the name, and a Prompt edge is drawn by the segment's band.
+        const flatMark =
+          state && (mark.place === 'run' || mark.place === 'line' || mark.place === 'fill') ? (
+            <TabMark
+              mark={mark}
+              state={state}
+              background={filled ? palette.fill[state] : paint(mark.colour, 'x')}
+              foot={mark.colour === 'badge' ? palette.badgeFoot : undefined}
+              ink={ink}
+            />
+          ) : null
+        const body = (
+          <>
+            {flatMark}
             {t.kind !== 'settings' && <DictationTabMark sessionId={t.id} />}
             {loadingIds?.has(t.id) && (
               <span
                 data-tab-loading
                 aria-hidden
-                className="no-drag pointer-events-none -mr-0.5 ml-2 inline-block h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--p-text)_22%,transparent)] border-t-[var(--p-accent-solid)] motion-safe:animate-spin"
+                className="no-drag pointer-events-none relative z-[1] -mr-0.5 ml-2 inline-block h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--p-text)_22%,transparent)] border-t-[var(--p-accent-solid)] motion-safe:animate-spin"
               />
             )}
+            {/* RING (#143): the spinner beside the name, only while working. */}
+            {mark.place === 'ring' && <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />}
             <button
               role="tab"
               aria-selected={on}
@@ -486,7 +417,10 @@ export function TabStrip({
               // tab, up to 14rem, as before #35.
               // CENTRED in both widths (owner, 2026-09-28), and never under
               // four characters wide, so a one-letter name is not a sliver.
-              className={`min-w-[4ch] truncate py-1 text-center ${width === 'fixed' ? 'flex-1' : 'max-w-[14rem]'}`}
+              className={`relative z-[1] min-w-[4ch] truncate py-1 text-center ${width === 'fixed' ? 'flex-1' : 'max-w-[14rem]'} ${
+                filled || (prompt && on) ? 'font-semibold' : ''
+              } ${prompt ? 'pl-1' : ''}`}
+              style={ink ? { color: ink } : undefined}
               // The label is the folder's last segment; the whole path is here.
               // While the Failed line shows, what failed is said under the
               // path (#131): "Failed: rate limit".
@@ -498,20 +432,21 @@ export function TabStrip({
                     : t.cwd
               }
               onClick={() => {
-              // A press that travelled is a drag, not a pick.
-              if (dragging.current) {
-                dragging.current = false
-                return
-              }
-              onPick(t.id)
-            }}
+                // A press that travelled is a drag, not a pick.
+                if (dragging.current) {
+                  dragging.current = false
+                  return
+                }
+                onPick(t.id)
+              }}
             >
               {labels[i]}
             </button>
             <button
-              className={`grid h-4 w-4 shrink-0 place-items-center rounded-sm text-[var(--p-icon)] transition-opacity hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] ${
+              className={`relative z-[1] grid h-4 w-4 shrink-0 place-items-center rounded-sm text-[var(--p-icon)] transition-opacity hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] ${
                 on ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
               }`}
+              style={ink ? { color: ink } : undefined}
               data-tab-close
               title={`Close ${labels[i]} (Ctrl+Shift+W)`}
               aria-label={`Close ${labels[i]}`}
@@ -524,6 +459,145 @@ export function TabStrip({
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>
             </button>
+          </>
+        )
+        // The handlers and the carry are the same in both styles: the whole
+        // tab is the click target, a press that travels is a drag (#70).
+        const shared = {
+          'data-agent': state ? indicator : undefined,
+          'data-agent-state': state ?? undefined,
+          'data-agent-present': agentIds.has(t.id) ? '' : undefined,
+          // EVERY TAB IS ONE WIDTH (owner, 2026-09-21), AND IT IS A SETTING
+          // (#56): Dynamic, the default, each tab as wide as its name up to
+          // 14rem, or Fixed, all one width, shrinking equally when out of room.
+          'data-tab-fixed': width === 'fixed' || undefined,
+          'data-tab-dynamic': width === 'dynamic' || undefined,
+          'data-tab-active': on || undefined,
+          onClick: () => {
+            // A press that travelled is a drag, not a pick.
+            if (dragging.current) {
+              dragging.current = false
+              return
+            }
+            onPick(t.id)
+          },
+          onAuxClick: (e: MouseEvent) => auxClose(e, t.id),
+          // The tab's own menu (2026-08-30). The wrapper owns it, not the inner
+          // button: the padding and the mark slots are part of the target. A
+          // right click cannot start a carry: onTabPointerDown ignores button 2.
+          onContextMenu: (e: MouseEvent) => {
+            e.preventDefault()
+            setTabMenu({ x: e.clientX, y: e.clientY, id: t.id, cwd: t.kind === 'settings' ? '' : t.cwd })
+          },
+          'data-tab': true,
+          onPointerDown: (e: PointerEvent<HTMLDivElement>) => onTabPointerDown(e, t.id, i),
+          onPointerMove: onTabPointerMove,
+          onPointerUp: onTabPointerUp,
+          onPointerCancel: () => carry && endDrag()
+        }
+        const motion = {
+          transform: `translateX(${carry?.id === t.id ? carry.dx : slide(i)}px)`,
+          zIndex: carry?.id === t.id ? 5 : undefined,
+          // What you carry is a COPY - Chromium's own drag snapshot - so the
+          // tab you picked up stays exactly where it was, solid, and the strip
+          // only really rearranges when the drop lands. The neighbours sliding
+          // open the gap are the preview.
+          transition: carry && carry.id !== t.id ? 'transform 170ms cubic-bezier(.23,1,.32,1)' : undefined
+        }
+        if (prompt) {
+          // PROMPT (#143): a chevron segment whose arrow EDGE is the mark. The
+          // wrapper is the flex item and the carry; it lets the pointer
+          // through, so a click lands on the segment's own SHAPE and the notch
+          // belongs to the tab whose arrow fills it. The band sits BEHIND the
+          // segment and is cut by this segment and the next one, so it fills
+          // the gap flush, tip to both corners (lib/promptGeometry).
+          const band = edgeBand(last)
+          const rule = ruleClip(stripH, first)
+          return (
+            <div
+              key={t.id}
+              {...shared}
+              data-prompt-segment
+              className={`no-drag group pointer-events-none relative flex ${
+                width === 'fixed' ? 'min-w-[72px] flex-[0_1_122px]' : 'min-w-min shrink'
+              }`}
+              style={{ ...motion, marginRight: last ? 4 : -OVERLAP }}
+            >
+              {mark.place === 'edge' && state && (
+                <span
+                  data-mark="edge"
+                  data-prompt-edge={state}
+                  data-mark-motion={mark.motion ?? undefined}
+                  data-attention={state !== 'working' ? state : undefined}
+                  data-rainbow={mark.colour === 'rainbow' ? '' : undefined}
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-0 z-0"
+                  style={{ right: band.right, width: band.width, clipPath: band.clip }}
+                >
+                  <i
+                    className={`absolute inset-0 ${motionClass(mark.motion, 'y')}`}
+                    style={{
+                      background: paint(mark.colour, 'y'),
+                      ...(mark.motion === 'flow' ? { backgroundSize: `100% ${stripH}px`, ['--tile-y' as string]: `${stripH}px` } : {})
+                    }}
+                  />
+                </span>
+              )}
+              <div
+                data-prompt-shape
+                className={`pointer-events-auto relative z-[1] flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden transition-colors ${nameInk} ${
+                  on
+                    ? 'bg-[var(--p-seg-on)]'
+                    : 'bg-[var(--p-seg)] group-hover:bg-[color-mix(in_srgb,var(--p-seg-on)_55%,var(--p-seg))]'
+                }`}
+                style={{ clipPath: segmentClip(first), padding: `0 22px 0 ${first ? 10 : 14}px` }}
+              >
+                {body}
+              </div>
+              {/* The tab in front's top rule, cut along the slant and running
+                  half a pixel past it, above the segment and its band. */}
+              {on && (
+                <span
+                  data-prompt-rule
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-0.5 bg-[var(--p-accent-hi)]"
+                  style={{ clipPath: rule.clip }}
+                />
+              )}
+            </div>
+          )
+        }
+        return (
+          <div
+            key={t.id}
+            {...shared}
+            // NO LINE BETWEEN TABS (#143; owner, 2026-10-10): the right-hand
+            // hairline every tab carried is gone, in both styles.
+            className={`no-drag group relative isolate flex items-center gap-1.5 px-2.5 transition-colors ${
+              // Dynamic has a floor too (owner, 2026-09-28: "so it's not too
+              // small when there's a tab with only one letter ... maybe like 4
+              // letters"): never narrower than its own content, whose label
+              // is at least four characters wide.
+              width === 'fixed' ? 'min-w-[64px] flex-[0_1_114px]' : 'min-w-min shrink'
+            } ${nameInk} ${
+              on
+                ? // THE SECONDARY COLOUR (owner, 2026-09-03): the strip, the
+                  // tabs at rest and this one are all --p-tabs, one surface
+                  // with the title bar. --p-tab-active is kept as a token (it
+                  // equals --p-tabs on an opaque window and paints nothing on
+                  // an acrylic one, where a second coat would be a fill by
+                  // accident) and the active tab is told by its ink, not a fill.
+                  'bg-[var(--p-tab-active)]'
+                : // --p-hover, not a white film: the theme may be a light
+                  // one, where white over paper is no hover at all.
+                  'hover:bg-[var(--p-hover)]'
+            }`}
+            style={motion}
+          >
+            {/* The active mark: an accent rule along the top. Full never fills
+                the tab in front (#143), so the rule is always there. */}
+            {on && <span className="absolute inset-x-0 top-0 z-[3] h-0.5 bg-[var(--p-accent-hi)]" aria-hidden />}
+            {body}
           </div>
         )
       })}

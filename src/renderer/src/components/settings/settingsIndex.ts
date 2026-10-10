@@ -38,9 +38,9 @@ const PAGE_OF: Record<SettingsSectionId, AppPageId> = {
 /** Every row in the order the pages draw them, which is the order Find a
  *  setting lists matches in. A test holds this to the lists. */
 export const ROW_ORDER = [
-  'tab-width', 'title-bar', 'window-edges', 'term-theme', 'window-background', 'window-accent', 'term-acrylic',
+  'tab-width', 'tab-style', 'title-bar', 'window-edges', 'term-theme', 'window-background', 'window-accent', 'term-acrylic',
   'term-shell', 'newtab-mode', 'explorer-verb', 'term-font-family', 'term-font', 'help-enabled',
-  'agent-indicator', 'agent-done-on', 'agent-question-on', 'agent-failed-on', 'taskbar-badge', 'agent-hooks',
+  'agent-indicator', 'agent-done-on', 'agent-rainbow', 'agent-question-on', 'agent-failed-on', 'taskbar-badge', 'agent-hooks',
   'agent-color', 'agent-done-color', 'agent-question-color',
   'dictation-enabled', 'dictation-mode', 'dictation-hotkey', 'dictation-mic', 'dictation-language',
   'dictation-pause-media', 'dictation-sounds', 'dictation-model', 'dictation-gpu',
@@ -51,7 +51,7 @@ export const ROW_ORDER = [
 /** The index Find a setting reads: the core's rows drawn here, and this
  *  app's own, in page order. */
 export function settingsIndex(nvidia: boolean): SettingsIndexEntry[] {
-  const core = coreSettingsIndex({ pageOf: (s) => PAGE_OF[s], nvidia, diagnostics: true })
+  const core = coreSettingsIndex({ pageOf: (s) => PAGE_OF[s], nvidia, diagnostics: true, marks: true })
   const own: SettingsIndexEntry[] = APP_OPTIONS.map((o) => ({
     id: o.id,
     page: o.page,

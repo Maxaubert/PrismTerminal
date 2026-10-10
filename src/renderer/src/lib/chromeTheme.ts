@@ -25,6 +25,9 @@ const FALLBACK_FG = '#e7e7ee'
 // on the same colour, and the active tab is told from the rest by its INK.
 const TEXT_FLOOR = 4.5
 const QUIET_FLOOR = 3
+/** How much text a Prompt segment carries over the strip, and the tab in front. */
+export const SEG_MIX = 0.04
+export const SEG_ON_MIX = 0.11
 
 /** Every COLOUR token the components read. Radius, font and size tokens are
  *  index.css's, since no theme changes them. */
@@ -53,7 +56,9 @@ export const CHROME_COLOUR_TOKENS = [
   '--p-control',
   '--p-preview',
   '--p-sel-bg',
-  '--p-tree-folder'
+  '--p-tree-folder',
+  '--p-seg',
+  '--p-seg-on'
 ] as const
 
 export interface ChromeTokens {
@@ -225,7 +230,13 @@ export function chromeTokens(
     '--p-sel-bg': selBg,
     // The folder in the + menu's list of places: the accent's brighter cut,
     // already held to the non-text floor on the panel it is drawn on.
-    '--p-tree-folder': accentHi
+    '--p-tree-folder': accentHi,
+    // THE PROMPT SEGMENTS (#143): the theme's text laid on the strip at 4%, and
+    // at 11% for the tab in front (the approved mockups' values). Solid on an
+    // opaque window; on glass the same text at that ALPHA, so a segment is the
+    // same step over the strip's sheet and never a second coat of the ground.
+    '--p-seg': glass ? fg + alphaHex(SEG_MIX) : mixHex(bg, fg, SEG_MIX),
+    '--p-seg-on': glass ? fg + alphaHex(SEG_ON_MIX) : mixHex(bg, fg, SEG_ON_MIX)
   }
   return { mode, vars }
 }

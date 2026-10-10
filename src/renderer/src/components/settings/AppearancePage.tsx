@@ -10,6 +10,7 @@ import { customTermTheme, onTermLookChange, termThemeId, useTermAcrylic } from '
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { setWindowEdges, useWindowEdges } from '../../lib/edgesPrefs'
 import { setTabWidth, useTabWidth, type TabWidth } from '../../lib/tabWidthPrefs'
+import { setTabStyle, useTabStyle, type TabStyle } from '../../lib/tabStylePrefs'
 import { setTitleBarMode, useTitleBarMode } from '../../lib/titleBarPrefs'
 import { setWindowAccent, useWindowAccent } from '../../lib/accentPrefs'
 import { onWindowBackgroundChange, setWindowBackground, useWindowBackground, windowBackground } from '../../lib/backgroundPrefs'
@@ -48,6 +49,12 @@ const EDGE_OPTIONS: Array<{ id: WindowEdges; name: string }> = WINDOW_EDGES.map(
 const TAB_WIDTH_OPTIONS: Array<{ id: TabWidth; name: string }> = [
   { id: 'dynamic', name: 'Dynamic' },
   { id: 'fixed', name: 'Fixed' }
+]
+
+// Classic first: it is the default, the strip as it always was.
+const TAB_STYLE_OPTIONS: Array<{ id: TabStyle; name: string }> = [
+  { id: 'classic', name: 'Classic' },
+  { id: 'prompt', name: 'Prompt' }
 ]
 
 /** What the THEME in force would give the window, which is what a swatch
@@ -162,8 +169,10 @@ function WindowColours(): JSX.Element {
 export function AppearancePage(): JSX.Element {
   const edges = useWindowEdges()
   const width = useTabWidth()
+  const style = useTabStyle()
   const titleBar = useTitleBarMode()
   const tab = appOpt('tab-width')
+  const shape = appOpt('tab-style')
   const bar = appOpt('title-bar')
   const edge = appOpt('window-edges')
   return (
@@ -171,6 +180,10 @@ export function AppearancePage(): JSX.Element {
       <SettingsSection id="window" title={APP_SECTIONS.window}>
         <SettingRow id="tab-width" icon={tab.icon} label={tab.label} sub={tab.sub}>
           <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
+        </SettingRow>
+        {/* The tab style (#143): the flat strip, or Prompt's chevrons. */}
+        <SettingRow id="tab-style" icon={shape.icon} label={shape.label} sub={shape.sub}>
+          <Segmented value={style} onChange={setTabStyle} options={TAB_STYLE_OPTIONS} />
         </SettingRow>
         {/* A switch over the same store the segmented control wrote: on is
             `shown`, the default, the window as it always was (#91). */}
