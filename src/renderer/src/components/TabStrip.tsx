@@ -1,6 +1,7 @@
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type JSX,
@@ -147,7 +148,13 @@ export function TabStrip({
   const grounds = prompt
     ? [solidGround, composite(read('--p-seg', solidGround), solidGround), composite(read('--p-seg-on', solidGround), solidGround)]
     : [solidGround]
-  const palette = markPalette({ colours, grounds, solidGround, text: read('--p-text', '#e7e7ee'), rainbow })
+  const text = read('--p-text', '#e7e7ee')
+  // Worked out again only when what it is made of changes: the strip renders on
+  // every pointer move of a tab drag, and flooring eighteen colours on three
+  // grounds each time is work the frame does not need.
+  const paletteKey = `${colours.working}|${colours.finished}|${colours.question}|${colours.failed}|${grounds.join(',')}|${solidGround}|${text}|${rainbow}`
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the key IS every input, as text
+  const palette = useMemo(() => markPalette({ colours, grounds, solidGround, text, rainbow }), [paletteKey])
   /** A mark's colour role as a CSS background: the rainbow runs along a line
    *  (`x`) or down a Prompt edge (`y`); the rule is the active rule's token. */
   const paint = (role: MarkColour | null, axis: 'x' | 'y'): string => {
