@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hookStep, raisedWhileSeen, type HookEvent, type HookSession } from './agentHookState'
+import { hookStep, raisedWhileSeen, screenDecides, type HookEvent, type HookPhase, type HookSession } from './agentHookState'
 
 /** Run events through the rules from no state, as the indicator does. */
 function run(events: HookEvent[]): { s: HookSession | undefined; last: ReturnType<typeof hookStep> } {
@@ -81,5 +81,72 @@ describe('raisedWhileSeen', () => {
   it('finished and failed are news, which a look has already told', () => {
     expect(raisedWhileSeen('finished')).toBe(false)
     expect(raisedWhileSeen('failed')).toBe(false)
+  })
+})
+
+// A SPINNER AFTER A QUESTION IS THE APPROVED WORK (#148). MEASURED, Claude Code
+// 2.1.296: after Yes no hook fires until PostToolUse, 26 s later for a 25 s
+// sleep; the spinner title came back 34 ms after the key.
+describe('hookStep, a working title', () => {
+  const working = { phase: 'working', working: true, raise: [], clear: ['question'] }
+  it('after a question, the spinner is Working, and takes the question down', () => {
+    expect(run([{ state: 'working' }, { state: 'question' }, { state: 'working-title' }]).last).toEqual(working)
+  })
+  it('after an Esc\'s stop too, for a prompt whose question signal never came', () => {
+    expect(run([{ state: 'working' }, { state: 'idle-title' }, { state: 'working-title' }]).last).toEqual(working)
+  })
+  it('anywhere else it changes nothing: a last frame racing a Stop does not relight a finish', () => {
+    for (const before of ['working', 'done', 'failed'] as const)
+      expect(run([{ state: before }, { state: 'working-title' }]).last).toBeNull()
+    expect(hookStep(undefined, { state: 'working-title' })).toBeNull()
+  })
+  it('a No or an Esc to the box leaves the title idle, so nothing turns Working on (case B)', () => {
+    const { s } = run([{ state: 'working' }, { state: 'idle-title' }, { state: 'question' }, { state: 'idle-title' }])
+    expect(s?.phase).toBe('question')
+  })
+})
+
+// WHILE THE BOX IS ON SCREEN, THE QUESTION STANDS (#148). MEASURED, case G2: a
+// sibling agent's PreToolUse and PostToolUse, and the main turn's Stop, arrived
+// while a subagent's box waited, and each took the line down.
+describe('screenDecides', () => {
+  const phases: (HookPhase | undefined)[] = [undefined, 'working', 'question', 'done', 'failed', 'stopped']
+  const events: HookEvent[] = [
+    { state: 'working' },
+    { state: 'working-title' },
+    { state: 'done' },
+    { state: 'question' },
+    { state: 'failed' },
+    { state: 'idle-title' }
+  ]
+  it('reads the screen only for work or a Stop while a question is pending', () => {
+    for (const p of phases)
+      for (const ev of events) {
+        const want = p === 'question' && ['working', 'working-title', 'done'].includes(ev.state)
+        expect(screenDecides(p ? { phase: p } : undefined, ev), `${p} + ${ev.state}`).toBe(want)
+      }
+  })
+})
+
+describe('hookStep, the box on screen', () => {
+  const asked: HookSession = { phase: 'question' }
+  const up = { questionOnScreen: true }
+  it('work from any agent leaves the question standing', () => {
+    expect(hookStep(asked, { state: 'working' }, up)).toBeNull()
+    expect(hookStep(asked, { state: 'working-title' }, up)).toBeNull()
+  })
+  it('a Stop raises Finished under it and keeps the question', () => {
+    expect(hookStep(asked, { state: 'done' }, up)).toEqual({ phase: 'question', working: false, raise: ['finished'], clear: [] })
+  })
+  it('a question or a failure is as without it', () => {
+    for (const ev of [{ state: 'question' }, { state: 'failed', kind: 'rate_limit' }] as HookEvent[])
+      expect(hookStep(asked, ev, up)).toEqual(hookStep(asked, ev))
+  })
+  it('with the box gone, or nothing read, every step is as before', () => {
+    for (const ev of [{ state: 'working' }, { state: 'working-title' }, { state: 'done' }] as HookEvent[]) {
+      expect(hookStep(asked, ev, { questionOnScreen: false })).toEqual(hookStep(asked, ev))
+    }
+    expect(hookStep(asked, { state: 'working' })?.clear).toContain('question')
+    expect(hookStep(asked, { state: 'done' })?.clear).toContain('question')
   })
 })

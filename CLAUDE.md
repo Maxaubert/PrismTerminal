@@ -64,7 +64,8 @@ read the full entry before changing anything it names.
 8. [The indicator is the agent's own word](docs/regression-rules.md#indicator-agent-word): the
    terminal title first, output scoring only as the fallback; rules live in `useAgentIndicator.ts`.
 9. [Claude Code's hooks are its word, above the title](docs/regression-rules.md#claude-hooks): the
-   plugin's OSC 777 signal wins; a hooked session is never scored from output.
+   plugin's OSC 777 signal wins; a hooked session is never scored from output; a spinner after a
+   question is Working, and a Question holds while its box shows (#148).
 10. [Typing is heard on `onKey`, never `onData`](docs/regression-rules.md#typing-on-onkey): xterm's
     own replies to the pty must not count as the user typing.
 11. [Cells are not characters, and a key is its physical key](docs/regression-rules.md#cells-not-characters):

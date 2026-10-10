@@ -132,3 +132,5 @@ agent's state. Nothing leaves the PC, and the setting turns it off.
 6. Codex `Action Required` in agentTitle; test.
 7. The e2e scenario, a fail-on-main proof, and the full gate.
 8. PRIVACY.md, the CLAUDE.md section, the versions, a hands-on check with the packaged build, and the PR.
+
+2026-10-10: permission prompts (Working after a Yes, a Question held while its box shows) are in `2026-10-10-permission-indicator-design.md` (#148).
