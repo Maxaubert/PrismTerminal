@@ -18,9 +18,10 @@ describe('node-pty pin (#159)', () => {
     expect(JSON.stringify(pkg)).not.toContain('node-pty@1.1.0')
   })
 
-  // A `^1.1.0` peer does not match a prerelease, so Prism's npm refused the pin.
-  it('the core asks its hosts for the same build', () => {
-    expect(json('core/package.json').peerDependencies['node-pty']).toBe(PIN)
+  // A `^1.1.0` peer matches no prerelease, so Prism's npm refused the pin. It
+  // still allows 1.1.0 so Prism's core bump installs before Prism's own pin lands.
+  it('the core lets its hosts take the pinned build', () => {
+    expect(json('core/package.json').peerDependencies['node-pty'].split(' || ')).toContain(PIN)
   })
 
   it('the lockfile resolves it', () => {

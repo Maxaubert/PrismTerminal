@@ -277,9 +277,10 @@ resolve: { dedupe: ['react', 'react-dom'] }, optimizeDeps: { exclude: ['prism-te
 
 `react`, `node-pty` and `@xterm/*` must stay at compatible versions in both apps
 so npm keeps ONE copy of each; the core is verified against Prism Terminal's
-lockfile but ships against Prism's. `node-pty` is EXACTLY `1.2.0-beta.15` in the
-core's peer and in both apps (1.1.0's quit crash, #127/#159); a `^1.1.0` peer
-does not match a prerelease, so npm refuses the pin in the host.
+lockfile but ships against Prism's. Both apps pin `node-pty` to EXACTLY
+`1.2.0-beta.15` (1.1.0's quit crash, #127/#159). The core's peer names that
+build (`^1.1.0 || 1.2.0-beta.15`): a bare `^1.1.0` matches no prerelease, so npm
+refused the pin in Prism.
 
 ## Releasing the core
 
