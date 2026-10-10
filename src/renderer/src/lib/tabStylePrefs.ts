@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 
 // THE TAB STYLE (#143; owner, 2026-10-10): Classic, the flat strip as it has
 // always been and the DEFAULT, so nobody's window changes with the update; or
-// Prompt, chevron segments whose arrow edge is the agent mark. THIS APP'S OWN
+// Powerline (stored as 'prompt', so saved choices survive), chevron segments whose arrow edge is the agent mark. THIS APP'S OWN
 // setting: the strip is the app's shell, not the terminal's, so its key is not
 // `prism.term.*`. Read defensively: anything unknown is Classic. The owner
 // called the first one "Current"; a choice cannot be named Current once there

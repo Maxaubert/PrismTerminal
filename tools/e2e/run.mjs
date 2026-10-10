@@ -1557,7 +1557,7 @@ const scenarios = {
   /**
    * THE PROMPT TAB STYLE (#143; owner, 2026-10-10). Six tabs in the mockups'
    * states: in front and working, idle, working, finished, question, failed.
-   * Measured: no line between tabs in either style; Prompt's segments are
+   * Measured: no line between tabs in either style; Powerline's segments are
    * clipped and overlap by 9.5 px; a working background tab's edge band sits
    * flush in the gap and grows; the tab in front wears its rule; Fixed and
    * Dynamic both hold. Screenshots against the mockups.
@@ -1582,12 +1582,12 @@ const scenarios = {
       const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
       ok(order.indexOf('tab-style') === order.indexOf('tab-width') + 1, `Tab style is right after Tab width (${order.slice(0, 3).join(' > ')})`)
       ok((await row.locator('[aria-pressed="true"]').getAttribute('data-seg')) === 'classic', 'Classic is the default')
-      ok((await row.locator('[data-seg]').allTextContents()).join('|') === 'Classic|Prompt', 'the choices are Classic and Prompt')
+      ok((await row.locator('[data-seg]').allTextContents()).join('|') === 'Classic|Powerline', 'the choices are Classic and Powerline')
       await row.locator('[data-seg="prompt"]').click()
-      ok((await page.evaluate(() => localStorage.getItem('prism.window.tabStyle'))) === 'prompt', 'Prompt is stored')
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.tabStyle'))) === 'prompt', 'Powerline is stored (as prompt)')
       await backToFirst(page)
-      ok((await page.locator('[data-tab-strip]').getAttribute('data-tab-style')) === 'prompt', 'the strip draws Prompt')
-      ok((await borders()) === 0, 'Prompt: no line between tabs')
+      ok((await page.locator('[data-tab-strip]').getAttribute('data-tab-style')) === 'prompt', 'the strip draws Powerline')
+      ok((await borders()) === 0, 'Powerline: no line between tabs')
       const geo = await page.evaluate(() => {
         const segs = [...document.querySelectorAll('[data-tab]')]
         const boxes = segs.map((s) => s.getBoundingClientRect())
@@ -1628,8 +1628,8 @@ const scenarios = {
       await (await gotoPref(page, 'tab-width')).locator('[data-seg="fixed"]').click()
       await backToFirst(page)
       const fixed = await widths()
-      ok(new Set(fixed).size === 1 && fixed[0] >= 112 && fixed[0] <= 124, `Prompt, Fixed: every segment one width (${fixed.join(' / ')})`)
-      ok(new Set(dyn).size > 1, `Prompt, Dynamic: sized to the name (${dyn.join(' / ')})`)
+      ok(new Set(fixed).size === 1 && fixed[0] >= 112 && fixed[0] <= 124, `Powerline, Fixed: every segment one width (${fixed.join(' / ')})`)
+      ok(new Set(dyn).size > 1, `Powerline, Dynamic: sized to the name (${dyn.join(' / ')})`)
       await shotStrip(page, 'tabs-prompt-fixed')
       // A light theme.
       await pickTheme(page, 'paper')
@@ -1813,7 +1813,7 @@ const scenarios = {
       await setPref(page, 'tab-style', 'prompt')
       await backToFirst(page)
       const edge = await page.evaluate(() => getComputedStyle(document.querySelectorAll('[data-tab]')[2].querySelector('[data-prompt-edge] i')).transform)
-      ok(edge === 'none', `and a working Prompt edge rests full (${edge})`)
+      ok(edge === 'none', `and a working Powerline edge rests full (${edge})`)
       await shotStrip(page, 'marks-reduced-motion')
       await page.emulateMedia({ reducedMotion: 'no-preference' })
       await setPref(page, 'tab-style', 'classic')

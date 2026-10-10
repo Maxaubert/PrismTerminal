@@ -129,7 +129,7 @@ export function TabStrip({
 }): JSX.Element | null {
   const indicator = useAgentIndicator()
   const width = useTabWidth()
-  // The tab style (#143): Classic, the flat strip, or Prompt's chevrons.
+  // The tab style (#143): Classic, the flat strip, or Powerline's chevrons.
   const prompt = useTabStyle() === 'prompt'
   // The user's pick where there is one, else the theme's accent and green.
   const colours = useAgentColors()
@@ -139,12 +139,12 @@ export function TabStrip({
   const rainbow = useAgentRainbow()
   // EVERY MARK'S COLOUR (#143), from what the window paints NOW: App paints
   // the chrome synchronously on every look change, before this re-renders.
-  // Held to 3:1 on every ground a mark can sit on: the strip, and under Prompt
+  // Held to 3:1 on every ground a mark can sit on: the strip, and under Powerline
   // both segment shades (composited, since on glass they are see-through).
   const root = getComputedStyle(document.documentElement)
   const read = (name: string, fallback: string): string => root.getPropertyValue(name).trim() || fallback
   const solidGround = read('--p-bg-solid', '#0b0b0f')
-  // Prompt's segments are the strip's own ground now (2026-10-10 rework: idle
+  // Powerline's segments are the strip's own ground now (2026-10-10 rework: idle
   // paints nothing, the tab in front is --p-tab-active, exactly Classic's), so
   // every mark sits on the one ground in both styles.
   const grounds = [solidGround]
@@ -159,7 +159,7 @@ export function TabStrip({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the key IS every input, as text
   const palette = useMemo(() => markPalette({ colours, grounds, solidGround, text, rainbow }), [paletteKey])
   /** A mark's colour role as a CSS background: the rainbow runs along a line
-   *  (`x`) or down a Prompt edge (`y`); the rule is the active rule's token. */
+   *  (`x`) or down a Powerline edge (`y`); the rule is the active rule's token. */
   const paint = (role: MarkColour | null, axis: 'x' | 'y'): string => {
     switch (role) {
       case 'working':
@@ -178,7 +178,7 @@ export function TabStrip({
         return 'transparent'
     }
   }
-  // Every tab's state and mark, worked out before any is drawn: a Prompt edge
+  // Every tab's state and mark, worked out before any is drawn: a Powerline edge
   // needs to know whether the NEXT segment paints (below).
   const looks = tabs.map((t) => {
     const on = t.id === activeId
@@ -334,7 +334,7 @@ export function TabStrip({
     if (dropAt <= carry.from && i >= dropAt && i < carry.from) return carry.width
     return 0
   }
-  // The strip's height, for the Prompt rule's cut along the slant and the
+  // The strip's height, for the Powerline rule's cut along the slant and the
   // rainbow's tile down an edge: 32 px under a title bar, the title row's
   // height without one (#91).
   const [stripH, setStripH] = useState(32)
@@ -402,7 +402,7 @@ export function TabStrip({
         // Elsewhere the tab in front is told by its brighter ink, as always.
         const nameInk = on || indicator === 'full' ? 'text-[var(--p-text)]' : 'text-[var(--p-dim)] hover:text-[var(--p-text)]'
         // What a flat tab's own mark draws (run, line, fill); the ring sits by
-        // the name, and a Prompt edge is drawn by the segment's band.
+        // the name, and a Powerline edge is drawn by the segment's band.
         const flatMark =
           state && (mark.place === 'run' || mark.place === 'line' || mark.place === 'fill') ? (
             <TabMark
