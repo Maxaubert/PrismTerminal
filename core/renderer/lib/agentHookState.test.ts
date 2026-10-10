@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hookStep, type HookEvent, type HookSession } from './agentHookState'
+import { hookStep, raisedWhileSeen, type HookEvent, type HookSession } from './agentHookState'
 
 /** Run events through the rules from no state, as the indicator does. */
 function run(events: HookEvent[]): { s: HookSession | undefined; last: ReturnType<typeof hookStep> } {
@@ -69,5 +69,17 @@ describe('hookStep', () => {
   it('a Stop that lands after the idle title still finishes', () => {
     const { last } = run([{ state: 'working' }, { state: 'idle-title' }, { state: 'done' }])
     expect(last?.raise).toEqual(['finished'])
+  })
+})
+
+// A QUESTION LASTS UNTIL IT IS ANSWERED (#144; owner, 2026-10-09: "it should
+// only disappear if you actually answered the question").
+describe('raisedWhileSeen', () => {
+  it('a question goes up on the tab in front too: being seen is not an answer', () => {
+    expect(raisedWhileSeen('question')).toBe(true)
+  })
+  it('finished and failed are news, which a look has already told', () => {
+    expect(raisedWhileSeen('finished')).toBe(false)
+    expect(raisedWhileSeen('failed')).toBe(false)
   })
 })
