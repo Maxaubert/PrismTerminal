@@ -170,6 +170,11 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   the FIRST token too: a native `claude.exe` started by bare name has the command line `claude`.
 - <a id="only-command-is-resume"></a>**The only command the app writes into a shell is the agent resume**, as the shell's STARTUP
   command, with the id shape-checked in main (`validResume`). Never type into a user's shell.
+- <a id="redraw-nudge"></a>**A THEME PUSH IS FOLLOWED BY A RESIZE NUDGE, NEVER A KEY** (owner, 2026-10-11, choosing
+  "Tiny resize nudge" over sending Ctrl+L or leaving it). Claude Code 2.1.296 switches palette on `?997` but redraws
+  only its live frame (measured, the #172 section of the compat spec). After a push the program asked for, the panel
+  resizes that terminal one column narrower for `NUDGE_HOLD_MS` and refits it back (`termReplies.ts`), waiting until
+  a hidden tab is shown. Nothing is typed. Held by the `termReplies` e2e (the stand-in sees cols-1 then cols, once).
 - <a id="replies-only-when-asked"></a>**THE APP ANSWERS A PROGRAM ONLY WHAT IT ASKED** (#168, #171, #172, #176; spec
   `docs/superpowers/specs/2026-10-10-claude-code-compat-design.md` section 15). Every byte the core writes into a pty that
   no key produced is a reply to a query in that pty's own stream (OSC 10/11 `?`, `CSI ? 996 n`, `CSI > q`, DECRQM 2031)

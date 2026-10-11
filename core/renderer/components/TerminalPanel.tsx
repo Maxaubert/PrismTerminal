@@ -43,6 +43,9 @@ import {
   dsrThemeReply,
   groundMode,
   modeParams,
+  nudgeWidths,
+  NUDGE_AFTER_MS,
+  NUDGE_HOLD_MS,
   noteThemeMode,
   themePush,
   themeReports,
@@ -981,10 +984,36 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     reply(decrqmReply(2031, reports.on))
     return true
   })
+  // The redraw nudge after a push (termReplies.ts says why): one column less,
+  // then a refit back, through the panel's own resize path so xterm and the pty
+  // agree. Several switches in a row give one nudge. The theme is switched in
+  // Settings, so the program's tab is usually HIDDEN then (no size): the nudge
+  // waits until the tab is shown again, since showing it refits to the same
+  // size, which tells the program nothing.
+  let nudge: number | undefined
+  const nudgeWhenShown = (): void => {
+    const s = sessions.get(id)
+    if (!s) return
+    if (!el.clientWidth || !el.clientHeight) {
+      nudge = window.setTimeout(nudgeWhenShown, NUDGE_AFTER_MS)
+      return
+    }
+    const w = nudgeWidths(term.cols)
+    if (!w) return
+    suppressActivity(id)
+    term.resize(w[0], term.rows)
+    termApi().termResize(id, w[0], term.rows)
+    nudge = window.setTimeout(() => {
+      if (sessions.get(id) === s) refitSession(id, s)
+    }, NUDGE_HOLD_MS)
+  }
   const tellTheme = (mode: GroundMode): void => {
     const r = themePush(reports, mode)
     reports = r.state
-    if (r.send) reply(r.send)
+    if (!r.send) return
+    reply(r.send)
+    window.clearTimeout(nudge)
+    nudge = window.setTimeout(nudgeWhenShown, NUDGE_AFTER_MS)
   }
   // XTVERSION, `CSI > q` / `CSI > 0 q` (#171; termReplies.ts has the
   // measurement): xterm 6.0.0 has no handler, and without a reply Claude never

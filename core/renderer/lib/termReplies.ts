@@ -139,3 +139,24 @@ export function themePush(s: ThemeReports, mode: GroundMode): { send: string | n
   if (!s.on || s.last === mode) return { send: null, state: s }
   return { send: dsrThemeReply(mode), state: { ...s, last: mode } }
 }
+
+/**
+ * THE REDRAW NUDGE (owner, 2026-10-11, choosing "Tiny resize nudge" over
+ * sending Ctrl+L or leaving it). Claude Code 2.1.296 hears a theme push and
+ * switches its palette, but only redraws its live frame: what it drew before
+ * keeps the old colours (measured, the #172 section of the compat spec). A
+ * resize makes it redraw everything visible. So after a push PT shrinks the
+ * terminal one column and gives it back: a resize, never a key, and only after
+ * a push the program itself asked for (?2031h).
+ *
+ * NUDGE_AFTER_MS leaves the program time to re-query OSC 11 and switch before
+ * the redraw it triggers; NUDGE_HOLD_MS is how long the narrower size stands,
+ * long enough that ConPTY passes both sizes on rather than only the last.
+ */
+export const NUDGE_AFTER_MS = 250
+export const NUDGE_HOLD_MS = 80
+
+/** The two widths of a nudge, or null when a terminal is too narrow for one. */
+export function nudgeWidths(cols: number): [number, number] | null {
+  return Number.isInteger(cols) && cols >= 3 ? [cols - 1, cols] : null
+}

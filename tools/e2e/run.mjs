@@ -2318,6 +2318,8 @@ const scenarios = {
         "  if (s === 't') { process.stdout.write('\\x1b]11;?\\x07\\x1b[?996n'); return }",
         "  process.stdout.write('IN ' + show(s) + '\\r\\n')",
         '})',
+        // The redraw nudge (owner, 2026-10-11): a resize after a theme push.
+        "process.stdout.on('resize', () => process.stdout.write('WINCH ' + process.stdout.columns + '\\r\\n'))",
         // XTVERSION three ways (#171): `> q` and `> 0 q` ask, `> 1 q` does not.
         "process.stdout.write('\\x1b[?2031h\\x1b]11;?\\x07\\x1b]10;?\\x07\\x1b[?996n\\x1b[?2031$p\\x1b[>q\\x1b[>0q\\x1b[>1q\\x1b[c')"
       ].join('\n')
@@ -2363,6 +2365,12 @@ const scenarios = {
       ok(!!(await until(async () => count(await heard(), LIGHT) >= 1, 5000)), 'picking Fawn tells the program light')
       await sleep(800)
       ok(count(await heard(), LIGHT) === 1, `exactly once (${count(await heard(), LIGHT)})`)
+      // THE REDRAW NUDGE (owner, 2026-10-11: "Tiny resize nudge"): once the tab is
+      // shown again the program sees one column less, then its width back.
+      const winch = (text) => [...text.matchAll(/WINCH (\d+)/g)].map((m) => Number(m[1]))
+      const nudged = await until(async () => { const ws = winch(await heard()); return ws.length >= 2 ? ws : null }, 5000)
+      ok(!!nudged && nudged[nudged.length - 2] === nudged[nudged.length - 1] - 1, `the program is nudged one column narrower and back (${nudged?.join(', ')})`)
+      ok(!!nudged && nudged.length === 2, `once, for one switch (${nudged?.length} resizes)`)
       await page.keyboard.type('t')
       ok(!!(await until(async () => (await heard()).includes(FAWN_GROUND), 5000)), "asked again, OSC 11 answers Fawn's ground")
 

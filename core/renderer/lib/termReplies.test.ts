@@ -8,6 +8,7 @@ import {
   dsrThemeReply,
   groundMode,
   modeParams,
+  nudgeWidths,
   noteThemeMode,
   oscColour,
   themePush,
@@ -142,5 +143,18 @@ describe('bellGate (#177)', () => {
     expect(BELL_GAP_MS).toBe(1000)
     expect(bellGate(0, 999)).toBe(false)
     expect(bellGate(0, 1000)).toBe(true)
+  })
+})
+
+// The redraw nudge after a theme push (owner, 2026-10-11): one column less,
+// then the width back, never a key.
+describe('nudgeWidths', () => {
+  it('is one column narrower and back', () => {
+    expect(nudgeWidths(120)).toEqual([119, 120])
+  })
+  it('is nothing for a terminal too narrow or not measured', () => {
+    expect(nudgeWidths(2)).toBeNull()
+    expect(nudgeWidths(0)).toBeNull()
+    expect(nudgeWidths(Number.NaN)).toBeNull()
   })
 })
