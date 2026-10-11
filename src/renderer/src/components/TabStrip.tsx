@@ -639,13 +639,14 @@ export function TabStrip({
             {body}
             {/* A FAINT LINE BETWEEN TABS (owner, 2026-10-11: "no borders on
                 classic tabs ... just a faint border"; #143 had taken the full
-                hairline away). Short of the strip's height, in the divider's
-                ink, so it follows the Edges setting with every other line. */}
+                hairline away). The strip's full height, top to bottom (owner:
+                they "should go down to the bottom" and "to the top"), in the
+                divider's ink, so it follows the Edges setting. */}
             {!last && (
               <span
                 data-tab-sep
                 aria-hidden
-                className="pointer-events-none absolute inset-y-2 right-0 w-px bg-[var(--p-divider)]"
+                className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[var(--p-divider)]"
               />
             )}
           </div>
