@@ -316,7 +316,7 @@ describe('tabEdge', () => {
     for (const p of TERM_PRESETS) {
       const t = resolveTermTheme(p.id)
       const bg = t.background as string
-      expect(contrastRatio(bg, tabEdge(bg, t.foreground as string)), p.id).toBeGreaterThanOrEqual(1.49)
+      expect(contrastRatio(bg, tabEdge(bg, t.foreground as string)), p.id).toBeGreaterThanOrEqual(1.29)
     }
   })
   it('is a token of the chrome', () => {

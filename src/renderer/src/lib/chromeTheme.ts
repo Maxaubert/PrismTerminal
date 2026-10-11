@@ -69,7 +69,8 @@ export interface ChromeTokens {
  *  core's (#114), which takes 0..1. */
 const pctHex = (pct: number): string => alphaHex(Math.min(100, Math.max(0, pct)) / 100)
 
-/** How far the Powerline border stands off the ground it separates. */
+/** How far the Powerline border stands off the ground it separates (black,
+ *  once reached, is as far as darker goes). */
 const TAB_EDGE_FLOOR = 1.5
 
 /**
@@ -81,7 +82,9 @@ const TAB_EDGE_FLOOR = 1.5
  * clears TAB_EDGE_FLOOR against the ground.
  */
 export function tabEdge(bg: string, fg: string): string {
-  const toward = contrastRatio(bg, '#000000') >= TAB_EDGE_FLOOR ? '#000000' : fg
+  // Black is taken whenever it stands off at all visibly (1.3), even short of
+  // the floor: a dark grey ground's border is black, as asked.
+  const toward = contrastRatio(bg, '#000000') >= 1.3 ? '#000000' : fg
   let edge = bg
   for (let i = 1; i <= 25 && contrastRatio(bg, edge) < TAB_EDGE_FLOOR; i += 1) edge = mixHex(bg, toward, i * 0.04)
   return edge
