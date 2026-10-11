@@ -17,8 +17,9 @@ import { useTabMenus } from './tabMenus'
 import { useTabStyle } from '../lib/tabStylePrefs'
 import { sideEdgeClip, sideSegmentClip } from '../lib/promptGeometry'
 import { dropSlot, type Lane } from '../lib/tabDrop'
-import { REVEAL, useHoverReveal } from '../lib/hoverReveal'
-import { useEdgeNear } from '../lib/edgeNear'
+import { useHoverReveal } from '../lib/hoverReveal'
+import { useEdgeWants } from '../lib/edgeNear'
+import { sideWants } from '../lib/revealZones'
 import {
   SIDEBAR_WIDTH,
   setSidebarMode,
@@ -129,28 +130,21 @@ export function TabSidebar({
   const [dragW, setDragW] = useState<number | null>(null)
   const width = dragW ?? storedWidth
   const collapsed = mode === 'collapsed'
-  // Main's word too: the page hears nothing over the resize border (edgeWatch.ts).
-  const edge = useEdgeNear(collapsed)
   // COLLAPSED: shown while the pointer is at the window's left edge or on the
-  // sidebar itself, and held while one of its menus is open.
+  // sidebar itself, and held while one of its menus is open. One rule for the
+  // page's pointer and main's (lib/revealZones): over the grab strip at its
+  // top the page hears nothing, a press there being Windows', and the sidebar
+  // went away under the hand (owner, 2026-10-11: "if i have the cursor on the
+  // sidebar at the top of it it will disappear when im still on the sidebar").
+  // Measured to where it COMES TO REST, never the half-slid box ("closes before
+  // my cursor is near the edge"): its stored width, not a rectangle.
   const shownNow = useRef(false)
+  const top = titleRow ? 0 : 36 // under a title bar, h-9
+  const fromMain = useEdgeWants(collapsed, (p) => sideWants(p, shownNow.current, top, width))
   const shown = useHoverReveal(
     collapsed,
-    (e) => {
-      const el = nav.current
-      if (!el) return false
-      // Its own height (under a title bar there is one).
-      const box = el.getBoundingClientRect()
-      if (e.clientY < box.top || e.clientY > box.bottom) return false
-      if (e.clientX <= REVEAL.left) return true
-      // ON IT once shown, measured to where it COMES TO REST, not where the
-      // slide has got to (owner, 2026-10-11: "the sidebar closes before my
-      // cursor is near the edge"): a pointer that outran the 260 ms slide was
-      // outside the half-drawn box, so it was put away under the hand. The
-      // layout width ignores the slide; a few pixels past the edge are its.
-      return shownNow.current && e.clientX <= el.offsetWidth + REVEAL.zone
-    },
-    menu.open || dragW !== null || (edge.left && edge.y >= (titleRow ? 0 : 36)) // 36: the title bar's h-9
+    (e) => sideWants({ x: e.clientX, y: e.clientY }, shownNow.current, top, width),
+    menu.open || dragW !== null || fromMain
   )
   useEffect(() => {
     shownNow.current = shown

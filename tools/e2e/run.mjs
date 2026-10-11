@@ -2205,6 +2205,26 @@ const scenarios = {
         return { gap: Math.round(nav.bottom - b.bottom), inFoot: !!document.querySelector('[data-sidebar-foot] [data-sidebar-toggle]') }
       })
       ok(foot.inFoot && foot.gap <= 12, `the sidebar's button sits at its foot (${JSON.stringify(foot)})`)
+      // ON ITS GRAB STRIP (the top of it, a drag region) the page hears
+      // nothing; main's cursor keeps it ("at the top of it it will disappear
+      // when im still on the sidebar").
+      {
+        const cursor = (p) => app.evaluate((_e, pt) => { globalThis.__e2eCursor = pt }, p)
+        await page.mouse.move(800, 400)
+        await until(async () => !(await geo()).shown, 3000, 50)
+        await cursor({ x: 10, y: 300 })
+        ok(!!(await until(async () => (await geo()).shown, 3000, 30)), "main's cursor at the left edge shows it")
+        await cursor({ x: 100, y: 50 })
+        await page.evaluate(() => document.documentElement.dispatchEvent(new MouseEvent('mouseleave')))
+        await sleep(900)
+        ok((await geo()).shown, 'and it stays with the cursor at its top, where the page hears nothing')
+        await cursor({ x: near.nav.right + 3, y: 400 })
+        await sleep(900)
+        ok((await geo()).shown, 'and 3 px past its edge')
+        await cursor({ x: near.nav.right + 40, y: 400 })
+        ok(!!(await until(async () => !(await geo()).shown, 3000, 30)), 'and goes once the cursor is clearly off it')
+        await cursor(null)
+      }
       // Back to open, through its own button while shown.
       await page.mouse.move(2, 300)
       await until(async () => (await geo()).shown, 3000, 50)
@@ -2280,6 +2300,26 @@ const scenarios = {
       const gone = await hitTest(app, [spots[0]])
       ok(gone[0] === 1, `and once up, that row is the terminal's again (${gone})`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-no-titlebar.png') }).catch(() => {})
+      // OVER THE BAR ITSELF the page hears nothing (it is a drag region, the
+      // press is Windows'): only main's reading of the cursor keeps it
+      // (owner, 2026-10-11: "my cursor can be on the titlebar and its
+      // disappearing"). The suite hands main a cursor and tells the page the
+      // pointer has gone, as Windows does.
+      const cursor = (p) => app.evaluate((_e, pt) => { globalThis.__e2eCursor = pt }, p)
+      const leave = () => page.evaluate(() => document.documentElement.dispatchEvent(new MouseEvent('mouseleave')))
+      const barUp = async () => !(await top()).shown
+      await cursor({ x: 600, y: 10 })
+      ok(!!(await until(async () => (await top()).shown, 3000, 30)), "main's cursor at the top brings the bar down")
+      await cursor({ x: 600, y: 30 })
+      await leave()
+      await sleep(900)
+      ok((await top()).shown, 'and it stays with the cursor on the bar, where the page hears nothing')
+      await cursor({ x: 600, y: 39 })
+      await sleep(900)
+      ok((await top()).shown, 'and 3 px below it ("2-3 px off the titlebar")')
+      await cursor({ x: 600, y: 60 })
+      ok(!!(await until(barUp, 3000, 30)), 'and goes once the cursor is clearly below it')
+      await cursor(null)
       // Settings from the sidebar, and back.
       await (await gotoPref(page, 'title-bar')).locator('[role="switch"]').click()
       ok(!!(await until(() => page.evaluate(() => document.querySelectorAll('[data-title-bar]').length === 1 && !document.querySelector('[data-title-bar="clear"]') && !!document.querySelector('[data-app-mark]')), 3000, 50)), 'Show title bar puts the full bar back')

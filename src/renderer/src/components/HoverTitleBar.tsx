@@ -1,6 +1,10 @@
-import { useRef, type JSX, type ReactNode } from 'react'
-import { REVEAL, useHoverReveal } from '../lib/hoverReveal'
-import { useEdgeNear } from '../lib/edgeNear'
+import { useEffect, useRef, type JSX, type ReactNode } from 'react'
+import { useHoverReveal } from '../lib/hoverReveal'
+import { useEdgeWants } from '../lib/edgeNear'
+import { barWants } from '../lib/revealZones'
+
+/** The bar's height: h-9. */
+const BAR_H = 36
 
 /**
  * THE TITLE BAR THAT IS NOT THERE (#162; owner, 2026-10-11): with the tabs in
@@ -28,19 +32,21 @@ export function HoverTitleBar({
   left?: number
 }): JSX.Element {
   const bar = useRef<HTMLDivElement>(null)
-  // Main's word too: over the resize border of a window that is not maximized
-  // the page hears nothing (edgeWatch.ts).
-  const edge = useEdgeNear(true)
+  // Whether it was shown at the last answer: the way out is past its bottom
+  // edge, the way in only the top zone (lib/revealZones).
+  const shownNow = useRef(false)
+  // Main's reading of the cursor, the only one there is while it is over the
+  // bar itself: the bar is a drag region, so a press there is Windows' and the
+  // page hears no pointer move (edgeWatch.ts).
+  const fromMain = useEdgeWants(true, (p) => barWants(p, shownNow.current, left, BAR_H))
   const shown = useHoverReveal(
     true,
-    (e) => {
-      if (e.clientX < left) return false
-      if (e.clientY <= REVEAL.top) return true
-      const box = bar.current?.getBoundingClientRect()
-      return !!box && box.bottom > 0 && e.clientY <= box.bottom
-    },
-    hold || (edge.top && edge.x >= left)
+    (e) => barWants({ x: e.clientX, y: e.clientY }, shownNow.current, left, BAR_H),
+    hold || fromMain
   )
+  useEffect(() => {
+    shownNow.current = shown
+  }, [shown])
   return (
     <div
       ref={bar}

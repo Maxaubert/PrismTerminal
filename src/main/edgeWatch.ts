@@ -42,7 +42,11 @@ export function edgeNear(cursor: Point, content: Rectangle, zone = EDGE): EdgeNe
   }
 }
 
-/** Poll while asked; tell the page only when top or left changes. */
+/** Poll while asked; tell the page whenever the cursor moves. The page decides
+ *  from it (lib/revealZones), because over a drag region (the dropped bar, the
+ *  sidebar's grab strip) a press is Windows', so the page hears no pointer
+ *  move there at all and took the pointer for gone (owner, 2026-10-11: "my
+ *  cursor can be on the titlebar and its disappearing"). */
 export function createEdgeWatch(
   win: () => BrowserWindow | null,
   cursor: () => Point,
@@ -54,7 +58,7 @@ export function createEdgeWatch(
     const w = win()
     if (!w || w.isDestroyed() || w.isMinimized() || !w.isVisible()) return
     const near = edgeNear(cursor(), w.getContentBounds())
-    const key = `${near.top}|${near.left}|${near.top ? Math.round(near.x / 8) : ''}`
+    const key = `${Math.round(near.x)}|${Math.round(near.y)}`
     if (key === last) return
     last = key
     send(near)
