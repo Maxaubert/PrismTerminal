@@ -503,10 +503,16 @@ function rawGroundAlpha(): number {
  * palette's own ground instead (review of #156) saved a dark Custom under an
  * opaque white pick at b9 while the window and the check stayed at d1, so
  * Save changes stayed lit after every save.
+ *
+ * Without a pick the ground is the PALETTE's own, not the active theme's:
+ * every preset card has an edit button, and a light preset edited under a
+ * dark active theme opened, and saved, at the dark level (review of the fix
+ * above). For the active theme the two are the same ground.
  */
 export function withGroundAlpha<T extends { bg: string }>(palette: T): T {
   if (!hostOwnsWindowAcrylic()) return palette
-  return { ...palette, bg: withAlpha(palette.bg, termGroundAlpha()) }
+  const ground = opaque(hostGround() ?? palette.bg)
+  return { ...palette, bg: withAlpha(palette.bg, paintsAlpha(rawGroundAlpha(), ground, termAcrylicInForce())) }
 }
 
 export function saveCustomTermTheme(theme: CustomTermTheme): void {

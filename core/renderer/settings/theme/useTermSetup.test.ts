@@ -7,8 +7,10 @@ import {
   setTermThemeId,
   termAcrylicInForce,
   termGroundAlpha,
-  termThemeId
+  termThemeId,
+  withGroundAlpha
 } from '../../lib/termLook'
+import { paletteOf } from './palette'
 import { saveTermSetup, termSetupState } from './useTermSetup'
 
 // Review of #156: Save changes must judge, and save, the setup IN FORCE, so a
@@ -76,5 +78,16 @@ describe('the setup Save changes judges (#156 review)', () => {
     // saving b9 left Save changes lit after every save.
     expect(customTermTheme()?.bg).toBe('#111111d1')
     expect(termSetupState().dirty).toBe(false)
+  })
+
+  it('editing a light preset that is not the active theme opens at its own level', () => {
+    // Every preset card has an edit button: with no pick, the window's ground
+    // is the ACTIVE (dark) theme's, which says nothing about this palette.
+    setTermThemeId('prism')
+    setTermAcrylic(true)
+    expect(withGroundAlpha(paletteOf('catppuccin-latte')).bg.slice(-2)).toBe('d1')
+    // Under an opaque pick the pick is what paints, for any palette.
+    picked = '#111111'
+    expect(withGroundAlpha(paletteOf('catppuccin-latte')).bg.slice(-2)).toBe('b9')
   })
 })
