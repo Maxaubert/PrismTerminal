@@ -14,7 +14,7 @@ import type { AgentIndicator } from '../host'
  * - Ring: the spinner beside the name while working; everything else Minimal's.
  * - Full: a tab NOT in front is filled edge to edge in its state colour. Working
  *   on a flat tab carries Minimal's run on top (`overlay`); a working Powerline
- *   segment is the fill alone, its edge still (owner, 2026-10-10: the pulsing
+ *   segment is the fill alone, with no edge (owner, 2026-10-10: the pulsing
  *   arrow belongs to the tab you are on). Finished is the icon's rainbow, solid,
  *   flowing (owner, 2026-10-10, choice 1A). The tab in front is never filled
  *   and shows Minimal's mark, so it stays obvious in every state.
@@ -29,8 +29,8 @@ export type MarkTabStyle = 'flat' | 'prompt'
 export type MarkPlace = 'none' | 'run' | 'line' | 'edge' | 'ring' | 'fill'
 export type MarkColour = 'working' | 'rule' | 'done' | 'rainbow' | 'question' | 'failed'
 export type MarkMotion = 'run' | 'grow' | 'breathe' | 'flow' | 'spin' | 'still'
-/** Minimal's working mark drawn ON a Full working fill: the run (flat) or the
- *  growing edge (Prompt). */
+/** Minimal's working mark drawn ON a Full working fill: the run, flat tabs
+ *  only (a Prompt fill has no edge). */
 export type MarkOverlay = 'run'
 
 export interface TabMark {

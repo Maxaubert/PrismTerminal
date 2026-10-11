@@ -12,7 +12,7 @@ import { motionClass } from './markClasses'
  * - `fill`: the whole tab, solid, under the name (Full, a tab not in front);
  *   a rainbow finish flows across all of it. With an `overlay` of `run`,
  *   Minimal's running bar on top in the `overlay` colour (the name's ink,
- *   owner, 2026-10-10). A `grow` overlay is the Prompt edge, the host's.
+ *   owner, 2026-10-10). A Prompt fill has none: its edge is the host's.
  * - `edge`: a Prompt segment's arrow edge, which the host's Prompt strip draws
  *   itself; nothing here.
  *

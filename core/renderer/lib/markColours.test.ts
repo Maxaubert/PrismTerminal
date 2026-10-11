@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ICON_RAINBOW, floorMark, opaqueOver, rainbowFillX, rainbowGradient, rainbowOn, shadeOn } from './markColours'
+import { ICON_RAINBOW, floorMark, opaqueOver, rainbowFillX, rainbowGradient, rainbowOn } from './markColours'
 import { contrastRatio, mixHex } from './termAnsi'
 import { rgbToHsl, parseColour } from './colour'
 
@@ -49,32 +49,6 @@ describe('the rainbow of the app icon (#143)', () => {
   it('loops its gradient, along x or down y', () => {
     expect(rainbowGradient(['#111111', '#222222'], 'x')).toBe('linear-gradient(90deg, #111111, #222222, #111111)')
     expect(rainbowGradient(['#111111', '#222222'], 'y')).toBe('linear-gradient(180deg, #111111, #222222, #111111)')
-  })
-
-  // THE PROMPT EDGE ON A WORKING FILL (2026-10-10 rework, variant 2A kept for
-  // Prompt only): the edge sits in the gap between segments, which is ground,
-  // so the name's ink (black on Volt) would vanish there. A shade of the
-  // working colour that clears 3:1 on BOTH the fill and the ground, the
-  // mockup's own numbers.
-  it('shades the working colour until it clears 3:1 on the fill and the ground', () => {
-    expect(shadeOn('#d8ff26', '#050706')).toBe('#798f15')
-    expect(shadeOn('#3f8ccb', '#f6f4ee')).toBe('#1c3e59')
-    for (const [f, g] of [['#d8ff26', '#050706'], ['#3f8ccb', '#f6f4ee'], ['#cfe4ff', '#f6f4ee']]) {
-      const s = shadeOn(f, g)
-      expect(Math.min(contrastRatio(s, f), contrastRatio(s, g)), `${f} on ${g} -> ${s}`).toBeGreaterThanOrEqual(3)
-    }
-  })
-
-  it('hands back the nearest shade when none clears the floor, and never throws', () => {
-    // A MID colour on a near-black ground (a green, Prism's blue): a step 3:1
-    // off the fill is too dark to be 3:1 off the ground, and no lighter one
-    // exists. The nearest step still stands well off both.
-    for (const [f, gr] of [['#22c55e', '#121212'], ['#4aa5f0', '#0b0b0f']]) {
-      const g = shadeOn(f, gr)
-      expect(Math.min(contrastRatio(g, f), contrastRatio(g, gr)), `${f} -> ${g}`).toBeGreaterThan(2.6)
-    }
-    expect(() => shadeOn('#777777', '#777777')).not.toThrow()
-    expect(shadeOn('#777777', '#777777')).toMatch(/^#[0-9a-f]{6}$/)
   })
 
   it('lays the icon\'s seven, raw, across a whole fill as a looping gradient', () => {
