@@ -549,6 +549,17 @@ export function TabStrip({
               }`}
               style={{ ...motion, marginRight: last ? 4 : -OVERLAP }}
             >
+              {/* With no mark the band is the plain border (owner, 2026-10-11):
+                  the tabs wear the ground, so a ground-coloured gap was no
+                  border at all. */}
+              {!edge && (
+                <span
+                  data-prompt-border
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-0 z-0 bg-[var(--p-tab-edge)]"
+                  style={{ right: band.right, width: band.width, clipPath: band.clip }}
+                />
+              )}
               {edge && state && (
                 <span
                   data-mark="edge"
