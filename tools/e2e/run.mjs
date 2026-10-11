@@ -1623,6 +1623,16 @@ const scenarios = {
       // Fixed and Dynamic both hold.
       const widths = () => page.evaluate(() => [...document.querySelectorAll('[data-tab]')].map((t) => Math.round(t.getBoundingClientRect().width)))
       const dyn = await widths()
+      // A CLICK MOVES NOTHING (#164; owner, 2026-10-10: "when you click tabs
+      // the ui shifts"). The tab in front is semi-bold here, and under Dynamic
+      // a heavier name was a wider tab that pushed the rest along.
+      const edgesX = () => page.evaluate(() => [...document.querySelectorAll('[data-tab]')].map((t) => { const r = t.getBoundingClientRect(); return [r.left, r.right].map((v) => Math.round(v * 2) / 2) }))
+      const before = await edgesX()
+      await page.locator('[data-tab]').nth(3).locator('[role="tab"]').click()
+      await sleep(200)
+      const after = await edgesX()
+      ok(JSON.stringify(before) === JSON.stringify(after), `Powerline, Dynamic: clicking a tab moves no tab (${JSON.stringify(before)} vs ${JSON.stringify(after)})`)
+      await backToFirst(page)
       await (await gotoPref(page, 'tab-width')).locator('[data-seg="fixed"]').click()
       await backToFirst(page)
       const fixed = await widths()
