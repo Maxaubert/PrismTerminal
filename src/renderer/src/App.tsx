@@ -60,7 +60,7 @@ import {
 } from '@core/renderer/lib/agentClose'
 import {
   onTermLookChange,
-  termAcrylicInForce,
+  termAcrylic,
   termFontStack,
   termGroundAlpha,
   termThemeId
@@ -100,9 +100,7 @@ const nextId = (): string => 't' + Date.now().toString(36) + '-' + String((seq +
  *  edges setting (#27) rides the same paint: it changes two of the tokens, and
  *  main is told so the DWM border round the window follows the lines in it. */
 function paintChrome(): void {
-  // IN FORCE, material and alpha both: High Contrast keeps the window solid
-  // whatever the switch says (#156).
-  const acrylic = termAcrylicInForce()
+  const acrylic = termAcrylic()
   const id = termThemeId()
   const edges = windowEdges()
   // A picked background replaces the theme's for the whole window; the panel

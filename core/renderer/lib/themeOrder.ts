@@ -34,7 +34,8 @@ export function oklch(colour: string): { L: number; C: number } {
 
 /**
  * Below this OKLab chroma a ground reads as neutral. MEASURED (2026-10-10, the
- * forty preset grounds sorted by C): 0 (six pure greys), 0.0027 Mist, 0.0055
+ * forty preset grounds sorted by C; High Contrast, one of the greys, left on
+ * 2026-10-11): 0 (six pure greys), 0.0027 Mist, 0.0055
  * Volt, 0.0058 Catppuccin Latte, 0.0082 Paper, 0.0085 Prism, 0.0109 Monokai,
  * then 0.0147 Sage, 0.0149 Cinder and Blossom, 0.0157 Horizon and up to 0.1316
  * Retro. 0.0109 to 0.0147 is the widest gap below 0.02, and this sits in it;

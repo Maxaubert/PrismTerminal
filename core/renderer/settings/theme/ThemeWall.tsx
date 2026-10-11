@@ -6,7 +6,7 @@ import {
   setTermThemeId,
   termThemeId,
   useCustomTermTheme,
-  useTermAcrylicInForce,
+  useTermAcrylic,
   useTermThemeId,
   withGroundAlpha,
   type CustomTermTheme
@@ -284,8 +284,7 @@ const TWO_ROWS = 268
  */
 export function ThemeWall({ onThemePicked, className = '' }: { onThemePicked?: () => void; className?: string }): JSX.Element {
   const themeId = useTermThemeId()
-  // In force, not stored: High Contrast stays solid (#156), so its Alpha is inert.
-  const acrylicOn = useTermAcrylicInForce()
+  const acrylicOn = useTermAcrylic()
   const custom = useCustomTermTheme()
   const { dirty, save } = useTermSetup()
   const noAcrylic = useNoAcrylic()

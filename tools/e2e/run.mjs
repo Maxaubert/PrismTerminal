@@ -4370,7 +4370,7 @@ const scenarios = {
    * levels (0xb9 on a dark ground, 0xd1 on a light one), where before it
    * changed the material and left a preset's ground opaque. The Background's
    * Alpha shows what is in force and stops at 95 (opaque is the switch's off);
-   * a picked alpha wins; off is solid; High Contrast stays solid.
+   * a picked alpha wins; off is solid.
    */
   async seeThrough(ok) {
     const w = world()
@@ -4480,16 +4480,8 @@ const scenarios = {
       await sleep(400)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/see-through.png') }).catch(() => {})
 
-      // High Contrast stays solid, and the row says why.
-      await pick('high-contrast')
-      ok((await sw.isDisabled()) && (await sw.getAttribute('aria-checked')) === 'false', 'on High Contrast the switch is off and disabled')
-      ok((await sub()) === 'High contrast stays solid.', `and says why (${await sub()})`)
-      ok(/^#[0-9a-f]{6}$/.test(await sheet()), `and the window is solid (${await sheet()})`)
-      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/see-through-high-contrast.png') }).catch(() => {})
-
-      // Leave on a quiet preset, the switch off: nothing holds the close.
+      // Leave on a quiet preset, the switch off (a pick resets it): nothing holds the close.
       await pick('dracula')
-      ok(!(await sw.isDisabled()), 'off High Contrast the switch is offered again')
     } finally {
       await closeApp(app)
     }
@@ -4534,7 +4526,7 @@ const scenarios = {
     const wantOrder = ['pt-default', ...computed.filter((id) => id !== 'pt-default')]
     const wallOrder = first.cards.map((c) => c.id).filter((id) => id !== 'custom')
     ok(
-      computed.length >= 40 && wallOrder.join(',') === wantOrder.join(','),
+      computed.length >= 39 && wallOrder.join(',') === wantOrder.join(','),
       `the wall runs PT Default, neutrals black to white, then coloured (${wallOrder.slice(0, 14).join(' ')} ...)`
     )
     const rowTops = [...new Set(first.cards.map((c) => c.top))]

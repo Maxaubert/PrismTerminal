@@ -3,7 +3,7 @@ import { TERM_PRESETS } from './termTheme'
 import { NEUTRAL_CHROMA, oklch, orderTermThemes } from './themeOrder'
 
 const NEUTRALS = [
-  'pitch', 'high-contrast', 'volt', 'prism', 'campbell', 'pt-default',
+  'pitch', 'volt', 'prism', 'campbell', 'pt-default',
   'graphite', 'monokai', 'gruvbox-dark', 'mist', 'catppuccin-latte', 'paper'
 ]
 
@@ -37,7 +37,7 @@ describe('orderTermThemes (#157)', () => {
     }
   })
 
-  it('measures the twelve neutral grounds', () => {
+  it('measures the eleven neutral grounds', () => {
     expect(ordered.filter((p) => neutral(p.bg)).map((p) => p.id).sort()).toEqual([...NEUTRALS].sort())
   })
 
@@ -45,9 +45,9 @@ describe('orderTermThemes (#157)', () => {
     for (const p of TERM_PRESETS) expect(Math.abs(oklch(p.bg).C - NEUTRAL_CHROMA), p.id).toBeGreaterThan(0.001)
   })
 
-  it('keeps the list order on a tie (Pitch before High Contrast)', () => {
-    const ids = ordered.map((p) => p.id)
-    expect(ids.indexOf('pitch')).toBeLessThan(ids.indexOf('high-contrast'))
+  // No two presets share a ground since High Contrast left (owner, 2026-10-11),
+  // so the tie is a made-up pair: a new preset on an existing ground keeps its place.
+  it('keeps the list order on a tie', () => {
     const a = { id: 'a', bg: '#101010' }
     const b = { id: 'b', bg: '#101010' }
     expect(orderTermThemes([b, a]).map((p) => p.id)).toEqual(['b', 'a'])

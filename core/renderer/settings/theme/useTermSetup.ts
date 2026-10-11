@@ -6,12 +6,9 @@ import {
   agentQuestionColorChoice,
   customTermTheme,
   saveCustomTermTheme,
-  seeThroughBlocked,
-  setTermAcrylic,
   setTermThemeId,
   paintsAlpha,
   termAcrylic,
-  termAcrylicInForce,
   termExtraDefaults,
   termGroundAlpha,
   termThemeId,
@@ -65,12 +62,7 @@ export function useTermSetup(): TermSetup {
 /** Dirty and the extras, from the stores as they are (tested). */
 export function termSetupState(): Pick<TermSetup, 'dirty' | 'extras'> {
   const themeId = termThemeId()
-  // THE SWITCH IN FORCE, not the stored one (review of #156): under High
-  // Contrast the row shows the switch off and cannot be clicked, so a stored
-  // on (from before #156) must neither light Save changes for a change the
-  // user cannot see, nor ride out on a save into a Custom that is no longer
-  // held solid. In Prism the two are the same.
-  const acrylicOn = termAcrylicInForce()
+  const acrylicOn = termAcrylic()
   // The window's see-through (#114): the alpha of the ground in force, the
   // picked Background's first. A byte, so the comparison below is exact.
   const groundByte = Math.round(termGroundAlpha() * 255)
@@ -92,7 +84,7 @@ export function termSetupState(): Pick<TermSetup, 'dirty' | 'extras'> {
     indicatorColor: src?.indicatorColor ?? termExtraDefaults().indicatorColor,
     doneColor: src?.doneColor ?? termExtraDefaults().doneColor,
     questionColor: src?.questionColor ?? termExtraDefaults().questionColor,
-    acrylic: (src?.acrylic ?? termExtraDefaults().acrylic) && !seeThroughBlocked()
+    acrylic: (src?.acrylic ?? termExtraDefaults().acrylic)
   }
   // THE UNSAVED-CHANGES QUESTION SURVIVES THE SLIDER (#114, #60). Opacity was
   // one of the extras, so a changed one lit Save changes and a theme pick
@@ -126,13 +118,9 @@ export function saveTermSetup(): void {
 /** Save a palette with the setup in force as Custom, and select it: Save
  *  changes, and the colour editor's save. */
 export function saveAsCustom(palette: ReturnType<typeof paletteOf>): void {
-  // Read before the switch to Custom: what is in force depends on the theme.
   const { extras } = termSetupState()
   saveCustomTermTheme({ ...palette, ...extras })
   setTermThemeId('custom')
-  // A Custom is never held solid, so the stored switch must say what the
-  // window showed: a save under High Contrast stays solid.
-  if (termAcrylic() !== extras.acrylic) setTermAcrylic(extras.acrylic)
 }
 
 /**

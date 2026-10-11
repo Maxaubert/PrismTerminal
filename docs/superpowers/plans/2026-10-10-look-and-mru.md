@@ -5,6 +5,11 @@ Spec: `docs/superpowers/specs/2026-10-10-look-and-mru-design.md`. Worktree
 test first. One commit per task group. No em-dashes. No push, no PR, no merge from this plan's
 build agents; e2e only in the Gate task, one run at a time.
 
+**Amended 2026-10-11:** the owner removed the High Contrast theme ("remove the theme called high
+contrast"), so everything below about it (`termAcrylicInForce`, `seeThroughBlocked`, "High
+contrast stays solid.", the high-contrast neutral and tie) went with it; the switch is read as
+stored (`termAcrylic`). See the spec's decision 6.
+
 ## Task 0: versions
 
 - `core/package.json` 0.30.0 to 0.31.0; `package.json` 0.36.0 to 0.37.0 (and `package-lock.json`'s

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { configureTermCore, resetTermCore, termHost, type TermApi, type TermHostConfig } from './host'
-import { agentColorChoice, agentIndicator, paintsAlpha, saveCustomTermTheme, setTermAcrylic, setTermThemeId, termAcrylic, termAcrylicInForce, termExtraDefaults, termGroundAlpha, termThemeId, withGroundAlpha } from './lib/termLook'
+import { agentColorChoice, agentIndicator, paintsAlpha, saveCustomTermTheme, setTermAcrylic, setTermThemeId, termAcrylic, termExtraDefaults, termGroundAlpha, termThemeId, withGroundAlpha } from './lib/termLook'
 import { CH } from '../shared/channels'
 
 // The seam is what lets ONE terminal serve two apps. These tests are the two
@@ -121,7 +121,7 @@ describe('the ground alpha a saved setup carries', () => {
 // #156: the switch alone makes the window see-through where the terminal owns
 // the window acrylic, as Prism's "See-through window" does. An opaque ground
 // in force paints Prism's default, measured light or dark; a ground that
-// carries its own alpha keeps it; High Contrast stays solid.
+// carries its own alpha keeps it.
 describe('the see-through window (#156)', () => {
   afterEach(() => resetTermCore())
   beforeEach(() => localStorage.clear())
@@ -155,16 +155,6 @@ describe('the see-through window (#156)', () => {
     saveCustomTermTheme({ bg: '#11111180', fg: '#eeeeee', cursor: '#ff0000', ansi: {} })
     expect(termGroundAlpha()).toBe(0x80 / 255)
   })
-  it('High Contrast stays solid, and the stored choice comes back after it', () => {
-    configureTermCore(PRISM_TERMINAL)
-    setTermThemeId('high-contrast')
-    setTermAcrylic(true)
-    expect(termAcrylic()).toBe(true)
-    expect(termAcrylicInForce()).toBe(false)
-    expect(termGroundAlpha()).toBe(1)
-    setTermThemeId('dracula')
-    expect(termAcrylicInForce()).toBe(true)
-  })
   it('Save as Custom carries the default, so a saved setup stays see-through', () => {
     configureTermCore(PRISM_TERMINAL)
     setTermThemeId('dracula')
@@ -176,8 +166,6 @@ describe('the see-through window (#156)', () => {
     setTermThemeId('dracula')
     setTermAcrylic(true)
     expect(termGroundAlpha()).toBe(1)
-    setTermThemeId('high-contrast')
-    expect(termAcrylicInForce()).toBe(true)
   })
   it('paintsAlpha: the one rule the window and the dirty check share', () => {
     expect(paintsAlpha(1, '#000000', false)).toBe(1)

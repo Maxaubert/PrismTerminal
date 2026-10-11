@@ -5,18 +5,13 @@ import {
   saveCustomTermTheme,
   setTermAcrylic,
   setTermThemeId,
-  termAcrylicInForce,
-  termGroundAlpha,
-  termThemeId,
   withGroundAlpha
 } from '../../lib/termLook'
 import { paletteOf } from './palette'
 import { saveTermSetup, termSetupState } from './useTermSetup'
 
-// Review of #156: Save changes must judge, and save, the setup IN FORCE, so a
-// switch the user cannot see (High Contrast holds the window solid) neither
-// lights it nor rides out on it, and a picked opaque Background does not light
-// it by its lightness.
+// Review of #156: Save changes judges, and saves, what the window paints, so a
+// picked opaque Background does not light it by its lightness.
 
 let picked: string | null = null
 const PRISM_TERMINAL: TermHostConfig = {
@@ -37,22 +32,6 @@ describe('the setup Save changes judges (#156 review)', () => {
     configureTermCore(PRISM_TERMINAL)
   })
   afterEach(() => resetTermCore())
-
-  it('High Contrast with the switch stored on is not dirty: the switch is not in force', () => {
-    setTermThemeId('high-contrast')
-    setTermAcrylic(true)
-    expect(termSetupState().dirty).toBe(false)
-  })
-
-  it('saving High Contrast keeps it solid: the Custom carries the switch in force', () => {
-    setTermThemeId('high-contrast')
-    setTermAcrylic(true)
-    saveTermSetup()
-    expect(termThemeId()).toBe('custom')
-    expect(customTermTheme()?.acrylic).toBe(false)
-    expect(termAcrylicInForce()).toBe(false)
-    expect(termGroundAlpha()).toBe(1)
-  })
 
   it('an opaque picked Background does not light Save changes, light or dark', () => {
     saveCustomTermTheme({ bg: '#111111', fg: '#eeeeee', cursor: '#ff0000', ansi: {}, acrylic: true })

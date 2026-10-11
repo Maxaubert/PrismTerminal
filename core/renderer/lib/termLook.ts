@@ -425,7 +425,7 @@ function stored(c: unknown): string | null {
  * but invisible window. The floor is the byte 30% gives (0x4d), so every
  * value a picker or the migration writes reads unchanged.
  *
- * And there, with the see-through switch in force, an OPAQUE ground paints
+ * And there, with the see-through switch on, an OPAQUE ground paints
  * the default see-through (#156, `paintsAlpha`): a preset is no longer 1.
  */
 export function termGroundAlpha(): number {
@@ -433,8 +433,8 @@ export function termGroundAlpha(): number {
   if (!hostOwnsWindowAcrylic()) return a
   // The ground is only looked up when the default can apply: resolving a
   // theme on every read of an alpha that needs none would be waste.
-  const inForce = termAcrylicInForce()
-  return paintsAlpha(a, inForce && isOpaque(a) ? groundInForce() : '#000000', inForce)
+  const on = termAcrylic()
+  return paintsAlpha(a, on && isOpaque(a) ? groundInForce() : '#000000', on)
 }
 /** The lowest window see-through: Opacity 30's byte, round(0.3 * 255). */
 export const GROUND_ALPHA_MIN = 0x4d / 255
@@ -462,24 +462,6 @@ function groundInForce(): string {
   return opaque(hostGround() ?? resolveTermTheme(termThemeId()).background)
 }
 
-/**
- * Whether the window is see-through RIGHT NOW: the switch, except that High
- * Contrast stays solid where the terminal owns the window acrylic (#156,
- * Prism's rule: its contrast is measured on a solid ground, and glass would
- * put an unmeasurable desktop under the text; this owner works zoomed in and
- * relies on it). A theme pick resets the switch with the rest of the setup
- * (`resetTermExtras`, "the theme is the whole setup"), so a stored on under
- * High Contrast only comes from before #156; Save changes judges and saves
- * this, not the stored value (`termSetupState`). In Prism the style owns the
- * glass and the switch is read as it is.
- */
-export function termAcrylicInForce(): boolean {
-  return termAcrylic() && !seeThroughBlocked()
-}
-/** The theme in force keeps the window solid whatever the switch says. */
-export function seeThroughBlocked(): boolean {
-  return hostOwnsWindowAcrylic() && termThemeId() === 'high-contrast'
-}
 function rawGroundAlpha(): number {
   const picked = hostGround()
   if (picked) return alphaOf(picked)
@@ -512,7 +494,7 @@ function rawGroundAlpha(): number {
 export function withGroundAlpha<T extends { bg: string }>(palette: T): T {
   if (!hostOwnsWindowAcrylic()) return palette
   const ground = opaque(hostGround() ?? palette.bg)
-  return { ...palette, bg: withAlpha(palette.bg, paintsAlpha(rawGroundAlpha(), ground, termAcrylicInForce())) }
+  return { ...palette, bg: withAlpha(palette.bg, paintsAlpha(rawGroundAlpha(), ground, termAcrylic())) }
 }
 
 export function saveCustomTermTheme(theme: CustomTermTheme): void {
@@ -540,13 +522,6 @@ export function useTermFontId(): string {
 }
 export function useTermAcrylic(): boolean {
   return useSyncExternalStore(sub, termAcrylic)
-}
-/** The see-through in force (High Contrast stays solid, #156). */
-export function useTermAcrylicInForce(): boolean {
-  return useSyncExternalStore(sub, termAcrylicInForce)
-}
-export function useSeeThroughBlocked(): boolean {
-  return useSyncExternalStore(sub, seeThroughBlocked)
 }
 /** The ground's alpha, re-read when the look OR the host's window colours
  *  change (a picked background is the host's, not this store's). */

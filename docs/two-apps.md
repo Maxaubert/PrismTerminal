@@ -224,8 +224,9 @@ so an update never silently changes what an existing user sees; the bridge to ma
   pink, green ... i want a noctua theme, don't call it that but use that nice brown beige colour
   scheme"; then 2026-09-24: "make more themes so we have 40 themes total like the trailer says.
   verify all themes look good, no invisible text, make some typical colour schemes like a green
-  window, blue, and more fun ones ... don't make them ugly"). THE COUNT IS FORTY, the trailer's
-  number, held by a test. Core `TERM_PRESETS`: the neutrals (PT Default, Prism, Pitch, Cinder,
+  window, blue, and more fun ones ... don't make them ugly"). THE COUNT WAS FORTY, the trailer's
+  number, held by a test; thirty-nine since High Contrast was removed (owner, 2026-10-11: "remove
+  the theme called high contrast"; its id maps to Pitch in `termThemeRetired.ts`). Core `TERM_PRESETS`: the neutrals (PT Default, Prism, Pitch, Cinder,
   Graphite, Volt, Paper, Mist); a dark and a light per colour (Umber and Fawn, the fan's brown and
   beige; Rosewood and Blossom; Moss and Sage); the classic looks (Phosphor, Amber, Marine,
   Retro, Campbell, High Contrast); more colours (Ocean, Garnet, Plum, Lavender, Sky, Peach,
@@ -383,9 +384,9 @@ so an update never silently changes what an existing user sees; the bridge to ma
   switch paints Prism's own levels as they paint (level 70 dark = byte 0xb9, level 49 light =
   0xd1, light measured as luminance > 0.4; `lib/seeThrough.ts`, and `paintsAlpha` in `termLook.ts`,
   shared by the window and Save changes' dirty check). A ground with an alpha keeps it; under the
-  switch the Alpha stops at 95% (`SEE_THROUGH_MAX`: opaque is the switch's off). High Contrast
-  stays solid (`termAcrylicInForce`; the row is drawn off with "High contrast stays solid."), and Save
-  changes judges and saves the switch in force there, not the stored one (`termSetupState`).
+  switch the Alpha stops at 95% (`SEE_THROUGH_MAX`: opaque is the switch's off). #156 first held
+  High Contrast solid under the switch; that rule was removed with the theme (owner, 2026-10-11),
+  so the stored switch is the one in force everywhere.
   In this app the row reads "See-through window" / "The desktop shows behind every surface."
   (`acrylicLabel`, `acrylicSub`); Prism keeps "Acrylic terminal background", a terminal row under
   its own app-level See-through window, and nothing there changes. The `seeThrough` e2e holds it.

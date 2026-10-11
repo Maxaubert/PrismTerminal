@@ -52,12 +52,6 @@ export const acrylicWord = (): string => (hostOwnsWindowAcrylic() ? 'see-through
 export const saveSetupTitle = (): string => `Saves the theme, agent colours and ${acrylicWord()} as Custom`
 
 /** The acrylic row's subtext, by what acrylic means in this host: the
- *  window's own material, or the app style's let through the terminal.
- *  `blocked`: the theme in force keeps the window solid (High Contrast,
- *  `seeThroughBlocked`), which the row says rather than look broken. */
-export const acrylicSub = (blocked = false): string =>
-  !hostOwnsWindowAcrylic()
-    ? 'The desktop shows through the terminal.'
-    : blocked
-      ? 'High contrast stays solid.'
-      : 'The desktop shows behind every surface.'
+ *  window's own material, or the app style's let through the terminal. */
+export const acrylicSub = (): string =>
+  !hostOwnsWindowAcrylic() ? 'The desktop shows through the terminal.' : 'The desktop shows behind every surface.'

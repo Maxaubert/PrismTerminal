@@ -98,14 +98,12 @@ PT already has the switch, under another name and with a gap that makes it look 
    Prism (see-through first, then the theme's colours). `TerminalThemeSection` renders the switch
    before `afterTheme`. Prism passes no `afterTheme`, so its Terminal page does not change. PT's
    `ROW_ORDER` becomes `... 'term-theme', 'term-acrylic', 'window-background', 'window-accent' ...`.
-6. **High Contrast stays solid** (Prism's rule, and this owner's eyes). In a window-acrylic host,
-   when the theme in force is `high-contrast`, the row is drawn off and disabled with the sub
-   "High contrast stays solid.", and the window paints solid whatever is stored
-   (`termAcrylicInForce()` in `termLook.ts` = `termAcrylic()` and not that case; `paintChrome`,
-   the Background row and the editor read it). A theme pick resets the switch with the rest of the
-   setup (`resetTermExtras`), so a stored on under High Contrast only comes from before #156; Save
-   changes judges and saves the switch IN FORCE (review: a hidden stored on lit it, and a save
-   carried it into a Custom that was no longer held solid).
+6. **REMOVED (owner, 2026-10-11: "remove the theme called high contrast").** This was "High
+   Contrast stays solid": in a window-acrylic host the row was drawn off and disabled under
+   `high-contrast` and the window painted solid whatever was stored (`termAcrylicInForce`,
+   `seeThroughBlocked`). The theme is gone (its id maps to Pitch), so the rule, its "in force vs
+   stored" distinction and its tests went with it: the switch is read as stored (`termAcrylic`)
+   by the window, the Background row, the editor and Save changes.
 7. **Save changes** keeps working: the switch is a theme extra already (`termExtraDefaults().acrylic`),
    and Save as Custom stores `withGroundAlpha(...)`, which now carries the default alpha, so a saved
    Custom stays see-through. `useTermSetup`'s dirty check compares the ground alpha in force with
@@ -142,14 +140,14 @@ coloured grouping. The wall shows two rows until "Show all".
   matrices) and `orderTermThemes(presets)`. Lightness is OKLab **L** (perceptual lightness, "the
   black or white scale"); a theme is **neutral** when the OKLab chroma **C** of its ground is below
   `NEUTRAL_CHROMA = 0.0125`. Each group sorts by L ascending; ties keep `TERM_PRESETS` order (stable
-  sort), so Pitch stays before High Contrast.
+  sort); no two presets share a ground since High Contrast was removed (2026-10-11).
 - **The threshold is measured** (2026-10-10, the forty grounds): sorted by C, the grounds run 0
   (six pure greys), 0.0027 Mist, 0.0055 Volt, 0.0058 Catppuccin Latte, 0.0082 Paper, 0.0085 Prism,
   0.0109 Monokai, then **0.0147** Sage, 0.0149 Cinder and Blossom, 0.0157 Horizon and up to 0.1316
   Retro. 0.0109 to 0.0147 is the widest gap below 0.02, and 0.0125 sits in it. A unit test holds
   that no preset ground is within 0.001 of the threshold, so a new theme cannot land on the fence
   unnoticed.
-- Neutral (12): Pitch, High Contrast, Volt, Prism, Campbell, PT Default, Graphite, Monokai, Gruvbox
+- Neutral (12; 11 since High Contrast was removed, 2026-10-11): Pitch, High Contrast, Volt, Prism, Campbell, PT Default, Graphite, Monokai, Gruvbox
   Dark, Mist, Catppuccin Latte, Paper. Coloured (28): the rest, from Phosphor (L 0.147) to Butter
   (0.967). Cinder (`#383c44`, a blue slate, C 0.0149) lands with the coloured: it is measurably as
   tinted as Blossom, and the rule is measured, not named.
@@ -206,17 +204,17 @@ other. `termHost.ts:70` claims Ctrl+Tab from xterm. There is no other next/previ
 ## What changes where
 
 **core/ (ships to Prism; bump 0.31.0):**
-- `lib/seeThrough.ts` (new), `lib/termLook.ts` (`termGroundAlpha` default, `termAcrylicInForce`),
+- `lib/seeThrough.ts` (new), `lib/termLook.ts` (`termGroundAlpha` default; `termAcrylicInForce` until 2026-10-11),
   `lib/themeOrder.ts` (new).
-- `settings/sections/opts.ts` (`acrylicLabel`, `acrylicSub` for High Contrast),
-  `settings/sections/TerminalThemeSection.tsx` (label, row above `afterTheme`, High Contrast off),
+- `settings/sections/opts.ts` (`acrylicLabel`, `acrylicSub`; its High Contrast wording removed 2026-10-11),
+  `settings/sections/TerminalThemeSection.tsx` (label, row above `afterTheme`),
   `settings/TerminalAppearance.tsx` (label; legacy, Prism-only in practice), `settings/coreIndex.ts`
   (label), `settings/theme/ThemeWall.tsx` (order; editor alpha cap and in-force acrylic),
   `settings/theme/useTermSetup.ts` (dirty check by the same rule).
 - Prism-visible effect: only the terminal theme wall's order. Everything else is gated on
   `acrylic.kind === 'window'`, or is a host's own rows.
 
-**src/ (PT only; app 0.37.0):** `App.tsx` (paintChrome reads `termAcrylicInForce`; MRU),
+**src/ (PT only; app 0.37.0):** `App.tsx` (paintChrome reads `termAcrylic`; MRU),
 `lib/tabMru.ts`, `lib/tabSwitchPrefs.ts` (new), `components/settings/AppearancePage.tsx`
 (Background alpha in force and cap; Tab switching row), `appOptions.ts` (`tab-switch`),
 `settingsIndex.ts` (`ROW_ORDER`).
@@ -228,7 +226,7 @@ Unit (vitest):
   see-through hex reads its own opaque colour.
 - `core/renderer/lib/termLook` / `host.test.ts`: window host + switch on + preset = default alpha
   (dark preset 0xb9, light preset 0xd1); picked Background with alpha keeps it; switch off = 1;
-  style host (Prism) unchanged; High Contrast in force = acrylic not in force.
+  style host (Prism) unchanged. (The High Contrast case went with the theme, 2026-10-11.)
 - `core/renderer/lib/themeOrder.test.ts`: permutation of the input; every neutral before every
   coloured; L non-decreasing in each group; the measured neutral list exactly; no ground within
   0.001 of the threshold; the full id order as a snapshot; stable on ties.
@@ -243,7 +241,7 @@ Unit (vitest):
 e2e (`tools/e2e/run.mjs`):
 - New **`seeThrough`**: on a dark preset, the switch alone paints `--p-bg` at alpha `b9`; on Paper
   at `d1`; the Background picker's Alpha reads 73 / 82 and is capped at 95; a picked alpha of 60
-  wins; off is solid; High Contrast shows the row disabled and the window solid; the row's label is
+  wins; off is solid; the row's label is
   "See-through window" and it sits right under the wall; screenshot `.e2e-shots/see-through.png`.
 - New **`tabSwitch`**: default In order still steps the strip; set Most recent; visit A, B, C;
   Ctrl+Tab lands on B, again on C (no ping-pong); hold Ctrl, Tab, Tab lands on A, release; then

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { configureTermCore, resetTermCore, type TermHostConfig } from '../../host'
-import { setTermAcrylic, setTermThemeId, seeThroughBlocked } from '../../lib/termLook'
 import { coreSettingsIndex } from '../coreIndex'
 import { acrylicLabel, acrylicSub, opt, saveSetupTitle } from './opts'
 
@@ -41,15 +40,6 @@ describe('the acrylic row, per host (#156)', () => {
     configureTermCore(STYLE)
     expect(acrylicLabel()).toBe(opt('term-acrylic').label)
     expect(acrylicSub()).toBe('The desktop shows through the terminal.')
-  })
-  it('High Contrast says why it stays solid, only where it does', () => {
-    configureTermCore(WINDOW)
-    setTermAcrylic(true)
-    setTermThemeId('high-contrast')
-    expect(seeThroughBlocked()).toBe(true)
-    expect(acrylicSub(true)).toBe('High contrast stays solid.')
-    configureTermCore(STYLE)
-    expect(seeThroughBlocked()).toBe(false)
   })
   it('Find a setting words the row as the page does', () => {
     configureTermCore(WINDOW)

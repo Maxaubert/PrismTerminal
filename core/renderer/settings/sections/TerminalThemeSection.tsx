@@ -1,5 +1,5 @@
 import type { JSX, ReactNode } from 'react'
-import { setTermAcrylic, useSeeThroughBlocked, useTermAcrylic } from '../../lib/termLook'
+import { setTermAcrylic, useTermAcrylic } from '../../lib/termLook'
 import { SaveButton, Switch } from '../fields'
 import { SettingBlock } from '../layout/SettingBlock'
 import { SettingRow } from '../layout/SettingRow'
@@ -31,7 +31,6 @@ export function TerminalThemeSection({
   const theme = opt('term-theme')
   const acrylic = opt('term-acrylic')
   const label = acrylicLabel()
-  const blocked = useSeeThroughBlocked()
   return (
     <SettingsSection id="theme" title={sectionTitle('theme')}>
       <SettingRow id="term-theme" icon={theme.icon} label={theme.label} sub={themeSub()}>
@@ -41,25 +40,16 @@ export function TerminalThemeSection({
         <ThemeWall onThemePicked={onThemePicked} />
       </SettingBlock>
       {/* The material does not exist before Windows 11, so there the row says
-          why instead of offering a switch that would do nothing. High Contrast
-          keeps the window solid (#156), and says so the same way. A theme
-          pick resets the switch with the rest of the setup, so a stored on
-          here is only one from before #156, and Save changes ignores it
-          (`termSetupState`). */}
+          why instead of offering a switch that would do nothing. */}
       <SettingRow
         id="term-acrylic"
         icon={acrylic.icon}
         label={label}
-        sub={noAcrylic ? 'Needs Windows 11.' : acrylicSub(blocked)}
-        off={noAcrylic || blocked}
+        sub={noAcrylic ? 'Needs Windows 11.' : acrylicSub()}
+        off={noAcrylic}
         tap
       >
-        <Switch
-          on={acrylicOn && !noAcrylic && !blocked}
-          onChange={setTermAcrylic}
-          label={label}
-          disabled={noAcrylic || blocked}
-        />
+        <Switch on={acrylicOn && !noAcrylic} onChange={setTermAcrylic} label={label} disabled={noAcrylic} />
       </SettingRow>
       {afterTheme}
     </SettingsSection>

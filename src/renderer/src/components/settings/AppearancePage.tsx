@@ -9,10 +9,10 @@ import { alphaOf, withAlpha, type AlphaRange } from '@core/renderer/lib/colour'
 import {
   customTermTheme,
   onTermLookChange,
-  termAcrylicInForce,
+  termAcrylic,
   termGroundAlpha,
   termThemeId,
-  useTermAcrylicInForce,
+  useTermAcrylic,
   useTermGroundAlpha
 } from '@core/renderer/lib/termLook'
 import { SEE_THROUGH_MAX } from '@core/renderer/lib/seeThrough'
@@ -90,7 +90,7 @@ const themeColours = (): string => {
   // that is what the window paints, an opaque theme's default included (#156),
   // so the Alpha reads 73 on a dark preset rather than 100.
   const own = id === 'custom' ? customTermTheme() : null
-  const alpha = termAcrylicInForce() ? termGroundAlpha() : own ? alphaOf(own.bg) : 1
+  const alpha = termAcrylic() ? termGroundAlpha() : own ? alphaOf(own.bg) : 1
   return `${vars['--p-accent']}|${withAlpha(themeBg, alpha)}`
 }
 const onColoursChange = (cb: () => void): (() => void) => {
@@ -146,9 +146,7 @@ function WindowColours(): JSX.Element {
   const accent = useWindowAccent()
   const background = useWindowBackground()
   const [themeAccent, themeBg] = useSyncExternalStore(onColoursChange, themeColours).split('|')
-  // In force: High Contrast keeps the window solid (#156), so there the
-  // Alpha is as inert as with the switch off.
-  const acrylicOn = useTermAcrylicInForce()
+  const acrylicOn = useTermAcrylic()
   const groundAlpha = useTermGroundAlpha()
   // The material is Windows 11's (1809 has none): where main says it cannot
   // be had, the window never shows the desktop, so the alpha is as inert as
