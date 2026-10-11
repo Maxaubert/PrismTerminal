@@ -333,12 +333,10 @@ describe('the switch knob token', () => {
 // THE SECONDARY COLOUR (#162; owner, 2026-10-12: "this is the gold standard.
 // make it fit with each theme"): the mockup's "a shade lighter", per theme.
 describe('the secondary colour', () => {
-  it.each(TERM_PRESETS.map((p) => p.id))('%s: unpicked, the ground a step toward the text, readable', (id) => {
-    const { vars, mode } = chromeTokens(resolveTermTheme(id), 1, presetAccent(id))
-    // Dark and grey: the flat panel. Light: a deeper step, darker, never white.
-    if (mode === 'dark') expect(vars['--p-secondary']).toBe(vars['--p-side-flat'])
-    else expect(contrastRatio(vars['--p-secondary'], '#ffffff')).toBeGreaterThan(contrastRatio(vars['--p-bg-solid'], '#ffffff') + 0.08)
-    expect(vars['--p-secondary']).not.toBe(vars['--p-bg-solid'])
+  // Owner, 2026-10-12, of the treatments mockup: "Same, with a line".
+  it.each(TERM_PRESETS.map((p) => p.id))("%s: unpicked, the terminal's own ground, readable", (id) => {
+    const { vars } = chromeTokens(resolveTermTheme(id), 1, presetAccent(id))
+    expect(vars['--p-secondary']).toBe(vars['--p-bg-solid'])
     expect(contrastRatio(vars['--p-text'], vars['--p-secondary'])).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(vars['--p-dim'], vars['--p-secondary'])).toBeGreaterThanOrEqual(3)
   })

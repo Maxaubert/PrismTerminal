@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type JSX,
-  type MouseEvent,
-  type PointerEvent
-} from 'react'
+import { useEffect, useRef, useState, type JSX, type MouseEvent, type PointerEvent } from 'react'
 import { tabLabels, type Tab } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
 import { TabMark } from '@core/renderer/components/TabMark'
@@ -262,14 +255,13 @@ export function TabSidebar({
             ? 'transition-[left,box-shadow] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
             : ''
         } ${
-          // A PLANE ABOVE THE TERMINAL (owner, 2026-10-12: "give the sidebar a
-          // shadow, so it looks like it's on a higher plane than the rest of the
-          // content"): always, deeper while it floats slid out over the terminal.
-          // No line at its edge: the shadow is the edge ("no border on sidebar
-          // though since we have that shadow now").
+          // OPEN, A HAIRLINE at its edge and no shadow: the terminal's own
+          // colour, split off by a line (owner, 2026-10-12: "Same, with a line",
+          // Warp's way). SLID OUT over the terminal it floats, so it casts a
+          // shadow there and the line goes.
           collapsed && visible
             ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]'
-            : 'shadow-[6px_0_22px_-6px_rgba(0,0,0,.5)]'
+            : 'border-r border-[var(--p-divider)]'
         } ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         // Slid by its LEFT, never a transform: Windows is told where a drag
         // region is from the layout, and a transformed panel's grab strip was
@@ -278,7 +270,11 @@ export function TabSidebar({
         // into the title bar too and drew a seam between the two (owner,
         // 2026-10-12: "I can see a border between them"). Clipped above and
         // below, open to the right.
-        style={{ width, left: collapsed && !visible ? -(width + 16) : 0, clipPath: 'inset(0 -60px 0 0)' }}
+        style={{
+          width,
+          left: collapsed && !visible ? -(width + 16) : 0,
+          clipPath: 'inset(0 -60px 0 0)'
+        }}
       >
         {/* A THIN STRIP TO GRAB, above the tabs, when there is no title bar
             (owner, 2026-10-11: "the tabs should start a bit further down on
@@ -350,7 +346,13 @@ export function TabSidebar({
                 onPointerCancel={() => carry && endDrag()}
                 className={`no-drag group relative isolate flex h-[34px] shrink-0 items-center gap-2 overflow-hidden transition-colors ${nameInk} ${
                   prompt ? 'mr-1 pl-3 pr-6' : 'mx-1.5 rounded-[4px] pl-3 pr-1.5'
-                } ${on ? 'bg-[var(--p-hover)]' : 'hover:bg-[var(--p-hover)]'}`}
+                } ${
+                  // The tab in front is a clear filled pill in the accent's tint
+                  // (Warp's way, 2026-10-12); the rest light only on hover.
+                  on
+                    ? 'bg-[color-mix(in_srgb,var(--p-accent-hi)_18%,transparent)]'
+                    : 'hover:bg-[var(--p-hover)]'
+                }`}
                 style={{
                   transform: `translateY(${carry?.id === t.id ? carry.dy : slide(i)}px)`,
                   zIndex: carry?.id === t.id ? 5 : undefined,

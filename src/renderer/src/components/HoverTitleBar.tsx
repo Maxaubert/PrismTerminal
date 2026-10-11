@@ -60,7 +60,9 @@ export function HoverTitleBar({
       // its slide started, above the window, so it moved nothing (measured
       // with WM_NCHITTEST, 2026-10-11).
       className={`drag p-styled-font absolute right-0 z-40 flex h-9 items-center justify-end gap-2.5 bg-[var(--p-secondary)] pl-3 pr-1.5 text-[13px] transition-[top,box-shadow] duration-[200ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
-        shown ? 'shadow-[0_10px_30px_-10px_rgba(0,0,0,.8)]' : ''
+        // No shadow and no line (2026-10-12, the "Same, with a line" mockup):
+        // the bar is the terminal's own colour over the terminal's top rows.
+        ''
       }`}
       // Its shadow falls below it only: spread sideways it darkened a strip of
       // the sidebar along the bar's left end, a line between the two (owner,
@@ -77,7 +79,10 @@ export function HoverTitleBar({
           data-title-corner
           aria-hidden
           className="pointer-events-none absolute left-0 top-full h-2.5 w-2.5"
-          style={{ background: 'radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary) 10px)' }}
+          style={{
+            background:
+              'radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary) 10px)'
+          }}
         />
       )}
     </div>

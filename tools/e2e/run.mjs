@@ -2115,7 +2115,6 @@ const scenarios = {
       ok(new Set(open.lefts).size === 1, 'all in one column')
       ok(open.nav.left === 0 && open.nav.width >= 150 && open.host.left >= open.nav.right - 1, `the sidebar on the left, the terminal beside it (${open.nav.width}px, terminal at ${open.host.left})`)
       ok(open.ruleAtRight, 'Classic: the tab in front has its accent rule on the terminal side')
-      // Owner, 2026-10-12: a shadow puts it on a higher plane, and with it no line.
       // The title bar and the sidebar are one surface; the terminal is set into
       // it, cut round at its top left (owner, 2026-10-12).
       const corner = await page.evaluate(() => {
@@ -2128,7 +2127,9 @@ const scenarios = {
       const seam = await page.evaluate(() => getComputedStyle(document.querySelector('[data-tab-sidebar]')).clipPath)
       ok(seam.startsWith('inset(0px -60px 0px 0px)'), `the sidebar's shadow falls on the terminal's side only (${seam})`)
       ok(corner.radius === '10px' && corner.barLine === '0px', `the terminal is cut round where the bar and the sidebar meet, and the bar draws no line (${JSON.stringify(corner)})`)
-      ok(open.line === '0px' && /rgba?\(0, 0, 0/.test(open.shadow ?? ''), `the sidebar casts a shadow and draws no line (${open.line}, ${open.shadow})`)
+      // Owner, 2026-10-12, of the treatments mockup: "Same, with a line": open,
+      // a hairline at its edge and no shadow.
+      ok(parseFloat(open.line) > 0 && !/rgba\(0, 0, 0, 0\.[1-9]/.test(open.shadow ?? ''), `the open sidebar draws a hairline and casts no shadow (${open.line}, ${open.shadow})`)
 
       // THE SAME MARKS AS THE STRIP, in both tab styles.
       const marks = () =>

@@ -122,17 +122,23 @@ export function chromeTokens(
   // should be this, but make that into a new setting called secondary colour
   // ... so the user can pick their own, but this is the gold standard. make it
   // fit with each theme"): the vertical tabs' sidebar and their title bar.
-  // Unpicked, on a dark or grey theme it IS the flat panel, the ground 4 percent
-  // toward the text: the mockup's "a shade lighter". On a LIGHT theme that step
-  // reads as white (owner, 2026-10-12: "make sure that light themes have a
-  // darker sidebar, not white ... go through each"): every light preset was
-  // drawn at 4, 8, 10 and 12 percent beside its terminal, and 10 is a clearly
-  // darker panel in the theme's own tint on all eleven. A pick is a surface the
-  // inks are held to as well.
-  const ownSecondary = light ? mixHex(bg, ensureContrast(rawFg, bg, TEXT_FLOOR), 0.1) : flat
+  // Unpicked it is THE TERMINAL'S OWN GROUND, the sidebar told apart by a
+  // hairline and its tab in front by a filled pill (owner, 2026-10-12, of the
+  // sidebar treatments mockup: "Same, with a line", Warp's way, picked over a
+  // lifted panel, a neutral grey, an inset terminal and a tint, which on black
+  // themes read as a muddy near-black). A pick is a surface the inks are held
+  // to as well.
+  const ownSecondary = bg
   const secondary = chosenSecondary ? normalizeColor(chosenSecondary, ownSecondary) : ownSecondary
+  // The form control's fill (below), a step off the ground: on a light theme
+  // the quiet inks sit on it too, a segment's name or a field's hint.
+  const controlFill = mixHex(bg, rawFg, light ? 0.09 : 0.035)
   const floorOn = (c: string, floor: number): string =>
-    ensureContrast(ensureContrast(ensureContrast(c, flat, floor), secondary, floor), bg, floor)
+    ensureContrast(
+      ensureContrast(ensureContrast(ensureContrast(c, flat, floor), secondary, floor), light ? controlFill : bg, floor),
+      bg,
+      floor
+    )
   const fg = floorOn(rawFg, TEXT_FLOOR)
   // The theme's own blue first, its cursor second, Prism's indigo last, and the
   // first that is VISIBLE on this ground wins. If none is, the theme's blue is

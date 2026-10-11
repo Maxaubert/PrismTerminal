@@ -128,6 +128,14 @@ looked at on the way).
   switch's track is a mid grey, and a pressed segment is a dark pill with the ground's ink
   (`--p-pressed`, `--p-pressed-ink`; a host without them keeps the grey). Dark themes unchanged.
 
+- **The final look: "Same, with a line"** (owner, 2026-10-12, from `sidebar-treatments.html`, over a
+  fixed step, a neutral grey, an inset terminal and a tint; the lifted 4 percent panel read as a muddy
+  near-black on black themes). The secondary colour defaults to the terminal's own ground on every
+  theme (still a setting); the open sidebar draws a hairline and no shadow; the tab in front is a
+  pill in the accent's tint; the dropped title bar has no shadow. Slid out over the terminal, the
+  collapsed sidebar still casts its shadow. On light themes the quiet inks are held to the form
+  controls' fill too.
+
 ## 2. The indicators
 
 - **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new
