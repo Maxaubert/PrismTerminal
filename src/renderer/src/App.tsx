@@ -721,6 +721,26 @@ export default function App(): JSX.Element {
           headStart={bare ? <AppButtons onSettings={onSettings} onHelp={onHelp} /> : undefined}
         />
       )}
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* A TITLE BAR YOU CANNOT SEE (owner, 2026-10-11: "there should be a
+          title bar to drag from not the sidebar. how about making it
+          transparent"): with the tabs down the side and the title bar off,
+          the row over the terminal is the terminal's own ground, no line, no
+          name, and moves the window; the three window buttons (and the update
+          chip, when there is one) sit at its right. Over the terminal only,
+          so the sidebar keeps its tabs at the top; with the sidebar collapsed
+          that is the whole width. */}
+      {bare && (
+        <div
+          data-title-bar="clear"
+          className="drag flex h-8 shrink-0 items-center justify-end gap-2.5 bg-[var(--p-bg)] pr-1"
+        >
+          {chip}
+          <div data-window-buttons className="no-drag flex items-center gap-1">
+            <WindowButtons />
+          </div>
+        </div>
+      )}
       <div
         className="relative min-h-0 min-w-0 flex-1"
         data-term-host
@@ -800,20 +820,7 @@ export default function App(): JSX.Element {
         )}
       </div>
       </div>
-      {/* What is left of the title bar: the window's own three buttons, and
-          the update chip when there is one, always there and quiet ("either
-          buttons that show once your cursor is close or always persistent":
-          always, since a reveal at the edge is the thing that did not hold).
-          On the terminal's own ground, so a long first line runs under them
-          rather than through them. */}
-      {bare && (
-        <div data-window-buttons className="no-drag absolute right-1 top-1 z-40 flex items-center gap-2.5 rounded-md bg-[var(--p-bg-solid)] px-0.5">
-          {chip}
-          <div className="flex items-center gap-1">
-            <WindowButtons />
-          </div>
-        </div>
-      )}
+      </div>
 
       {termMenu && activeShell && termMenu.id === activeShell.id && (
         <ContextMenu

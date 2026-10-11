@@ -105,7 +105,7 @@ export function TabSidebar({
   onDropFolder: (path: string) => void
   onReorder: (id: string, toIndex: number) => void
   onOpenRecent: (path: string) => void
-  /** The title bar is hidden: the sidebar's head is the window's handle. */
+  /** The title bar is hidden: the sidebar starts at the window's top. */
   titleRow: boolean
   /** Command help and Settings, at the foot, when there is no title bar. */
   headStart?: ReactNode
@@ -248,25 +248,6 @@ export function TabSidebar({
     grip.addEventListener('pointercancel', up)
   }
 
-  // A drag in from Explorer (a folder for a new tab) is not a pointer: no
-  // pointermove arrives while it is in flight, so the head stops being a
-  // window handle for the length of it, as the strip does.
-  const [dragInFlight, setDragInFlight] = useState(false)
-  useEffect(() => {
-    const on = (): void => setDragInFlight(true)
-    const off = (): void => setDragInFlight(false)
-    window.addEventListener('dragenter', on, true)
-    window.addEventListener('dragend', off, true)
-    window.addEventListener('drop', off, true)
-    window.addEventListener('pointermove', off, true)
-    return () => {
-      window.removeEventListener('dragenter', on, true)
-      window.removeEventListener('dragend', off, true)
-      window.removeEventListener('drop', off, true)
-      window.removeEventListener('pointermove', off, true)
-    }
-  }, [])
-
   if (!tabs.length) return null
   const labels = tabLabels(tabs)
   const auxClose = (e: MouseEvent, id: string): void => {
@@ -275,9 +256,6 @@ export function TabSidebar({
       onClose(id)
     }
   }
-  // Hidden off to the left, it is no handle and no stop for Tab: an element
-  // moved out of sight can still claim the window's drag region and the keys.
-  const handle = titleRow && visible && !dragInFlight ? 'drag' : 'no-drag'
   return (
     <div
       data-sidebar-slot
@@ -322,7 +300,7 @@ export function TabSidebar({
           // top"). With no title bar, the list's empty space below the tabs
           // is what moves the window ("i cant drag the window"); each row is
           // no-drag, so a tab still clicks and drags as a tab.
-          className={`${handle} p-scroll flex min-h-0 flex-1 flex-col gap-px overflow-y-auto pb-2 pt-1.5`}
+          className="p-scroll flex min-h-0 flex-1 flex-col gap-px overflow-y-auto pb-2 pt-1.5"
         >
           {tabs.map((t, i) => {
             const on = t.id === activeId
@@ -498,10 +476,7 @@ export function TabSidebar({
         {/* THE BUTTONS, AT THE FOOT (owner, 2026-10-11): the +, then, with no
             title bar, command help and Settings, then the sidebar's own
             button. The space between them moves the window too. */}
-        <div
-          data-sidebar-foot
-          className={`${handle} flex h-10 shrink-0 items-center gap-0.5 px-1.5`}
-        >
+        <div data-sidebar-foot className="flex h-10 shrink-0 items-center gap-0.5 px-1.5">
           <button
             className={BTN}
             title="New tab (Ctrl+T). Right-click for recent folders"
