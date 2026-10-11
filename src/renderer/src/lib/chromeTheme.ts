@@ -37,7 +37,6 @@ export const CHROME_COLOUR_TOKENS = [
   '--p-title',
   '--p-tabs',
   '--p-tab-active',
-  '--p-tab-edge',
   '--p-text',
   '--p-text-soft',
   '--p-dim',
@@ -68,44 +67,6 @@ export interface ChromeTokens {
  *  hover and edge strengths are written in percent. The one `alphaHex` is the
  *  core's (#114), which takes 0..1. */
 const pctHex = (pct: number): string => alphaHex(Math.min(100, Math.max(0, pct)) / 100)
-
-/** A light ground's border stands this far off it (owner, 2026-10-11: the
- *  first light borders, at 1.25, were "too faint"). */
-const TAB_EDGE_ON_LIGHT = 1.45
-/** A dark ground's border is the ground this much of the way to black. */
-const TAB_EDGE_DARKEN = 0.45
-/** ...but never black itself: "some will hit black, but then it needs to be
- *  very dark grey". No channel goes under this. */
-const TAB_EDGE_MIN = 7
-/** A true-black ground's grey border: as dark a grey as still shows. */
-const TAB_EDGE_ON_BLACK = 1.2
-/** Under this ratio to black a ground counts as black (about #0a0a0a). */
-const BLACK_GROUND = 1.05
-
-/**
- * THE POWERLINE BORDER between two tabs (owner, 2026-10-11): the tabs sit on
- * the theme's own ground, so a border in the ground's colour vanished. Every
- * ground's border is that ground a bit DARKER ("all themes should have its bg
- * color + a bit darker, except black themes since that's not possible"), a
- * dark one stopping at a very dark grey short of black. Only a true-black
- * ground gets a lighter one, a dark grey.
- */
-export function tabEdge(bg: string, fg: string): string {
-  if (contrastRatio(bg, '#000000') < BLACK_GROUND) {
-    let edge = bg
-    for (let i = 1; i <= 50 && contrastRatio(bg, edge) < TAB_EDGE_ON_BLACK; i += 1) edge = mixHex(bg, fg, i * 0.02)
-    return edge
-  }
-  if (luminance(bg) > 0.4) {
-    let edge = bg
-    for (let i = 1; i <= 50 && contrastRatio(bg, edge) < TAB_EDGE_ON_LIGHT; i += 1) edge = mixHex(bg, '#000000', i * 0.02)
-    return edge
-  }
-  const dark = mixHex(bg, '#000000', TAB_EDGE_DARKEN)
-  const ch = (k: number): string =>
-    Math.max(TAB_EDGE_MIN, parseInt(dark.slice(1 + k * 2, 3 + k * 2), 16)).toString(16).padStart(2, '0')
-  return `#${ch(0)}${ch(1)}${ch(2)}`
-}
 
 /**
  * Pure: a terminal theme in, the chrome's custom properties out. `groundAlpha`
@@ -244,9 +205,6 @@ export function chromeTokens(
     // NOTHING: it sits on the strip, and a second translucent coat of the same
     // colour is a visibly darker tab, which is a fill by accident.
     '--p-tab-active': glass ? bg + '00' : bg,
-    // On glass at the sheet's own alpha, so the border is as see-through as
-    // the tabs either side of it.
-    '--p-tab-edge': glass ? tabEdge(bg, fg) + alphaHex(groundAlpha) : tabEdge(bg, fg),
     '--p-text': fg,
     '--p-text-soft': floorOn(mixHex(fg, bg, 0.14), TEXT_FLOOR),
     '--p-dim': dim,
