@@ -358,6 +358,37 @@ async function backToFirst(page) {
   await page.locator('[data-tab]').nth(0).click()
 }
 
+/**
+ * WHAT WINDOWS DOES WITH A PRESS AT A POINT (#162): sends the window
+ * WM_NCHITTEST at a page point and returns the answer, 2 (HTCAPTION) where a
+ * press moves the window, 1 (HTCLIENT) where the page gets it. This is the
+ * drag itself as Windows decides it, which no page event can show.
+ */
+async function hitTest(app, points) {
+  const at = await app.evaluate(({ BrowserWindow }) => {
+    const w = BrowserWindow.getAllWindows()[0]
+    return { hwnd: w.getNativeWindowHandle().readBigUInt64LE(0).toString(), b: w.getBounds(), c: w.getContentBounds() }
+  })
+  // Placed in Windows' own pixels: the window's rectangle from Windows, scaled
+  // by its width over Electron's (a parked window is on no display, so the
+  // screen module cannot convert for it).
+  const ps = `
+Add-Type -Namespace E2e -Name Hit -MemberDefinition '[DllImport("user32.dll")] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l); [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, int[] r);'
+$h = [System.IntPtr]::new([long]${at.hwnd})
+$r = New-Object int[] 4
+[void][E2e.Hit]::GetWindowRect($h, $r)
+$k = ($r[2] - $r[0]) / ${at.b.width}
+${points
+  .map(
+    (p) =>
+      `$x = [int]($r[0] + (${at.c.x - at.b.x} + ${p.x}) * $k); $y = [int]($r[1] + (${at.c.y - at.b.y} + ${p.y}) * $k); [E2e.Hit]::SendMessageW($h, 0x84, [System.IntPtr]::Zero, [System.IntPtr]::new([long]((($y -band 0xffff) -shl 16) -bor ($x -band 0xffff)))).ToInt64()`
+  )
+  .join('\n')}
+`
+  const out = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8' })
+  return out.trim().split(/\r?\n/).map(Number)
+}
+
 /** Pick a segmented choice on a settings row. */
 async function setPref(page, id, seg) {
   await (await gotoPref(page, id)).locator(`[data-seg="${seg}"]`).click()
@@ -2181,28 +2212,47 @@ const scenarios = {
       await backToFirst(page)
       const top = () =>
         page.evaluate(() => {
-          const head = document.querySelector('[data-sidebar-head]')
+          const foot = document.querySelector('[data-sidebar-foot]')
           const btns = document.querySelector('[data-window-buttons]')
           const b = btns?.getBoundingClientRect()
           return {
             rows: document.querySelectorAll('[data-title-bar]').length,
             mark: !!document.querySelector('[data-app-mark]'),
-            inHead: !!head?.querySelector('[data-title-settings]'),
-            help: !!head?.querySelector('[data-title-help]'),
+            inFoot: !!foot?.querySelector('[data-title-settings]') && !!foot?.querySelector('[data-sidebar-new]') && !!foot?.querySelector('[data-sidebar-toggle]'),
+            help: !!foot?.querySelector('[data-title-help]'),
             close: !!btns?.querySelector('[data-window-close]') && !!btns?.querySelector('[aria-label="Minimize"]') && !!btns?.querySelector('[aria-label="Maximize"]'),
             cog: !!btns?.querySelector('[data-title-settings]'),
             right: b ? Math.round(innerWidth - b.right) : null,
             top: b ? Math.round(b.top) : null,
             navTop: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().top ?? -1),
-            head: head ? getComputedStyle(head).getPropertyValue('app-region') || getComputedStyle(head).getPropertyValue('-webkit-app-region') : ''
+            firstRowTop: Math.round(document.querySelector('[data-tab-sidebar] [data-tab]')?.getBoundingClientRect().top ?? -1)
           }
         })
       const bare = await top()
       ok(bare.rows === 0 && !bare.mark, `no title bar at all, nor the app's icon (${JSON.stringify(bare)})`)
       ok(bare.navTop === 0, `the sidebar starts at the top of the window (${bare.navTop})`)
-      ok(bare.inHead, "Settings is in the sidebar's head")
+      ok(bare.inFoot, "the +, Settings and the sidebar's button are at its foot")
+      ok(bare.firstRowTop <= 10, `only tabs at the top (the first row at ${bare.firstRowTop}px)`)
       ok(bare.close && !bare.cog && bare.right <= 12 && bare.top <= 8, `the window's three buttons float at the top right, alone (${JSON.stringify(bare)})`)
-      ok(bare.head === 'drag', `the sidebar's head moves the window (${bare.head})`)
+      // THE DRAG ITSELF, as Windows decides it (owner, 2026-10-11: "i cant drag
+      // the window"): 2 is HTCAPTION, a press that moves the window.
+      const spots = await page.evaluate(() => {
+        const rows = [...document.querySelectorAll('[data-tab-sidebar] [data-tab]')]
+        const last = rows[rows.length - 1].getBoundingClientRect()
+        const nav = document.querySelector('[data-tab-sidebar]').getBoundingClientRect()
+        const foot = document.querySelector('[data-sidebar-foot]').getBoundingClientRect()
+        const plus = document.querySelector('[data-sidebar-new]').getBoundingClientRect()
+        const row = rows[0].getBoundingClientRect()
+        return [
+          { x: nav.left + 60, y: (last.bottom + foot.top) / 2 },
+          { x: plus.right + 12, y: foot.top + foot.height / 2 },
+          { x: row.left + 40, y: row.top + row.height / 2 },
+          { x: nav.right + 200, y: 300 }
+        ]
+      })
+      const hit = await hitTest(app, spots)
+      ok(hit[0] === 2 && hit[1] === 2, `the sidebar's empty space and its foot move the window (${hit})`)
+      ok(hit[2] === 1 && hit[3] === 1, `a tab and the terminal do not (${hit})`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-no-titlebar.png') }).catch(() => {})
       // Settings from the sidebar, and back.
       await (await gotoPref(page, 'title-bar')).locator('[role="switch"]').click()
