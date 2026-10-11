@@ -13,7 +13,7 @@ import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
-import { isSidebarChord, toggleSidebar } from './lib/sidebarPrefs'
+import { isSidebarChord, toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
 import { useSidebarEdge } from './lib/sidebarEdge'
 import { HoverTitleBar } from './components/HoverTitleBar'
 import TitleBar, { TitleButtons } from './components/TitleBar'
@@ -172,6 +172,7 @@ export default function App(): JSX.Element {
   const bare = vertical && titleBar === 'hidden' && state.tabs.length > 0
   // Where the sidebar's edge is on screen: the pop-out bar starts there.
   const sidebarEdge = useSidebarEdge()
+  const sidebarOpen = useSidebarMode() === 'open'
   /** Which shell each tab was SPAWNED with. The Shell setting only names what
    *  the next terminal launches, so a tab opened before it was changed still
    *  speaks its old language, and the popup preselects by what is running. */
@@ -727,14 +728,25 @@ export default function App(): JSX.Element {
           {tabs.length > 0 && strip(false)}
         </>
       )}
-      <div className="relative flex min-h-0 flex-1">
+      {/* ONE SURFACE, THE TERMINAL SET INTO IT (owner, 2026-10-12: "the
+          corners of the sidebar and titlebar should connect like this where
+          its rounded making it seem like they merge together"): with the tabs
+          down the side and a title bar showing, the body wears the secondary
+          colour and the terminal's column is cut round at its top left, where
+          the bar and the sidebar meet. */}
+      <div className={`relative flex min-h-0 flex-1 ${vertical ? 'bg-[var(--p-secondary)]' : ''}`}>
       {vertical && (
         <TabSidebar
           {...tabProps}
           titleRow={titleBar === 'hidden'}
         />
       )}
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <div
+        data-term-column
+        className={`relative flex min-h-0 min-w-0 flex-1 flex-col ${
+          vertical && titleBar === 'shown' && sidebarOpen && tabs.length > 0 ? 'overflow-hidden rounded-tl-[10px] bg-[var(--p-bg)]' : ''
+        }`}
+      >
       <div
         className="relative min-h-0 min-w-0 flex-1"
         data-term-host

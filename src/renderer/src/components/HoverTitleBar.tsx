@@ -65,6 +65,18 @@ export function HoverTitleBar({
       style={{ left, top: shown ? 0 : -48 }}
     >
       {children}
+      {/* THE CORNER WHERE IT MEETS THE SIDEBAR (owner, 2026-10-12: rounded,
+          "making it seem like they merge together"): a quarter circle of the
+          bar's own colour under its left end, cut out of the terminal. Only
+          beside a sidebar; across the whole window there is none to meet. */}
+      {left > 0 && (
+        <span
+          data-title-corner
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-full h-2.5 w-2.5"
+          style={{ background: 'radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary) 10px)' }}
+        />
+      )}
     </div>
   )
 }

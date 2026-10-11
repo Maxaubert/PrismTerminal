@@ -2116,6 +2116,15 @@ const scenarios = {
       ok(open.nav.left === 0 && open.nav.width >= 150 && open.host.left >= open.nav.right - 1, `the sidebar on the left, the terminal beside it (${open.nav.width}px, terminal at ${open.host.left})`)
       ok(open.ruleAtRight, 'Classic: the tab in front has its accent rule on the terminal side')
       // Owner, 2026-10-12: a shadow puts it on a higher plane, and with it no line.
+      // The title bar and the sidebar are one surface; the terminal is set into
+      // it, cut round at its top left (owner, 2026-10-12).
+      const corner = await page.evaluate(() => {
+        const col = document.querySelector('[data-term-column]')
+        const bar = document.querySelector('[data-title-bar]')
+        return { radius: col ? getComputedStyle(col).borderTopLeftRadius : null, barLine: bar ? getComputedStyle(bar).borderBottomWidth : null }
+      })
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-merged.png') }).catch(() => {})
+      ok(corner.radius === '10px' && corner.barLine === '0px', `the terminal is cut round where the bar and the sidebar meet, and the bar draws no line (${JSON.stringify(corner)})`)
       ok(open.line === '0px' && /rgba?\(0, 0, 0/.test(open.shadow ?? ''), `the sidebar casts a shadow and draws no line (${open.line}, ${open.shadow})`)
 
       // THE SAME MARKS AS THE STRIP, in both tab styles.
@@ -2296,6 +2305,7 @@ const scenarios = {
       const down = await top()
       ok(down.bar.top === 0 && Math.abs(down.bar.left - down.navRight) <= 1 && down.bar.right === 0, `from the sidebar's edge to the right, not over it (${JSON.stringify(down.bar)}, sidebar ends ${down.navRight})`)
       ok(down.buttons && down.settings && !down.name, "with Settings, Help and the window's buttons, no icon or name")
+      ok(await page.evaluate(() => !!document.querySelector('[data-title-bar="float"] [data-title-corner]')), 'with a curved corner where it meets the sidebar')
       ok((await top()).hostTop === 0, 'over the terminal, which keeps its size')
       // THE DRAG ITSELF, as Windows decides it: 2 (HTCAPTION) moves the window.
       const spots = await page.evaluate(() => {
