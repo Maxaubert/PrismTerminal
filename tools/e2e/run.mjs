@@ -166,7 +166,7 @@ const tabLabels = (page) =>
  * so a row moving between pages is one line here.
  */
 const PREF_PAGE = {
-  'tab-width': 'appearance', 'tab-style': 'appearance', 'title-bar': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
+  'tab-width': 'appearance', 'tab-style': 'appearance', 'tab-switch': 'appearance', 'title-bar': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
   'window-background': 'appearance', 'window-accent': 'appearance', 'term-acrylic': 'appearance',
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
@@ -1636,6 +1636,105 @@ const scenarios = {
       await backToFirst(page)
       await shotStrip(page, 'tabs-prompt-light')
       await quietStrip(page)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * TAB SWITCHING, MOST RECENT (#158; owner, 2026-10-10: "so you can either
+   * switch chronologically or by most recently used"). In order stays the
+   * default and steps the strip. Most recent walks the used list as browsers
+   * do: one Ctrl+Tab flips to the tab used before, Tab again while Ctrl is held
+   * goes further back, and the order changes only when Ctrl is let go, so
+   * repeated presses never ping-pong. A closed tab leaves the list, a new one
+   * enters it at the front.
+   */
+  async tabSwitch(ok) {
+    const w = world()
+    const gamma = join(dirname(w.alpha), 'gamma')
+    const delta = join(dirname(w.alpha), 'delta')
+    mkdirSync(gamma)
+    mkdirSync(delta)
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta, gamma], pick: delta })
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 3), 'three tabs open')
+      const front = () =>
+        page.evaluate(() => {
+          const t = [...document.querySelectorAll('[data-tab]')].find(
+            (el) => el.getAttribute('aria-selected') === 'true' || el.querySelector('[aria-selected="true"]')
+          )
+          return (t?.textContent ?? '').trim()
+        })
+      const lands = async (name, said) => ok(!!(await until(async () => (await front()).startsWith(name), 4000, 50)), `${said} (${await front()})`)
+      const visit = async (i) => {
+        await page.locator('[data-tab]').nth(i).click()
+        await sleep(150)
+      }
+      // A hold: Ctrl down, Tab (or Shift+Tab) per step, Ctrl up.
+      const hold = async (steps) => {
+        await page.keyboard.down('Control')
+        for (const s of steps) {
+          if (s < 0) await page.keyboard.down('Shift')
+          await page.keyboard.press('Tab')
+          if (s < 0) await page.keyboard.up('Shift')
+          await sleep(120)
+        }
+        await page.keyboard.up('Control')
+        await sleep(150)
+      }
+
+      // IN ORDER, the default: the strip, left to right, wrapping.
+      await visit(0)
+      await hold([1])
+      await lands('beta', 'In order: Ctrl+Tab steps to the next tab in the strip')
+      await hold([-1])
+      await lands('alpha', 'and Ctrl+Shift+Tab back')
+
+      // The row: right after Tab style, In order by default.
+      const row = await gotoPref(page, 'tab-switch')
+      const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
+      ok(order.indexOf('tab-switch') === order.indexOf('tab-style') + 1, `Tab switching is right after Tab style (${order.slice(0, 4).join(' > ')})`)
+      ok((await row.locator('[aria-pressed="true"]').getAttribute('data-seg')) === 'order', 'In order is the default')
+      ok((await row.locator('[data-seg]').allTextContents()).join('|') === 'In order|Most recent', 'the choices are In order and Most recent')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-tab-switch.png') }).catch(() => {})
+      await row.locator('[data-seg="recent"]').click()
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.tabSwitch'))) === 'recent', 'Most recent is stored')
+      await backToFirst(page)
+
+      // MOST RECENT: used alpha, beta, gamma, in that order.
+      for (const i of [0, 1, 2]) await visit(i)
+      await hold([1])
+      await lands('beta', 'one Ctrl+Tab goes to the tab used before this one')
+      await hold([1])
+      await lands('gamma', 'and the next flips back: the last two used')
+      await hold([1, 1])
+      await lands('alpha', 'Tab twice in one hold goes two back, no ping-pong')
+      await hold([1])
+      await lands('gamma', 'released there, alpha is now the latest, so the next flip is gamma')
+      await hold([-1])
+      await lands('beta', 'Ctrl+Shift+Tab on a fresh hold goes to the oldest')
+
+      // A CLOSED TAB LEAVES THE LIST: close gamma (idle, so nothing asks).
+      await visit(2)
+      await lands('gamma', 'gamma in front')
+      await page.keyboard.press('Control+w')
+      ok(await until(async () => (await tabLabels(page)).length === 2), 'Ctrl+W closes it')
+      const after = await front()
+      await hold([1])
+      const flip = await front()
+      ok(!flip.startsWith('gamma') && flip !== after && flip.length > 0, `Ctrl+Tab goes to the other open tab, never the closed one (${after} > ${flip})`)
+
+      // A NEW TAB ENTERS AT THE FRONT: opened (asked, the chooser answers delta),
+      // one flip goes to the tab before it, the next comes back to it.
+      await page.evaluate(() => localStorage.setItem('prism.newtab.mode', 'ask'))
+      await page.locator('[aria-label="New tab"]').click()
+      ok(await until(async () => (await tabLabels(page)).length === 3), 'a new tab opens')
+      await lands('delta', 'and is in front')
+      await hold([1])
+      await lands(flip, 'one Ctrl+Tab goes to the tab used before the new one')
+      await hold([1])
+      await lands('delta', 'and the next comes back to the new tab')
     } finally {
       await closeApp(app)
     }
@@ -3296,7 +3395,11 @@ const scenarios = {
           chosen: chosen ? parse(getComputedStyle(chosen).backgroundColor) : null,
           hoverHi: parse(root.getPropertyValue('--p-hover-hi').trim()),
           accent: parse(root.getPropertyValue('--p-accent').trim()),
-          accentButtons: accentFilled.map((b) => (b.hasAttribute('data-save-term') ? 'save' : b.textContent.trim())),
+          // An ON switch wears the accent too, on purpose (#138, #139), so it
+          // is named and allowed; any other accent-filled button is a miss.
+          accentButtons: accentFilled.map((b) =>
+            b.hasAttribute('data-save-term') ? 'save' : b.getAttribute('role') === 'switch' && b.getAttribute('aria-checked') === 'true' ? 'switch' : b.textContent.trim()
+          ),
           sideways: document.querySelector('[data-settings-page]').scrollWidth > document.querySelector('[data-settings-page]').clientWidth + 1
         }
       })
@@ -3318,7 +3421,7 @@ const scenarios = {
           if (m.warn !== null) ok(m.warn >= 4.5, `${scheme} ${p}: a warning subtext reads 4.5:1 (${m.warn.toFixed(1)}:1)`)
           ok(!!m.chosen && m.chosen.rgb.join() === m.hoverHi.rgb.join() && Math.abs(m.chosen.a - m.hoverHi.a) < 0.02, `${scheme} ${p}: the chosen rail page is the grey fill (${JSON.stringify(m.chosen)})`)
           ok(!!m.chosen && m.chosen.rgb.join() !== m.accent.rgb.join(), `${scheme} ${p}: and not the accent`)
-          ok(m.accentButtons.every((b) => b === 'save'), `${scheme} ${p}: the only accent-filled buttons are Save changes (${JSON.stringify(m.accentButtons)})`)
+          ok(m.accentButtons.every((b) => b === 'save' || b === 'switch'), `${scheme} ${p}: the only accent-filled buttons are Save changes and on switches (${JSON.stringify(m.accentButtons)})`)
           ok(!m.sideways, `${scheme} ${p}: nothing scrolls sideways at 1600px`)
           await page.screenshot({ path: resolve(process.cwd(), `.e2e-shots/settings-${p}-${scheme}.png`) }).catch(() => {})
         }
@@ -3387,6 +3490,9 @@ const scenarios = {
     for (const file of ['core/renderer/settings/options.ts', 'core/renderer/settings/markOptions.ts', 'core/renderer/settings/dictationOptions.ts', 'core/renderer/settings/helpOptions.ts', 'src/renderer/src/components/settings/appOptions.ts'])
       for (const m of readFileSync(resolve(process.cwd(), file), 'utf8').matchAll(/\{\s*id: '([a-z-]+)'[^}]*\}/g))
         if (!m[0].includes('onlyWhere')) labelOf[m[1]] = (m[0].match(/label: '([^']+)'/) ?? [])[1]
+    // options.ts keeps Prism's name for this row; Prism Terminal draws and
+    // indexes it as the see-through window (#156, `acrylicLabel`).
+    labelOf['term-acrylic'] = 'See-through window'
     const order = [...readFileSync(resolve(process.cwd(), 'src/renderer/src/components/settings/settingsIndex.ts'), 'utf8').matchAll(/'([a-z]+(?:-[a-z]+)+|[a-z]+-[a-z]+)'/g)].map((m) => m[1])
     const ids = [...new Set(order.filter((id) => labelOf[id]))]
     ok(ids.length >= 30, `the index covers every row drawn on this PC (${ids.length})`)
@@ -3566,7 +3672,8 @@ const scenarios = {
       // and the agent rows have pages of their own; Appearance keeps the
       // window's rows above the theme and what a theme sets under it.
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
-      const want = ['tab-width', 'tab-style', 'title-bar', 'window-edges', 'term-theme', 'window-background', 'window-accent', 'term-acrylic']
+      // The see-through row sits right under the wall since #156, as Prism's.
+      const want = ['tab-width', 'tab-style', 'tab-switch', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-accent']
       ok(JSON.stringify(rows) === JSON.stringify(want), `Appearance runs ${want.join(' > ')} (${rows.join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await gotoPref(page, 'term-font')
@@ -4247,6 +4354,98 @@ const scenarios = {
     }
   },
 
+  /**
+   * THE SEE-THROUGH WINDOW (#156; owner, 2026-10-10: "add support for the see
+   * through window setting ... its in prism in style settings i want it here
+   * too"). The acrylic row IS it: named and worded as Prism's, right under the
+   * wall, and the switch ALONE makes the window see-through at Prism's own
+   * levels (0xb9 on a dark ground, 0xd1 on a light one), where before it
+   * changed the material and left a preset's ground opaque. The Background's
+   * Alpha shows what is in force and stops at 95 (opaque is the switch's off);
+   * a picked alpha wins; off is solid; High Contrast stays solid.
+   */
+  async seeThrough(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const sheet = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--p-bg').trim().toLowerCase())
+    const sw = page.locator('[data-pref="term-acrylic"] [role="switch"]')
+    const sub = () => page.locator('[data-pref="term-acrylic"] [title]').first().getAttribute('title')
+    const bgRow = page.locator('[data-pref="window-background"]')
+    const pop = page.locator('[data-colour-popover][role="dialog"]')
+    /** The Background picker's Alpha, read and closed again. */
+    const alphaReads = async () => {
+      await bgRow.scrollIntoViewIfNeeded()
+      await bgRow.locator('[data-colour-swatch]').click()
+      await pop.waitFor({ timeout: 3000 })
+      const a = pop.locator('[role="slider"][aria-label="Alpha"]')
+      const v = { now: await a.getAttribute('aria-valuenow'), max: await a.getAttribute('aria-valuemax') }
+      await page.keyboard.press('Escape')
+      await until(async () => (await pop.count()) === 0, 3000, 50)
+      return v
+    }
+    /** A theme pick, answering the unsaved-changes question if it asks. */
+    const pick = async (id) => {
+      await page.locator(`[data-term-card="${id}"]`).first().click()
+      const ask = page.locator('[data-theme-switch-ask]')
+      if (await until(async () => (await ask.count()) === 1, 1500, 50)) await page.locator('[data-ask-discard]').click()
+      await until(async () => (await page.locator(`[data-term-card="${id}"]`).first().getAttribute('aria-pressed')) === 'true', 4000, 50)
+    }
+    try {
+      await gotoPref(page, 'term-acrylic')
+      const more = page.locator('button[aria-label^="Show all"]')
+      if ((await more.count()) === 1) await more.click()
+      // Named and placed as Prism's: right under the wall, before the colours.
+      const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
+      const at = rows.indexOf('term-theme')
+      ok(rows[at + 1] === 'term-acrylic' && rows[at + 2] === 'window-background', `the row sits right under the wall (${rows.join(' > ')})`)
+      ok((await sw.getAttribute('aria-label')) === 'See-through window', `it is called See-through window (${await sw.getAttribute('aria-label')})`)
+      ok((await sub()) === 'The desktop shows behind every surface.', `with Prism's words (${await sub()})`)
+
+      // A dark preset: the switch alone paints 0xb9.
+      await pick('dracula')
+      ok(/^#[0-9a-f]{6}$/.test(await sheet()), `off, the window is solid (${await sheet()})`)
+      await sw.click()
+      ok(!!(await until(async () => /^#[0-9a-f]{6}b9$/.test(await sheet()), 4000, 50)), `on a dark preset the switch alone paints alpha b9 (${await sheet()})`)
+      const dark = await alphaReads()
+      ok(dark.now === '73' && dark.max === '95', `the Background's Alpha reads 73 and stops at 95 (${dark.now}, max ${dark.max})`)
+
+      // A picked alpha wins; Reset gives the default back.
+      const field = bgRow.locator('input:not([type])')
+      await field.fill('#1c233099')
+      await field.press('Enter')
+      ok(!!(await until(async () => (await sheet()) === '#1c233099', 4000, 50)), `a picked 60 wins (${await sheet()})`)
+      await page.locator('[data-follow-theme="background"]').click()
+      ok(!!(await until(async () => /^#[0-9a-f]{6}b9$/.test(await sheet()), 4000, 50)), `Reset gives the default back (${await sheet()})`)
+
+      // Off is solid.
+      await sw.click()
+      ok(!!(await until(async () => /^#[0-9a-f]{6}$/.test(await sheet()), 4000, 50)), `switched off, the window is solid (${await sheet()})`)
+
+      // A light preset: 0xd1. A theme pick resets the switch, as every extra.
+      await pick('paper')
+      await sw.click()
+      ok(!!(await until(async () => /^#[0-9a-f]{6}d1$/.test(await sheet()), 4000, 50)), `on Paper the switch paints alpha d1 (${await sheet()})`)
+      const light = await alphaReads()
+      ok(light.now === '82', `the Background's Alpha reads 82 (${light.now})`)
+      await sw.scrollIntoViewIfNeeded()
+      await sleep(400)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/see-through.png') }).catch(() => {})
+
+      // High Contrast stays solid, and the row says why.
+      await pick('high-contrast')
+      ok((await sw.isDisabled()) && (await sw.getAttribute('aria-checked')) === 'false', 'on High Contrast the switch is off and disabled')
+      ok((await sub()) === 'High contrast stays solid.', `and says why (${await sub()})`)
+      ok(/^#[0-9a-f]{6}$/.test(await sheet()), `and the window is solid (${await sheet()})`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/see-through-high-contrast.png') }).catch(() => {})
+
+      // Leave on a quiet preset, the switch off: nothing holds the close.
+      await pick('dracula')
+      ok(!(await sw.isDisabled()), 'off High Contrast the switch is offered again')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async themeCards(ok) {
     // PICKING A THEME MOVES NOTHING (owner, 2026-09-22: "when I click a theme
     // ... the ui shifts a bit, it's not every theme but some"). Only the
@@ -4277,6 +4476,18 @@ const scenarios = {
         return { cards, below: row ? Math.round(y(row) * 10) / 10 : -1 }
       })
     const first = await measure()
+    // THE ORDER (#157, owner 2026-10-10): PT Default leads, then the neutral
+    // grounds black to white, then the coloured ones. The expected list is the
+    // unit test's snapshot of orderTermThemes, read here so the two never
+    // disagree (this runner cannot import the TypeScript).
+    const snap = readFileSync(resolve(process.cwd(), 'core/renderer/lib/__snapshots__/themeOrder.test.ts.snap'), 'utf8')
+    const computed = [...snap.matchAll(/^\s+"([a-z0-9-]+)",?$/gm)].map((m) => m[1])
+    const wantOrder = ['pt-default', ...computed.filter((id) => id !== 'pt-default')]
+    const wallOrder = first.cards.map((c) => c.id).filter((id) => id !== 'custom')
+    ok(
+      computed.length >= 40 && wallOrder.join(',') === wantOrder.join(','),
+      `the wall runs PT Default, neutrals black to white, then coloured (${wallOrder.slice(0, 14).join(' ')} ...)`
+    )
     const rowTops = [...new Set(first.cards.map((c) => c.top))]
     ok(rowTops.length >= 2, `the wall has two rows to pick across (${rowTops.length})`)
     const inRow = (top) => first.cards.find((c) => c.top === top)?.id
@@ -4768,12 +4979,13 @@ const scenarios = {
     )
 
     // BACKGROUND AND ACCENT SIT RIGHT UNDER THE THEME WALL (2026-09-28: a
-    // theme sets them, so they follow it; they sat under Font size before).
+    // theme sets them, so they follow it; they sat under Font size before),
+    // after the see-through window, which moved up to the wall in #156.
     const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
     const at = order.indexOf('term-theme')
     ok(
-      at >= 0 && order[at + 1] === 'window-background' && order[at + 2] === 'window-accent',
-      `Background and Accent come right after the theme wall (${order.slice(Math.max(0, at - 1), at + 4).join(' > ')})`
+      at >= 0 && order[at + 1] === 'term-acrylic' && order[at + 2] === 'window-background' && order[at + 3] === 'window-accent',
+      `See-through, Background and Accent come right after the theme wall (${order.slice(Math.max(0, at - 1), at + 5).join(' > ')})`
     )
 
     // THE BACKGROUND (owner: "let background colour be a setting"): the

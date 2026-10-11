@@ -23,6 +23,10 @@ const custom = (extra: Record<string, unknown>): string =>
 /** Dracula's own ground, as the window paints it. */
 const DRACULA = resolveTermTheme('dracula').background.slice(0, 7).toLowerCase()
 const saved = (): Record<string, unknown> => JSON.parse(localStorage.getItem(CUSTOM) ?? 'null')
+/** What an opaque dark ground paints with the switch on since #156: the
+ *  migration leaves the ground opaque, and the switch alone makes it Prism's
+ *  default see-through (an opaque window under acrylic on was the bug #156 fixes). */
+const DEFAULT_DARK = 0xb9 / 255
 
 beforeEach(() => {
   localStorage.clear()
@@ -89,25 +93,25 @@ describe('migrateOpacity', () => {
 
   // Review of #115: step 1 gave Custom.bg the saved alpha, and a live 100 was
   // skipped as "nothing to do", so an opaque window turned see-through.
-  it('a Custom saved at 60, left at a live 100 with acrylic on, stays opaque', () => {
+  it('a Custom saved at 60, left at a live 100 with acrylic on, keeps an opaque ground (not the saved 60)', () => {
     localStorage.setItem(THEME, 'custom')
     localStorage.setItem(ACRYLIC, '1')
     localStorage.setItem(LIVE, '100')
     localStorage.setItem(CUSTOM, custom({ acrylic: true, opacity: 60 }))
     migrateOpacity()
-    expect(termGroundAlpha()).toBe(1)
+    expect(termGroundAlpha()).toBe(DEFAULT_DARK)
     expect(windowBackground()).toBe('#1d1f21')
     // Picking Custom again still restores the SAVED see-through.
     expect(customTermTheme()?.bg).toBe('#1d1f21' + byte(60))
     expect(localStorage.getItem(LIVE)).toBeNull()
   })
 
-  it('a Custom saved at 60 with no live value stored (read as 100) stays opaque', () => {
+  it('a Custom saved at 60 with no live value stored (read as 100) keeps an opaque ground', () => {
     localStorage.setItem(THEME, 'custom')
     localStorage.setItem(ACRYLIC, '1')
     localStorage.setItem(CUSTOM, custom({ acrylic: true, opacity: 60 }))
     migrateOpacity()
-    expect(termGroundAlpha()).toBe(1)
+    expect(termGroundAlpha()).toBe(DEFAULT_DARK)
     const once = JSON.stringify({ ...localStorage })
     migrateOpacity()
     expect(JSON.stringify({ ...localStorage })).toBe(once)
@@ -119,7 +123,7 @@ describe('migrateOpacity', () => {
     localStorage.setItem(CUSTOM, custom({ acrylic: true, opacity: 60 }))
     migrateOpacity()
     expect(windowBackground()).toBeNull()
-    expect(termGroundAlpha()).toBe(1)
+    expect(termGroundAlpha()).toBe(DEFAULT_DARK)
   })
 
   it('a Custom with a picked Background: the picked one takes the live value', () => {

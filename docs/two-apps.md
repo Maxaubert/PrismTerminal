@@ -234,6 +234,14 @@ so an update never silently changes what an existing user sees; the bridge to ma
   Horizon). NO INVISIBLE TEXT is a test (`termTheme.legible.test.ts`): text 4.5:1, cursor and
   accent 3:1, all sixteen 3:1 against the theme's own ground. It caught Catppuccin Latte's own
   cursor at 2.3:1, which is its mauve here. Original themes give base colours only.
+  **THE WALL'S ORDER IS MEASURED** (#157; owner, 2026-10-10: "first black to white then
+  coloured"): after the leading cards (Custom, the host's default, Follow style in Prism), core
+  `orderTermThemes` (`lib/themeOrder.ts`) puts the neutral grounds first, then the coloured ones,
+  each black to white by OKLab L. Neutral is OKLab chroma below `NEUTRAL_CHROMA` 0.0125, measured
+  in the widest gap of the forty grounds (Monokai 0.0109, Sage 0.0147), so Cinder, a blue slate,
+  files with the coloured. One fixed order in both apps (it replaced the light-first flip);
+  `themeOrder.test.ts` snapshots it and keeps every ground 0.001 off the threshold, and the
+  `themeCards` e2e reads that snapshot against the wall.
   **VOLT TOOK INK'S PLACE** (#93; owner, 2026-09-28, with a screenshot: "make one of the black
   themes this colour scheme with black and that yellow greenish colour, kind of cyberpunk"):
   `#d8ff26` on `#050706`; Ink, the blue-black next to Prism and Tokyo Night, retired to `prism`.
@@ -315,8 +323,8 @@ so an update never silently changes what an existing user sees; the bridge to ma
   transcend" the theme's save, "so changing a theme should not reset the font and font size or if
   you use a minimal or full agent indicator, or edges. those options should be above the themes").
   Since #134 Appearance runs: the Window section (Tab width, Show title bar, Panel edges), then the
-  Theme section (the theme row with Save changes, the wall, what a theme SETS: Background, Accent,
-  Acrylic). The font and its size are Terminal's Text section; the indicator and the agent colours
+  Theme section (the theme row with Save changes, the wall, what a theme SETS: See-through window,
+  Background, Accent; the see-through row right under the wall since #156, as in Prism). The font and its size are Terminal's Text section; the indicator and the agent colours
   are on Agents, where Mark colours carries the SAME Save changes (both save the whole setup and
   light together, `theme/useTermSetup.ts`). A theme switch and Save
   as Custom leave the font and its size alone (`termExtraDefaults`, `resetTermExtras`,
@@ -368,7 +376,20 @@ so an update never silently changes what an existing user sees; the bridge to ma
   paint and maps a saved Opacity N to byte round(N / 100 * 255), which is exactly what N painted
   (snapshot `chromeTheme.opacity.test.ts`): the saved `Custom.opacity` folds into `Custom.bg`, the
   live value onto the picked Background. The ground alpha takes Opacity's place in Save changes'
-  dirty check, so a theme pick still asks first (#60). The Accent's alpha is for FILLS;
+  dirty check, so a theme pick still asks first (#60).
+  **ON MEANS SEE-THROUGH, BY ITSELF** (#156; owner, 2026-10-10, of Prism's "See-through window":
+  "i want it here too"). Before it the switch changed the material and left every preset's ground
+  opaque, so it looked broken. Now where `acrylic.kind` is 'window' an OPAQUE ground under the
+  switch paints Prism's own levels as they paint (level 70 dark = byte 0xb9, level 49 light =
+  0xd1, light measured as luminance > 0.4; `lib/seeThrough.ts`, and `paintsAlpha` in `termLook.ts`,
+  shared by the window and Save changes' dirty check). A ground with an alpha keeps it; under the
+  switch the Alpha stops at 95% (`SEE_THROUGH_MAX`: opaque is the switch's off). High Contrast
+  stays solid (`termAcrylicInForce`; the row is drawn off with "High contrast stays solid."), and Save
+  changes judges and saves the switch in force there, not the stored one (`termSetupState`).
+  In this app the row reads "See-through window" / "The desktop shows behind every surface."
+  (`acrylicLabel`, `acrylicSub`); Prism keeps "Acrylic terminal background", a terminal row under
+  its own app-level See-through window, and nothing there changes. The `seeThrough` e2e holds it.
+  The Accent's alpha is for FILLS;
   `--p-accent-solid` is the line (rules, spinner, progress, rings, an unpicked working colour),
   `--p-on-accent` is chosen 4.5:1 on the composite (`selectionFor`), and under a see-through
   ground the text fills are flattened over `--p-bg-solid`. The `opacityAlpha` and `accent` e2e

@@ -13,6 +13,8 @@ import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import TitleBar, { TitleButtons } from './components/TitleBar'
 import { useTitleBarMode } from './lib/titleBarPrefs'
+import { tabSwitch } from './lib/tabSwitchPrefs'
+import { startWalk, stepWalk, syncMru, touchMru, walkHolds, walkTarget, type Mru, type Walk } from './lib/tabMru'
 import EmptyState from './components/EmptyState'
 import type { SettingsPage } from './components/settings/Settings'
 import { Dialog } from './components/Dialog'
@@ -58,7 +60,7 @@ import {
 } from '@core/renderer/lib/agentClose'
 import {
   onTermLookChange,
-  termAcrylic,
+  termAcrylicInForce,
   termFontStack,
   termGroundAlpha,
   termThemeId
@@ -98,7 +100,9 @@ const nextId = (): string => 't' + Date.now().toString(36) + '-' + String((seq +
  *  edges setting (#27) rides the same paint: it changes two of the tokens, and
  *  main is told so the DWM border round the window follows the lines in it. */
 function paintChrome(): void {
-  const acrylic = termAcrylic()
+  // IN FORCE, material and alpha both: High Contrast keeps the window solid
+  // whatever the switch says (#156).
+  const acrylic = termAcrylicInForce()
   const id = termThemeId()
   const edges = windowEdges()
   // A picked background replaces the theme's for the whole window; the panel
@@ -109,6 +113,7 @@ function paintChrome(): void {
   // Opacity slider): the picked Background's, else the theme's own (a Custom
   // may carry one), the same order the core reads. Passed as the byte's
   // fraction, unrounded, so the field and the window name the same alpha.
+  // An opaque ground under the switch paints the default see-through (#156).
   const tokens = chromeTokens(
     background ? { ...theme, background } : theme,
     acrylic ? termGroundAlpha() : 1,
@@ -204,6 +209,49 @@ export default function App(): JSX.Element {
 
   // The latest of everything, for listeners registered once.
   const live = useRef({ state, workingIds, agentIds, blocked: false, front: '' })
+
+  // MOST RECENT (#158): the tabs by last use, and the walk of a Ctrl hold.
+  // Refs, not state: nothing is drawn from them, and the key listener is
+  // registered once. Not persisted: at launch the list is the tab in front,
+  // then the strip.
+  const mru = useRef<Mru>(syncMru([], boot.state.tabs.map((t) => t.id), boot.state.activeId))
+  const walk = useRef<Walk | null>(null)
+  /** The hold ended (Ctrl released, the window left, another chord): only
+   *  now does the tab landed on move to the front, so repeated presses walk
+   *  instead of flipping back and forth. */
+  const commitWalk = useCallback((): void => {
+    if (!walk.current) return
+    walk.current = null
+    const id = live.current.state.activeId
+    if (id) mru.current = touchMru(mru.current, id)
+  }, [])
+  useEffect(() => {
+    mru.current = syncMru(
+      mru.current,
+      tabs.map((t) => t.id),
+      activeId
+    )
+    // The hold ends on anything that is not its own step (walkHolds): a click
+    // on another tab while Ctrl is still down, or a tab opened or closed under
+    // it. Then the activation is a use at once, as it is outside a hold (a
+    // click, Ctrl+1..9, a new tab, a close handing over).
+    if (walk.current && !walkHolds(walk.current, tabs.map((t) => t.id), activeId)) walk.current = null
+    if (!walk.current && activeId) mru.current = touchMru(mru.current, activeId)
+  }, [tabs, activeId])
+  useEffect(() => {
+    // Capture, on the window: the shell's xterm never gets to swallow it.
+    // Control's own keyup only; rule 10 is untouched, nothing here reads what
+    // reaches the pty.
+    const onUp = (e: KeyboardEvent): void => {
+      if (e.key === 'Control') commitWalk()
+    }
+    window.addEventListener('keyup', onUp, true)
+    window.addEventListener('blur', commitWalk)
+    return () => {
+      window.removeEventListener('keyup', onUp, true)
+      window.removeEventListener('blur', commitWalk)
+    }
+  }, [commitWalk])
 
   useEffect(() => {
     paintChrome()
@@ -526,6 +574,10 @@ export default function App(): JSX.Element {
         e.preventDefault()
         e.stopPropagation()
       }
+      // Any other Ctrl chord ends a Most recent walk first (#158), then acts:
+      // the tab the walk landed on counts as used. Control and Shift are the
+      // hold itself (Shift walks the other way), and Control repeats while held.
+      if (e.key !== 'Tab' && e.key !== 'Control' && e.key !== 'Shift') commitWalk()
       // ONE QUESTION AT A TIME, for the tab chords too (code review
       // 2026-09-24, #10): under a close question or the update window, Ctrl+Tab
       // or Ctrl+T moved the keyboard into a shell behind it, and the Enter
@@ -537,7 +589,23 @@ export default function App(): JSX.Element {
       }
       if (e.key === 'Tab') {
         hit()
-        setState((s) => stepTab(s, e.shiftKey ? -1 : 1))
+        const dir = e.shiftKey ? -1 : 1
+        if (tabSwitch() === 'recent') {
+          // The walk is a snapshot taken at the hold's first press, of the
+          // list as it stands with the tab in front first (tabMru).
+          const { state: st } = live.current
+          if (!walk.current) {
+            const ids = st.tabs.map((t) => t.id)
+            const now = syncMru(mru.current, ids, st.activeId)
+            walk.current = startWalk(st.activeId ? touchMru(now, st.activeId) : now)
+          }
+          if (!walk.current) return
+          walk.current = stepWalk(walk.current, dir)
+          const id = walkTarget(walk.current)
+          setState((s) => pickTab(s, id))
+        } else {
+          setState((s) => stepTab(s, dir))
+        }
       } else if (!e.shiftKey && /^[1-9]$/.test(e.key)) {
         const t = live.current.state.tabs[Number(e.key) - 1]
         if (t) {
@@ -569,7 +637,7 @@ export default function App(): JSX.Element {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [newTab, requestClose, toggleHelp])
+  }, [newTab, requestClose, toggleHelp, commitWalk])
 
   const openRecent = useCallback(
     (path: string) => {

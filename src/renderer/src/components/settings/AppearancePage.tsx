@@ -6,11 +6,21 @@ import { SettingRow } from '@core/renderer/settings/layout/SettingRow'
 import { SettingsSection } from '@core/renderer/settings/layout/SettingsSection'
 import { TerminalThemeSection } from '@core/renderer/settings/sections/TerminalThemeSection'
 import { alphaOf, withAlpha, type AlphaRange } from '@core/renderer/lib/colour'
-import { customTermTheme, onTermLookChange, termThemeId, useTermAcrylic } from '@core/renderer/lib/termLook'
+import {
+  customTermTheme,
+  onTermLookChange,
+  termAcrylicInForce,
+  termGroundAlpha,
+  termThemeId,
+  useTermAcrylicInForce,
+  useTermGroundAlpha
+} from '@core/renderer/lib/termLook'
+import { SEE_THROUGH_MAX } from '@core/renderer/lib/seeThrough'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { setWindowEdges, useWindowEdges } from '../../lib/edgesPrefs'
 import { setTabWidth, useTabWidth, type TabWidth } from '../../lib/tabWidthPrefs'
 import { setTabStyle, useTabStyle, type TabStyle } from '../../lib/tabStylePrefs'
+import { setTabSwitch, useTabSwitch, type TabSwitch } from '../../lib/tabSwitchPrefs'
 import { setTitleBarMode, useTitleBarMode } from '../../lib/titleBarPrefs'
 import { setWindowAccent, useWindowAccent } from '../../lib/accentPrefs'
 import { onWindowBackgroundChange, setWindowBackground, useWindowBackground, windowBackground } from '../../lib/backgroundPrefs'
@@ -57,6 +67,12 @@ const TAB_STYLE_OPTIONS: Array<{ id: TabStyle; name: string }> = [
   { id: 'prompt', name: 'Powerline' }
 ]
 
+// In order first: it is the default, Ctrl+Tab as it always was (#158).
+const TAB_SWITCH_OPTIONS: Array<{ id: TabSwitch; name: string }> = [
+  { id: 'order', name: 'In order' },
+  { id: 'recent', name: 'Most recent' }
+]
+
 /** What the THEME in force would give the window, which is what a swatch
  *  shows while nothing is chosen: computed the way the window computes it
  *  (chromeTokens), not read back off the page, so it cannot lag a repaint.
@@ -70,9 +86,12 @@ const themeColours = (): string => {
   const themeBg = chromeTokens(theme, 1, presetAccent(id)).vars['--p-bg-solid']
   // The theme's ground AS THE WINDOW PAINTS IT (#114): its solid colour at the
   // theme's own alpha (a Custom may carry one), so the row shows the
-  // see-through that is in force while nothing is picked.
+  // see-through that is in force while nothing is picked. Under the switch
+  // that is what the window paints, an opaque theme's default included (#156),
+  // so the Alpha reads 73 on a dark preset rather than 100.
   const own = id === 'custom' ? customTermTheme() : null
-  return `${vars['--p-accent']}|${withAlpha(themeBg, own ? alphaOf(own.bg) : 1)}`
+  const alpha = termAcrylicInForce() ? termGroundAlpha() : own ? alphaOf(own.bg) : 1
+  return `${vars['--p-accent']}|${withAlpha(themeBg, alpha)}`
 }
 const onColoursChange = (cb: () => void): (() => void) => {
   const offs = [onTermLookChange(cb), onWindowBackgroundChange(cb)]
@@ -92,6 +111,7 @@ function WindowColour({
   id,
   sub,
   chosen,
+  shown = chosen,
   fromTheme,
   onPick,
   range
@@ -99,6 +119,9 @@ function WindowColour({
   id: 'window-background' | 'window-accent'
   sub: string
   chosen: string | null
+  /** What the field shows of the choice, where it paints otherwise than it
+   *  is stored (an opaque Background under the see-through switch, #156). */
+  shown?: string | null
   fromTheme: string
   onPick: (hex: string | null) => void
   /** The alpha this colour may carry (#114). */
@@ -114,7 +137,7 @@ function WindowColour({
       )}
       {/* Escape in the picker puts back what was chosen when it opened, a
           row that followed the theme included (#112). */}
-      <ColourField label={o.label} value={chosen ?? fromTheme} onChange={onPick} onRevert={() => onPick(chosen)} {...range} />
+      <ColourField label={o.label} value={shown ?? fromTheme} onChange={onPick} onRevert={() => onPick(chosen)} {...range} />
     </SettingRow>
   )
 }
@@ -123,7 +146,10 @@ function WindowColours(): JSX.Element {
   const accent = useWindowAccent()
   const background = useWindowBackground()
   const [themeAccent, themeBg] = useSyncExternalStore(onColoursChange, themeColours).split('|')
-  const acrylicOn = useTermAcrylic()
+  // In force: High Contrast keeps the window solid (#156), so there the
+  // Alpha is as inert as with the switch off.
+  const acrylicOn = useTermAcrylicInForce()
+  const groundAlpha = useTermGroundAlpha()
   // The material is Windows 11's (1809 has none): where main says it cannot
   // be had, the window never shows the desktop, so the alpha is as inert as
   // with the switch off, the rule the theme editor's Background follows.
@@ -144,14 +170,18 @@ function WindowColours(): JSX.Element {
       {/* THE BACKGROUND'S ALPHA IS THE WINDOW'S SEE-THROUGH (#114; owner,
           2026-10-03: alpha "should be built into the colour pickers ... it
           should not be a separate opacity setting"). At least 30%, and inert
-          while acrylic is off, when the desktop does not show through. */}
+          while acrylic is off, when the desktop does not show through.
+          OPAQUE IS THE SWITCH'S OFF (#156, Prism's rule): under it an opaque
+          pick paints the default see-through and the field shows that, and
+          the Alpha stops at 95%, so the field and the window always agree. */}
       <WindowColour
         id="window-background"
         sub={acrylic ? 'Its alpha lets the desktop show through.' : appOpt('window-background').sub}
         chosen={background}
+        shown={background && acrylic ? withAlpha(background, groundAlpha) : background}
         fromTheme={themeBg}
         onPick={setWindowBackground}
-        range={{ alphaMin: 0.3, alphaDisabled: !acrylic }}
+        range={{ alphaMin: 0.3, alphaMax: acrylic ? SEE_THROUGH_MAX : 1, alphaDisabled: !acrylic }}
       />
       {/* The accent's alpha is for its FILLS; its lines stay solid. */}
       <WindowColour
@@ -173,6 +203,8 @@ export function AppearancePage(): JSX.Element {
   const titleBar = useTitleBarMode()
   const tab = appOpt('tab-width')
   const shape = appOpt('tab-style')
+  const switching = useTabSwitch()
+  const swap = appOpt('tab-switch')
   const bar = appOpt('title-bar')
   const edge = appOpt('window-edges')
   return (
@@ -184,6 +216,17 @@ export function AppearancePage(): JSX.Element {
         {/* The tab style (#143): the flat strip, or Powerline's chevrons. */}
         <SettingRow id="tab-style" icon={shape.icon} label={shape.label} sub={shape.sub}>
           <Segmented value={style} onChange={setTabStyle} options={TAB_STYLE_OPTIONS} />
+        </SettingRow>
+        {/* Where Ctrl+Tab goes (#158): the strip, or the tab used last. The
+            sub says what the choice in force does, so the row answers it
+            without trying the keys; settings copy names no key (settingsCopy). */}
+        <SettingRow
+          id="tab-switch"
+          icon={swap.icon}
+          label={swap.label}
+          sub={switching === 'recent' ? 'Back to the tab you used last.' : 'The next tab along the strip.'}
+        >
+          <Segmented value={switching} onChange={setTabSwitch} options={TAB_SWITCH_OPTIONS} />
         </SettingRow>
         {/* A switch over the same store the segmented control wrote: on is
             `shown`, the default, the window as it always was (#91). */}

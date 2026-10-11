@@ -34,6 +34,7 @@ describe("this app's own settings rows", () => {
       [
         "tab-width=prism.window.tabWidth",
         "tab-style=prism.window.tabStyle",
+        "tab-switch=prism.window.tabSwitch",
         "title-bar=prism.window.titleBar",
         "window-edges=prism.window.edges",
         "window-background=prism.window.background",
@@ -86,5 +87,14 @@ describe('Find a setting', () => {
     expect(ids.indexOf('agent-rainbow')).toBe(ids.indexOf('agent-done-on') + 1)
     const style = settingsIndex(true).find((e) => e.id === 'tab-style')
     expect(style?.keywords).toContain('chevron')
+  })
+
+  it('finds Tab switching by what it does, right after Tab style, in the Window section (#158)', () => {
+    const index = settingsIndex(true)
+    const ids = index.map((e) => e.id)
+    expect(ids.indexOf('tab-switch')).toBe(ids.indexOf('tab-style') + 1)
+    const row = index.find((e) => e.id === 'tab-switch')
+    expect(`${row?.page}/${row?.section}`).toBe('appearance/Window')
+    for (const word of ['recent', 'ctrl', 'mru', 'order']) expect(row?.keywords).toContain(word)
   })
 })
