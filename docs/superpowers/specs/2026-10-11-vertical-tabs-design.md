@@ -33,10 +33,16 @@ looked at on the way).
   window's handle. With horizontal tabs the hidden title bar is unchanged (#91).
 
 ### Follow-ups the same day (owner, 2026-10-11)
-- The hidden title bar starts at the open sidebar's edge and never covers it; with the sidebar
-  collapsed it spans the window ("dont have the titlebar go over the sidebar ... when the sidebar is
-  collapsed then it can go across the whole thing").
-- Both edge reveals also listen to MAIN (`src/main/edgeWatch.ts`, the cursor read from Windows while
+- **Superseded the same evening: no title bar at all.** The bar that slid down at the top edge could
+  not be dragged by, and did not always come. Now, with vertical tabs and the title bar off, there is
+  none: command help and Settings sit at the left of the sidebar's head, whose empty space moves the
+  window, and minimize, maximize and close float at the top right on the terminal's ground, always
+  there (owner: "no title bar at all on vertical tabs with it hidden, settings and command help move
+  to sidebar and the exit minimize maximize buttons stay overlayed without a whole bar ... either
+  buttons that show once your cursor is close or always persistent"; always, since an edge reveal
+  was what did not hold, and a visually impaired user should not have to hunt for them). With no tab
+  open there is no sidebar, so the start screen keeps #91's top row to move the window by.
+- The collapsed sidebar's edge reveal also listens to MAIN (`src/main/edgeWatch.ts`, the cursor read from Windows while
   asked): on a window that is not maximized the outermost pixels are the resize border, where the
   page hears no pointer move, so the bar often did not come ("doesnt always appear ... maximized
   seems a bit more stable").

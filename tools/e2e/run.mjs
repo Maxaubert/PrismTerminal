@@ -2157,52 +2157,39 @@ const scenarios = {
       await page.locator('[data-sidebar-toggle="expand"]').click()
       ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open' && (await geo()).host.left > 100, 'its button keeps it open again')
 
-      // NO TITLE BAR: no top row; the bar slides down at the top edge.
+      // NO TITLE BAR AT ALL (owner, 2026-10-11): command help and Settings in
+      // the sidebar's head, the window's three buttons floating at the top right.
       const bar = await gotoPref(page, 'title-bar')
       await bar.locator('[role="switch"]').click()
       await backToFirst(page)
-      await page.mouse.move(600, 400)
-      await sleep(600)
       const top = () =>
         page.evaluate(() => {
-          const f = document.querySelector('[data-title-bar="float"]')
-          const b = f?.getBoundingClientRect()
           const head = document.querySelector('[data-sidebar-head]')
+          const btns = document.querySelector('[data-window-buttons]')
+          const b = btns?.getBoundingClientRect()
           return {
             rows: document.querySelectorAll('[data-title-bar]').length,
-            shown: f?.hasAttribute('data-title-shown') ?? false,
-            bottom: b ? Math.round(b.bottom) : null,
-            name: (f?.textContent ?? '').includes('Prism Terminal') || !!f?.querySelector('[data-app-mark]'),
-            buttons: !!f?.querySelector('[data-title-settings]') && !!f?.querySelector('[data-window-close]'),
-            toggle: !!f?.querySelector('[data-sidebar-toggle]'),
-            barLeft: b ? Math.round(b.left) : null,
-            navRight: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().right ?? -1),
+            mark: !!document.querySelector('[data-app-mark]'),
+            inHead: !!head?.querySelector('[data-title-settings]'),
+            help: !!head?.querySelector('[data-title-help]'),
+            close: !!btns?.querySelector('[data-window-close]') && !!btns?.querySelector('[aria-label="Minimize"]') && !!btns?.querySelector('[aria-label="Maximize"]'),
+            cog: !!btns?.querySelector('[data-title-settings]'),
+            right: b ? Math.round(innerWidth - b.right) : null,
+            top: b ? Math.round(b.top) : null,
             navTop: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().top ?? -1),
             head: head ? getComputedStyle(head).getPropertyValue('app-region') || getComputedStyle(head).getPropertyValue('-webkit-app-region') : ''
           }
         })
-      const hidden = await top()
-      ok(hidden.rows === 1 && !hidden.shown && hidden.bottom <= 0, `no title row: the only bar is out of sight (${JSON.stringify(hidden)})`)
-      ok(hidden.navTop === 0, `the sidebar starts at the top of the window (${hidden.navTop})`)
-      ok(hidden.head === 'drag', `the sidebar's head moves the window (${hidden.head})`)
-      await page.mouse.move(600, 3)
-      await page.mouse.move(610, 2)
-      ok(!!(await until(async () => (await top()).shown, 3000, 50)), 'the pointer at the top edge brings the bar down')
-      await sleep(300)
-      const down = await top()
-      ok(down.bottom > 30 && down.buttons, `with Settings and the window buttons (${JSON.stringify(down)})`)
-      ok(!down.name && !down.toggle, "and not the app's name, nor the sidebar's button")
-      // Owner, 2026-10-11: "dont have the titlebar go over the sidebar".
-      ok(Math.abs(down.barLeft - down.navRight) <= 1, `it starts at the open sidebar's edge, not over it (bar ${down.barLeft}, sidebar ends ${down.navRight})`)
-      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-titlebar-shown.png') }).catch(() => {})
-      await page.mouse.move(600, 400)
-      ok(!!(await until(async () => !(await top()).shown, 3000, 50)), 'it goes again when the pointer leaves')
-      // Back to the strip, quiet, so the close asks nothing. Settings is in
-      // the bar, so the bar comes down first.
-      await page.mouse.move(600, 2)
-      await until(async () => (await top()).shown, 3000, 50)
-      await sleep(300)
+      const bare = await top()
+      ok(bare.rows === 0 && !bare.mark, `no title bar at all, nor the app's icon (${JSON.stringify(bare)})`)
+      ok(bare.navTop === 0, `the sidebar starts at the top of the window (${bare.navTop})`)
+      ok(bare.inHead, "Settings is in the sidebar's head")
+      ok(bare.close && !bare.cog && bare.right <= 12 && bare.top <= 8, `the window's three buttons float at the top right, alone (${JSON.stringify(bare)})`)
+      ok(bare.head === 'drag', `the sidebar's head moves the window (${bare.head})`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-no-titlebar.png') }).catch(() => {})
+      // Settings from the sidebar, and back.
       await (await gotoPref(page, 'title-bar')).locator('[role="switch"]').click()
+      ok(!!(await until(() => page.evaluate(() => document.querySelectorAll('[data-title-bar]').length === 1 && !document.querySelector('[data-window-buttons]')), 3000, 50)), 'Show title bar puts the bar back, with the buttons in it')
       await setPref(page, 'tab-layout', 'horizontal')
       ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-tab-strip]') && !document.querySelector('[data-tab-sidebar]')), 3000, 50)), 'Horizontal puts the strip back')
       await quietStrip(page)
