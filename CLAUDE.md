@@ -51,7 +51,9 @@ read the full entry before changing anything it names.
    go through `sanitizePaste`, paths through `quotePath` per shell, Windows tools by full path.
 2. [The only command the app writes into a shell is the agent resume](docs/regression-rules.md#only-command-is-resume),
    as the STARTUP command with a validated id. Never type into a user's shell; a program gets only
-   [replies to what it asked](docs/regression-rules.md#replies-only-when-asked).
+   [replies to what it asked](docs/regression-rules.md#replies-only-when-asked). The id rides in the
+   environment: [one command line per kind of shell, no `-EncodedCommand`](docs/regression-rules.md#same-command-line),
+   or Defender holds main 700 ms per shell at launch (#180).
 3. [Main installs only what main offered](docs/regression-rules.md#main-installs-only-offered):
    `update:install` refuses any url but `pendingUpdate.url`; state files are written atomically.
 4. [Renderer is sandboxed](docs/regression-rules.md#renderer-sandboxed): `sandbox: true`, context

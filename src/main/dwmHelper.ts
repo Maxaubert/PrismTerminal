@@ -12,26 +12,33 @@
  *
  * Attributes: 33 DWMWA_WINDOW_CORNER_PREFERENCE (0 default, 1 do not round),
  * 34 DWMWA_BORDER_COLOR (a COLORREF 0x00BBGGRR, -1 default, -2 none).
+ *
+ * PLAIN -Command, NEVER -EncodedCommand (#180). Windows Defender inspects an
+ * encoded PowerShell inside CreateProcess, and spawn() runs that on main's
+ * thread: measured from the packaged app (2026-10-11), 1.4 s at every launch,
+ * the window and every IPC call standing still; the same script as plain
+ * -Command, 10 ms. So the script is ONE line with no double quote in it (the
+ * mediaPause rule): the C# string's quotes are made inside PowerShell.
  */
 import { SYS } from '@core/main/sysTools'
 import { spawn, type ChildProcess } from 'child_process'
 
-const SCRIPT =
-  `Add-Type 'using System;using System.Runtime.InteropServices;public class DW{[DllImport("dwmapi.dll")]public static extern int DwmSetWindowAttribute(IntPtr h,int a,ref int v,int s);}';` +
+export const DWM_HELPER_SCRIPT =
+  `$q = [char]34; Add-Type ('using System;using System.Runtime.InteropServices;public class DW{[DllImport(' + $q + 'dwmapi.dll' + $q + ')]public static extern int DwmSetWindowAttribute(IntPtr h,int a,ref int v,int s);}'); ` +
   `while ($true) { $line = [Console]::In.ReadLine(); if ($null -eq $line) { break }; $p = $line.Split(' '); ` +
   `if ($p.Length -ge 3) { try { $h = [IntPtr]::new([int64]$p[0]); $a = [int]$p[1]; $v = [int]$p[2]; ` +
   `[DW]::DwmSetWindowAttribute($h, $a, [ref]$v, 4) | Out-Null } catch {} } }`
+
+export function dwmHelperArgs(): string[] {
+  return ['-NoProfile', '-NonInteractive', '-Command', DWM_HELPER_SCRIPT]
+}
 
 let proc: ChildProcess | null = null
 
 function helper(): ChildProcess | null {
   if (proc && proc.exitCode === null && !proc.killed) return proc
   try {
-    proc = spawn(
-      SYS.powershell,
-      ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(SCRIPT, 'utf16le').toString('base64')],
-      { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true }
-    )
+    proc = spawn(SYS.powershell, dwmHelperArgs(), { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true })
     proc.on('exit', () => {
       proc = null
     })

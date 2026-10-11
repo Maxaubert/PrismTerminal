@@ -47,9 +47,21 @@ How to read a stall:
 - **`page-stack`** (2 s or more) is the page's JavaScript stack taken WHILE it was stuck: the top
   frame is the code that was running.
 - **`main-lag`** lists `inflight`: the IPC calls running during the lag, or that ended inside it
-  (`done`). A long `ipc-slow` beside it usually names the cause.
+  (`done`). A long `ipc-slow` beside it usually names the cause. The calls in it are only what
+  was AROUND the block: a `main-lag` whose calls all ended in 0 ms (or "no IPC call around it")
+  was main's own synchronous work, most often a process start (#180, below).
 - **`fs-slow`** next to slow listings means libuv's four fs threads were starved (a dead network or
-  optical drive, a size scan), not that one folder is slow.
+  optical drive, a size scan), not that one folder is slow. Beside a `main-lag` of the same length
+  it is that lag (the canary could not run either), not a disk.
+- **A process start blocks main** (#180, measured 2026-10-11 from the packaged app on Windows
+  Defender): `CreateProcess` runs on main's thread for `child_process.spawn` AND for node-pty
+  (1.2.0-beta.15 creates the shell in a callback AFTER `spawn()` returned, so the `shell-spawn`
+  crumb says a few ms and the cost lands in the next `main-lag`). From `PrismTerminal.exe` Defender
+  judges each new command line inside that call: a `pwsh.exe` start 1.4 s the first time in a run,
+  700 ms per NEW command line, 3 ms per one it has seen; a `powershell -EncodedCommand` 1.4 s, the
+  same script as plain `-Command` 10 ms. The dev build's `electron.exe` pays none of it, so measure
+  a startup on the packaged app. Hence the rules: no per-shell value on a command line (the resume
+  id rides in `PRISM_RESUME_ID`) and no `-EncodedCommand`.
 
 ## The line
 
