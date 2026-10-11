@@ -89,6 +89,21 @@ looked at on the way).
   the edge zone, out only past the far edge plus 4 px. The e2e hands main a cursor (`__e2eCursor`,
   under --e2e only) and fails on the old code.
 
+- **2026-10-12, from the surfaces mockup** (`sidebar-surfaces.html`; owner's pick: "A shade lighter",
+  "Thin strip", medium buttons, regular icon line, on Pitch):
+  - **A new setting, Secondary colour** (Appearance, under Background and Accent; "make that into a new
+    setting called secondary colour ... so the user can pick their own, but this is the gold standard.
+    make it fit with each theme"). Unpicked it is the theme's flat panel, the ground 4 percent toward
+    the text (a step darker on a light theme), the token `--p-secondary`. It paints the vertical tabs'
+    sidebar, their pop-out title bar and their title bar when shown; the horizontal strip is unchanged.
+    A theme pick resets it, as it does Background and Accent; inks are held to it.
+  - **No line under the pop-out bar** ("dont have a border on the titlebar on hidden").
+  - **New tab is the tab list's last row, a tab's size** ("make new tab a button attached to the end
+    of the tab list and the same size as a tab"); the foot keeps Help, Settings and the sidebar button.
+  - **A thin grab strip, 16 px**: a 10 px one was nearly all Windows' resize border (WM_NCHITTEST
+    answered HTTOP at its middle on a window that is not maximized).
+  - Under Ring, a tab with no mark keeps the 12 px slot, so every name starts at one x.
+
 ## 2. The indicators
 
 - **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new

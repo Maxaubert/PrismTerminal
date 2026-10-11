@@ -74,6 +74,7 @@ import { applyChrome, chromeTokens } from './lib/chromeTheme'
 import { onWindowEdgesChange, windowEdges } from './lib/edgesPrefs'
 import { onWindowAccentChange, windowAccent } from './lib/accentPrefs'
 import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPrefs'
+import { onWindowSecondaryChange, windowSecondary } from './lib/secondaryPrefs'
 import { attentionCount, drawBadge, useTaskbarBadgeOn } from './lib/taskbarBadge'
 import { agentHooksOn, useAgentDoneOn, useAgentFailedOn, useAgentQuestionOn } from '@core/renderer/lib/termLook'
 
@@ -121,7 +122,8 @@ function paintChrome(): void {
     acrylic ? termGroundAlpha() : 1,
     presetAccent(id),
     edges,
-    windowAccent()
+    windowAccent(),
+    windowSecondary()
   )
   applyChrome(tokens)
   window.prism.setWindowBg(tokens.vars['--p-bg-solid'])
@@ -270,7 +272,9 @@ export default function App(): JSX.Element {
     const offEdges = onWindowEdgesChange(paintChrome)
     const offAccent = onWindowAccentChange(paintChrome)
     const offBackground = onWindowBackgroundChange(paintChrome)
+    const offSecondary = onWindowSecondaryChange(paintChrome)
     return () => {
+      offSecondary()
       offBackground()
       offLook()
       offEdges()
@@ -699,8 +703,9 @@ export default function App(): JSX.Element {
           no tabs (the start screen) the row is only that handle and the
           buttons. */}
       {bare ? null : vertical && titleBar === 'shown' ? (
-        // VERTICAL (#162): the title bar of its own, the tabs in the sidebar.
-        <TitleBar onSettings={onSettings} onHelp={onHelp} chip={chip} />
+        // VERTICAL (#162): the title bar of its own, the tabs in the sidebar,
+        // both in the secondary colour.
+        <TitleBar onSettings={onSettings} onHelp={onHelp} chip={chip} secondary />
       ) : titleBar === 'hidden' ? (
         <div
           data-title-bar="tabs"

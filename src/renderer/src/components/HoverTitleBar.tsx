@@ -59,7 +59,7 @@ export function HoverTitleBar({
       // region is from the layout, and a transformed bar was reported where
       // its slide started, above the window, so it moved nothing (measured
       // with WM_NCHITTEST, 2026-10-11).
-      className={`drag p-styled-font absolute right-0 z-40 flex h-9 items-center justify-end gap-2.5 bg-[var(--p-title)] pl-3 pr-1.5 text-[13px] transition-[top,box-shadow] duration-[200ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
+      className={`drag p-styled-font absolute right-0 z-40 flex h-9 items-center justify-end gap-2.5 bg-[var(--p-secondary)] pl-3 pr-1.5 text-[13px] transition-[top,box-shadow] duration-[200ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
         shown ? 'shadow-[0_10px_30px_-10px_rgba(0,0,0,.8)]' : ''
       }`}
       style={{ left, top: shown ? 0 : -48 }}

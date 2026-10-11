@@ -25,6 +25,7 @@ import { setTitleBarMode, useTitleBarMode } from '../../lib/titleBarPrefs'
 import { setTabLayout, useTabLayout, type TabLayout } from '../../lib/tabLayoutPrefs'
 import { setWindowAccent, useWindowAccent } from '../../lib/accentPrefs'
 import { onWindowBackgroundChange, setWindowBackground, useWindowBackground, windowBackground } from '../../lib/backgroundPrefs'
+import { onWindowSecondaryChange, setWindowSecondary, useWindowSecondary } from '../../lib/secondaryPrefs'
 import { chromeTokens } from '../../lib/chromeTheme'
 import { APP_SECTIONS, appOpt } from './appOptions'
 
@@ -98,10 +99,10 @@ const themeColours = (): string => {
   // so the Alpha reads 73 on a dark preset rather than 100.
   const own = id === 'custom' ? customTermTheme() : null
   const alpha = termAcrylic() ? termGroundAlpha() : own ? alphaOf(own.bg) : 1
-  return `${vars['--p-accent']}|${withAlpha(themeBg, alpha)}`
+  return `${vars['--p-accent']}|${withAlpha(themeBg, alpha)}|${vars['--p-secondary']}`
 }
 const onColoursChange = (cb: () => void): (() => void) => {
-  const offs = [onTermLookChange(cb), onWindowBackgroundChange(cb)]
+  const offs = [onTermLookChange(cb), onWindowBackgroundChange(cb), onWindowSecondaryChange(cb)]
   return () => offs.forEach((off) => off())
 }
 
@@ -123,7 +124,7 @@ function WindowColour({
   onPick,
   range
 }: {
-  id: 'window-background' | 'window-accent'
+  id: 'window-background' | 'window-accent' | 'window-secondary'
   sub: string
   chosen: string | null
   /** What the field shows of the choice, where it paints otherwise than it
@@ -152,7 +153,8 @@ function WindowColour({
 function WindowColours(): JSX.Element {
   const accent = useWindowAccent()
   const background = useWindowBackground()
-  const [themeAccent, themeBg] = useSyncExternalStore(onColoursChange, themeColours).split('|')
+  const [themeAccent, themeBg, themeSecondary] = useSyncExternalStore(onColoursChange, themeColours).split('|')
+  const secondary = useWindowSecondary()
   const acrylicOn = useTermAcrylic()
   const groundAlpha = useTermGroundAlpha()
   // The material is Windows 11's (1809 has none): where main says it cannot
@@ -196,6 +198,17 @@ function WindowColours(): JSX.Element {
         fromTheme={themeAccent}
         onPick={setWindowAccent}
         range={{ alphaMin: 0.1 }}
+      />
+      {/* THE SECONDARY COLOUR (owner, 2026-10-12): the vertical tabs'
+          sidebar and title bar. The theme's own, a step off its ground, until
+          one is picked; solid, its see-through is the window's. */}
+      <WindowColour
+        id="window-secondary"
+        sub={appOpt('window-secondary').sub}
+        chosen={secondary}
+        fromTheme={themeSecondary}
+        onPick={setWindowSecondary}
+        range={{ alpha: false }}
       />
     </>
   )
@@ -266,6 +279,7 @@ export function AppearancePage(): JSX.Element {
         onThemePicked={() => {
           setWindowBackground(null)
           setWindowAccent(null)
+          setWindowSecondary(null)
         }}
       />
     </>

@@ -167,7 +167,7 @@ const tabLabels = (page) =>
  */
 const PREF_PAGE = {
   'tab-layout': 'appearance', 'tab-width': 'appearance', 'tab-style': 'appearance', 'tab-switch': 'appearance', 'title-bar': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
-  'window-background': 'appearance', 'window-accent': 'appearance', 'term-acrylic': 'appearance',
+  'window-background': 'appearance', 'window-accent': 'appearance', 'window-secondary': 'appearance', 'term-acrylic': 'appearance',
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
   'agent-indicator': 'agents', 'agent-done-on': 'agents', 'agent-rainbow': 'agents', 'agent-question-on': 'agents', 'agent-failed-on': 'agents',
@@ -2255,7 +2255,23 @@ const scenarios = {
             bar: r ? { left: Math.round(r.left), top: Math.round(r.top), bottom: Math.round(r.bottom), right: Math.round(innerWidth - r.right) } : null,
             buttons: !!btns && !!f?.contains(btns) && !!btns.querySelector('[data-window-close]'),
             name: (f?.textContent ?? '').includes('Prism Terminal') || !!f?.querySelector('[data-app-mark]') || !!f?.querySelector('[data-title-settings]'),
-            inFoot: !!foot?.querySelector('[data-title-settings]') && !!foot?.querySelector('[data-sidebar-new]') && !!foot?.querySelector('[data-sidebar-toggle]'),
+            inFoot: !!foot?.querySelector('[data-title-settings]') && !!foot?.querySelector('[data-sidebar-toggle]') && !foot?.querySelector('[data-sidebar-new]'),
+            newRow: (() => {
+              const n = document.querySelector('[data-sidebar-rows] [data-sidebar-new]')
+              const rows = [...document.querySelectorAll('[data-tab-sidebar] [data-tab]')]
+              const last = rows[rows.length - 1]
+              if (!n || !last) return null
+              const a = n.getBoundingClientRect(), b = last.getBoundingClientRect()
+              return { last: n.previousElementSibling === last, h: Math.round(a.height), tabH: Math.round(b.height), w: Math.round(a.width), tabW: Math.round(b.width) }
+            })(),
+            colours: (() => {
+              const probe = document.createElement('span')
+              probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-secondary')
+              document.body.appendChild(probe)
+              const sec = getComputedStyle(probe).color
+              probe.remove()
+              return { secondary: sec, side: getComputedStyle(document.querySelector('[data-tab-sidebar]')).backgroundColor, bar: f ? getComputedStyle(f).backgroundColor : null, term: getComputedStyle(document.querySelector('[data-term-host] .xterm-scrollable-element') ?? document.querySelector('[data-term-host]')).backgroundColor }
+            })(),
             navTop: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().top ?? -1),
             navRight: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().right ?? -1),
             hostTop: Math.round(document.querySelector('[data-term-host]')?.getBoundingClientRect().top ?? -1),
@@ -2265,8 +2281,13 @@ const scenarios = {
       const up = await top()
       ok(up.rows === 1 && !up.shown && up.bar.bottom <= 0, `the bar is up out of sight (${JSON.stringify(up.bar)})`)
       ok(up.hostTop === 0, `and the terminal has the whole height ("usable for content") (${up.hostTop})`)
-      ok(up.navTop === 0 && up.firstRowTop >= 34, `the sidebar starts at the top, its tabs a strip lower (${up.firstRowTop}px)`)
-      ok(up.inFoot, "the +, Settings and the sidebar's button are at its foot")
+      ok(up.navTop === 0 && up.firstRowTop >= 10 && up.firstRowTop <= 24, `the sidebar starts at the top, its tabs a thin strip lower (${up.firstRowTop}px)`)
+      ok(up.inFoot, "Settings and the sidebar's button are at its foot, the + is not")
+      // Owner, 2026-10-12: "make new tab a button attached to the end of the tab
+      // list and the same size as a tab".
+      ok(!!up.newRow && up.newRow.last && up.newRow.h === up.newRow.tabH && up.newRow.w === up.newRow.tabW, `New tab is the list's last row, a tab's size (${JSON.stringify(up.newRow)})`)
+      // The secondary colour: the sidebar and the bar wear it, not the terminal's.
+      ok(up.colours.side === up.colours.secondary && up.colours.bar === up.colours.secondary, `the sidebar and the bar wear the secondary colour (${JSON.stringify(up.colours)})`)
       // Within the top 16 px, not only at the very edge.
       await page.mouse.move(600, 30)
       await page.mouse.move(610, 12)
@@ -2284,7 +2305,8 @@ const scenarios = {
         const nav = document.querySelector('[data-tab-sidebar]').getBoundingClientRect()
         return [
           { x: f.left + 120, y: f.top + f.height / 2 },
-          { x: grab.left + 60, y: grab.top + grab.height / 2 },
+          // Below Windows' own resize border at the window's top.
+          { x: grab.left + 60, y: grab.bottom - 3 },
           { x: row.left + 40, y: row.top + row.height / 2 },
           { x: nav.right + 200, y: 300 }
         ]
@@ -4717,7 +4739,7 @@ const scenarios = {
       // window's rows above the theme and what a theme sets under it.
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
       // The see-through row sits right under the wall since #156, as Prism's.
-      const want = ['tab-layout', 'tab-width', 'tab-style', 'tab-switch', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-accent']
+      const want = ['tab-layout', 'tab-width', 'tab-style', 'tab-switch', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-accent', 'window-secondary']
       ok(JSON.stringify(rows) === JSON.stringify(want), `Appearance runs ${want.join(' > ')} (${rows.join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await gotoPref(page, 'term-font')

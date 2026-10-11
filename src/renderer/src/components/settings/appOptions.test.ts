@@ -40,6 +40,7 @@ describe("this app's own settings rows", () => {
         "window-edges=prism.window.edges",
         "window-background=prism.window.background",
         "window-accent=prism.window.accent",
+        "window-secondary=prism.window.secondary",
         "newtab-mode=prism.newtab.mode+prism.newtab.folder",
         "explorer-verb=registry",
         "taskbar-badge=prism.window.taskbarBadge",

@@ -286,7 +286,7 @@ export function TabSidebar({
             if (path) onDropFolder(path)
           }
         }}
-        className={`p-styled-font absolute inset-y-0 left-0 flex flex-col border-r border-[var(--p-divider)] bg-[var(--p-tabs)] text-[13px] ${
+        className={`p-styled-font absolute inset-y-0 left-0 flex flex-col border-r border-[var(--p-divider)] bg-[var(--p-secondary)] text-[13px] ${
           collapsed
             ? 'transition-[left,box-shadow] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
             : ''
@@ -296,11 +296,14 @@ export function TabSidebar({
         // reported where its slide started (measured, WM_NCHITTEST).
         style={{ width, left: collapsed && !visible ? -(width + 16) : 0 }}
       >
-        {/* A STRIP TO GRAB, above the tabs, when there is no title bar (owner,
-            2026-10-11: "the tabs should start a bit further down on the
-            sidebar so that you can grab that area"). The pop-out bar's height,
-            so the two read as one top edge. */}
-        {titleRow && <div data-sidebar-grab aria-hidden className="drag h-9 shrink-0" />}
+        {/* A THIN STRIP TO GRAB, above the tabs, when there is no title bar
+            (owner, 2026-10-11: "the tabs should start a bit further down on
+            the sidebar so that you can grab that area"; 2026-10-12, of the
+            mockups: "thin strip"). 16 px: on a window that is not maximized
+            Windows keeps the top few pixels as its resize border (measured
+            with WM_NCHITTEST, a 10 px strip answered HTTOP at its middle), so
+            the band below that is what moves the window. */}
+        {titleRow && <div data-sidebar-grab aria-hidden className="drag h-4 shrink-0" />}
         <div
           ref={rows}
           data-sidebar-rows
@@ -309,7 +312,7 @@ export function TabSidebar({
           // top"). With no title bar, the list's empty space below the tabs
           // is what moves the window ("i cant drag the window"); each row is
           // no-drag, so a tab still clicks and drags as a tab.
-          className="p-scroll flex min-h-0 flex-1 flex-col gap-px overflow-y-auto pb-2 pt-1.5"
+          className={`p-scroll flex min-h-0 flex-1 flex-col gap-px overflow-y-auto pb-2 ${titleRow ? 'pt-0.5' : 'pt-1.5'}`}
         >
           {tabs.map((t, i) => {
             const on = t.id === activeId
@@ -425,8 +428,13 @@ export function TabSidebar({
                     className="pointer-events-none relative z-[1] inline-block h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--p-text)_22%,transparent)] border-t-[var(--p-accent-solid)] motion-safe:animate-spin"
                   />
                 )}
-                {mark.place === 'ring' && (
+                {mark.place === 'ring' ? (
                   <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
+                ) : (
+                  // Under Ring every name starts at one x: a tab with no mark
+                  // keeps the mark's 12 px slot, as the New tab row's + does.
+                  indicator === 'ring' &&
+                  !loadingIds?.has(t.id) && <span aria-hidden className="-mr-0.5 w-3 shrink-0" />
                 )}
                 <button
                   role="tab"
@@ -481,32 +489,36 @@ export function TabSidebar({
               </div>
             )
           })}
-        </div>
-        {/* THE BUTTONS, AT THE FOOT (owner, 2026-10-11): the +, then, with no
-            title bar, command help and Settings, then the sidebar's own
-            button. The space between them moves the window too. */}
-        <div data-sidebar-foot className="flex h-10 shrink-0 items-center gap-0.5 px-1.5">
+          {/* NEW TAB, the list's last row and a tab's own size (owner,
+              2026-10-12: "make new tab a button attached to the end of the tab
+              list and the same size as a tab"). Its right click is the +'s
+              list of places, as on the strip. */}
           <button
-            className={BTN}
-            title="New tab (Ctrl+T). Right-click for recent folders"
-            aria-label="New tab"
             data-sidebar-new
+            title="New tab (Ctrl+T). Right-click for recent folders"
             onClick={onNew}
             onContextMenu={menu.openPlusMenu}
+            className="no-drag mx-1.5 flex h-[34px] shrink-0 items-center gap-2 rounded-[4px] pl-3 pr-1.5 text-left text-[var(--p-dim)] transition-colors hover:bg-[var(--p-hover)] hover:text-[var(--p-text)]"
           >
             <svg
               viewBox="0 0 24 24"
-              width={14}
-              height={14}
+              width={12}
+              height={12}
               fill="none"
               stroke="currentColor"
-              strokeWidth="2"
+              strokeWidth="2.2"
               strokeLinecap="round"
+              className="shrink-0"
               aria-hidden
             >
-              <path d="M12 6v12m6-6H6" />
+              <path d="M12 5v14m7-7H5" />
             </svg>
+            <span className="min-w-0 flex-1 truncate">New tab</span>
           </button>
+        </div>
+        {/* THE BUTTONS, AT THE FOOT (owner, 2026-10-11): with no title bar,
+            command help and Settings, then the sidebar's own button. */}
+        <div data-sidebar-foot className="flex h-10 shrink-0 items-center gap-0.5 px-1.5">
           <span className="min-w-2 flex-1 self-stretch" />
           {headStart && <div className="no-drag flex items-center gap-0.5">{headStart}</div>}
           <button

@@ -21,8 +21,12 @@ const BTN =
 export default function TitleBar({
   onSettings,
   onHelp,
-  chip
+  chip,
+  secondary = false
 }: {
+  /** Beside the vertical tabs' sidebar, the bar wears the secondary colour,
+   *  as the sidebar does (#162). */
+  secondary?: boolean
   onSettings: () => void
   /** Open the command help popup; absent when the setting is off, and the
    *  button goes with it. */
@@ -33,7 +37,7 @@ export default function TitleBar({
   return (
     <div
       data-title-bar
-      className="drag p-styled-font flex h-9 shrink-0 items-center gap-2.5 border-b border-[var(--p-divider)] bg-[var(--p-title)] pl-3 pr-1.5 text-[13px]"
+      className={`drag p-styled-font flex h-9 shrink-0 items-center gap-2.5 border-b border-[var(--p-divider)] ${secondary ? 'bg-[var(--p-secondary)]' : 'bg-[var(--p-title)]'} pl-3 pr-1.5 text-[13px]`}
     >
       {/* THE APP'S ICON, AS OUTLINES (owner, 2026-10-11: "dont show the whole
           prism terminal text and instead just show the logo ... just the

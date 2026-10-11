@@ -329,3 +329,29 @@ describe('the switch knob token', () => {
     expect(css).toContain(`--p-switch-knob: ${chromeTokens(resolveTermTheme('prism')).vars['--p-switch-knob']};`)
   })
 })
+
+// THE SECONDARY COLOUR (#162; owner, 2026-10-12: "this is the gold standard.
+// make it fit with each theme"): the mockup's "a shade lighter", per theme.
+describe('the secondary colour', () => {
+  it.each(TERM_PRESETS.map((p) => p.id))('%s: unpicked, the ground a step toward the text, readable', (id) => {
+    const { vars } = chromeTokens(resolveTermTheme(id), 1, presetAccent(id))
+    expect(vars['--p-secondary']).toBe(vars['--p-side-flat'])
+    expect(vars['--p-secondary']).not.toBe(vars['--p-bg-solid'])
+    expect(contrastRatio(vars['--p-text'], vars['--p-secondary'])).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(vars['--p-dim'], vars['--p-secondary'])).toBeGreaterThanOrEqual(3)
+  })
+
+  it('a pick is worn, and the inks are held to it', () => {
+    const theme = resolveTermTheme('pt-default')
+    const { vars } = chromeTokens(theme, 1, presetAccent('pt-default'), 'hairline', null, '#3a3a3a')
+    expect(vars['--p-secondary']).toBe('#3a3a3a')
+    expect(contrastRatio(vars['--p-text'], '#3a3a3a')).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(vars['--p-dim'], '#3a3a3a')).toBeGreaterThanOrEqual(3)
+  })
+
+  it("on glass it is see-through at the ground's alpha", () => {
+    const { vars } = chromeTokens(resolveTermTheme('pt-default'), 0.73)
+    expect(vars['--p-secondary']).toMatch(/^#[0-9a-f]{8}$/)
+    expect(vars['--p-secondary'].slice(7)).toBe(vars['--p-bg'].slice(7))
+  })
+})

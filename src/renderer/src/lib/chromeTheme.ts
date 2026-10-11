@@ -34,6 +34,7 @@ export const CHROME_COLOUR_TOKENS = [
   '--p-bg-solid',
   '--p-side',
   '--p-side-flat',
+  '--p-secondary',
   '--p-title',
   '--p-tabs',
   '--p-tab-active',
@@ -95,7 +96,10 @@ export function chromeTokens(
   edges: WindowEdges = 'hairline',
   /** The accent the USER chose (accentPrefs), or nothing to follow the theme.
    *  It may carry an alpha (#114). */
-  chosenAccent?: string | null
+  chosenAccent?: string | null,
+  /** The SECONDARY colour the user chose (secondaryPrefs), or nothing for the
+   *  theme's own: the sidebar and the title bar beside the terminal. */
+  chosenSecondary?: string | null
 ): ChromeTokens {
   // Flattened before any maths: a theme may publish rgba() or #rrggbbaa, which
   // is fine to paint and NaN to measure, and NaN is how a hue walks to black.
@@ -112,8 +116,16 @@ export function chromeTokens(
   // between the ground and the text, so it is the harder of the two for
   // anything on the text's side; the ground is checked after it for the rare
   // colour that sits on the other side.
+  // THE SECONDARY COLOUR (owner, 2026-10-12: "the sidebar and titlebar colour
+  // should be this, but make that into a new setting called secondary colour
+  // ... so the user can pick their own, but this is the gold standard. make it
+  // fit with each theme"): the vertical tabs' sidebar and their title bar.
+  // Unpicked it IS the flat panel, the ground a step toward the text, which is
+  // the mockup's "a shade lighter" on every theme (darker on a light one). A
+  // pick is a surface the inks are held to as well.
+  const secondary = chosenSecondary ? normalizeColor(chosenSecondary, flat) : flat
   const floorOn = (c: string, floor: number): string =>
-    ensureContrast(ensureContrast(c, flat, floor), bg, floor)
+    ensureContrast(ensureContrast(ensureContrast(c, flat, floor), secondary, floor), bg, floor)
   const fg = floorOn(rawFg, TEXT_FLOOR)
   // The theme's own blue first, its cursor second, Prism's indigo last, and the
   // first that is VISIBLE on this ground wins. If none is, the theme's blue is
@@ -203,6 +215,8 @@ export function chromeTokens(
     // change when you turn on see through window, like the sidebar").
     '--p-side': glass ? bg + '00' : bg,
     '--p-side-flat': flat,
+    // On glass it is see-through at the ground's own alpha, as the sheet is.
+    '--p-secondary': glass ? secondary + alphaHex(groundAlpha) : secondary,
     '--p-title': sheet,
     '--p-tabs': sheet,
     // The active tab is told by its ink, not a fill. On glass it must paint
