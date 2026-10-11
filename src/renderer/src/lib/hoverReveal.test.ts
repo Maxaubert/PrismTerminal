@@ -45,9 +45,9 @@ describe('the hover reveal (#162)', () => {
   it('a pointer moving about inside does not restart the wait', () => {
     const { seen, r } = make()
     r.feel(true)
-    vi.advanceTimersByTime(50)
+    vi.advanceTimersByTime(30)
     r.feel(true)
-    vi.advanceTimersByTime(REVEAL.openDelay - 50)
+    vi.advanceTimersByTime(REVEAL.openDelay - 30)
     expect(seen).toEqual([true])
   })
 

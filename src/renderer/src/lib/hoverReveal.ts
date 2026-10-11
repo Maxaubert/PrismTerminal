@@ -13,9 +13,15 @@ import { useEffect, useRef, useState } from 'react'
  * pointer does: a menu it opened is still in use.
  */
 export const REVEAL = {
-  /** How close to the window's edge the pointer must be, in CSS pixels. */
+  /** How close to the window's edge the pointer must be, in CSS pixels: the
+   *  left edge 24 (owner, 2026-10-11: "it reacts a bit too late, my cursor
+   *  needs to be essentially at the edge, could be better if it was like
+   *  20px further into the window"), the top 16, where the terminal's first
+   *  row also lives. */
   zone: 8,
-  openDelay: 90,
+  left: 24,
+  top: 16,
+  openDelay: 60,
   closeDelay: 340
 } as const
 

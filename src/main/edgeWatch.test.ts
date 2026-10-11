@@ -6,9 +6,9 @@ const box = { x: 100, y: 200, width: 800, height: 600 }
 describe('the pointer at the window edge (#162)', () => {
   it('is at the top inside the content band, and in the resize border above it', () => {
     expect(edgeNear({ x: 500, y: 200 }, box).top).toBe(true)
-    expect(edgeNear({ x: 500, y: 200 + EDGE.inside - 1 }, box).top).toBe(true)
+    expect(edgeNear({ x: 500, y: 200 + EDGE.top - 1 }, box).top).toBe(true)
     expect(edgeNear({ x: 500, y: 200 - EDGE.outside }, box).top).toBe(true)
-    expect(edgeNear({ x: 500, y: 200 + EDGE.inside }, box).top).toBe(false)
+    expect(edgeNear({ x: 500, y: 200 + EDGE.top }, box).top).toBe(false)
     expect(edgeNear({ x: 500, y: 200 - EDGE.outside - 1 }, box).top).toBe(false)
   })
 
@@ -20,7 +20,7 @@ describe('the pointer at the window edge (#162)', () => {
   it('is at the left edge the same way, along the window only', () => {
     expect(edgeNear({ x: 100, y: 500 }, box).left).toBe(true)
     expect(edgeNear({ x: 100 - EDGE.outside, y: 500 }, box).left).toBe(true)
-    expect(edgeNear({ x: 100 + EDGE.inside, y: 500 }, box).left).toBe(false)
+    expect(edgeNear({ x: 100 + EDGE.left, y: 500 }, box).left).toBe(false)
     expect(edgeNear({ x: 100, y: 800 + EDGE.outside }, box).left).toBe(false)
   })
 

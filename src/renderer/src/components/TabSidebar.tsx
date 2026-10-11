@@ -142,7 +142,7 @@ export function TabSidebar({
       // Its own height (under a title bar there is one).
       const box = el.getBoundingClientRect()
       if (e.clientY < box.top || e.clientY > box.bottom) return false
-      if (e.clientX <= REVEAL.zone) return true
+      if (e.clientX <= REVEAL.left) return true
       // ON IT once shown, measured to where it COMES TO REST, not where the
       // slide has got to (owner, 2026-10-11: "the sidebar closes before my
       // cursor is near the edge"): a pointer that outran the 260 ms slide was
@@ -287,11 +287,19 @@ export function TabSidebar({
         }}
         className={`p-styled-font absolute inset-y-0 left-0 flex flex-col border-r border-[var(--p-divider)] bg-[var(--p-tabs)] text-[13px] ${
           collapsed
-            ? 'transition-[transform,box-shadow] duration-[260ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
+            ? 'transition-[left,box-shadow] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
             : ''
         } ${collapsed && visible ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]' : ''} ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
-        style={{ width, transform: collapsed && !visible ? 'translateX(calc(-100% - 16px))' : '' }}
+        // Slid by its LEFT, never a transform: Windows is told where a drag
+        // region is from the layout, and a transformed panel's grab strip was
+        // reported where its slide started (measured, WM_NCHITTEST).
+        style={{ width, left: collapsed && !visible ? -(width + 16) : 0 }}
       >
+        {/* A STRIP TO GRAB, above the tabs, when there is no title bar (owner,
+            2026-10-11: "the tabs should start a bit further down on the
+            sidebar so that you can grab that area"). The pop-out bar's height,
+            so the two read as one top edge. */}
+        {titleRow && <div data-sidebar-grab aria-hidden className="drag h-9 shrink-0" />}
         <div
           ref={rows}
           data-sidebar-rows
