@@ -5,6 +5,7 @@ import {
   osc8Target,
   Osc8Spans,
   parseOsc8,
+  piecesOverlap,
   spanRows,
   spanText,
   spanTextRange,
@@ -205,5 +206,25 @@ describe('spanText and spanTextRange', () => {
     expect(spanText(sp, row.length, () => row)).toBe('PR #165')
     // In the row's TEXT the label starts at 2 ("界" + " "), not at 3.
     expect(spanTextRange(row, 3, 10)).toEqual({ start: 2, end: 9 })
+  })
+})
+
+// Review 2026-10-11: on the normal screen an OSC 8 link whose label is itself
+// a URL was painted twice, once as the span and once as the URL the text
+// matched; the alternate screen's ink already took it once.
+describe('piecesOverlap', () => {
+  const span = [
+    { line: 4, x: 70, width: 10 },
+    { line: 5, x: 0, width: 12 }
+  ]
+  it('is true for a match that shares a cell with a span, on any of its rows', () => {
+    expect(piecesOverlap([{ line: 4, x: 70, width: 10 }], span)).toBe(true)
+    expect(piecesOverlap([{ line: 5, x: 11, width: 4 }], span)).toBe(true)
+  })
+  it('is false beside it, on the same row or another', () => {
+    expect(piecesOverlap([{ line: 4, x: 60, width: 10 }], span)).toBe(false)
+    expect(piecesOverlap([{ line: 5, x: 12, width: 8 }], span)).toBe(false)
+    expect(piecesOverlap([{ line: 6, x: 0, width: 12 }], span)).toBe(false)
+    expect(piecesOverlap([{ line: 4, x: 70, width: 10 }], [])).toBe(false)
   })
 })

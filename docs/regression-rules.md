@@ -27,9 +27,12 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   Ctrl+V match `e.code` too (a Russian layout's C is 'с'). Shift+Enter sends a newline ONLY where an
   agent runs, at a plain prompt it is Enter: Ctrl+J to Claude and the `\` continuation otherwise
   (`newlineKey`, measured: Codex 0.153.2 drops a bare LF), armed by Claude's title glyphs or Codex's
-  Action Required before the poll, never a bare braille spinner, and disarmed by the poll (#175), or
-  by the shell's prompt report when only a title armed it (`lib/agentArm.ts`: a WSL tab's poll sees
-  wsl.exe and never says left). An image on Ctrl+V sends the AGENT's key, Alt+V to Claude (on WSL
+  Action Required before the poll, never a bare braille spinner (#175). The shell's prompt report
+  takes them back at once and asks the poll for its next answer even if unchanged (`termAgentAgain`:
+  Ctrl+V's ESC v reached PSReadLine as RevertLine), the poll's "left" takes back only what the poll
+  saw (a resume's first "no agent" is asked again, not obeyed), and an agent only its title vouches
+  for goes when the title stops naming it: a WSL tab's poll sees wsl.exe and bash prints no prompt
+  report (`lib/agentArm.ts`, review 2026-10-11). An image on Ctrl+V sends the AGENT's key, Alt+V to Claude (on WSL
   too) and ^V otherwise, exactly one, since a
   keybindings.json binding both would paste twice (`imagePasteKey`, #170). The panel's attach is keyed on the
   session alone (a `cd` must not re-attach it and take the focus). Under a question or the update
@@ -171,8 +174,9 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   `docs/superpowers/specs/2026-10-10-claude-code-compat-design.md` section 15). Every byte the core writes into a pty that
   no key produced is a reply to a query in that pty's own stream (OSC 10/11 `?`, `CSI ? 996 n`, `CSI > q`, DECRQM 2031)
   or the `?997` report the program turned on with `?2031h`, only on a change and only while that program is there:
-  the shell's prompt report, the poll's "agent left" and RIS turn the reports off (review 2026-10-11: a push after a
-  killed Claude reached PSReadLine as ESC, RevertLine, then typed `[?997;1n`). Replies hold no CR, LF or printable
+  the shell's prompt report, an agent leaving (`agentArm`'s `gone`: the poll's "left" for an agent it saw, or a
+  title-armed agent's title going) and RIS turn the reports off; the poll's first "no agent" never does (review
+  2026-10-11: a push after a killed Claude reached PSReadLine as ESC, RevertLine, then typed `[?997;1n`). Replies hold no CR, LF or printable
   command, go through `term.input(reply, false)` so `onData` and `looksTyped` treat them as the replies they are
   ([typing on onKey](#typing-on-onkey)), and never read anything private: OSC 52 is write-only and a read gets no
   answer. The pure half is `core/renderer/lib/termReplies.ts` (tested); the light/dark it reports is the chrome's own

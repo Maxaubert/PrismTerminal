@@ -5,7 +5,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
 import { decidePaste, imagePasteKey, newlineKey, sanitizePaste, type PathShell } from '../lib/termPaste'
-import { armAtStart, armOnPoll, armOnPrompt, armOnTitle } from '../lib/agentArm'
+import { armAtStart, armOnPoll, armOnPrompt, armOnTitle, type ArmStep } from '../lib/agentArm'
 import { shellOfShellId } from '../../shared/help/shells'
 import {
   onResumingChange,
@@ -46,7 +46,6 @@ import {
   noteThemeMode,
   themePush,
   themeReports,
-  themeReportsOnPoll,
   xtversionAsked,
   xtversionReply,
   type GroundMode
@@ -823,12 +822,31 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // The title (OSC 0/2) is where Claude Code writes its working state; App
   // reads the glyph. xterm parses it either way, this only passes it on.
   term.onTitleChange((t) => reportTitle(id, t))
+  // Whether an agent runs in this shell right now, and which, for Shift+Enter
+  // and an image on Ctrl+V below: a resumed session is its agent from its
+  // first moment (set where the resume is taken, below); the title, the poll
+  // and the prompt move it (`agentArm`).
+  let arm = armAtStart(null)
+  // Whether the program in front asked for theme reports (?2031h, below).
+  let reports = THEME_REPORTS_OFF
+  const moveArm = (s: ArmStep): void => {
+    arm = s.arm
+    // The agent that asked for theme reports has gone with them.
+    if (s.gone) reports = THEME_REPORTS_OFF
+    if (s.recheck) termApi().termAgentAgain?.(id)
+  }
   term.parser.registerOscHandler(9, (data) => {
     const p = parseOsc9(data)
     if (p) {
       cwdNow = p
       markPrompt(id)
       reportCwd(id, p)
+      // THE PROMPT IS BACK: nothing runs in front of the shell (review
+      // 2026-10-11). The agent's keys go at once (Ctrl+V's ESC v reached
+      // PSReadLine, whose RevertLine wiped the line), and so does a ?2031h
+      // whose program died without its ?2031l: a theme push would reach the
+      // shell, and PSReadLine read the ESC as RevertLine and typed the rest.
+      moveArm(armOnPrompt(arm))
     }
     return true
   })
@@ -920,8 +938,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // onData, in stream order with xterm's own replies (a DA1 right after stays
   // after), and starting with ESC so `looksTyped` never counts it as typing.
   // Anything these do not answer returns false and stays xterm's.
-  let reports = THEME_REPORTS_OFF
-  const reply = (r: string): void => term.input(r, false)
+  const reply =(r: string): void => term.input(r, false)
   const modeNow = (): GroundMode => groundMode(groundedTheme().background)
   const colourQuery = (ident: 10 | 11) => (data: string): boolean => {
     const theme = groundedTheme()
@@ -1010,6 +1027,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // drawn itself (`resumeReveal`, which says when). The overlay is the
   // component's; this says which sessions still wear it (termBus).
   const resume = takeResume(id)
+  arm = armAtStart(resume ? agentOfResume(resume) : null)
   let reveal: RevealState | null = null
   let revealClock: ReturnType<typeof setInterval> | null = null
   const finishReveal = (): void => {
@@ -1049,10 +1067,6 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     else term.write(data.slice(0, r.clearAt) + CLEAR + data.slice(r.clearAt))
   }
 
-  // Whether an agent runs in this shell right now, and which, for Shift+Enter
-  // and an image on Ctrl+V below: a resumed session is its agent from its
-  // first moment; the title, the poll and the prompt move it (`agentArm`).
-  let arm = armAtStart(resume ? agentOfResume(resume) : null)
   /**
    * The one paste. Bracketed for text - without that framing a multi-line
    * paste reaches the shell as a run of Enter presses, so the first line runs
@@ -1074,35 +1088,16 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     }
   }
 
-  // The title arms the agent's keys before the poll (#175; `agentArm` has the
-  // rules).
-  term.onTitleChange((t) => {
-    arm = armOnTitle(arm, t)
-  })
-  // THE SHELL'S PROMPT IS BACK (OSC 9;9): nothing runs in front of it. It takes
-  // back what only a title armed (a WSL tab's poll never says "left"), and a
-  // ?2031h whose program died without its ?2031l (review 2026-10-11): a theme
-  // push after it reached the shell, and PSReadLine read the ESC as
-  // RevertLine and typed the rest. Registered after the cwd handler, so it is
-  // asked first, and returns false: that handler still takes the sequence.
-  term.parser.registerOscHandler(9, (data) => {
-    if (parseOsc9(data)) {
-      arm = armOnPrompt(arm)
-      reports = THEME_REPORTS_OFF
-    }
-    return false
-  })
+  // The title arms the agent's keys before the poll (#175), and takes back an
+  // agent only it vouched for (`agentArm` has the rules).
+  term.onTitleChange((t) => moveArm(armOnTitle(arm, t)))
   const unsub = [
     attachClickCaret(term, el, id, (line, x) => oscLink(line, x) !== null),
     // A path this session asked about turned out to exist: paint the lines
     // that asked (#167; it used to be every line of every tab).
     onPathsFound(id, () => links.revisit()),
     termApi().onTermAgent((forId, present, kind) => {
-      if (forId !== id) return
-      // The agent that asked for theme reports has gone with it; a first
-      // "no agent" verdict is no departure (`themeReportsOnPoll`).
-      reports = themeReportsOnPoll(reports, arm.here, present)
-      arm = armOnPoll(arm, present, kind)
+      if (forId === id) moveArm(armOnPoll(arm, present, kind))
     }),
     termApi().onTermData((forId, data) => {
       if (forId === id) writeOutput(data)

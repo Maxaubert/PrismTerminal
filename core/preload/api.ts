@@ -47,6 +47,8 @@ export interface TermPreloadApi {
   onTermAgent(cb: (id: string, has: boolean, kind: DetectedAgent | null) => void): () => void
   /** Ask the process poll to look now, past its backoff (#73). */
   termAgentLook(): void
+  /** Ask the process poll for this session's next answer, changed or not. */
+  termAgentAgain(id: string): void
   /** The shell ended by itself (`exit`); a shell main was told to kill says nothing. */
   onTermExit(cb: (id: string) => void): () => void
   /**
@@ -105,6 +107,7 @@ export function createTermApi(ipc: IpcRendererLike): TermPreloadApi {
     onTermData: (cb) => on(CH.data, cb),
     onTermAgent: (cb) => on(CH.agent, cb),
     termAgentLook: () => ipc.send(CH.agentLook),
+    termAgentAgain: (id) => ipc.send(CH.agentAgain, id),
     onTermExit: (cb) => on(CH.exit, cb),
     readClipboard: () => ipc.sendSync(CH.clipboardRead) as ClipboardRead,
     writeClipboard: (text) => ipc.invoke(CH.clipboardWrite, text) as Promise<boolean>,

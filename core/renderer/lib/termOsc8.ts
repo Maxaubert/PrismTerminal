@@ -136,15 +136,28 @@ export class Osc8Spans {
   }
 }
 
+/** A stretch of cells on one buffer row. */
+export interface RowPiece {
+  line: number
+  x: number
+  width: number
+}
+
 /** The span's cells, one piece per row. */
-export function spanRows(span: Osc8Span, cols: number): Array<{ line: number; x: number; width: number }> {
-  const out: Array<{ line: number; x: number; width: number }> = []
+export function spanRows(span: Osc8Span, cols: number): RowPiece[] {
+  const out: RowPiece[] = []
   for (let r = 0; r <= span.rows; r += 1) {
     const from = r === 0 ? span.x : 0
     const to = r === span.rows ? span.endX : cols
     if (to > from) out.push({ line: span.anchor.line + r, x: from, width: to - from })
   }
   return out
+}
+
+/** Whether any of `pieces` shares a cell with any of `taken`: a URL match
+ *  inside an OSC 8 link is that link, painted once (review 2026-10-11). */
+export function piecesOverlap(pieces: readonly RowPiece[], taken: readonly RowPiece[]): boolean {
+  return pieces.some((p) => taken.some((t) => t.line === p.line && t.x < p.x + p.width && p.x < t.x + t.width))
 }
 
 /** Where cells `from` to `to` of a row sit in the row's TEXT (a wide

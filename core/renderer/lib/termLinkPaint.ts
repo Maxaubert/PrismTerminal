@@ -4,7 +4,15 @@ import { rowsToReink } from './linkInkRows'
 import { sliceRows, type RowPlan } from './linkScanPlan'
 import { findLinks } from './termLinks'
 import { cellText } from './termCells'
-import { bufferRowCells, spanRows, spanText, spanTextRange, type Osc8Span } from './termOsc8'
+import {
+  bufferRowCells,
+  piecesOverlap,
+  spanRows,
+  spanText,
+  spanTextRange,
+  type Osc8Span,
+  type RowPiece
+} from './termOsc8'
 
 /**
  * Paints the links in a terminal's buffer (owner, 2026-09-19). xterm's link
@@ -169,10 +177,14 @@ export function attachLinkPaint(
       quick += line.translateToString(r === last)
     }
     // OSC 8 links first: their labels need not look like links at all.
+    const taken: RowPiece[] = []
     for (const s of opts.spans?.(first, last) ?? []) {
       if (!standing(s)) continue
       for (const p of spanRows(s, term.cols))
-        if (p.line >= first && p.line <= last) paintRow(p.line, p.x, p.width, ink)
+        if (p.line >= first && p.line <= last) {
+          paintRow(p.line, p.x, p.width, ink)
+          taken.push(p)
+        }
     }
     if (!/[\\/.]/.test(quick)) return // no URL and no path can be here
     // Built cell by cell, because a wide character is one character and TWO
@@ -193,14 +205,19 @@ export function attachLinkPaint(
     const links = find(text)
     if (opts.asked?.()) noteWaiting(first)
     for (const link of links) {
+      const pieces: RowPiece[] = []
       let from = link.start
       while (from < link.end) {
         const row = cells[from].row
         let to = from
         while (to + 1 < link.end && cells[to + 1].row === row) to += 1
-        paintRow(row, cells[from].x, cells[to].x + cells[to].w - cells[from].x, ink)
+        pieces.push({ line: row, x: cells[from].x, width: cells[to].x + cells[to].w - cells[from].x })
         from = to + 1
       }
+      // An OSC 8 label that is itself a URL is painted once, as the span: two
+      // coats of the same ink and two underlines otherwise.
+      if (piecesOverlap(pieces, taken)) continue
+      for (const p of pieces) paintRow(p.line, p.x, p.width, ink)
     }
   }
 

@@ -14,6 +14,8 @@ export const CH = {
   data: 'term:data',
   agent: 'term:agent',
   agentLook: 'term:agent-look',
+  /** Send one session's next agent answer, changed or not. */
+  agentAgain: 'term:agent-again',
   exit: 'term:exit',
   clipboardRead: 'clipboard:read',
   clipboardWrite: 'clipboard:write',

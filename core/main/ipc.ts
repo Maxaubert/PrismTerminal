@@ -1,7 +1,7 @@
 import { CH } from '../shared/channels'
 import { OSC52_MAX } from '../shared/termLimits'
 import { validResume } from './agentResume'
-import { pollAgentsNow, pollAgentsSoon, startAgentPoll } from './agentPoll'
+import { pollAgentAgain, pollAgentsNow, pollAgentsSoon, startAgentPoll } from './agentPoll'
 import { detectShells } from './shells'
 import { cdTerm, killTerm, prewarmShell, resizeTerm, spawnTerm, writeTerm, type ClaudePluginEnv } from './terminal'
 import { openTermPath, pathKinds, PATHS_MAX, type PathOpeners } from './termPathOpen'
@@ -125,6 +125,11 @@ export function registerTermIpc(deps: TermIpcDeps): () => void {
 
   // A title claimed an agent the poll has not seen (#73): look now.
   ipcMain.on(CH.agentLook, () => pollAgentsNow())
+  // The shell's prompt took an agent's keys back, or a resume's agent was
+  // not there yet: this session's next answer is wanted, news or not.
+  ipcMain.on(CH.agentAgain, (_e: unknown, id: unknown) => {
+    if (typeof id === 'string') pollAgentAgain(id)
+  })
 
   ipcMain.on(CH.prewarm, (_e: unknown, cwd: unknown, shellId: unknown, hooks: unknown) => {
     if (typeof cwd !== 'string') return

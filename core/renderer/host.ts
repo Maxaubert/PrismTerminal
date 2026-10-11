@@ -42,6 +42,10 @@ export interface TermApi {
   /** Ask the process poll to look NOW, past its backoff (#73). Optional so a
    *  host bridge without it still builds; the poll then finds agents late. */
   termAgentLook?(): void
+  /** Ask the poll for this session's NEXT answer, sent even if unchanged.
+   *  Optional like the look: without it a Codex started again between two
+   *  looks waits for its title to give its keys back. */
+  termAgentAgain?(id: string): void
   onTermExit(cb: (id: string) => void): () => void
   readClipboard(): ClipboardRead
   /** Text onto the clipboard through main, for when the page itself is refused
