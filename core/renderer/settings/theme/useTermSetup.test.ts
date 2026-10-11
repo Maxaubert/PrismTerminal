@@ -66,12 +66,15 @@ describe('the setup Save changes judges (#156 review)', () => {
     expect(termSetupState().dirty).toBe(true)
   })
 
-  it('a save under an opaque light pick keeps the Custom at its own level', () => {
+  it('a save under an opaque light pick is clean afterwards', () => {
     saveCustomTermTheme({ bg: '#111111', fg: '#eeeeee', cursor: '#ff0000', ansi: {}, acrylic: true })
     setTermThemeId('custom')
     setTermAcrylic(true)
     picked = '#ffffff'
     saveTermSetup()
-    expect(customTermTheme()?.bg).toBe('#111111b9')
+    // The level the window painted (white's d1), not the Custom's own b9:
+    // saving b9 left Save changes lit after every save.
+    expect(customTermTheme()?.bg).toBe('#111111d1')
+    expect(termSetupState().dirty).toBe(false)
   })
 })

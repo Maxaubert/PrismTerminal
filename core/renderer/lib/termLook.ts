@@ -497,15 +497,16 @@ function rawGroundAlpha(): number {
  * through a save (the Opacity slider was carried in the setup the same way).
  * Where the host's style owns the glass (Prism), the palette as it is.
  *
- * The default see-through is measured from the PALETTE's own ground, not the
- * picked Background (review of #156): a dark Custom saved under an opaque
- * white pick keeps the dark level, the one it paints by itself, and the one
- * Save changes' dirty check expects. Without an opaque pick the two are the
- * same ground, so this is `termGroundAlpha()`.
+ * It is the alpha the WINDOW paints (`termGroundAlpha`), the default measured
+ * from the picked Background where one is in force: what the user saw is what
+ * is saved, and what Save changes' dirty check reads back. Measuring from the
+ * palette's own ground instead (review of #156) saved a dark Custom under an
+ * opaque white pick at b9 while the window and the check stayed at d1, so
+ * Save changes stayed lit after every save.
  */
 export function withGroundAlpha<T extends { bg: string }>(palette: T): T {
   if (!hostOwnsWindowAcrylic()) return palette
-  return { ...palette, bg: withAlpha(palette.bg, paintsAlpha(rawGroundAlpha(), opaque(palette.bg), termAcrylicInForce())) }
+  return { ...palette, bg: withAlpha(palette.bg, termGroundAlpha()) }
 }
 
 export function saveCustomTermTheme(theme: CustomTermTheme): void {
