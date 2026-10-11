@@ -1713,6 +1713,16 @@ const scenarios = {
       // Fixed and Dynamic both hold.
       const widths = () => page.evaluate(() => [...document.querySelectorAll('[data-tab]')].map((t) => Math.round(t.getBoundingClientRect().width)))
       const dyn = await widths()
+      // A CLICK MOVES NOTHING (#164; owner, 2026-10-10: "when you click tabs
+      // the ui shifts"). The tab in front is semi-bold here, and under Dynamic
+      // a heavier name was a wider tab that pushed the rest along.
+      const edgesX = () => page.evaluate(() => [...document.querySelectorAll('[data-tab]')].map((t) => { const r = t.getBoundingClientRect(); return [r.left, r.right].map((v) => Math.round(v * 2) / 2) }))
+      const before = await edgesX()
+      await page.locator('[data-tab]').nth(3).locator('[role="tab"]').click()
+      await sleep(200)
+      const after = await edgesX()
+      ok(JSON.stringify(before) === JSON.stringify(after), `Powerline, Dynamic: clicking a tab moves no tab (${JSON.stringify(before)} vs ${JSON.stringify(after)})`)
+      await backToFirst(page)
       await (await gotoPref(page, 'tab-width')).locator('[data-seg="fixed"]').click()
       await backToFirst(page)
       const fixed = await widths()
@@ -2336,6 +2346,19 @@ const scenarios = {
     const alt = 'https://example.org/alt/path?x=1'
     await typeLine(page, `Write-Host -NoNewline "$([char]27)[?1049h$([char]27)[H"; Write-Host 'open ${alt} here'`)
     ok(await until(async () => (await inked(BLUE)).includes(alt), 8000), 'on the alternate screen a printed link wears the link blue')
+    // HOVER AND LEAVE KEEP IT (#163; owner's recording, 2026-10-10: a hovered
+    // link in Claude Code's fullscreen view "turn[s] white" until a scroll).
+    // xterm underlines a hovered link by REPLACING the row's contents, with
+    // no onRender, which wiped the ink.
+    const box = await page.locator('.xterm-rows > div span', { hasText: 'example.org' }).first().boundingBox()
+    if (box) {
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await new Promise((r) => setTimeout(r, 600))
+      ok((await inked(BLUE)).includes(alt), 'a hovered link on the alternate screen keeps the link blue')
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height * 6)
+      await new Promise((r) => setTimeout(r, 600))
+      ok((await inked(BLUE)).includes(alt), 'and keeps it once the pointer leaves, with no scroll')
+    } else ok(false, 'the alternate-screen link is on screen to hover')
     await typeLine(page, `Write-Host -NoNewline "$([char]27)[H$([char]27)[2Kplain words where the link was"`)
     ok(
       await until(async () => !(await inked(BLUE)).some((t) => t.includes('plain') || t.includes('words')), 8000),

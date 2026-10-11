@@ -424,7 +424,14 @@ export function TabStrip({
               // tab, up to 14rem, as before #35.
               // CENTRED in both widths (owner, 2026-09-28), and never under
               // four characters wide, so a one-letter name is not a sliver.
-              className={`relative z-[1] min-w-[4ch] truncate py-1 text-center ${width === 'fixed' ? 'flex-1' : 'max-w-[14rem]'} ${
+              // THE WEIGHT NEVER MOVES THE STRIP (#164; owner, 2026-10-10: "when
+              // you click tabs the ui shifts"). The name goes semi-bold in front
+              // on Powerline and on a Full fill, and a heavier name is a wider
+              // tab under Fit, which pushed every tab after it. An invisible,
+              // zero-height semi-bold copy (`::after`, so never in the text)
+              // holds every name at its semi-bold width.
+              data-label={labels[i]}
+              className={`relative z-[1] min-w-[4ch] truncate py-1 text-center after:invisible after:block after:h-0 after:overflow-hidden after:font-semibold after:content-[attr(data-label)] ${width === 'fixed' ? 'flex-1' : 'max-w-[14rem]'} ${
                 filled || (prompt && on) ? 'font-semibold' : ''
               } ${prompt ? 'pl-1' : ''}`}
               style={ink ? { color: ink } : undefined}
