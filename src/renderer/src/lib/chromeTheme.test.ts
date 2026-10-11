@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CHROME_COLOUR_TOKENS, chromeTokens } from './chromeTheme'
-import { TERM_PRESETS, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
+import { TERM_PRESETS, presetAccent, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
+import { SEE_THROUGH_ALPHA, seeThroughAlpha } from '@core/renderer/lib/seeThrough'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
 import { composite } from '@core/renderer/lib/colour'
 import { groundMode } from '@core/renderer/lib/termReplies'
@@ -91,11 +92,17 @@ describe('chromeTokens', () => {
     expect(chromeTokens(resolveTermTheme('prism')).vars['--p-bg']).toMatch(/^#[0-9a-f]{6}$/i)
     const glass = chromeTokens(resolveTermTheme('prism'), 153 / 255).vars
     // One sheet: the ground, the title bar and the strip carry the same alpha.
-    for (const name of ['--p-bg', '--p-side', '--p-title', '--p-tabs']) {
+    for (const name of ['--p-bg', '--p-title', '--p-tabs']) {
       expect(glass[name], name).toMatch(/^#[0-9a-f]{6}99$/i)
     }
     // The active tab sits ON the strip: a second coat would be a darker tab.
     expect(glass['--p-tab-active']).toMatch(/^#[0-9a-f]{6}00$/i)
+    // The settings rail sits ON the settings page, which paints the sheet: a
+    // second coat made the rail near solid under See-through (owner,
+    // 2026-10-11: "not all things change ... like the sidebar in settings").
+    expect(glass['--p-side']).toMatch(/^#[0-9a-f]{6}00$/i)
+    // Opaque, it is the ground itself, as before.
+    expect(chromeTokens(resolveTermTheme('prism')).vars['--p-side']).toBe(chromeTokens(resolveTermTheme('prism')).vars['--p-bg'])
     // What a menu paints, and what the maths measures, stays flat.
     expect(glass['--p-side-flat']).toMatch(/^#[0-9a-f]{6}$/i)
     expect(glass['--p-bg-solid']).toMatch(/^#[0-9a-f]{6}$/i)
@@ -147,8 +154,8 @@ describe('the window edges', () => {
     expect(dark['--p-divider']).toBe('#ffffff12')
     expect(dark['--p-line']).toBe('#ffffff17')
     const light = chromeTokens(resolveTermTheme('github')).vars
-    expect(light['--p-divider']).toBe('#0000001a')
-    expect(light['--p-line']).toBe('#0000001f')
+    expect(light['--p-divider']).toBe('#00000026')
+    expect(light['--p-line']).toBe('#0000002b')
     for (const id of ['prism', 'github']) {
       const t = resolveTermTheme(id)
       expect(chromeTokens(t, 1, undefined, 'hairline').vars).toEqual(chromeTokens(t).vars)
@@ -244,6 +251,18 @@ describe('a see-through accent', () => {
     const open = chromeTokens(resolveTermTheme(id), 1, undefined, 'hairline', '#e07a2f80').vars
     expect(vars['--p-sel-bg']).toBe(composite(open['--p-sel-bg'], vars['--p-bg-solid']))
   })
+  // #156: the switch alone paints every preset at Prism's default see-through,
+  // so every preset is held to its text there, on the theme's own accent.
+  it.each(TERM_PRESETS.map((p) => [p.id, p.bg]))('%s: legible at its default see-through', (id, bg) => {
+    const a = seeThroughAlpha(bg)
+    const { vars } = chromeTokens(resolveTermTheme(id), a, presetAccent(id))
+    expect(vars['--p-bg']).toMatch(a === SEE_THROUGH_ALPHA.dark ? /^#[0-9a-f]{6}b9$/ : /^#[0-9a-f]{6}d1$/)
+    for (const t of ['--p-text', '--p-dim', '--p-on-accent', '--p-accent', '--p-sel-bg'])
+      expect(vars[t], t).toMatch(/^#[0-9a-f]{6}$/)
+    expect(contrastRatio(vars['--p-text'], vars['--p-bg-solid'])).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(vars['--p-on-accent'], vars['--p-accent'])).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(vars['--p-on-accent'], vars['--p-sel-bg'])).toBeGreaterThanOrEqual(4.5)
+  })
   it('--p-bg-solid is always flat, whatever the ground alpha (main is only ever sent it)', () => {
     for (const a of [0.3, 0.5, 153 / 255, 1]) {
       expect(chromeTokens(resolveTermTheme('prism'), a).vars['--p-bg-solid']).toMatch(/^#[0-9a-f]{6}$/)
@@ -252,25 +271,61 @@ describe('a see-through accent', () => {
   })
 })
 
-describe('the Prompt segments (#143)', () => {
-  it('are the text over the strip at 4% and 11%, solid on an opaque window', () => {
+// PROMPT ON THE THEME'S OWN GROUND (2026-10-10 rework): the segments' own two
+// greys are gone. An idle segment paints nothing and the tab in front is
+// --p-tab-active, exactly Classic's, so no token of their own remains.
+describe('the Prompt segments', () => {
+  it('have no tokens of their own any more, nor :root fallbacks', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
     const v = chromeTokens(resolveTermTheme('prism')).vars
-    expect(v['--p-seg']).toBe(v['--p-side-flat'])
-    expect(contrastRatio(v['--p-seg-on'], v['--p-bg'])).toBeGreaterThan(contrastRatio(v['--p-seg'], v['--p-bg']))
+    expect(v['--p-seg']).toBeUndefined()
+    expect(v['--p-seg-on']).toBeUndefined()
+    expect((CHROME_COLOUR_TOKENS as readonly string[]).filter((n) => n.startsWith('--p-seg'))).toEqual([])
+    expect(readFileSync(join(__dirname, '..', 'index.css'), 'utf8')).not.toMatch(/--p-seg/)
   })
 
-  it('on glass are the text at that alpha, so a segment is one step over the sheet', () => {
-    const v = chromeTokens(resolveTermTheme('prism'), 0.6).vars
-    expect(v['--p-seg']).toBe(v['--p-text'] + '0a')
-    expect(v['--p-seg-on']).toBe(v['--p-text'] + '1c')
-    expect(composite(v['--p-seg'], v['--p-bg-solid'])).toBe(chromeTokens(resolveTermTheme('prism')).vars['--p-seg'])
+  it('wear --p-tab-active in front and nothing at rest, in the strip source', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const src = readFileSync(join(__dirname, '..', 'components', 'TabStrip.tsx'), 'utf8')
+    expect(src).not.toMatch(/--p-seg/)
+    const shape = src.slice(src.indexOf('data-prompt-shape'), src.indexOf('style={{ clipPath: segmentClip'))
+    expect(shape).toMatch(/on \? 'bg-\[var\(--p-tab-active\)\]' : 'group-hover:bg-\[var\(--p-hover\)\]'/)
+  })
+})
+
+// THE ON SWITCH'S KNOB (owner, 2026-10-10: "keep that to being black on dark
+// themes and white on light themes ... only when the color is very close").
+describe('the switch knob token', () => {
+  it('is black on a dark theme, white on a light one, on the presets', () => {
+    expect(chromeTokens(resolveTermTheme('pt-default')).vars['--p-switch-knob']).toBe('#0b0b0f')
+    expect(chromeTokens(resolveTermTheme('paper')).vars['--p-switch-knob']).toBe('#ffffff')
   })
 
-  it('match the :root fallbacks index.css carries for the default prism preset', async () => {
+  it('flips only where the default reads under 2:1 on the ON track', () => {
+    // Every preset's knob reads at least 2:1 on its track.
+    for (const p of TERM_PRESETS) {
+      const v = chromeTokens(resolveTermTheme(p.id)).vars
+      expect(contrastRatio(v['--p-switch-knob'], v['--p-sel-bg']), p.id).toBeGreaterThanOrEqual(2)
+    }
+    // An opaque accent is held to 3:1 on the ground, which keeps it clear of the
+    // default knob too; a SEE-THROUGH one (#114) is a fill that can sit close
+    // to it. A very light blue on a light theme: a black knob.
+    const track = (v: Record<string, string>): string => composite(v['--p-sel-bg'], v['--p-bg-solid'])
+    const pale = chromeTokens(resolveTermTheme('paper'), 1, undefined, 'hairline', '#cfe4ff80').vars
+    expect(contrastRatio('#ffffff', track(pale))).toBeLessThan(2)
+    expect(pale['--p-switch-knob']).toBe('#0b0b0f')
+    // A very dark grey accent on a dark theme: a white knob.
+    const dark = chromeTokens(resolveTermTheme('pt-default'), 1, undefined, 'hairline', '#2a2c3080').vars
+    expect(contrastRatio('#0b0b0f', track(dark))).toBeLessThan(2)
+    expect(dark['--p-switch-knob']).toBe('#ffffff')
+  })
+
+  it('matches the :root fallback index.css carries for the default prism preset', async () => {
     const { readFileSync } = await import('node:fs')
     const { join } = await import('node:path')
     const css = readFileSync(join(__dirname, '..', 'index.css'), 'utf8')
-    const v = chromeTokens(resolveTermTheme('prism')).vars
-    for (const name of ['--p-seg', '--p-seg-on']) expect(css).toContain(`${name}: ${v[name]};`)
+    expect(css).toContain(`--p-switch-knob: ${chromeTokens(resolveTermTheme('prism')).vars['--p-switch-knob']};`)
   })
 })

@@ -28,6 +28,7 @@ export interface AppOption {
 export const APP_OPTIONS: readonly AppOption[] = [
   { id: 'tab-width', label: 'Tab width', sub: 'Sized to the name, or all equal.', section: 'window', page: 'appearance', icon: 'tabs', keywords: 'size wide narrow equal fixed dynamic', store: ['prism.window.tabWidth'] },
   { id: 'tab-style', label: 'Tab style', sub: 'Flat tabs, or arrows like a prompt.', section: 'window', page: 'appearance', icon: 'prompt', keywords: 'chevron arrow segment shape powerline classic', store: ['prism.window.tabStyle'] },
+  { id: 'tab-switch', label: 'Tab switching', sub: 'Which tab comes next when you switch.', section: 'window', page: 'appearance', icon: 'key', keywords: 'ctrl tab mru recent order cycle switch next previous last used', store: ['prism.window.tabSwitch'] },
   { id: 'title-bar', label: 'Show title bar', sub: 'When off, tabs share the top row.', section: 'window', page: 'appearance', icon: 'titlebar', keywords: 'caption top frame hide hidden', store: ['prism.window.titleBar'] },
   { id: 'window-edges', label: 'Panel edges', sub: 'Lines between panels and around the window.', section: 'window', page: 'appearance', icon: 'edges', keywords: 'border lines hairline outline faint solid', store: ['prism.window.edges'] },
   { id: 'window-background', label: 'Background colour', sub: 'Behind the text in window and terminal.', section: 'theme', page: 'appearance', icon: 'viewer', keywords: 'ground backdrop color transparent alpha opacity', store: ['prism.window.background'] },

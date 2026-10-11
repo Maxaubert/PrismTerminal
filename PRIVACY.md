@@ -10,7 +10,9 @@ To find out why the app froze or failed, Prism Terminal keeps a log on your PC
 (`%APPDATA%\PrismTerminal\logs`, at most 10 MB, the oldest part removed as it grows): when the
 window or the app was slow and for how long, errors, and a timeline of what you did in the app
 (a tab opened, closed or switched, a Settings page, an update, dictation starting and stopping, a
-shell starting and ending). Folder paths are written in full. What you type, what you copy and
+shell starting and ending), and what each tab's agent indicator showed and why (states such as
+working or finished, never what is on the screen, in a title or in the conversation). Folder paths
+are written in full. What you type, what you copy and
 what you say are never written to it. The log is **never sent anywhere**; it leaves your PC only if
 you send it yourself. Settings > Diagnostics opens its folder, and has a switch for more detail.
 

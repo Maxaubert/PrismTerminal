@@ -218,6 +218,19 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   **Ctrl+W closes a tab, in BOTH apps** (owner, 2026-09-19, reversing the first build's
   Ctrl+Shift+W, which still works). Known cost, accepted: the shell loses delete-word on that chord;
   Ctrl+Backspace does the same job.
+- <a id="most-recent-commits-on-release"></a>**MOST RECENT COMMITS ON CTRL RELEASE** (#158; owner, 2026-10-10: "add a
+  new tab switching mode called most recent. so you can either switch chronologically or by most
+  recently used"). Settings > Appearance > Window > Tab switching, `prism.window.tabSwitch`:
+  `order` (In order, the DEFAULT, `stepTab` exactly as before) or `recent`. In Most recent,
+  Ctrl+Tab walks a SNAPSHOT of the used list taken at the hold's first press (`lib/tabMru.ts`):
+  one press flips to the tab used before, more presses while Ctrl is held go further back,
+  Shift goes the other way. The list is reordered ONLY when the hold ends: Control's keyup
+  (window, capture), the window's blur, or any other Ctrl chord. Reordering on each press makes
+  the second Tab flip straight back (a ping-pong) and the oldest tabs unreachable. Any other
+  activation (a click, Ctrl+1..9, a new tab, a close handing over) is a use at once, and one during
+  a hold (a click with Ctrl still down, a tab opened or closed) ends the hold (`walkHolds`); closed
+  tabs leave the list. Not persisted. Listens to Control's keyup only, never `onData` (rule 10). Held by
+  `tabMru.test.ts`, `tabSwitchPrefs.test.ts` and the `tabSwitch` e2e.
 - <a id="window-edge-hairline"></a>**The window's edge is a faint hairline that follows the theme** (owner, same day;
   `windowEdge.ts` + Prism's `dwmHelper.ts`). DWM's border is always one physical pixel, so it cannot
   be thinner; what reads as thickness is contrast, so it is drawn a small step off the theme's own
@@ -239,7 +252,8 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   the choice is applied ONCE, where `chromeTokens` derives those two, and no component knows the
   setting exists. The numbers are in `src/shared/windowEdges.ts` (shared because main reads them
   too): hairline is 7/10% and 9/12% (dark/light), EXACTLY what was hard-coded before, so nobody's
-  window changed; faint (2.2/3.5%) and solid (16/18%) are Prism's `faint` and `strong`, the owner's
+  window changed (2026-10-11: the LIGHT column raised to 15% and 17%, faint 5%, solid 26%, the
+  owner finding light edges "too faint"); faint (2.2/3.5%) and solid (16/18%) are Prism's `faint` and `strong`, the owner's
   word for the latter being Solid; none is alpha 00, still a colour, so a border keeps its width
   and nothing shifts (the e2e compares the layout across all four). Unlike Prism, `--p-line`
   follows too: the owner asked for every edge, and "no edges" with ruled settings rows is half a
@@ -277,15 +291,25 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   THE THEME'S ACCENT** (#138; owner, 2026-10-07: "toggles differ in look i like the teal with black
   not the green and white", then "yes option 1 but it should depend on the theme so only teal on the
   teal theme"). This narrows #42 for switches only: `SWITCH_ON` is `--p-sel-bg` (the accent as a
-  fill, moved until `--p-on-accent` clears 4.5:1 on it, the update chip's pair) and
-  `SWITCH_KNOB_ON` is `--p-on-accent` (near-black on a bright accent, white on a dark one); dimmed
+  fill, moved until `--p-on-accent` clears 4.5:1 on it, the update chip's pair). **THE KNOB FOLLOWS
+  THE THEME, NOT THE ACCENT** (#154; owner, 2026-10-10: "keep that to being black on dark themes and
+  white on light themes ... only when the color is very close"): `SWITCH_KNOB_ON` is
+  `var(--p-switch-knob, var(--p-on-accent))`, and `--p-switch-knob` (`chromeTokens`, rule in
+  `core/renderer/lib/switchKnob.ts`) is near-black `#0b0b0f` when the GROUND is dark (luminance 0.4 or
+  under, measured, never a name) and white when it is light, flipped to the opposite only where that
+  reads under 2:1 on the ON track as the eye sees it. Decided per colour, never per frame. An opaque
+  accent is held to 3:1 on the ground, which keeps it off the default knob, so the flip shows on a
+  see-through accent (a pale one on Paper: black; a deep one on PT Default: white). Prism defines no
+  `--p-switch-knob` yet and keeps its `--p-on-accent` knob. Dimmed
   when disabled, lifted on hover; off is the grey track and white knob as before. Still accented, since they are not
   buttons: Reset links, the chosen theme card, the dropdown's chosen item, the badges, progress, the
   hotkey capture while it listens, a found row's flash. NOT the rail's chosen page any more (#134,
   owner: no accent bar): a grey `--p-hover-hi` fill; and focus in the new rows is a fill and a
   lighter edge, not an accent ring (Prism #272). `neutralControls.test.ts` holds the
   source; the `accent` e2e asserts a picked accent moves neither the row button nor the segment, and that an
-  on switch is `--p-sel-bg` with an `--p-on-accent` knob on PT Default, a picked accent and Paper.
+  on switch is `--p-sel-bg` with the `--p-switch-knob` rule's knob on PT Default, a picked accent,
+  Paper, a very light see-through accent on Paper and a very dark one (see-through and opaque) on PT
+  Default; `switchKnob.test.ts` and `switchAccent.test.ts` hold the rule on every preset.
 - <a id="pt-default-theme"></a>**PT DEFAULT IS THE DEFAULT THEME HERE, AND FIRST IN THE WALL** (owner, 2026-09-22, handing over the palette he had saved as
   Custom: "let this be the default theme ... for prism terminal"): Wombat's colours on #121212, the
   two blacks lifted, the icon's orange `#fe8f34` as the accent. A core preset like any other, and

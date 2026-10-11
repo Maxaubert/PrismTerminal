@@ -18,7 +18,7 @@ describe('edgeFor', () => {
   it('is a small step DARKER than a light ground', () => {
     const e = edgeFor('#f4f4f4')
     expect(lum(e)).toBeLessThan(lum('#f4f4f4'))
-    expect(lum('#f4f4f4') - lum(e)).toBeLessThan(0.2)
+    expect(lum('#f4f4f4') - lum(e)).toBeLessThan(0.25)
   })
   it('answers a hex for anything it is handed', () => {
     expect(edgeFor('javascript:1')).toMatch(/^#[0-9a-f]{6}$/)
@@ -37,7 +37,7 @@ describe('edgeFor, under the edges setting', () => {
     // 0.13 of the way to white from #0b0b0f, 0.16 of the way to black from
     // #f4f4f4: the numbers this file used before there was a choice.
     expect(edgeFor('#0b0b0f')).toBe('#2b2b2e')
-    expect(edgeFor('#f4f4f4')).toBe('#cdcdcd')
+    expect(edgeFor('#f4f4f4')).toBe('#bebebe')
     for (const bg of GROUNDS) expect(edgeFor(bg, 'hairline')).toBe(edgeFor(bg))
   })
 

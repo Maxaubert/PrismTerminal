@@ -152,6 +152,11 @@ only when Prism's checks are green, so either would stall the pipeline. The spli
 
 ## 3. The marks, state by state
 
+> **Amended 2026-10-10 (#154, [the full-style rework](2026-10-10-full-style-rework-design.md)).** Full no
+> longer has the badge or the ride: finished is the icon's rainbow, solid, flowing across the whole tab;
+> working is the fill with Minimal's own mark on top (on Classic the run in the NAME'S ink, on Prompt
+> the growing edge in a shade clearing 3:1 on fill and ground). The rows below are kept as history.
+
 `state` is what TabStrip already works out, unchanged: working (any tab, active included), else
 question > failed > done, each only on a tab not looked at and behind its switch. Colours are
 `useAgentColors()` as today; `rule` is `--p-accent-hi`.
@@ -192,6 +197,9 @@ question > failed > done, each only on a tab not looked at and behind its switch
   `margin-right: 4px` before the +. Fixed width: `flex: 0 1 122px`, min 72 px. Dynamic width: the
   label sizes the segment as Classic does, plus the arrow's room.
 - Segments are `--p-seg`; the tab in front is `--p-seg-on`, its name bold.
+- **Amended 2026-10-10 (#154):** `--p-seg` and `--p-seg-on` are gone. Segments are the theme's own
+  tab ground exactly like Classic: an idle segment paints nothing, the tab in front is
+  `--p-tab-active`. See [the full-style rework](2026-10-10-full-style-rework-design.md).
 - **The edge band** is drawn in the STRIP, behind the segments, from 1 px inside this segment to
   1 px inside the next, so both segments' own shapes cut it and it fills the gap flush, tip to both
   corners. The last segment's band stops on the notch line it would have. Bands are placed from the
