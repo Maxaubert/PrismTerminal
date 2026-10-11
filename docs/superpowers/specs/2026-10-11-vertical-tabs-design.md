@@ -63,6 +63,23 @@ looked at on the way).
   holds the window buttons and moves the window. The sidebar's empty space no longer does. With the
   sidebar collapsed the row spans the window.
 
+- **Final, the same night: the pop-out bar, done well** (owner: "a pop out title bar is best actually
+  we just need to do it well ... like zen browser's title bar ... when the sidebar is open the
+  titlebar drops down but only from the sidebar edge and all the way to the right ... make sure the
+  titlebar area is usable for content"; his screen recording of Zen, `Videos/2026-10-11 23-26-24.mp4`).
+  The terminal has the whole height; the bar drops over it within 16 px of the top, from the open
+  sidebar's edge to the right (the whole width when it is collapsed), with only the window buttons,
+  and moves the window while down. The clear bar is gone.
+  - **Why the first pop-out bar could not be dragged** (measured with WM_NCHITTEST): it slid with a CSS
+    transform, and Windows is told where a drag region is from the layout, so the region stayed where
+    the slide started, above the window. It now slides by `top`; the collapsed sidebar slides by
+    `left` for the same reason.
+  - The sidebar shows within 24 px of the left edge (was 8), the bar within 16 px of the top, both
+    after 60 ms (was 90) ("it reacts a bit too late ... could be better if it was like 20px further
+    into the window").
+  - A 36 px strip above the tabs moves the window ("the tabs should start a bit further down on the
+    sidebar so that you can grab that area").
+
 ## 2. The indicators
 
 - **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new

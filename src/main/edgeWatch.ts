@@ -17,7 +17,7 @@ import type { BrowserWindow, Point, Rectangle } from 'electron'
 
 /** How far inside the content edge counts as "at" it, and how far outside it
  *  (the resize border's own band), in DIPs. */
-export const EDGE = { inside: 10, outside: 8, everyMs: 60 } as const
+export const EDGE = { top: 16, left: 24, outside: 8, everyMs: 50 } as const
 
 export interface EdgeNear {
   top: boolean
@@ -35,8 +35,8 @@ export function edgeNear(cursor: Point, content: Rectangle, zone = EDGE): EdgeNe
   const across = x >= -zone.outside && x < content.width + zone.outside
   const down = y >= -zone.outside && y < content.height + zone.outside
   return {
-    top: across && y >= -zone.outside && y < zone.inside,
-    left: down && x >= -zone.outside && x < zone.inside,
+    top: across && y >= -zone.outside && y < zone.top,
+    left: down && x >= -zone.outside && x < zone.left,
     x,
     y
   }

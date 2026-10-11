@@ -13,6 +13,8 @@ import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { useTabLayout } from './lib/tabLayoutPrefs'
+import { useSidebarMode, useSidebarWidth } from './lib/sidebarPrefs'
+import { HoverTitleBar } from './components/HoverTitleBar'
 import TitleBar, { AppButtons, TitleButtons, WindowButtons } from './components/TitleBar'
 import { useTitleBarMode } from './lib/titleBarPrefs'
 import { tabSwitch } from './lib/tabSwitchPrefs'
@@ -165,6 +167,8 @@ export default function App(): JSX.Element {
   // the window buttons float at the top right. With no tab open there is no
   // sidebar, so the window keeps #91's top row to be moved by.
   const bare = vertical && titleBar === 'hidden' && state.tabs.length > 0
+  const sidebarOpen = useSidebarMode() === 'open'
+  const sidebarWidth = useSidebarWidth()
   /** Which shell each tab was SPAWNED with. The Shell setting only names what
    *  the next terminal launches, so a tab opened before it was changed still
    *  speaks its old language, and the popup preselects by what is running. */
@@ -722,25 +726,6 @@ export default function App(): JSX.Element {
         />
       )}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      {/* A TITLE BAR YOU CANNOT SEE (owner, 2026-10-11: "there should be a
-          title bar to drag from not the sidebar. how about making it
-          transparent"): with the tabs down the side and the title bar off,
-          the row over the terminal is the terminal's own ground, no line, no
-          name, and moves the window; the three window buttons (and the update
-          chip, when there is one) sit at its right. Over the terminal only,
-          so the sidebar keeps its tabs at the top; with the sidebar collapsed
-          that is the whole width. */}
-      {bare && (
-        <div
-          data-title-bar="clear"
-          className="drag flex h-8 shrink-0 items-center justify-end gap-2.5 bg-[var(--p-bg)] pr-1"
-        >
-          {chip}
-          <div data-window-buttons className="no-drag flex items-center gap-1">
-            <WindowButtons />
-          </div>
-        </div>
-      )}
       <div
         className="relative min-h-0 min-w-0 flex-1"
         data-term-host
@@ -821,6 +806,22 @@ export default function App(): JSX.Element {
       </div>
       </div>
       </div>
+      {/* THE TITLE BAR THAT POPS OUT (owner, 2026-10-11: "a pop out title bar
+          is best actually we just need to do it well ... like zen browser's
+          title bar ... when the sidebar is open the titlebar drops down but
+          only from the sidebar edge and all the way to the right"). With the
+          tabs down the side and the title bar off, the terminal has the whole
+          height ("the titlebar area is usable for content"); the bar drops
+          over it at the top edge with the window's buttons, and moves the
+          window while it is down. */}
+      {bare && (
+        <HoverTitleBar hold={!!update.state.notice} left={sidebarOpen ? sidebarWidth : 0}>
+          {chip}
+          <div data-window-buttons className="no-drag flex items-center gap-1">
+            <WindowButtons />
+          </div>
+        </HoverTitleBar>
+      )}
 
       {termMenu && activeShell && termMenu.id === activeShell.id && (
         <ContextMenu
