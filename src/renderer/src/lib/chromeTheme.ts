@@ -223,7 +223,11 @@ export function chromeTokens(
   const vars: Record<string, string> = {
     '--p-bg-solid': bg,
     '--p-bg': sheet,
-    '--p-side': sheet,
+    // The settings rail sits ON the settings page, which already paints the
+    // sheet, so on glass it paints NOTHING, as the active tab does: a second
+    // coat of b9 is 92%, solid to the eye (owner, 2026-10-11: "not all things
+    // change when you turn on see through window, like the sidebar").
+    '--p-side': glass ? bg + '00' : bg,
     '--p-side-flat': flat,
     '--p-title': sheet,
     '--p-tabs': sheet,

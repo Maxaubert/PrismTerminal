@@ -84,11 +84,17 @@ describe('chromeTokens', () => {
     expect(chromeTokens(resolveTermTheme('prism')).vars['--p-bg']).toMatch(/^#[0-9a-f]{6}$/i)
     const glass = chromeTokens(resolveTermTheme('prism'), 153 / 255).vars
     // One sheet: the ground, the title bar and the strip carry the same alpha.
-    for (const name of ['--p-bg', '--p-side', '--p-title', '--p-tabs']) {
+    for (const name of ['--p-bg', '--p-title', '--p-tabs']) {
       expect(glass[name], name).toMatch(/^#[0-9a-f]{6}99$/i)
     }
     // The active tab sits ON the strip: a second coat would be a darker tab.
     expect(glass['--p-tab-active']).toMatch(/^#[0-9a-f]{6}00$/i)
+    // The settings rail sits ON the settings page, which paints the sheet: a
+    // second coat made the rail near solid under See-through (owner,
+    // 2026-10-11: "not all things change ... like the sidebar in settings").
+    expect(glass['--p-side']).toMatch(/^#[0-9a-f]{6}00$/i)
+    // Opaque, it is the ground itself, as before.
+    expect(chromeTokens(resolveTermTheme('prism')).vars['--p-side']).toBe(chromeTokens(resolveTermTheme('prism')).vars['--p-bg'])
     // What a menu paints, and what the maths measures, stays flat.
     expect(glass['--p-side-flat']).toMatch(/^#[0-9a-f]{6}$/i)
     expect(glass['--p-bg-solid']).toMatch(/^#[0-9a-f]{6}$/i)

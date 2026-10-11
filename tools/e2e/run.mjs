@@ -4368,6 +4368,29 @@ const scenarios = {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
     const sheet = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--p-bg').trim().toLowerCase())
+    /** How much of the desktop a surface hides: its own background and every
+     *  box behind it, composited (1 is solid, 0 is clear). */
+    const coats = () =>
+      page.evaluate(() => {
+        const alpha = (c) => {
+          const m = /rgba?\(([^)]+)\)/.exec(c)
+          if (!m) return 0
+          const p = m[1].split(/[\s,/]+/).filter(Boolean)
+          return p.length > 3 ? parseFloat(p[3]) : 1
+        }
+        const seen = (el) => {
+          if (!el) return -1
+          let keep = 1
+          for (let n = el; n; n = n.parentElement) keep *= 1 - alpha(getComputedStyle(n).backgroundColor)
+          return Math.round((1 - keep) * 1000) / 1000
+        }
+        return {
+          strip: seen(document.querySelector('[data-tab-strip]')),
+          row: seen(document.querySelector('[data-title-bar]')),
+          rail: seen(document.querySelector('nav[aria-label="Settings pages"]')),
+          page: seen(document.querySelector('[data-settings-page] .p-scroll'))
+        }
+      })
     const sw = page.locator('[data-pref="term-acrylic"] [role="switch"]')
     const sub = () => page.locator('[data-pref="term-acrylic"] [title]').first().getAttribute('title')
     const bgRow = page.locator('[data-pref="window-background"]')
@@ -4401,11 +4424,27 @@ const scenarios = {
       ok((await sw.getAttribute('aria-label')) === 'See-through window', `it is called See-through window (${await sw.getAttribute('aria-label')})`)
       ok((await sub()) === 'The desktop shows behind every surface.', `with Prism's words (${await sub()})`)
 
+      // The tabs in the top row (the owner's layout): the row and the strip
+      // in it are two boxes over one pixel.
+      const tb = await gotoPref(page, 'title-bar')
+      await tb.locator('[role="switch"]').click()
+      ok(!!(await until(async () => (await page.locator('[data-title-bar="tabs"]').count()) === 1, 4000, 50)), 'the tabs moved into the top row')
+      await gotoPref(page, 'term-acrylic')
+      if ((await more.count()) === 1) await more.click()
+
       // A dark preset: the switch alone paints 0xb9.
       await pick('dracula')
       ok(/^#[0-9a-f]{6}$/.test(await sheet()), `off, the window is solid (${await sheet()})`)
       await sw.click()
       ok(!!(await until(async () => /^#[0-9a-f]{6}b9$/.test(await sheet()), 4000, 50)), `on a dark preset the switch alone paints alpha b9 (${await sheet()})`)
+      // EVERY SURFACE IS ONE COAT (owner, 2026-10-11: "not all things change
+      // when you turn on see through window, like the sidebar in settings or
+      // the tab bar"). A translucent box over another translucent box is two
+      // coats, b9 twice is 92% and three times 98%: solid to the eye.
+      const one = 0xb9 / 255
+      let seen = await coats()
+      await until(async () => Object.values((seen = await coats())).every((a) => Math.abs(a - one) < 0.01), 4000, 50)
+      ok(Object.values(seen).every((a) => Math.abs(a - one) < 0.01), `on, the strip, the top row, the settings rail and its page each show the desktop through one coat at ${one.toFixed(3)} (${JSON.stringify(seen)})`)
       const dark = await alphaReads()
       ok(dark.now === '73' && dark.max === '95', `the Background's Alpha reads 73 and stops at 95 (${dark.now}, max ${dark.max})`)
 
@@ -4420,6 +4459,8 @@ const scenarios = {
       // Off is solid.
       await sw.click()
       ok(!!(await until(async () => /^#[0-9a-f]{6}$/.test(await sheet()), 4000, 50)), `switched off, the window is solid (${await sheet()})`)
+      await until(async () => Object.values((seen = await coats())).every((a) => a === 1), 4000, 50)
+      ok(Object.values(seen).every((a) => a === 1), `off, every one of them is solid (${JSON.stringify(seen)})`)
 
       // A light preset: 0xd1. A theme pick resets the switch, as every extra.
       await pick('paper')

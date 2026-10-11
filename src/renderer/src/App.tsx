@@ -762,9 +762,11 @@ export default function App(): JSX.Element {
         )}
         {/* The terminal paints its own ground (a second coat of a translucent
             --p-bg behind it reads darker than the rest of the window); the
-            pages that are not a terminal paint theirs here. */}
+            pages that are not a terminal paint theirs here, except Settings:
+            its frame paints its own, and a coat here too made the page 92%
+            solid under See-through (owner, 2026-10-11). */}
         {active?.kind === 'settings' && (
-          <div className="h-full min-h-0 w-full bg-[var(--p-bg)]">
+          <div className="h-full min-h-0 w-full">
             <Suspense fallback={null}>
               <Settings page={settingsPage} onPage={setSettingsPage} />
             </Suspense>
