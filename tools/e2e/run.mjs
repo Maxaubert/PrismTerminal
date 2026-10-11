@@ -2247,8 +2247,9 @@ const scenarios = {
             shown: f?.hasAttribute('data-title-shown') ?? false,
             bar: r ? { left: Math.round(r.left), top: Math.round(r.top), bottom: Math.round(r.bottom), right: Math.round(innerWidth - r.right) } : null,
             buttons: !!btns && !!f?.contains(btns) && !!btns.querySelector('[data-window-close]'),
-            name: (f?.textContent ?? '').includes('Prism Terminal') || !!f?.querySelector('[data-app-mark]') || !!f?.querySelector('[data-title-settings]'),
-            inFoot: !!foot?.querySelector('[data-title-settings]') && !foot?.querySelector('[data-sidebar-new]'),
+            name: (f?.textContent ?? '').includes('Prism Terminal') || !!f?.querySelector('[data-app-mark]'),
+            settings: !!f?.querySelector('[data-title-settings]'),
+            inFoot: !!foot,
             newRow: (() => {
               const n = document.querySelector('[data-sidebar-rows] [data-sidebar-new]')
               const rows = [...document.querySelectorAll('[data-tab-sidebar] [data-tab]')]
@@ -2275,7 +2276,9 @@ const scenarios = {
       ok(up.rows === 1 && !up.shown && up.bar.bottom <= 0, `the bar is up out of sight (${JSON.stringify(up.bar)})`)
       ok(up.hostTop === 0, `and the terminal has the whole height ("usable for content") (${up.hostTop})`)
       ok(up.navTop === 0 && up.firstRowTop >= 10 && up.firstRowTop <= 24, `the sidebar starts at the top, its tabs a thin strip lower (${up.firstRowTop}px)`)
-      ok(up.inFoot, 'Settings is at its foot, the + is not')
+      // Owner, 2026-10-12: "settings and that command help can stay in the
+      // title bar now that we do have a title bar".
+      ok(!up.inFoot && up.settings, 'Settings is in the dropped bar, and the sidebar has no foot')
       // Owner, 2026-10-12: "make new tab a button attached to the end of the tab
       // list and the same size as a tab".
       ok(!!up.newRow && up.newRow.last && up.newRow.h === up.newRow.tabH && up.newRow.w === up.newRow.tabW, `New tab is the list's last row, a tab's size (${JSON.stringify(up.newRow)})`)
@@ -2288,7 +2291,7 @@ const scenarios = {
       await sleep(400)
       const down = await top()
       ok(down.bar.top === 0 && Math.abs(down.bar.left - down.navRight) <= 1 && down.bar.right === 0, `from the sidebar's edge to the right, not over it (${JSON.stringify(down.bar)}, sidebar ends ${down.navRight})`)
-      ok(down.buttons && !down.name, "with the window's buttons and nothing else")
+      ok(down.buttons && down.settings && !down.name, "with Settings, Help and the window's buttons, no icon or name")
       ok((await top()).hostTop === 0, 'over the terminal, which keeps its size')
       // THE DRAG ITSELF, as Windows decides it: 2 (HTCAPTION) moves the window.
       const spots = await page.evaluate(() => {
@@ -2367,16 +2370,63 @@ const scenarios = {
       await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
       await sleep(300)
       await page.keyboard.press('Control+Shift+B')
-      await cursor(null)
-      // Settings from the sidebar, and back.
+      // Settings is in the bar now, so the bar comes down first.
+      await cursor({ x: 600, y: 4 })
+      await until(async () => (await top()).shown, 3000, 30)
+      await sleep(300)
       await (await gotoPref(page, 'title-bar')).locator('[role="switch"]').click()
-      ok(!!(await until(() => page.evaluate(() => document.querySelectorAll('[data-title-bar]').length === 1 && !document.querySelector('[data-title-bar="clear"]') && !!document.querySelector('[data-app-mark]')), 3000, 50)), 'Show title bar puts the full bar back')
+      await cursor(null)
+      ok(!!(await until(() => page.evaluate(() => document.querySelectorAll('[data-title-bar]').length === 1 && !document.querySelector('[data-title-bar="float"]')), 3000, 50)), 'Show title bar puts the full bar back')
       await setPref(page, 'tab-layout', 'horizontal')
       ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-tab-strip]') && !document.querySelector('[data-tab-sidebar]')), 3000, 50)), 'Horizontal puts the strip back')
       // With the strip, Ctrl+Shift+B is the shell's again.
       await page.keyboard.press('Control+Shift+B')
       ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open', 'with the strip, Ctrl+Shift+B does not touch the sidebar')
       await quietStrip(page)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * THE WINDOW COLOURS ARE CHANGES TO SAVE (owner, 2026-10-12: Save changes
+   * "should use the accent colour, so its never grey when there are changes to
+   * save"). A Secondary colour of your own lights Save changes in the accent;
+   * Save keeps it with Custom; another theme forgets it, and Custom brings it
+   * back. Secondary sits above Accent.
+   */
+  async windowColoursSave(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 1), 'one tab')
+      const row = await gotoPref(page, 'window-secondary')
+      const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
+      ok(order.indexOf('window-secondary') === order.indexOf('window-accent') - 1, `Secondary colour sits right above Accent (${order.slice(order.indexOf('window-background'), order.indexOf('window-background') + 3)})`)
+      const save = page.locator('[data-save-term]').first()
+      ok(await save.isDisabled(), 'nothing to save at first')
+      const field = row.locator('input:not([type])')
+      await field.fill('#2a2a2a')
+      await field.press('Enter')
+      ok(!!(await until(async () => !(await save.isDisabled()), 4000, 50)), 'a Secondary colour of your own lights Save changes')
+      await sleep(500) // the button's colour transition
+      const lit = await save.evaluate((b) => {
+        const probe = document.createElement('span')
+        probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-accent')
+        document.body.appendChild(probe)
+        const a = getComputedStyle(probe).color
+        probe.remove()
+        return { bg: getComputedStyle(b).backgroundColor, accent: a }
+      })
+      ok(lit.bg === lit.accent, `in the accent (${JSON.stringify(lit)})`)
+      await save.click()
+      const kept = await page.evaluate(() => ({ theme: localStorage.getItem('prism.term.theme'), colours: localStorage.getItem('prism.window.customColours') }))
+      ok(/2a2a2a/.test(kept.colours ?? '') && (await save.isDisabled()), `Save keeps it with Custom, and goes quiet (${JSON.stringify(kept)})`)
+      await page.locator('[data-term-card="pitch"]').first().click()
+      ok(!!(await until(async () => (await page.evaluate(() => localStorage.getItem('prism.window.secondary'))) === null, 4000, 50)), 'another theme forgets it')
+      await page.locator('[data-term-card="custom"]').first().click()
+      ok(!!(await until(async () => (await page.evaluate(() => localStorage.getItem('prism.window.secondary'))) === '#2a2a2a', 4000, 50)), 'and Custom brings it back')
+      ok(await save.isDisabled(), 'with nothing to save')
     } finally {
       await closeApp(app)
     }
@@ -2408,7 +2458,7 @@ const scenarios = {
         }
       })
     const shown = await layout()
-    ok(shown.mode !== 'tabs' && shown.mark && !shown.name && !shown.stripInBar && shown.buttons, `by default the title bar is its own row, with the app's icon in outline and no name (${JSON.stringify(shown)})`)
+    ok(shown.mode !== 'tabs' && !shown.mark && !shown.name && !shown.stripInBar && shown.buttons, `by default the title bar is its own row, with no icon and no name for now (${JSON.stringify(shown)})`)
     ok(shown.hostTop >= 64, `two rows above the terminal (${shown.hostTop}px)`)
     await page.locator('[data-title-settings]').click()
     await page.locator('[data-settings-tab="appearance"]').click()
@@ -2440,7 +2490,7 @@ const scenarios = {
     await flip.click()
     await sleep(200)
     const back = await layout()
-    ok(back.mode !== 'tabs' && back.mark, 'Shown brings the title bar back')
+    ok(back.mode !== 'tabs' && back.buttons, 'Shown brings the title bar back')
     await closeApp(app)
   },
 
@@ -4735,7 +4785,7 @@ const scenarios = {
       // window's rows above the theme and what a theme sets under it.
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
       // The see-through row sits right under the wall since #156, as Prism's.
-      const want = ['tab-layout', 'tab-width', 'tab-style', 'tab-switch', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-accent', 'window-secondary']
+      const want = ['tab-layout', 'tab-width', 'tab-style', 'tab-switch', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-secondary', 'window-accent']
       ok(JSON.stringify(rows) === JSON.stringify(want), `Appearance runs ${want.join(' > ')} (${rows.join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await gotoPref(page, 'term-font')
@@ -4779,7 +4829,9 @@ const scenarios = {
       const savedCustom = JSON.parse((await store()).custom ?? '{}')
       ok(savedCustom.fontPct === undefined && savedCustom.font === undefined, 'Save as Custom carries no font and no size')
 
-      // A picked background and accent, then a plain switch: both are forgotten.
+      // A picked background and accent are CHANGES TO SAVE (owner, 2026-10-12:
+      // Save changes "never grey when there are changes to save"), so a switch
+      // asks first; Discard switches and forgets both.
       for (const [pref, hex] of [['window-background', '#202830'], ['window-accent', '#E07A2F']]) {
         const f = page.locator(`[data-pref="${pref}"] input:not([type])`)
         await f.fill(hex)
@@ -4791,11 +4843,12 @@ const scenarios = {
       }, 4000)
       ok(!!picked, 'a background and an accent are picked')
       await gotoPref(page, 'term-theme')
+      ok(!(await page.locator('[data-save-term]').first().isDisabled()), 'and they light Save changes')
       await page.locator('[data-term-card="pitch"]').first().click()
-      await sleep(300)
-      ok((await ask.count()) === 0, 'with nothing unsaved a theme switch asks nothing')
+      ok(!!(await until(async () => (await ask.count()) === 1, 3000, 50)), 'so a theme switch asks first')
+      await page.locator('[data-ask-discard]').click()
       const after = await store()
-      ok(after.theme === 'pitch' && after.accent === null && after.background === null, `the switch takes the picked background and accent with it (${JSON.stringify({ ...after, custom: undefined })})`)
+      ok(after.theme === 'pitch' && after.accent === null && after.background === null, `Discard: the switch takes the picked background and accent with it (${JSON.stringify({ ...after, custom: undefined })})`)
 
       // Unsaved: Cancel keeps everything as it was.
       await agentColour('#C0FFEE')
@@ -6079,8 +6132,8 @@ const scenarios = {
     const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
     const at = order.indexOf('term-theme')
     ok(
-      at >= 0 && order[at + 1] === 'term-acrylic' && order[at + 2] === 'window-background' && order[at + 3] === 'window-accent',
-      `See-through, Background and Accent come right after the theme wall (${order.slice(Math.max(0, at - 1), at + 5).join(' > ')})`
+      at >= 0 && order[at + 1] === 'term-acrylic' && order[at + 2] === 'window-background' && order[at + 3] === 'window-secondary' && order[at + 4] === 'window-accent',
+      `See-through, Background, Secondary and Accent come right after the theme wall (${order.slice(Math.max(0, at - 1), at + 5).join(' > ')})`
     )
 
     // THE BACKGROUND (owner: "let background colour be a setting"): the
@@ -6146,6 +6199,9 @@ const scenarios = {
     ok(pale.knob === BLACK && pk.r < 2, `there it flips to black: white would read ${pk.r.toFixed(2)}:1`)
     await page.locator('[data-settings-tab="appearance"]').click()
     await page.locator('[data-term-card="pt-default"]').first().click()
+    // The picked accent is a change to save (2026-10-12): the switch asks, and
+    // Discard lets it go.
+    if (await until(async () => (await page.locator('[data-ask-discard]').count()) === 1, 2000, 50)) await page.locator('[data-ask-discard]').click()
     await until(async () => (await page.locator('[data-term-card="pt-default"]').first().getAttribute('aria-pressed')) === 'true', 4000, 50)
     // The opaque pick first: typing six digits over a see-through pick keeps
     // the field's alpha, and the theme switch above cleared the accent.

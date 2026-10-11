@@ -4,8 +4,7 @@ import {
   useState,
   type JSX,
   type MouseEvent,
-  type PointerEvent,
-  type ReactNode
+  type PointerEvent
 } from 'react'
 import { tabLabels, type Tab } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
@@ -64,8 +63,7 @@ export function TabSidebar({
   onDropFolder,
   onReorder,
   onOpenRecent,
-  titleRow,
-  headStart
+  titleRow
 }: {
   tabs: Tab[]
   activeId: string | null
@@ -84,8 +82,6 @@ export function TabSidebar({
   onOpenRecent: (path: string) => void
   /** The title bar is hidden: the sidebar starts at the window's top. */
   titleRow: boolean
-  /** Command help and Settings, at the foot, when there is no title bar. */
-  headStart?: ReactNode
 }): JSX.Element | null {
   const prompt = useTabStyle() === 'prompt'
   const mode = useSidebarMode()
@@ -265,7 +261,14 @@ export function TabSidebar({
           collapsed
             ? 'transition-[left,box-shadow] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
             : ''
-        } ${collapsed && visible ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]' : ''} ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
+        } ${
+          // A PLANE ABOVE THE TERMINAL (owner, 2026-10-12: "give the sidebar a
+          // shadow, so it looks like it's on a higher plane than the rest of the
+          // content"): always, deeper while it floats slid out over the terminal.
+          collapsed && visible
+            ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]'
+            : 'shadow-[6px_0_22px_-6px_rgba(0,0,0,.5)]'
+        } ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         // Slid by its LEFT, never a transform: Windows is told where a drag
         // region is from the layout, and a transformed panel's grab strip was
         // reported where its slide started (measured, WM_NCHITTEST).
@@ -491,18 +494,6 @@ export function TabSidebar({
             <span className="min-w-0 flex-1 truncate">New tab</span>
           </button>
         </div>
-        {/* THE BUTTONS, AT THE FOOT, with no title bar: command help and
-            Settings. No sidebar button (owner, 2026-10-12: "dont show this
-            collapse show button. instead bind the sidebar to a hotkey"): it
-            is Ctrl+Shift+B (App). */}
-        {headStart && (
-          <div
-            data-sidebar-foot
-            className="flex h-10 shrink-0 items-center justify-end gap-0.5 px-1.5"
-          >
-            <div className="no-drag flex items-center gap-0.5">{headStart}</div>
-          </div>
-        )}
         {/* The resize grip, on the sidebar's right edge, while it is open. */}
         {!collapsed && (
           // A 6 px target, and what it shows is one hairline over the

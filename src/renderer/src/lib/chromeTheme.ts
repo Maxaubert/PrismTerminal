@@ -56,7 +56,9 @@ export const CHROME_COLOUR_TOKENS = [
   '--p-preview',
   '--p-sel-bg',
   '--p-tree-folder',
-  '--p-switch-knob'
+  '--p-switch-knob',
+  '--p-pressed',
+  '--p-pressed-ink'
 ] as const
 
 export interface ChromeTokens {
@@ -194,7 +196,13 @@ export function chromeTokens(
     selBg = composite(selBg, bg)
   }
   const accentHi = floorOn(mixHex(solid, fg, 0.25), QUIET_FLOOR)
-  const dim = floorOn(mixHex(fg, bg, 0.38), QUIET_FLOOR)
+  // ON A LIGHT THEME the quiet inks sit nearer the text (owner, 2026-10-12:
+  // "the ui buttons on light themes are often a bit too hard to see, would be
+  // better if they were darker grey or black"): the dim text and the icons are
+  // held to the BODY floor there, and the icons a further step darker. A dark
+  // theme keeps the quieter greys it was tuned with.
+  const dim = light ? floorOn(mixHex(fg, bg, 0.28), TEXT_FLOOR) : floorOn(mixHex(fg, bg, 0.38), QUIET_FLOOR)
+  const icon = light ? floorOn(mixHex(fg, bg, 0.18), TEXT_FLOOR) : dim
   // A raised stage rather than a sunken one: a true-black ground has nothing
   // darker to go to, so this always steps towards the text colour.
   const stage = mixHex(bg, fg, light ? 0.16 : 0.13)
@@ -231,12 +239,14 @@ export function chromeTokens(
     '--p-text': fg,
     '--p-text-soft': floorOn(mixHex(fg, bg, 0.14), TEXT_FLOOR),
     '--p-dim': dim,
-    '--p-dim2': floorOn(mixHex(fg, bg, 0.55), QUIET_FLOOR),
+    // The quietest ink, a hint or a disabled button's word: on a light theme
+    // held to the body floor too, so a disabled Save changes still reads.
+    '--p-dim2': light ? floorOn(mixHex(fg, bg, 0.42), TEXT_FLOOR) : floorOn(mixHex(fg, bg, 0.55), QUIET_FLOOR),
     '--p-accent': accent,
     '--p-accent-solid': solid,
     '--p-accent-hi': accentHi,
     '--p-on-accent': onAccent,
-    '--p-icon': dim,
+    '--p-icon': icon,
     '--p-hover': ink + pctHex(light ? 7 : 6),
     '--p-hover-hi': ink + pctHex(light ? 12 : 11),
     '--p-divider': ink + pctHex(edgeAlpha.divider[shade]),
@@ -246,7 +256,9 @@ export function chromeTokens(
     '--p-control': mixHex(bg, fg, light ? 0.09 : 0.035),
     // The unfilled part of a bar sits ON the stage, where a divider-strength
     // grey disappears.
-    '--p-track': mixHex(stage, fg, light ? 0.34 : 0.26),
+    // An off switch's track: on a light theme a mid grey the white knob stands
+    // out on, not a pale one.
+    '--p-track': mixHex(stage, fg, light ? 0.5 : 0.26),
     '--p-sel-bg': selBg,
     // The folder in the + menu's list of places: the accent's brighter cut,
     // already held to the non-text floor on the panel it is drawn on.
@@ -256,7 +268,14 @@ export function chromeTokens(
     // close"): the theme's own ink, measured off the ground, flipped only where
     // it reads under 2:1 on the ON track (`--p-sel-bg`, as the eye sees it over
     // the ground: a see-through accent's fill is measured composited).
-    '--p-switch-knob': switchKnob(composite(selBg, bg), !light)
+    '--p-switch-knob': switchKnob(composite(selBg, bg), !light),
+    // A PRESSED SEGMENT (owner, 2026-10-12: "make sure to fix the contrast on
+    // light themes ... white themes having a very light gray color for
+    // buttons"): on a light theme the text colour as a pill with the ground's
+    // ink on it, the clearest pair the theme has; on a dark one the quiet grey
+    // it always was.
+    '--p-pressed': light ? mixHex(fg, bg, 0.08) : mixHex(mixHex(bg, fg, 0.035), fg, 0.16),
+    '--p-pressed-ink': light ? bg : fg
   }
   return { mode, vars }
 }

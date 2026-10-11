@@ -16,7 +16,7 @@ import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
 import { isSidebarChord, toggleSidebar } from './lib/sidebarPrefs'
 import { useSidebarEdge } from './lib/sidebarEdge'
 import { HoverTitleBar } from './components/HoverTitleBar'
-import TitleBar, { AppButtons, TitleButtons, WindowButtons } from './components/TitleBar'
+import TitleBar, { TitleButtons } from './components/TitleBar'
 import { useTitleBarMode } from './lib/titleBarPrefs'
 import { tabSwitch } from './lib/tabSwitchPrefs'
 import { startWalk, stepWalk, syncMru, touchMru, walkHolds, walkTarget, type Mru, type Walk } from './lib/tabMru'
@@ -732,7 +732,6 @@ export default function App(): JSX.Element {
         <TabSidebar
           {...tabProps}
           titleRow={titleBar === 'hidden'}
-          headStart={bare ? <AppButtons onSettings={onSettings} onHelp={onHelp} /> : undefined}
         />
       )}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -826,9 +825,12 @@ export default function App(): JSX.Element {
           window while it is down. */}
       {bare && (
         <HoverTitleBar hold={!!update.state.notice} left={sidebarEdge}>
-          {chip}
-          <div data-window-buttons className="no-drag flex items-center gap-1">
-            <WindowButtons />
+          {/* The same buttons as the bar that is always there (owner,
+              2026-10-12: "settings and that command help can stay in the
+              title bar now that we do have a title bar. That way it stays
+              consistent at all times"). */}
+          <div data-window-buttons className="no-drag flex items-center gap-2.5">
+            <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
           </div>
         </HoverTitleBar>
       )}

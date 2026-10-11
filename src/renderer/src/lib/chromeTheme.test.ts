@@ -357,3 +357,18 @@ describe('the secondary colour', () => {
     expect(vars['--p-secondary'].slice(7)).toBe(vars['--p-bg'].slice(7))
   })
 })
+
+// LIGHT THEMES, READABLE CONTROLS (owner, 2026-10-12: "make sure to fix the
+// contrast on light themes, so that buttons and text are properly contrasted").
+describe('controls on light themes', () => {
+  const lights = TERM_PRESETS.map((p) => p.id).filter((id) => chromeTokens(resolveTermTheme(id)).mode === 'light')
+  it.each(lights)('%s: a pressed segment, the icons and the quiet text read at the body floor', (id) => {
+    const { vars } = chromeTokens(resolveTermTheme(id), 1, presetAccent(id))
+    expect(contrastRatio(vars['--p-pressed-ink'], vars['--p-pressed'])).toBeGreaterThanOrEqual(4.5)
+    for (const ground of [vars['--p-bg-solid'], vars['--p-secondary'], vars['--p-control']]) {
+      expect(contrastRatio(vars['--p-icon'], ground)).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(vars['--p-dim'], ground)).toBeGreaterThanOrEqual(4.5)
+    }
+    expect(contrastRatio(vars['--p-dim2'], vars['--p-bg-solid'])).toBeGreaterThanOrEqual(4.5)
+  })
+})

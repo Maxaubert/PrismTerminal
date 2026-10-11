@@ -39,33 +39,9 @@ export default function TitleBar({
       data-title-bar
       className={`drag p-styled-font flex h-9 shrink-0 items-center gap-2.5 border-b border-[var(--p-divider)] ${secondary ? 'bg-[var(--p-secondary)]' : 'bg-[var(--p-title)]'} pl-3 pr-1.5 text-[13px]`}
     >
-      {/* THE APP'S ICON, AS OUTLINES (owner, 2026-10-11: "dont show the whole
-          prism terminal text and instead just show the logo ... just the
-          outlines inside it, not the black bg, an outline box with the
-          outlined art inside and that follows theme accent"): the badge's
-          box, the long ribbon with its slot and the small one with its
-          diamond, from build/icon-source.png, in the accent. No name beside
-          it; it says the app's name to a reader. */}
-      <svg
-        data-app-mark
-        role="img"
-        aria-label="Prism Terminal"
-        viewBox="0 0 24 24"
-        width={18}
-        height={18}
-        fill="none"
-        stroke="var(--p-accent-hi)"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="shrink-0"
-      >
-        <rect x="2.5" y="2.5" width="19" height="19" rx="5" />
-        <path d="M5.3 13.6L11.3 5.6Q11.7 5.2 12.2 5.2H13.6Q15 5.3 14.7 6.7L9.6 16Q9.2 16.6 8.5 16.6H7Q5.1 16.5 5.3 14.8Z" />
-        <path d="M8.4 14.3L12.5 7.4" />
-        <path d="M13.7 11H17L18.4 13.7L17 16.4H13.7L12.3 13.7Z" />
-        <path d="M15.4 12.5L16.6 13.7L15.4 14.9L14.2 13.7Z" />
-      </svg>
+      {/* NO ICON, FOR NOW (owner, 2026-10-12: "removed that app icon in the
+          title bar for now. It might get re-added later"). The outline mark of
+          #185 is in git history (TitleBar.tsx at 031f0c0). */}
       {/* The rest of the bar is the handle the window is moved by. */}
       <span className="min-w-0 flex-1" />
       <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />

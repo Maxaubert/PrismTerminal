@@ -13,7 +13,8 @@ import {
   termGroundAlpha,
   termThemeId,
   useTermAcrylic,
-  useTermGroundAlpha
+  useTermGroundAlpha,
+  useTermThemeId
 } from '@core/renderer/lib/termLook'
 import { SEE_THROUGH_MAX } from '@core/renderer/lib/seeThrough'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
@@ -26,6 +27,13 @@ import { setTabLayout, useTabLayout, type TabLayout } from '../../lib/tabLayoutP
 import { setWindowAccent, useWindowAccent } from '../../lib/accentPrefs'
 import { onWindowBackgroundChange, setWindowBackground, useWindowBackground, windowBackground } from '../../lib/backgroundPrefs'
 import { onWindowSecondaryChange, setWindowSecondary, useWindowSecondary } from '../../lib/secondaryPrefs'
+import {
+  NO_COLOURS,
+  coloursDiffer,
+  customWindowColours,
+  setCustomWindowColours,
+  useCustomWindowColours
+} from '../../lib/customWindowColours'
 import { chromeTokens } from '../../lib/chromeTheme'
 import { APP_SECTIONS, appOpt } from './appOptions'
 
@@ -190,15 +198,6 @@ function WindowColours(): JSX.Element {
         onPick={setWindowBackground}
         range={{ alphaMin: 0.3, alphaMax: acrylic ? SEE_THROUGH_MAX : 1, alphaDisabled: !acrylic }}
       />
-      {/* The accent's alpha is for its FILLS; its lines stay solid. */}
-      <WindowColour
-        id="window-accent"
-        sub={appOpt('window-accent').sub}
-        chosen={accent}
-        fromTheme={themeAccent}
-        onPick={setWindowAccent}
-        range={{ alphaMin: 0.1 }}
-      />
       {/* THE SECONDARY COLOUR (owner, 2026-10-12): the vertical tabs'
           sidebar and title bar. The theme's own, a step off its ground, until
           one is picked; solid, its see-through is the window's. */}
@@ -210,11 +209,26 @@ function WindowColours(): JSX.Element {
         onPick={setWindowSecondary}
         range={{ alpha: false }}
       />
+      {/* The accent's alpha is for its FILLS; its lines stay solid. */}
+      <WindowColour
+        id="window-accent"
+        sub={appOpt('window-accent').sub}
+        chosen={accent}
+        fromTheme={themeAccent}
+        onPick={setWindowAccent}
+        range={{ alphaMin: 0.1 }}
+      />
     </>
   )
 }
 
 export function AppearancePage(): JSX.Element {
+  // The window colours in force and what Custom keeps (Save changes).
+  const background = useWindowBackground()
+  const accent = useWindowAccent()
+  const secondary = useWindowSecondary()
+  const kept = useCustomWindowColours()
+  const themeId = useTermThemeId()
   const edges = useWindowEdges()
   const layout = useTabLayout()
   const place = appOpt('tab-layout')
@@ -276,11 +290,20 @@ export function AppearancePage(): JSX.Element {
         // it doesn't change the altered bg and accent colours, though it
         // should"): the two picks are forgotten, as Reset does, so the new
         // theme's own background and accent are what the window wears.
-        onThemePicked={() => {
-          setWindowBackground(null)
-          setWindowAccent(null)
-          setWindowSecondary(null)
+        // CUSTOM KEEPS ITS OWN (owner, 2026-10-12: Save changes "never grey when
+        // there are changes to save"): picking Custom brings back the window
+        // colours its Save kept; the editor's save starts Custom afresh.
+        onThemePicked={(id) => {
+          const kept = id === 'custom' ? customWindowColours() : NO_COLOURS
+          if (id === 'edited') setCustomWindowColours(null)
+          setWindowBackground(kept.background)
+          setWindowAccent(kept.accent)
+          setWindowSecondary(kept.secondary)
         }}
+        // The window colours in force are changes to save while they differ
+        // from what the theme in front keeps; Save keeps them with Custom.
+        extraDirty={coloursDiffer({ background, accent, secondary }, themeId === 'custom' ? kept : NO_COLOURS)}
+        onSaved={() => setCustomWindowColours({ background, accent, secondary })}
       />
     </>
   )

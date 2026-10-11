@@ -116,6 +116,18 @@ looked at on the way).
   10 percent is a clearly darker panel in the theme's own tint (all eleven). Inks are held to it, so
   on light themes `--p-dim2` and a hard accent move a step darker.
 
+- **2026-10-12, later** (owner): the sidebar casts a shadow, a plane above the terminal; no app icon
+  in the title bar for now (the outline mark of #185 is in git history); Help and Settings stay in
+  the title bar, the dropped one included, so the sidebar has no foot ("that way it stays consistent
+  at all times"); Secondary sits above Accent; the window colours (Background, Secondary, Accent) are
+  changes to save: Save changes lights in the accent, Save keeps them with Custom, Custom brings them
+  back, and a theme switch asks before dropping them (core: `TerminalThemeSection` and `ThemeWall`
+  take `extraDirty` / `onSaved`, `onThemePicked` says which card).
+- **Light themes, readable controls** ("white themes having like a very light gray color for buttons"):
+  the dim text and icons are held to the body floor (icons a step darker), the hint ink too, the off
+  switch's track is a mid grey, and a pressed segment is a dark pill with the ground's ink
+  (`--p-pressed`, `--p-pressed-ink`; a host without them keeps the grey). Dark themes unchanged.
+
 ## 2. The indicators
 
 - **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new
