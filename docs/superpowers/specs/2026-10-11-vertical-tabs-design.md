@@ -80,6 +80,15 @@ looked at on the way).
   - A 36 px strip above the tabs moves the window ("the tabs should start a bit further down on the
     sidebar so that you can grab that area").
 
+- **The bar and the sidebar stay under the hand** (owner: "my cursor can be on the titlebar and its
+  disappearing ... i should be able to have the cursor 2-3 px off the titlebar before it
+  disappears"; "if i have the cursor on the sidebar at the top of it it will disappear"). Cause: the
+  dropped bar and the sidebar's grab strip are drag regions, where a press is Windows', so the page
+  hears no pointer move and Windows tells it the pointer left. Main now streams the cursor while
+  either can show, and one rule (`lib/revealZones.ts`) decides from it or the page's pointer: in at
+  the edge zone, out only past the far edge plus 4 px. The e2e hands main a cursor (`__e2eCursor`,
+  under --e2e only) and fails on the old code.
+
 ## 2. The indicators
 
 - **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new
