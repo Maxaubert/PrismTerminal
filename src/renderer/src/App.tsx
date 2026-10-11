@@ -11,6 +11,9 @@ import TerminalPanel, {
 } from '@core/renderer/components/TerminalPanel'
 import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
+import { TabSidebar } from './components/TabSidebar'
+import { HoverTitleBar } from './components/HoverTitleBar'
+import { useTabLayout } from './lib/tabLayoutPrefs'
 import TitleBar, { TitleButtons } from './components/TitleBar'
 import { useTitleBarMode } from './lib/titleBarPrefs'
 import { tabSwitch } from './lib/tabSwitchPrefs'
@@ -156,6 +159,8 @@ export default function App(): JSX.Element {
   const [helpFor, setHelpFor] = useState<HelpShellChoice>('powershell')
   const helpOn = useHelpEnabled()
   const titleBar = useTitleBarMode()
+  // THE TABS DOWN THE SIDE (#162): the strip, or a sidebar.
+  const vertical = useTabLayout() === 'vertical'
   /** Which shell each tab was SPAWNED with. The Shell setting only names what
    *  the next terminal launches, so a tab opened before it was changed still
    *  speaks its old language, and the popup preselects by what is running. */
@@ -659,26 +664,25 @@ export default function App(): JSX.Element {
       onDismissNotice={update.dismissNotice}
     />
   )
-  const strip = (inTitleRow: boolean): JSX.Element => (
-    <TabStrip
-      tabs={tabs}
-      activeId={activeId}
-      workingIds={workingIds}
-      doneIds={doneIds}
-      questionIds={questionIds}
-      failedIds={failedIds}
-      failedKinds={failedKinds}
-      agentIds={agentIds}
-      loadingIds={loadingIds}
-      onPick={(id) => setState((s) => pickTab(s, id))}
-      onClose={requestClose}
-      onNew={() => void newTab()}
-      onDropFolder={(path) => void window.prism.folderOf(path).then((dir) => dir && openTab(dir))}
-      onReorder={(id, to) => setState((s) => ({ ...s, tabs: reorderTabs(s.tabs, id, to) }))}
-      onOpenRecent={openRecent}
-      inTitleRow={inTitleRow}
-    />
-  )
+  // Everything a tab list is told, the same for the strip and the sidebar.
+  const tabProps = {
+    tabs,
+    activeId,
+    workingIds,
+    doneIds,
+    questionIds,
+    failedIds,
+    failedKinds,
+    agentIds,
+    loadingIds,
+    onPick: (id: string) => setState((s) => pickTab(s, id)),
+    onClose: requestClose,
+    onNew: () => void newTab(),
+    onDropFolder: (path: string) => void window.prism.folderOf(path).then((dir) => dir && openTab(dir)),
+    onReorder: (id: string, to: number) => setState((s) => ({ ...s, tabs: reorderTabs(s.tabs, id, to) })),
+    onOpenRecent: openRecent
+  }
+  const strip = (inTitleRow: boolean): JSX.Element => <TabStrip {...tabProps} inTitleRow={inTitleRow} />
   return (
     <div className="flex h-full w-full flex-col overflow-hidden text-[var(--p-text)]">
       {/* NO TITLE BAR (#91, owner's pick "tabs in the top row"): the tabs
@@ -686,7 +690,12 @@ export default function App(): JSX.Element {
           The strip's own empty space is the handle the window moves by; with
           no tabs (the start screen) the row is only that handle and the
           buttons. */}
-      {titleBar === 'hidden' ? (
+      {vertical ? (
+        // VERTICAL (#162): a title bar of its own when shown, the tabs in the
+        // sidebar below it. Hidden, there is no top row at all: the bar slides
+        // down at the top edge (HoverTitleBar, after the body).
+        titleBar === 'shown' && <TitleBar onSettings={onSettings} onHelp={onHelp} chip={chip} />
+      ) : titleBar === 'hidden' ? (
         <div
           data-title-bar="tabs"
           className="drag p-styled-font flex h-9 shrink-0 items-stretch border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1.5 text-[13px]"
@@ -702,8 +711,10 @@ export default function App(): JSX.Element {
           {tabs.length > 0 && strip(false)}
         </>
       )}
+      <div className="relative flex min-h-0 flex-1">
+      {vertical && <TabSidebar {...tabProps} titleRow={titleBar === 'hidden'} />}
       <div
-        className="relative min-h-0 flex-1"
+        className="relative min-h-0 min-w-0 flex-1"
         data-term-host
         // A FILE DROPPED ON THE TERMINAL TYPES ITS PATH (2026-09-19, #16): the
         // other way a file, or a screenshot, gets into an agent's prompt.
@@ -780,6 +791,12 @@ export default function App(): JSX.Element {
           </div>
         )}
       </div>
+      </div>
+      {vertical && titleBar === 'hidden' && (
+        <HoverTitleBar hold={!!update.state.notice}>
+          <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
+        </HoverTitleBar>
+      )}
 
       {termMenu && activeShell && termMenu.id === activeShell.id && (
         <ContextMenu

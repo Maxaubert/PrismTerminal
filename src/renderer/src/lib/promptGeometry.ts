@@ -75,3 +75,20 @@ export function ruleClip(height: number, first: boolean): { d: number; clip: str
     clip: `polygon(0 0, calc(100% - ${ARROW - SEAM}px) 0, calc(100% - ${ARROW - d - SEAM}px) 100%, ${l}px 100%)`
   }
 }
+
+/**
+ * POWERLINE IN THE SIDEBAR (#162): each tab a row whose right end is the same
+ * 12 px arrow, pointing at the terminal. The rows stand apart (a small gap
+ * between them), so there is no notch: the arrow's EDGE is a band inside the
+ * row, 3 px across along the slant, cut by the row's own shape. The plain edge
+ * wears the divider's ink, as on the strip; a mark paints it in its colour.
+ */
+export function sideSegmentClip(): string {
+  return `polygon(0 0, calc(100% - ${ARROW}px) 0, 100% 50%, calc(100% - ${ARROW}px) 100%, 0 100%)`
+}
+
+/** The arrow's edge band inside a sidebar row, 3 px across. */
+export function sideEdgeClip(): string {
+  const w = 3
+  return `polygon(calc(100% - ${ARROW + w}px) 0, calc(100% - ${ARROW}px) 0, 100% 50%, calc(100% - ${ARROW}px) 100%, calc(100% - ${ARROW + w}px) 100%, calc(100% - ${w}px) 50%)`
+}

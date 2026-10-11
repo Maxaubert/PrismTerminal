@@ -166,7 +166,7 @@ const tabLabels = (page) =>
  * so a row moving between pages is one line here.
  */
 const PREF_PAGE = {
-  'tab-width': 'appearance', 'tab-style': 'appearance', 'tab-switch': 'appearance', 'title-bar': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
+  'tab-layout': 'appearance', 'tab-width': 'appearance', 'tab-style': 'appearance', 'tab-switch': 'appearance', 'title-bar': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
   'window-background': 'appearance', 'window-accent': 'appearance', 'term-acrylic': 'appearance',
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
@@ -1622,8 +1622,9 @@ const scenarios = {
     await page.locator('[data-settings-tab="appearance"]').click()
     const row = page.locator('[data-pref="tab-width"]')
     await row.waitFor({ timeout: 8000 })
-    const firstRow = await page.evaluate(() => document.querySelector('[data-pref]')?.getAttribute('data-pref'))
-    ok(firstRow === 'tab-width', `Tab width is the first row of Appearance (${firstRow})`)
+    // Second since #162: Tab position, where the tabs sit, comes first.
+    const firstRows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].slice(0, 2).map((e) => e.getAttribute('data-pref')))
+    ok(firstRows.join() === 'tab-layout,tab-width', `Tab width is at the top of Appearance, after Tab position (${firstRows})`)
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-tab-width.png') }).catch(() => {})
     await row.locator('[data-seg="fixed"]').click()
     ok((await page.evaluate(() => localStorage.getItem('prism.window.tabWidth'))) === 'fixed', 'Fixed is stored')
@@ -1884,7 +1885,9 @@ const scenarios = {
               const run = t.querySelector('[data-mark-overlay="run"] > span')
               const edge = t.querySelector('[data-prompt-edge]')
               const shape = t.querySelector('[data-prompt-shape]')
+              const ring = t.querySelector('[data-mark="ring"]')
               return {
+                ringInk: ring ? getComputedStyle(ring).color : null,
                 active: t.hasAttribute('data-tab-active'),
                 state: t.getAttribute('data-agent-state'),
                 marks: [...t.querySelectorAll('[data-mark]')].map((m) => m.getAttribute('data-mark')),
@@ -1918,8 +1921,10 @@ const scenarios = {
             ok(t.every((x) => !x.active || !x.fill), `${tag}: the tab in front is never filled`)
             if (ind === 'ring') {
               ok(t[0].marks.includes('ring') && t[2].marks.includes('ring'), `${tag}: a spinner by each working tab's name (${t[2].marks})`)
-              const minimal = style === 'prompt' ? 'edge' : 'line'
-              ok([3, 4, 5].every((i) => t[i].marks.includes(minimal)), `${tag}: finished, question and failed keep Minimal's ${minimal}`)
+              // #162: every state is Ring's own mono mark by the name, in the
+              // name's ink: no line, no edge, no colour of its own.
+              ok([3, 4, 5].every((i) => t[i].marks.join() === 'ring'), `${tag}: finished, question and failed are Ring's mark alone (${[3, 4, 5].map((i) => t[i].marks)})`)
+              ok([0, 2, 3, 4, 5].every((i) => t[i].ringInk === t[i].name), `${tag}: every ring wears its name's ink (${[0, 2, 3, 4, 5].map((i) => t[i].ringInk + ' vs ' + t[i].name).join('; ')})`)
             }
             // PROMPT ON THE THEME'S OWN GROUND (2026-10-10 rework): an idle
             // segment paints nothing, the tab in front is --p-tab-active.
@@ -2021,6 +2026,181 @@ const scenarios = {
       await shotStrip(page, 'marks-reduced-motion')
       await page.emulateMedia({ reducedMotion: 'no-preference' })
       await setPref(page, 'tab-style', 'classic')
+      await quietStrip(page)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * VERTICAL TABS (#162; owner, 2026-10-11): the tabs as a sidebar down the
+   * left. Measured: the setting moves every tab into one column and the strip
+   * goes; each row wears the same mark the strip would (Ring, Minimal, Full,
+   * Classic and Powerline); a row picks and drags; collapsed, the sidebar takes
+   * no room and shows at the left edge over a terminal that keeps its size;
+   * with the title bar off there is no top row, and the bar slides down at the
+   * top edge with only the window's buttons, never the app's name or the
+   * sidebar's own button.
+   */
+  async verticalTabs(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: markedFolders(w) })
+    try {
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1100, 700))
+      await markStrip(page, ok)
+      const row = await gotoPref(page, 'tab-layout')
+      ok((await row.locator('[aria-pressed="true"]').getAttribute('data-seg')) === 'horizontal', 'Horizontal is the default')
+      ok((await row.locator('[data-seg]').allTextContents()).join('|') === 'Horizontal|Vertical', 'the choices are Horizontal and Vertical')
+      const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
+      ok(order[0] === 'tab-layout', `Tab position is the Window section's first row (${order.slice(0, 3).join(' > ')})`)
+      await row.locator('[data-seg="vertical"]').click()
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.tabLayout'))) === 'vertical', 'Vertical is stored')
+      await backToFirst(page)
+      const geo = () =>
+        page.evaluate(() => {
+          const nav = document.querySelector('[data-tab-sidebar]')
+          const host = document.querySelector('[data-term-host]')
+          const rows = [...document.querySelectorAll('[data-tab-sidebar] [data-tab]')]
+          const b = nav?.getBoundingClientRect()
+          const h = host?.getBoundingClientRect()
+          const first = rows.find((r) => r.hasAttribute('data-tab-active'))
+          const rule = first?.querySelector('[data-side-rule]')?.getBoundingClientRect()
+          return {
+            strip: !!document.querySelector('[data-tab-strip]'),
+            nav: b ? { left: Math.round(b.left), right: Math.round(b.right), top: Math.round(b.top), width: Math.round(b.width) } : null,
+            host: h ? { left: Math.round(h.left), width: Math.round(h.width) } : null,
+            tops: rows.map((r) => Math.round(r.getBoundingClientRect().top)),
+            lefts: rows.map((r) => Math.round(r.getBoundingClientRect().left)),
+            ruleAtRight: !!rule && !!first && Math.abs(rule.right - first.getBoundingClientRect().right) <= 1 && Math.round(rule.width) === 2,
+            mode: nav?.getAttribute('data-sidebar-mode') ?? null,
+            shown: nav?.hasAttribute('data-sidebar-shown') ?? false
+          }
+        })
+      const open = await geo()
+      ok(!open.strip && !!open.nav, `the strip is gone and the sidebar is there (${JSON.stringify(open.nav)})`)
+      ok(open.tops.length === 6 && open.tops.every((t, i) => i === 0 || t > open.tops[i - 1]), `six rows, one under another (${open.tops})`)
+      ok(new Set(open.lefts).size === 1, 'all in one column')
+      ok(open.nav.left === 0 && open.nav.width >= 150 && open.host.left >= open.nav.right - 1, `the sidebar on the left, the terminal beside it (${open.nav.width}px, terminal at ${open.host.left})`)
+      ok(open.ruleAtRight, 'Classic: the tab in front has its accent rule on the terminal side')
+
+      // THE SAME MARKS AS THE STRIP, in both tab styles.
+      const marks = () =>
+        page.evaluate(() =>
+          [...document.querySelectorAll('[data-tab-sidebar] [data-tab]')].map((t) => [...t.querySelectorAll('[data-mark]')].map((m) => m.getAttribute('data-mark')).join())
+        )
+      const shotSide = async (name) => {
+        await sleep(150)
+        await page.locator('[data-tab-sidebar]').screenshot({ path: resolve(process.cwd(), `.e2e-shots/${name}.png`) }).catch(() => {})
+      }
+      for (const style of ['classic', 'prompt']) {
+        await setPref(page, 'tab-style', style)
+        for (const ind of ['ring', 'minimal', 'full']) {
+          await setPref(page, 'agent-indicator', ind)
+          await backToFirst(page)
+          await sleep(250)
+          const m = await marks()
+          const tag = `vertical, ${style}, ${ind}`
+          if (ind === 'ring') ok([0, 2, 3, 4, 5].every((i) => m[i] === 'ring') && m[1] === '', `${tag}: one ring by each marked name, nothing else (${JSON.stringify(m)})`)
+          if (ind === 'minimal') {
+            const want = style === 'prompt' ? ['edge', 'edge', 'edge', 'edge'] : ['run', 'line', 'line', 'line']
+            ok([2, 3, 4, 5].every((i, k) => m[i] === want[k]), `${tag}: the strip's Minimal marks (${JSON.stringify(m)})`)
+          }
+          if (ind === 'full') ok([2, 3, 4, 5].every((i) => m[i].split(',').includes('fill')) && !m[0].includes('fill'), `${tag}: tabs not in front fill, the one in front never (${JSON.stringify(m)})`)
+          await shotSide(`side-${style}-${ind}`)
+        }
+      }
+      await setPref(page, 'tab-style', 'classic')
+      await setPref(page, 'agent-indicator', 'ring')
+      await backToFirst(page)
+
+      // A ROW PICKS, AND DRAGS.
+      const labels = () => page.evaluate(() => [...document.querySelectorAll('[data-tab-sidebar] [role="tab"]')].map((b) => b.textContent))
+      await page.locator('[data-tab-sidebar] [data-tab]').nth(1).click()
+      ok(!!(await until(() => page.evaluate(() => document.querySelectorAll('[data-tab-sidebar] [data-tab]')[1].hasAttribute('data-tab-active')), 3000, 50)), 'a click on a row puts it in front')
+      const before = await labels()
+      const box = await page.locator('[data-tab-sidebar] [data-tab]').nth(1).boundingBox()
+      await page.mouse.move(box.x + 40, box.y + box.height / 2)
+      await page.mouse.down()
+      for (let k = 1; k <= 8; k += 1) await page.mouse.move(box.x + 40, box.y + box.height / 2 + k * 6)
+      await page.mouse.up()
+      await sleep(200)
+      const after = await labels()
+      ok(after[2] === before[1] && after[1] === before[2], `dragging a row down a row swaps it (${before.slice(0, 3)} -> ${after.slice(0, 3)})`)
+
+      // COLLAPSED: no room taken, shown at the left edge, the terminal unmoved.
+      await page.locator('[data-sidebar-toggle="collapse"]').click()
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'collapsed', 'Collapsed is stored')
+      await page.mouse.move(700, 400)
+      await sleep(600)
+      const away = await geo()
+      ok(away.mode === 'collapsed' && !away.shown && away.nav.right <= 0, `collapsed, the sidebar is out of sight (${JSON.stringify(away.nav)})`)
+      ok(away.host.left === 0, `and the terminal takes the full width (${JSON.stringify(away.host)})`)
+      const cols = () => page.evaluate(() => document.querySelector('[data-term-host] .xterm-screen')?.getBoundingClientRect().width ?? 0)
+      const widthAway = await cols()
+      await page.mouse.move(3, 300)
+      await page.mouse.move(2, 310)
+      ok(!!(await until(async () => (await geo()).shown, 3000, 50)), 'the pointer at the left edge shows it')
+      await sleep(400)
+      const near = await geo()
+      ok(near.nav.left === 0 && near.nav.right > 100, `over the terminal (${JSON.stringify(near.nav)})`)
+      ok((await cols()) === widthAway && near.host.left === 0, 'and the terminal keeps its size, so the shell is not redrawn')
+      await page.mouse.move(80, 320)
+      await sleep(500)
+      ok((await geo()).shown, 'it stays while the pointer is on it')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-collapsed-shown.png') }).catch(() => {})
+      await page.mouse.move(800, 400)
+      ok(!!(await until(async () => !(await geo()).shown, 3000, 50)), 'and goes when the pointer leaves it')
+      // Back to open, through its own button while shown.
+      await page.mouse.move(2, 300)
+      await until(async () => (await geo()).shown, 3000, 50)
+      await sleep(350)
+      await page.locator('[data-sidebar-toggle="expand"]').click()
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open' && (await geo()).host.left > 100, 'its button keeps it open again')
+
+      // NO TITLE BAR: no top row; the bar slides down at the top edge.
+      const bar = await gotoPref(page, 'title-bar')
+      await bar.locator('[role="switch"]').click()
+      await backToFirst(page)
+      await page.mouse.move(600, 400)
+      await sleep(600)
+      const top = () =>
+        page.evaluate(() => {
+          const f = document.querySelector('[data-title-bar="float"]')
+          const b = f?.getBoundingClientRect()
+          const head = document.querySelector('[data-sidebar-head]')
+          return {
+            rows: document.querySelectorAll('[data-title-bar]').length,
+            shown: f?.hasAttribute('data-title-shown') ?? false,
+            bottom: b ? Math.round(b.bottom) : null,
+            name: (f?.textContent ?? '').includes('Prism Terminal'),
+            buttons: !!f?.querySelector('[data-title-settings]') && !!f?.querySelector('[data-window-close]'),
+            toggle: !!f?.querySelector('[data-sidebar-toggle]'),
+            navTop: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().top ?? -1),
+            head: head ? getComputedStyle(head).getPropertyValue('app-region') || getComputedStyle(head).getPropertyValue('-webkit-app-region') : ''
+          }
+        })
+      const hidden = await top()
+      ok(hidden.rows === 1 && !hidden.shown && hidden.bottom <= 0, `no title row: the only bar is out of sight (${JSON.stringify(hidden)})`)
+      ok(hidden.navTop === 0, `the sidebar starts at the top of the window (${hidden.navTop})`)
+      ok(hidden.head === 'drag', `the sidebar's head moves the window (${hidden.head})`)
+      await page.mouse.move(600, 3)
+      await page.mouse.move(610, 2)
+      ok(!!(await until(async () => (await top()).shown, 3000, 50)), 'the pointer at the top edge brings the bar down')
+      await sleep(300)
+      const down = await top()
+      ok(down.bottom > 30 && down.buttons, `with Settings and the window buttons (${JSON.stringify(down)})`)
+      ok(!down.name && !down.toggle, "and not the app's name, nor the sidebar's button")
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-titlebar-shown.png') }).catch(() => {})
+      await page.mouse.move(600, 400)
+      ok(!!(await until(async () => !(await top()).shown, 3000, 50)), 'it goes again when the pointer leaves')
+      // Back to the strip, quiet, so the close asks nothing. Settings is in
+      // the bar, so the bar comes down first.
+      await page.mouse.move(600, 2)
+      await until(async () => (await top()).shown, 3000, 50)
+      await sleep(300)
+      await (await gotoPref(page, 'title-bar')).locator('[role="switch"]').click()
+      await setPref(page, 'tab-layout', 'horizontal')
+      ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-tab-strip]') && !document.querySelector('[data-tab-sidebar]')), 3000, 50)), 'Horizontal puts the strip back')
       await quietStrip(page)
     } finally {
       await closeApp(app)
@@ -4379,7 +4559,7 @@ const scenarios = {
       // window's rows above the theme and what a theme sets under it.
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
       // The see-through row sits right under the wall since #156, as Prism's.
-      const want = ['tab-width', 'tab-style', 'tab-switch', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-accent']
+      const want = ['tab-layout', 'tab-width', 'tab-style', 'tab-switch', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-accent']
       ok(JSON.stringify(rows) === JSON.stringify(want), `Appearance runs ${want.join(' > ')} (${rows.join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await gotoPref(page, 'term-font')
@@ -6790,7 +6970,7 @@ function collectStalls(scenario) {
   }
 }
 /** Scenarios that honestly take longer than the default limit. */
-const SLOW = { linkPaintStall: 300000, dictation: 360000, dictationParakeet: 360000, helpPanel: 300000, updateWindow: 300000, indicatorStyles: 360000 }
+const SLOW = { verticalTabs: 360000, linkPaintStall: 300000, dictation: 360000, dictationParakeet: 360000, helpPanel: 300000, updateWindow: 300000, indicatorStyles: 360000 }
 reapStrays()
 for (const [name, run] of Object.entries(scenarios)) {
   if (only.length && !only.some((o) => name.toLowerCase().includes(o.toLowerCase()))) continue

@@ -1,7 +1,6 @@
 import {
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type JSX,
@@ -12,20 +11,9 @@ import { tabLabels, type Tab } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
 import { TabMark } from '@core/renderer/components/TabMark'
 import { motionClass } from '@core/renderer/components/markClasses'
-import {
-  useAgentDoneOn,
-  useAgentFailedOn,
-  useAgentIndicator,
-  useAgentQuestionOn,
-  useAgentRainbow
-} from '@core/renderer/lib/termLook'
 import { failedLabel } from '@core/renderer/lib/agentHookSignal'
-import { useAgentColors } from '@core/renderer/lib/agentColors'
-import { markPalette } from '@core/renderer/lib/markPalette'
-import { resolveTabMark, type MarkColour, type MarkState } from '@core/renderer/lib/tabMark'
-import { pinnedRoots, plusMenuList, recentLabels, recentRoots, togglePin } from '@core/renderer/lib/recentRoots'
-import { ContextMenu } from './ContextMenu'
-import { MenuIcon } from './MenuIcon'
+import { useTabLooks } from './tabLooks'
+import { useTabMenus } from './tabMenus'
 import { useTabWidth } from '../lib/tabWidthPrefs'
 import { useTabStyle } from '../lib/tabStylePrefs'
 import { OVERLAP, edgeBand, ruleClip, segmentClip } from '../lib/promptGeometry'
@@ -41,36 +29,6 @@ import { dropSlot, type Lane } from '../lib/tabDrop'
 /** How far the pointer must travel before a press becomes a drag rather than
  *  a click on the tab. */
 const DRAG_SLOP = 4
-
-/** A folder, at menu size: the + menu lists PLACES. */
-const FolderGlyph = (): JSX.Element => (
-  <svg viewBox="0 0 24 24" width={13} height={13} fill="var(--p-tree-folder)" className="shrink-0" aria-hidden>
-    <path d="M2.5 5.5h6.2l2 2.6h10.8v10.4H2.5z" />
-  </svg>
-)
-
-/** The pin on a + menu row (#99): outlined while the folder is only history,
- *  filled once it is pinned. One path, two fills, so the two states line up. */
-const PinGlyph = ({ filled }: { filled: boolean }): JSX.Element => (
-  <svg
-    viewBox="0 0 24 24"
-    width={12}
-    height={12}
-    fill={filled ? 'currentColor' : 'none'}
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinejoin="round"
-    className="shrink-0"
-    data-pin={filled ? 'on' : 'off'}
-    aria-hidden
-  >
-    <path d="M15 3l6 6-3 1-4 4 .5 4.5L10 14l-6 6-1-1 6-6-4.5-4.5L9 8l4-4z" />
-  </svg>
-)
-
-/** What the + menu lists right now: pins first, then the newest recents. */
-const plusMenuRows = (): Array<{ path: string; pinned: boolean }> =>
-  plusMenuList(pinnedRoots(), recentRoots())
 
 export function TabStrip({
   tabs,
@@ -127,82 +85,19 @@ export function TabStrip({
    *  beside the title buttons, and that row draws the rule under it. */
   inTitleRow?: boolean
 }): JSX.Element | null {
-  const indicator = useAgentIndicator()
   const width = useTabWidth()
   // The tab style (#143): Classic, the flat strip, or Powerline's chevrons.
   const prompt = useTabStyle() === 'prompt'
-  // The user's pick where there is one, else the theme's accent and green.
-  const colours = useAgentColors()
-  const doneOn = useAgentDoneOn()
-  const questionOn = useAgentQuestionOn()
-  const failedOn = useAgentFailedOn()
-  const rainbow = useAgentRainbow()
-  // EVERY MARK'S COLOUR (#143), from what the window paints NOW: App paints
-  // the chrome synchronously on every look change, before this re-renders.
-  // Held to 3:1 on every ground a mark can sit on: the strip, and under Powerline
-  // both segment shades (composited, since on glass they are see-through).
-  const root = getComputedStyle(document.documentElement)
-  const read = (name: string, fallback: string): string => root.getPropertyValue(name).trim() || fallback
-  const solidGround = read('--p-bg-solid', '#0b0b0f')
-  // Powerline's segments are the strip's own ground now (2026-10-10 rework: idle
-  // paints nothing, the tab in front is --p-tab-active, exactly Classic's), so
-  // every mark sits on the one ground in both styles.
-  const grounds = [solidGround]
-  // Whether the tab in front PAINTS: --p-tab-active is the ground on an opaque
-  // window and fully transparent on glass (chromeTokens).
-  const activePaints = !/^#[0-9a-f]{6}00$/i.test(read('--p-tab-active', solidGround))
-  const text = read('--p-text', '#e7e7ee')
-  // Worked out again only when what it is made of changes: the strip renders on
-  // every pointer move of a tab drag, and flooring colours each time is work
-  // the frame does not need.
-  const paletteKey = `${colours.working}|${colours.finished}|${colours.question}|${colours.failed}|${grounds.join(',')}|${solidGround}|${text}|${rainbow}`
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- the key IS every input, as text
-  const palette = useMemo(() => markPalette({ colours, grounds, solidGround, text, rainbow }), [paletteKey])
-  /** A mark's colour role as a CSS background: the rainbow runs along a line
-   *  (`x`) or down a Powerline edge (`y`); the rule is the active rule's token. */
-  const paint = (role: MarkColour | null, axis: 'x' | 'y'): string => {
-    switch (role) {
-      case 'working':
-        return palette.line.working
-      case 'rule':
-        return 'var(--p-accent-hi)'
-      case 'done':
-        return palette.line.done
-      case 'rainbow':
-        return axis === 'x' ? palette.rainbowX : palette.rainbowY
-      case 'question':
-        return palette.line.question
-      case 'failed':
-        return palette.line.failed
-      default:
-        return 'transparent'
-    }
-  }
-  // Every tab's state and mark, worked out before any is drawn: a Powerline edge
-  // needs to know whether the NEXT segment paints (below).
-  const looks = tabs.map((t) => {
-    const on = t.id === activeId
-    // The agent's state on this tab. A tab IS its shell here, so the tab's
-    // id is the session's. Working shows on any tab, the one in front
-    // included; the other three only on a tab nobody is looking at (App's
-    // sets), each behind its own switch.
-    const working = indicator !== 'off' && agentIds.has(t.id) && workingIds.has(t.id)
-    // THE ATTENTION MARKS (2026-09-28; owner: a finished indicator, "a
-    // static colour like a green border on the bottom ... until you click
-    // the tab", and "a question indicator ... blue"): a question outranks
-    // a plain finish.
-    const question = questionOn && !working && questionIds.has(t.id)
-    // FAILED (#131): a turn that ended on an error, said by Claude Code's
-    // own hook. Under a question, over a plain finish.
-    const failed = failedOn && !working && !question && !!failedIds?.has(t.id)
-    const done = doneOn && !working && !question && !failed && doneIds.has(t.id)
-    const state: MarkState | null = working ? 'working' : question ? 'question' : failed ? 'failed' : done ? 'done' : null
-    // WHICH MARK, from the core's one rule (#143): the strip only draws it.
-    const mark = resolveTabMark({ indicator, tabStyle: prompt ? 'prompt' : 'flat', state, active: on, rainbow })
-    // Whether its segment covers what lies under it: a Full fill, or the tab
-    // in front on an opaque window. An idle segment paints nothing.
-    const paints = mark.place === 'fill' || (on && activePaints)
-    return { failed, state, mark, paints }
+  // Every tab's state, mark and colours: the one reading the sidebar shares (#162).
+  const { indicator, palette, paint, looks } = useTabLooks({
+    tabs,
+    activeId,
+    workingIds,
+    doneIds,
+    questionIds,
+    failedIds,
+    agentIds,
+    prompt
   })
   // A tab being carried (#71 follow-up): the strip animates it rather than
   // drawing a hairline - the tab lifts out and its neighbours slide across to
@@ -241,18 +136,7 @@ export function TabStrip({
       window.removeEventListener('drop', off, true)
     }
   }, [])
-  const [plusMenu, setPlusMenu] = useState<{
-    x: number
-    y: number
-    rows: Array<{ path: string; pinned: boolean }>
-  } | null>(null)
-  /** A tab's own menu. Deliberately WITHOUT 'close others': each close can
-   *  raise the agent-is-working question, and firing several would overwrite
-   *  it and stop the work it exists to protect. That wants App-side
-   *  batching, which is a decision rather than a gap to fill here. */
-  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; id: string; cwd: string } | null>(
-    null
-  )
+  const menu = useTabMenus({ onClose, onOpenRecent })
   const [dropAt, setDropAt] = useState<number | null>(null)
   const [carry, setCarry] = useState<{
     id: string
@@ -513,10 +397,7 @@ export function TabStrip({
           // The tab's own menu (2026-08-30). The wrapper owns it, not the inner
           // button: the padding and the mark slots are part of the target. A
           // right click cannot start a carry: onTabPointerDown ignores button 2.
-          onContextMenu: (e: MouseEvent) => {
-            e.preventDefault()
-            setTabMenu({ x: e.clientX, y: e.clientY, id: t.id, cwd: t.kind === 'settings' ? '' : t.cwd })
-          },
+          onContextMenu: (e: MouseEvent) => menu.openTabMenu(e, t),
           'data-tab': true,
           onPointerDown: (e: PointerEvent<HTMLDivElement>) => onTabPointerDown(e, t.id, i),
           onPointerMove: onTabPointerMove,
@@ -670,73 +551,13 @@ export function TabStrip({
         onClick={onNew}
         // The + adds a tab instantly; its RIGHT click is where "somewhere I
         // have been before" lives, so the instant verb stays instant.
-        onContextMenu={(e) => {
-          e.preventDefault()
-          // Read when it opens: the list is history, and history moves.
-          setPlusMenu({ x: e.clientX, y: e.clientY, rows: plusMenuRows() })
-        }}
+        onContextMenu={menu.openPlusMenu}
       >
         <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
           <path d="M12 6v12m6-6H6" />
         </svg>
       </button>
-      {tabMenu && (
-        <ContextMenu
-          x={tabMenu.x}
-          y={tabMenu.y}
-          onClose={() => setTabMenu(null)}
-          items={[
-            // Every row acts on the tab you clicked. "New tab" was here and
-            // went (2026-08-31): the + is one pixel away and its tooltip
-            // already teaches its key.
-            { label: 'Close tab', icon: <MenuIcon name="close" />, hint: 'Ctrl+Shift+W', onPick: () => onClose(tabMenu.id) },
-            // Settings is a tab with no folder. Offering this there wrote an
-            // EMPTY STRING over the clipboard, which is worse than doing
-            // nothing.
-            ...(tabMenu.cwd
-              ? [
-                  {
-                    label: 'Copy folder path',
-                    icon: <MenuIcon name="folder" />,
-                    onPick: () => void navigator.clipboard.writeText(tabMenu.cwd)
-                  }
-                ]
-              : [])
-          ]}
-        />
-      )}
-      {plusMenu && (
-        <ContextMenu
-          x={plusMenu.x}
-          y={plusMenu.y}
-          onClose={() => setPlusMenu(null)}
-          items={
-            plusMenu.rows.length
-              ? recentLabels(plusMenu.rows.map((r) => r.path)).map((r, i) => {
-                  const pinned = plusMenu.rows[i].pinned
-                  return {
-                    label: r.label,
-                    // A folder in front of each, in the accent: the menu should say
-                    // "places" at a glance, not read as a list of commands.
-                    icon: <FolderGlyph />,
-                    onPick: () => onOpenRecent(r.path),
-                    // The pin (#99): toggles in place and the list re-reads,
-                    // so the row you pinned climbs to the top while the menu
-                    // stands. Pinned rows stay for good, above the recents.
-                    trailing: {
-                      icon: <PinGlyph filled={pinned} />,
-                      title: pinned ? 'Unpin' : 'Pin to this menu',
-                      onClick: () => {
-                        togglePin(r.path)
-                        setPlusMenu((m) => (m ? { ...m, rows: plusMenuRows() } : m))
-                      }
-                    }
-                  }
-                })
-              : [{ label: 'No recent folders', disabled: true }]
-          }
-        />
-      )}
+      {menu.menus}
     </div>
   )
 }
