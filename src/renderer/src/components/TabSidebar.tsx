@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type JSX, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type JSX,
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode
+} from 'react'
 import { tabLabels, type Tab } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
 import { TabMark } from '@core/renderer/components/TabMark'
@@ -125,20 +133,28 @@ export function TabSidebar({
   const edge = useEdgeNear(collapsed)
   // COLLAPSED: shown while the pointer is at the window's left edge or on the
   // sidebar itself, and held while one of its menus is open.
+  const shownNow = useRef(false)
   const shown = useHoverReveal(
     collapsed,
     (e) => {
-      const box = nav.current?.getBoundingClientRect()
-      if (!box) return false
-      // Its own height (under a title bar there is one): the window's edge, or
-      // the sidebar itself, which is off to the left while hidden.
-      const beside = e.clientY >= box.top && e.clientY <= box.bottom
-      return (
-        beside && (e.clientX <= REVEAL.zone || (e.clientX >= box.left && e.clientX <= box.right))
-      )
+      const el = nav.current
+      if (!el) return false
+      // Its own height (under a title bar there is one).
+      const box = el.getBoundingClientRect()
+      if (e.clientY < box.top || e.clientY > box.bottom) return false
+      if (e.clientX <= REVEAL.zone) return true
+      // ON IT once shown, measured to where it COMES TO REST, not where the
+      // slide has got to (owner, 2026-10-11: "the sidebar closes before my
+      // cursor is near the edge"): a pointer that outran the 260 ms slide was
+      // outside the half-drawn box, so it was put away under the hand. The
+      // layout width ignores the slide; a few pixels past the edge are its.
+      return shownNow.current && e.clientX <= el.offsetWidth + REVEAL.zone
     },
     menu.open || dragW !== null || (edge.left && edge.y >= (titleRow ? 0 : 36)) // 36: the title bar's h-9
   )
+  useEffect(() => {
+    shownNow.current = shown
+  }, [shown])
   const visible = !collapsed || shown
 
   // ---- Reorder: the strip's pointer drag, along y ----
@@ -298,7 +314,7 @@ export function TabSidebar({
         } ${collapsed && visible ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]' : ''} ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         style={{ width, transform: collapsed && !visible ? 'translateX(calc(-100% - 16px))' : '' }}
       >
-        {/* The head: the + and the sidebar's own button, at the right. With no
+        {/* The head: the +, at the right. With no
             title bar, command help and Settings at its left (#162; owner,
             2026-10-11: "settings and command help move to sidebar"), and its
             empty space is what moves the window. */}
@@ -306,7 +322,9 @@ export function TabSidebar({
           data-sidebar-head
           className={`${handle} flex h-9 shrink-0 items-center justify-end gap-0.5 px-1.5`}
         >
-          {headStart && <div className="no-drag mr-auto flex items-center gap-0.5">{headStart}</div>}
+          {headStart && (
+            <div className="no-drag mr-auto flex items-center gap-0.5">{headStart}</div>
+          )}
           <button
             className={BTN}
             title="New tab (Ctrl+T). Right-click for recent folders"
@@ -327,19 +345,6 @@ export function TabSidebar({
             >
               <path d="M12 6v12m6-6H6" />
             </svg>
-          </button>
-          <button
-            className={BTN}
-            data-sidebar-toggle={collapsed ? 'expand' : 'collapse'}
-            title={
-              collapsed
-                ? 'Keep the sidebar open'
-                : 'Collapse the sidebar: it shows when the pointer reaches the left edge'
-            }
-            aria-label={collapsed ? 'Keep the sidebar open' : 'Collapse the sidebar'}
-            onClick={() => setSidebarMode(collapsed ? 'open' : 'collapsed')}
-          >
-            <PanelGlyph open={!collapsed} />
           </button>
         </div>
         <div
@@ -516,6 +521,23 @@ export function TabSidebar({
               </div>
             )
           })}
+        </div>
+        {/* The sidebar's own button, at its foot (owner, 2026-10-11: "put the
+            sidebar button at the bottom"). */}
+        <div data-sidebar-foot className="flex h-9 shrink-0 items-center px-1.5">
+          <button
+            className={BTN}
+            data-sidebar-toggle={collapsed ? 'expand' : 'collapse'}
+            title={
+              collapsed
+                ? 'Keep the sidebar open'
+                : 'Collapse the sidebar: it shows when the pointer reaches the left edge'
+            }
+            aria-label={collapsed ? 'Keep the sidebar open' : 'Collapse the sidebar'}
+            onClick={() => setSidebarMode(collapsed ? 'open' : 'collapsed')}
+          >
+            <PanelGlyph open={!collapsed} />
+          </button>
         </div>
         {/* The resize grip, on the sidebar's right edge, while it is open. */}
         {!collapsed && (
