@@ -37,6 +37,7 @@ export const CHROME_COLOUR_TOKENS = [
   '--p-title',
   '--p-tabs',
   '--p-tab-active',
+  '--p-tab-edge',
   '--p-text',
   '--p-text-soft',
   '--p-dim',
@@ -67,6 +68,24 @@ export interface ChromeTokens {
  *  hover and edge strengths are written in percent. The one `alphaHex` is the
  *  core's (#114), which takes 0..1. */
 const pctHex = (pct: number): string => alphaHex(Math.min(100, Math.max(0, pct)) / 100)
+
+/** How far the Powerline border stands off the ground it separates. */
+const TAB_EDGE_FLOOR = 1.5
+
+/**
+ * THE POWERLINE BORDER between two tabs (owner, 2026-10-11): the tabs sit on
+ * the theme's own ground, so a border in the ground's colour vanished ("the
+ * border which was black before"). It is DARKER than the tabs where the
+ * ground leaves room (dark grey gets black, white gets light grey) and
+ * lighter only where it does not (black gets grey): the first step that
+ * clears TAB_EDGE_FLOOR against the ground.
+ */
+export function tabEdge(bg: string, fg: string): string {
+  const toward = contrastRatio(bg, '#000000') >= TAB_EDGE_FLOOR ? '#000000' : fg
+  let edge = bg
+  for (let i = 1; i <= 25 && contrastRatio(bg, edge) < TAB_EDGE_FLOOR; i += 1) edge = mixHex(bg, toward, i * 0.04)
+  return edge
+}
 
 /**
  * Pure: a terminal theme in, the chrome's custom properties out. `groundAlpha`
@@ -205,6 +224,9 @@ export function chromeTokens(
     // NOTHING: it sits on the strip, and a second translucent coat of the same
     // colour is a visibly darker tab, which is a fill by accident.
     '--p-tab-active': glass ? bg + '00' : bg,
+    // On glass at the sheet's own alpha, so the border is as see-through as
+    // the tabs either side of it.
+    '--p-tab-edge': glass ? tabEdge(bg, fg) + alphaHex(groundAlpha) : tabEdge(bg, fg),
     '--p-text': fg,
     '--p-text-soft': floorOn(mixHex(fg, bg, 0.14), TEXT_FLOOR),
     '--p-dim': dim,

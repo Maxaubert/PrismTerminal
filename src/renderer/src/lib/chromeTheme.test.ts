@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CHROME_COLOUR_TOKENS, chromeTokens } from './chromeTheme'
+import { CHROME_COLOUR_TOKENS, chromeTokens, tabEdge } from './chromeTheme'
 import { TERM_PRESETS, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
 import { composite } from '@core/renderer/lib/colour'
@@ -300,5 +300,27 @@ describe('the switch knob token', () => {
     const { join } = await import('node:path')
     const css = readFileSync(join(__dirname, '..', 'index.css'), 'utf8')
     expect(css).toContain(`--p-switch-knob: ${chromeTokens(resolveTermTheme('prism')).vars['--p-switch-knob']};`)
+  })
+})
+
+// THE POWERLINE BORDER (owner, 2026-10-11): darker than the tabs where the
+// ground leaves room, lighter only on a ground too dark to go darker.
+describe('tabEdge', () => {
+  const lum = (h: string): number => parseInt(h.slice(1, 3), 16)
+  it('is darker than a dark grey ground, lighter than black, darker than white', () => {
+    expect(lum(tabEdge('#2b2b2b', '#e0e0e0'))).toBeLessThan(0x2b)
+    expect(lum(tabEdge('#000000', '#e0e0e0'))).toBeGreaterThan(0)
+    expect(lum(tabEdge('#ffffff', '#202020'))).toBeLessThan(0xff)
+  })
+  it('stands off every preset ground enough to be seen', () => {
+    for (const p of TERM_PRESETS) {
+      const t = resolveTermTheme(p.id)
+      const bg = t.background as string
+      expect(contrastRatio(bg, tabEdge(bg, t.foreground as string)), p.id).toBeGreaterThanOrEqual(1.49)
+    }
+  })
+  it('is a token of the chrome', () => {
+    const t = chromeTokens(resolveTermTheme(TERM_PRESETS[0].id))
+    expect(t.vars['--p-tab-edge']).toMatch(/^#[0-9a-f]{6}$/i)
   })
 })
