@@ -170,6 +170,16 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   the FIRST token too: a native `claude.exe` started by bare name has the command line `claude`.
 - <a id="only-command-is-resume"></a>**The only command the app writes into a shell is the agent resume**, as the shell's STARTUP
   command, with the id shape-checked in main (`validResume`). Never type into a user's shell.
+- <a id="same-command-line"></a>**EVERY SHELL OF A KIND STARTS WITH THE SAME COMMAND LINE, AND NO POWERSHELL IS
+  `-EncodedCommand`** (#180; owner, 2026-10-11: "slow on startup and not responding until Claude sessions load").
+  Windows Defender judges each NEW command line a process from `PrismTerminal.exe` starts, inside `CreateProcess`,
+  which runs on main's thread (node-pty's deferred connect included). MEASURED on the packaged app: 700 ms per new
+  command line, 3 ms per repeated one, 1.4 s for an `-EncodedCommand` (10 ms as plain `-Command`); eight restored
+  Claude tabs with the session id on their command lines held main for 12 to 14 s. So the resume id rides in
+  `PRISM_RESUME_ID` (`withResume`), cleared by the shell before claude starts, and the DWM helper is one quote-free
+  `-Command` line. Measure a startup on the PACKAGED app: the dev `electron.exe` pays none of this. Held by
+  `terminal.test.ts` (`withResume`) and `dwmHelper.test.ts`; the full measurement is in
+  [`diagnostics.md`](diagnostics.md).
 - <a id="redraw-nudge"></a>**A THEME PUSH IS FOLLOWED BY A RESIZE NUDGE, NEVER A KEY** (owner, 2026-10-11, choosing
   "Tiny resize nudge" over sending Ctrl+L or leaving it). Claude Code 2.1.296 switches palette on `?997` but redraws
   only its live frame (measured, the #172 section of the compat spec). After a push the program asked for, the panel
