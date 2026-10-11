@@ -14,6 +14,7 @@ import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { HoverTitleBar } from './components/HoverTitleBar'
 import { useTabLayout } from './lib/tabLayoutPrefs'
+import { useSidebarMode, useSidebarWidth } from './lib/sidebarPrefs'
 import TitleBar, { TitleButtons } from './components/TitleBar'
 import { useTitleBarMode } from './lib/titleBarPrefs'
 import { tabSwitch } from './lib/tabSwitchPrefs'
@@ -161,6 +162,8 @@ export default function App(): JSX.Element {
   const titleBar = useTitleBarMode()
   // THE TABS DOWN THE SIDE (#162): the strip, or a sidebar.
   const vertical = useTabLayout() === 'vertical'
+  const sidebarOpen = useSidebarMode() === 'open'
+  const sidebarWidth = useSidebarWidth()
   /** Which shell each tab was SPAWNED with. The Shell setting only names what
    *  the next terminal launches, so a tab opened before it was changed still
    *  speaks its old language, and the popup preselects by what is running. */
@@ -793,7 +796,7 @@ export default function App(): JSX.Element {
       </div>
       </div>
       {vertical && titleBar === 'hidden' && (
-        <HoverTitleBar hold={!!update.state.notice}>
+        <HoverTitleBar hold={!!update.state.notice} left={tabs.length > 0 && sidebarOpen ? sidebarWidth : 0}>
           <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
         </HoverTitleBar>
       )}

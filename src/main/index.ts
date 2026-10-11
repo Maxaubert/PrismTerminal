@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, powerMonitor, session, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, powerMonitor, screen, session, shell } from 'electron'
 import pkg from '../../package.json'
 import { existsSync } from 'fs'
 import { stat } from 'fs/promises'
@@ -15,6 +15,7 @@ import { foldersFromArgv } from './argv'
 import { acrylicOk, createMaterial } from './material'
 import { stopDwmHelper, warmDwmHelper } from './dwmHelper'
 import { createWindowEdge } from './windowEdge'
+import { createEdgeWatch } from './edgeWatch'
 import { DEFAULT_WINDOW_EDGES, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 import { detectShells } from '@core/main/shells'
 import { createTabsStore } from './tabsStore'
@@ -654,6 +655,16 @@ function wireIpc(): void {
   ipcMain.handle('app:home', () => homedir())
 
   /* ----- the window ----- */
+
+  // The pointer at the top or left edge, read from Windows (edgeWatch.ts): the
+  // hidden title bar and the collapsed sidebar ask for it only while they exist.
+  const edgeWatch = createEdgeWatch(
+    () => mainWindow,
+    () => screen.getCursorScreenPoint(),
+    (near) => mainWindow?.webContents.send('window:edge-near', near)
+  )
+  ipcMain.on('window:edge-watch', (_e, on: unknown) => edgeWatch.set(on === true))
+  app.on('will-quit', () => edgeWatch.stop())
 
   ipcMain.on('window:minimize', () => mainWindow?.minimize())
   ipcMain.on('window:toggle-maximize', () =>

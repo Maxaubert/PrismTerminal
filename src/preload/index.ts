@@ -89,6 +89,12 @@ const api = {
    *  for none. Main sets it as the window's overlay icon. */
   setTaskbarBadge: (png: string | null, description: string, scale = 1): void =>
     ipcRenderer.send('window:badge', png, description, scale),
+  /** Ask main to watch the pointer at the window's top and left edges (#162),
+   *  which the page cannot see over the resize border or a drag region. */
+  watchEdges: (on: boolean): void => ipcRenderer.send('window:edge-watch', on),
+  /** Where the pointer is against those edges, when that changes. */
+  onEdgeNear: (cb: (near: { top: boolean; left: boolean; x: number; y: number }) => void): (() => void) =>
+    on('window:edge-near', cb),
   windowMinimize: (): void => ipcRenderer.send('window:minimize'),
   windowToggleMaximize: (): void => ipcRenderer.send('window:toggle-maximize'),
   /** Closes the window, which quits (after the agent question, if one is due). */

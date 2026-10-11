@@ -2172,9 +2172,11 @@ const scenarios = {
             rows: document.querySelectorAll('[data-title-bar]').length,
             shown: f?.hasAttribute('data-title-shown') ?? false,
             bottom: b ? Math.round(b.bottom) : null,
-            name: (f?.textContent ?? '').includes('Prism Terminal'),
+            name: (f?.textContent ?? '').includes('Prism Terminal') || !!f?.querySelector('[data-app-mark]'),
             buttons: !!f?.querySelector('[data-title-settings]') && !!f?.querySelector('[data-window-close]'),
             toggle: !!f?.querySelector('[data-sidebar-toggle]'),
+            barLeft: b ? Math.round(b.left) : null,
+            navRight: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().right ?? -1),
             navTop: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().top ?? -1),
             head: head ? getComputedStyle(head).getPropertyValue('app-region') || getComputedStyle(head).getPropertyValue('-webkit-app-region') : ''
           }
@@ -2190,6 +2192,8 @@ const scenarios = {
       const down = await top()
       ok(down.bottom > 30 && down.buttons, `with Settings and the window buttons (${JSON.stringify(down)})`)
       ok(!down.name && !down.toggle, "and not the app's name, nor the sidebar's button")
+      // Owner, 2026-10-11: "dont have the titlebar go over the sidebar".
+      ok(Math.abs(down.barLeft - down.navRight) <= 1, `it starts at the open sidebar's edge, not over it (bar ${down.barLeft}, sidebar ends ${down.navRight})`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-titlebar-shown.png') }).catch(() => {})
       await page.mouse.move(600, 400)
       ok(!!(await until(async () => !(await top()).shown, 3000, 50)), 'it goes again when the pointer leaves')
@@ -2223,6 +2227,7 @@ const scenarios = {
         return {
           mode: bar?.getAttribute('data-title-bar') ?? null,
           name: (bar?.textContent ?? '').includes('Prism Terminal'),
+          mark: !!bar?.querySelector('[data-app-mark]'),
           stripInBar: !!(bar && strip && bar.contains(strip)),
           buttons: inBar('[data-title-settings]') && inBar('[data-window-close]') && inBar('[aria-label="Minimize"]'),
           hostTop: Math.round(host?.getBoundingClientRect().top ?? -1),
@@ -2232,7 +2237,7 @@ const scenarios = {
         }
       })
     const shown = await layout()
-    ok(shown.mode !== 'tabs' && shown.name && !shown.stripInBar && shown.buttons, `by default the title bar is its own row, with the name (${JSON.stringify(shown)})`)
+    ok(shown.mode !== 'tabs' && shown.mark && !shown.name && !shown.stripInBar && shown.buttons, `by default the title bar is its own row, with the app's icon in outline and no name (${JSON.stringify(shown)})`)
     ok(shown.hostTop >= 64, `two rows above the terminal (${shown.hostTop}px)`)
     await page.locator('[data-title-settings]').click()
     await page.locator('[data-settings-tab="appearance"]').click()
@@ -2264,7 +2269,7 @@ const scenarios = {
     await flip.click()
     await sleep(200)
     const back = await layout()
-    ok(back.mode !== 'tabs' && back.name, 'Shown brings the title bar back')
+    ok(back.mode !== 'tabs' && back.mark, 'Shown brings the title bar back')
     await closeApp(app)
   },
 
