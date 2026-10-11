@@ -2150,6 +2150,23 @@ const scenarios = {
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-collapsed-shown.png') }).catch(() => {})
       await page.mouse.move(800, 400)
       ok(!!(await until(async () => !(await geo()).shown, 3000, 50)), 'and goes when the pointer leaves it')
+      // A pointer that outruns the slide (owner, 2026-10-11: "the sidebar
+      // closes before my cursor is near the edge"): straight to near its right
+      // edge the moment it starts to show, then still.
+      await page.mouse.move(2, 300)
+      await until(async () => (await geo()).shown, 3000, 10)
+      await page.mouse.move(near.nav.right - 6, 320)
+      await sleep(1200)
+      ok((await geo()).shown, 'a pointer that got near its far edge before the slide did keeps it shown')
+      await page.mouse.move(800, 400)
+      await until(async () => !(await geo()).shown, 3000, 50)
+      // Its own button is at its foot.
+      const foot = await page.evaluate(() => {
+        const nav = document.querySelector('[data-tab-sidebar]').getBoundingClientRect()
+        const b = document.querySelector('[data-sidebar-toggle]').getBoundingClientRect()
+        return { gap: Math.round(nav.bottom - b.bottom), inFoot: !!document.querySelector('[data-sidebar-foot] [data-sidebar-toggle]') }
+      })
+      ok(foot.inFoot && foot.gap <= 12, `the sidebar's button sits at its foot (${JSON.stringify(foot)})`)
       // Back to open, through its own button while shown.
       await page.mouse.move(2, 300)
       await until(async () => (await geo()).shown, 3000, 50)
