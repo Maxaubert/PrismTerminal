@@ -23,7 +23,6 @@ import { sideWants } from '../lib/revealZones'
 import { setSidebarEdge } from '../lib/sidebarEdge'
 import {
   SIDEBAR_WIDTH,
-  setSidebarMode,
   setSidebarWidth,
   useSidebarMode,
   useSidebarWidth
@@ -32,30 +31,6 @@ import {
 /** How far the pointer must travel before a press becomes a drag rather than
  *  a click on the tab: the strip's own slop. */
 const DRAG_SLOP = 4
-
-/** The sidebar's own button: a panel with its left column and a chevron, the
- *  way editors draw "collapse the sidebar" (owner, 2026-10-11: "not a normal
- *  pin ... like a collapse sidebar icon"). The chevron points the way it goes. */
-const PanelGlyph = ({ open }: { open: boolean }): JSX.Element => (
-  <svg
-    viewBox="0 0 24 24"
-    width={15}
-    height={15}
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.7"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <rect x="3" y="3.5" width="18" height="17" rx="2.5" />
-    <path d="M9 3.5v17" />
-    <path d={open ? 'M16 15l-3-3 3-3' : 'M13 9l3 3-3 3'} />
-  </svg>
-)
-
-const BTN =
-  'no-drag grid h-[26px] w-7 shrink-0 place-items-center rounded text-[var(--p-icon)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)]'
 
 /**
  * THE TABS AS A SIDEBAR (#162; owner, 2026-10-11): the strip's tabs, one row
@@ -516,25 +491,18 @@ export function TabSidebar({
             <span className="min-w-0 flex-1 truncate">New tab</span>
           </button>
         </div>
-        {/* THE BUTTONS, AT THE FOOT (owner, 2026-10-11): with no title bar,
-            command help and Settings, then the sidebar's own button. */}
-        <div data-sidebar-foot className="flex h-10 shrink-0 items-center gap-0.5 px-1.5">
-          <span className="min-w-2 flex-1 self-stretch" />
-          {headStart && <div className="no-drag flex items-center gap-0.5">{headStart}</div>}
-          <button
-            className={BTN}
-            data-sidebar-toggle={collapsed ? 'expand' : 'collapse'}
-            title={
-              collapsed
-                ? 'Keep the sidebar open'
-                : 'Collapse the sidebar: it shows when the pointer reaches the left edge'
-            }
-            aria-label={collapsed ? 'Keep the sidebar open' : 'Collapse the sidebar'}
-            onClick={() => setSidebarMode(collapsed ? 'open' : 'collapsed')}
+        {/* THE BUTTONS, AT THE FOOT, with no title bar: command help and
+            Settings. No sidebar button (owner, 2026-10-12: "dont show this
+            collapse show button. instead bind the sidebar to a hotkey"): it
+            is Ctrl+Shift+B (App). */}
+        {headStart && (
+          <div
+            data-sidebar-foot
+            className="flex h-10 shrink-0 items-center justify-end gap-0.5 px-1.5"
           >
-            <PanelGlyph open={!collapsed} />
-          </button>
-        </div>
+            <div className="no-drag flex items-center gap-0.5">{headStart}</div>
+          </div>
+        )}
         {/* The resize grip, on the sidebar's right edge, while it is open. */}
         {!collapsed && (
           // A 6 px target, and what it shows is one hairline over the

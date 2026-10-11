@@ -2159,8 +2159,11 @@ const scenarios = {
       ok(after[2] === before[1] && after[1] === before[2], `dragging a row down a row swaps it (${before.slice(0, 3)} -> ${after.slice(0, 3)})`)
 
       // COLLAPSED: no room taken, shown at the left edge, the terminal unmoved.
-      await page.locator('[data-sidebar-toggle="collapse"]').click()
-      ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'collapsed', 'Collapsed is stored')
+      // NO BUTTON, A KEY (owner, 2026-10-12: "dont show this collapse show
+      // button. instead bind the sidebar to a hotkey"): Ctrl+Shift+B.
+      ok((await page.locator('[data-sidebar-toggle]').count()) === 0, 'the sidebar has no collapse button')
+      await page.keyboard.press('Control+Shift+B')
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'collapsed', 'Ctrl+Shift+B collapses it, and Collapsed is stored')
       await page.mouse.move(700, 400)
       await sleep(600)
       const away = await geo()
@@ -2198,13 +2201,6 @@ const scenarios = {
       ok((await geo()).shown, 'a pointer that got near its far edge before the slide did keeps it shown')
       await page.mouse.move(800, 400)
       await until(async () => !(await geo()).shown, 3000, 50)
-      // Its own button is at its foot.
-      const foot = await page.evaluate(() => {
-        const nav = document.querySelector('[data-tab-sidebar]').getBoundingClientRect()
-        const b = document.querySelector('[data-sidebar-toggle]').getBoundingClientRect()
-        return { gap: Math.round(nav.bottom - b.bottom), inFoot: !!document.querySelector('[data-sidebar-foot] [data-sidebar-toggle]') }
-      })
-      ok(foot.inFoot && foot.gap <= 12, `the sidebar's button sits at its foot (${JSON.stringify(foot)})`)
       // ON ITS GRAB STRIP (the top of it, a drag region) the page hears
       // nothing; main's cursor keeps it ("at the top of it it will disappear
       // when im still on the sidebar").
@@ -2225,12 +2221,9 @@ const scenarios = {
         ok(!!(await until(async () => !(await geo()).shown, 3000, 30)), 'and goes once the cursor is clearly off it')
         await cursor(null)
       }
-      // Back to open, through its own button while shown.
-      await page.mouse.move(2, 300)
-      await until(async () => (await geo()).shown, 3000, 50)
-      await sleep(350)
-      await page.locator('[data-sidebar-toggle="expand"]').click()
-      ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open' && (await geo()).host.left > 100, 'its button keeps it open again')
+      // Back to open, through the same key.
+      await page.keyboard.press('Control+Shift+B')
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open' && (await geo()).host.left > 100, 'Ctrl+Shift+B keeps it open again')
 
       // THE POP-OUT TITLE BAR (owner, 2026-10-11: "a pop out title bar is
       // best actually we just need to do it well ... like zen browser's"):
@@ -2255,7 +2248,7 @@ const scenarios = {
             bar: r ? { left: Math.round(r.left), top: Math.round(r.top), bottom: Math.round(r.bottom), right: Math.round(innerWidth - r.right) } : null,
             buttons: !!btns && !!f?.contains(btns) && !!btns.querySelector('[data-window-close]'),
             name: (f?.textContent ?? '').includes('Prism Terminal') || !!f?.querySelector('[data-app-mark]') || !!f?.querySelector('[data-title-settings]'),
-            inFoot: !!foot?.querySelector('[data-title-settings]') && !!foot?.querySelector('[data-sidebar-toggle]') && !foot?.querySelector('[data-sidebar-new]'),
+            inFoot: !!foot?.querySelector('[data-title-settings]') && !foot?.querySelector('[data-sidebar-new]'),
             newRow: (() => {
               const n = document.querySelector('[data-sidebar-rows] [data-sidebar-new]')
               const rows = [...document.querySelectorAll('[data-tab-sidebar] [data-tab]')]
@@ -2282,7 +2275,7 @@ const scenarios = {
       ok(up.rows === 1 && !up.shown && up.bar.bottom <= 0, `the bar is up out of sight (${JSON.stringify(up.bar)})`)
       ok(up.hostTop === 0, `and the terminal has the whole height ("usable for content") (${up.hostTop})`)
       ok(up.navTop === 0 && up.firstRowTop >= 10 && up.firstRowTop <= 24, `the sidebar starts at the top, its tabs a thin strip lower (${up.firstRowTop}px)`)
-      ok(up.inFoot, "Settings and the sidebar's button are at its foot, the + is not")
+      ok(up.inFoot, 'Settings is at its foot, the + is not')
       // Owner, 2026-10-12: "make new tab a button attached to the end of the tab
       // list and the same size as a tab".
       ok(!!up.newRow && up.newRow.last && up.newRow.h === up.newRow.tabH && up.newRow.w === up.newRow.tabW, `New tab is the list's last row, a tab's size (${JSON.stringify(up.newRow)})`)
@@ -2346,7 +2339,7 @@ const scenarios = {
       // edge, never over it (owner, 2026-10-11: "the titlebar should drop down
       // from the sidebar edge and until the right edge. not overlay over the
       // sidebar").
-      await page.locator('[data-sidebar-toggle="collapse"]').click()
+      await page.keyboard.press('Control+Shift+B')
       await page.mouse.move(800, 400)
       await sleep(600)
       await cursor({ x: 10, y: 300 })
@@ -2373,13 +2366,16 @@ const scenarios = {
       await cursor({ x: 10, y: 300 })
       await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
       await sleep(300)
-      await page.locator('[data-sidebar-toggle="expand"]').click()
+      await page.keyboard.press('Control+Shift+B')
       await cursor(null)
       // Settings from the sidebar, and back.
       await (await gotoPref(page, 'title-bar')).locator('[role="switch"]').click()
       ok(!!(await until(() => page.evaluate(() => document.querySelectorAll('[data-title-bar]').length === 1 && !document.querySelector('[data-title-bar="clear"]') && !!document.querySelector('[data-app-mark]')), 3000, 50)), 'Show title bar puts the full bar back')
       await setPref(page, 'tab-layout', 'horizontal')
       ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-tab-strip]') && !document.querySelector('[data-tab-sidebar]')), 3000, 50)), 'Horizontal puts the strip back')
+      // With the strip, Ctrl+Shift+B is the shell's again.
+      await page.keyboard.press('Control+Shift+B')
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open', 'with the strip, Ctrl+Shift+B does not touch the sidebar')
       await quietStrip(page)
     } finally {
       await closeApp(app)

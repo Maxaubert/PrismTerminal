@@ -104,6 +104,12 @@ looked at on the way).
     answered HTTOP at its middle on a window that is not maximized).
   - Under Ring, a tab with no mark keeps the 12 px slot, so every name starts at one x.
 
+- **No sidebar button; Ctrl+Shift+B** (owner, 2026-10-12: "dont show this collapse show button.
+  instead bind the sidebar to a hotkey like ctrl b or ctrl s. not sure whats available"). Ctrl+B is
+  Claude Code's (background a running task) and the shell's cursor-left; Ctrl+S is PowerShell's
+  forward history search and the terminal's pause. Ctrl+Shift+B is free, VS Code's sidebar key with
+  Shift, and is taken only while the tabs are vertical (`isSidebarChord`, termHost's `ownsKey`).
+
 ## 2. The indicators
 
 - **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new
@@ -123,5 +129,5 @@ looked at on the way).
 
 - The sidebar on the RIGHT side (#162 lists it as a choice). Not asked for in the 2026-10-11
   session; a follow-up if wanted.
-- A key to toggle the sidebar. Ctrl+B is Claude Code's own (background a task), so none is taken.
+- ~~A key to toggle the sidebar~~: added 2026-10-12, see below.
 - Ctrl+Tab, Most recent and Ctrl+1..9 are unchanged: they act on the tab list, whatever its shape.

@@ -12,7 +12,8 @@ import TerminalPanel, {
 import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
-import { useTabLayout } from './lib/tabLayoutPrefs'
+import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
+import { isSidebarChord, toggleSidebar } from './lib/sidebarPrefs'
 import { useSidebarEdge } from './lib/sidebarEdge'
 import { HoverTitleBar } from './components/HoverTitleBar'
 import TitleBar, { AppButtons, TitleButtons, WindowButtons } from './components/TitleBar'
@@ -630,6 +631,10 @@ export default function App(): JSX.Element {
       } else if (!e.shiftKey && e.key === ',') {
         hit()
         setState(openSettings)
+      } else if (isSidebarChord(e) && tabLayout() === 'vertical') {
+        // THE SIDEBAR (#162): open, or collapsed to the left edge.
+        hit()
+        toggleSidebar()
       } else if (k === 't') {
         // With or without shift: Ctrl+T is the chord, Ctrl+Shift+T the habit
         // Windows Terminal leaves in the hand.
