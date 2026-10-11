@@ -83,11 +83,28 @@ export function TitleButtons({
   onHelp?: () => void
   chip?: ReactNode
 }): JSX.Element {
-  const w = window.prism
   return (
     <>
-    {chip}
-    <div className="no-drag flex items-center gap-1">
+      {chip}
+      <div className="no-drag flex items-center gap-1">
+        <AppButtons onSettings={onSettings} onHelp={onHelp} />
+        <WindowButtons />
+      </div>
+    </>
+  )
+}
+
+/** Command help (while its setting is on) and the cog: with vertical tabs and
+ *  no title bar they sit at the top of the sidebar instead (#162). */
+export function AppButtons({
+  onSettings,
+  onHelp
+}: {
+  onSettings: () => void
+  onHelp?: () => void
+}): JSX.Element {
+  return (
+    <>
       {onHelp && (
         <button
           className={BTN}
@@ -135,8 +152,32 @@ export function TitleButtons({
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
       </button>
-      <button className={BTN} onClick={() => w.windowMinimize()} title="Minimize" aria-label="Minimize">
-        <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+    </>
+  )
+}
+
+/** Minimize, maximize and close. With vertical tabs and no title bar they are
+ *  all that is left of it, floating at the window's top right (#162). */
+export function WindowButtons(): JSX.Element {
+  const w = window.prism
+  return (
+    <>
+      <button
+        className={BTN}
+        onClick={() => w.windowMinimize()}
+        title="Minimize"
+        aria-label="Minimize"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width={13}
+          height={13}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          aria-hidden
+        >
           <path d="M6 12h12" />
         </svg>
       </button>
@@ -146,7 +187,16 @@ export function TitleButtons({
         title="Maximize"
         aria-label="Maximize"
       >
-        <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
+        <svg
+          viewBox="0 0 24 24"
+          width={13}
+          height={13}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+          aria-hidden
+        >
           <rect x="6" y="6" width="12" height="12" rx="1.5" />
         </svg>
       </button>
@@ -159,11 +209,19 @@ export function TitleButtons({
         aria-label="Close"
         data-window-close
       >
-        <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+        <svg
+          viewBox="0 0 24 24"
+          width={13}
+          height={13}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          aria-hidden
+        >
           <path d="M7 7l10 10M17 7L7 17" />
         </svg>
       </button>
-    </div>
     </>
   )
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type JSX, type MouseEvent, type PointerEvent } from 'react'
+import { useEffect, useRef, useState, type JSX, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
 import { tabLabels, type Tab } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
 import { TabMark } from '@core/renderer/components/TabMark'
@@ -79,7 +79,8 @@ export function TabSidebar({
   onDropFolder,
   onReorder,
   onOpenRecent,
-  titleRow
+  titleRow,
+  headStart
 }: {
   tabs: Tab[]
   activeId: string | null
@@ -98,6 +99,8 @@ export function TabSidebar({
   onOpenRecent: (path: string) => void
   /** The title bar is hidden: the sidebar's head is the window's handle. */
   titleRow: boolean
+  /** What leads the head: command help and Settings, when there is no title bar. */
+  headStart?: ReactNode
 }): JSX.Element | null {
   const prompt = useTabStyle() === 'prompt'
   const mode = useSidebarMode()
@@ -295,12 +298,15 @@ export function TabSidebar({
         } ${collapsed && visible ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]' : ''} ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         style={{ width, transform: collapsed && !visible ? 'translateX(calc(-100% - 16px))' : '' }}
       >
-        {/* The head: the + and the sidebar's own button, at the right. Its empty
-            space moves the window when there is no title bar. */}
+        {/* The head: the + and the sidebar's own button, at the right. With no
+            title bar, command help and Settings at its left (#162; owner,
+            2026-10-11: "settings and command help move to sidebar"), and its
+            empty space is what moves the window. */}
         <div
           data-sidebar-head
           className={`${handle} flex h-9 shrink-0 items-center justify-end gap-0.5 px-1.5`}
         >
+          {headStart && <div className="no-drag mr-auto flex items-center gap-0.5">{headStart}</div>}
           <button
             className={BTN}
             title="New tab (Ctrl+T). Right-click for recent folders"

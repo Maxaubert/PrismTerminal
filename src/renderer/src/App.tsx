@@ -12,10 +12,8 @@ import TerminalPanel, {
 import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
-import { HoverTitleBar } from './components/HoverTitleBar'
 import { useTabLayout } from './lib/tabLayoutPrefs'
-import { useSidebarMode, useSidebarWidth } from './lib/sidebarPrefs'
-import TitleBar, { TitleButtons } from './components/TitleBar'
+import TitleBar, { AppButtons, TitleButtons, WindowButtons } from './components/TitleBar'
 import { useTitleBarMode } from './lib/titleBarPrefs'
 import { tabSwitch } from './lib/tabSwitchPrefs'
 import { startWalk, stepWalk, syncMru, touchMru, walkHolds, walkTarget, type Mru, type Walk } from './lib/tabMru'
@@ -162,8 +160,11 @@ export default function App(): JSX.Element {
   const titleBar = useTitleBarMode()
   // THE TABS DOWN THE SIDE (#162): the strip, or a sidebar.
   const vertical = useTabLayout() === 'vertical'
-  const sidebarOpen = useSidebarMode() === 'open'
-  const sidebarWidth = useSidebarWidth()
+  // NO TITLE BAR AT ALL (#162; owner, 2026-10-11): with the tabs down the side
+  // and the title bar off, command help and Settings move into the sidebar and
+  // the window buttons float at the top right. With no tab open there is no
+  // sidebar, so the window keeps #91's top row to be moved by.
+  const bare = vertical && titleBar === 'hidden' && state.tabs.length > 0
   /** Which shell each tab was SPAWNED with. The Shell setting only names what
    *  the next terminal launches, so a tab opened before it was changed still
    *  speaks its old language, and the popup preselects by what is running. */
@@ -693,11 +694,9 @@ export default function App(): JSX.Element {
           The strip's own empty space is the handle the window moves by; with
           no tabs (the start screen) the row is only that handle and the
           buttons. */}
-      {vertical ? (
-        // VERTICAL (#162): a title bar of its own when shown, the tabs in the
-        // sidebar below it. Hidden, there is no top row at all: the bar slides
-        // down at the top edge (HoverTitleBar, after the body).
-        titleBar === 'shown' && <TitleBar onSettings={onSettings} onHelp={onHelp} chip={chip} />
+      {bare ? null : vertical && titleBar === 'shown' ? (
+        // VERTICAL (#162): the title bar of its own, the tabs in the sidebar.
+        <TitleBar onSettings={onSettings} onHelp={onHelp} chip={chip} />
       ) : titleBar === 'hidden' ? (
         <div
           data-title-bar="tabs"
@@ -715,7 +714,13 @@ export default function App(): JSX.Element {
         </>
       )}
       <div className="relative flex min-h-0 flex-1">
-      {vertical && <TabSidebar {...tabProps} titleRow={titleBar === 'hidden'} />}
+      {vertical && (
+        <TabSidebar
+          {...tabProps}
+          titleRow={titleBar === 'hidden'}
+          headStart={bare ? <AppButtons onSettings={onSettings} onHelp={onHelp} /> : undefined}
+        />
+      )}
       <div
         className="relative min-h-0 min-w-0 flex-1"
         data-term-host
@@ -795,10 +800,19 @@ export default function App(): JSX.Element {
         )}
       </div>
       </div>
-      {vertical && titleBar === 'hidden' && (
-        <HoverTitleBar hold={!!update.state.notice} left={tabs.length > 0 && sidebarOpen ? sidebarWidth : 0}>
-          <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
-        </HoverTitleBar>
+      {/* What is left of the title bar: the window's own three buttons, and
+          the update chip when there is one, always there and quiet ("either
+          buttons that show once your cursor is close or always persistent":
+          always, since a reveal at the edge is the thing that did not hold).
+          On the terminal's own ground, so a long first line runs under them
+          rather than through them. */}
+      {bare && (
+        <div data-window-buttons className="no-drag absolute right-1 top-1 z-40 flex items-center gap-2.5 rounded-md bg-[var(--p-bg-solid)] px-0.5">
+          {chip}
+          <div className="flex items-center gap-1">
+            <WindowButtons />
+          </div>
+        </div>
       )}
 
       {termMenu && activeShell && termMenu.id === activeShell.id && (
