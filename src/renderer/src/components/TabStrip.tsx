@@ -609,8 +609,6 @@ export function TabStrip({
           <div
             key={t.id}
             {...shared}
-            // NO LINE BETWEEN TABS (#143; owner, 2026-10-10): the right-hand
-            // hairline every tab carried is gone, in both styles.
             className={`no-drag group relative isolate flex items-center gap-1.5 px-2.5 transition-colors ${
               // Dynamic has a floor too (owner, 2026-09-28: "so it's not too
               // small when there's a tab with only one letter ... maybe like 4
@@ -636,6 +634,17 @@ export function TabStrip({
                 the tab in front (#143), so the rule is always there. */}
             {on && <span className="absolute inset-x-0 top-0 z-[3] h-0.5 bg-[var(--p-accent-hi)]" aria-hidden />}
             {body}
+            {/* A FAINT LINE BETWEEN TABS (owner, 2026-10-11: "no borders on
+                classic tabs ... just a faint border"; #143 had taken the full
+                hairline away). Short of the strip's height, in the divider's
+                ink, so it follows the Edges setting with every other line. */}
+            {!last && (
+              <span
+                data-tab-sep
+                aria-hidden
+                className="pointer-events-none absolute inset-y-2 right-0 w-px bg-[var(--p-divider)]"
+              />
+            )}
           </div>
         )
       })}
