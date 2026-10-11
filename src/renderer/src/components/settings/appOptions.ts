@@ -26,6 +26,7 @@ export interface AppOption {
 }
 
 export const APP_OPTIONS: readonly AppOption[] = [
+  { id: 'tab-layout', label: 'Tab position', sub: 'Tabs along the top, or down the side.', section: 'window', page: 'appearance', icon: 'sidebar', keywords: 'vertical horizontal sidebar side left strip top', store: ['prism.window.tabLayout', 'prism.window.sidebar', 'prism.window.sidebarWidth'] },
   { id: 'tab-width', label: 'Tab width', sub: 'Sized to the name, or all equal.', section: 'window', page: 'appearance', icon: 'tabs', keywords: 'size wide narrow equal fixed dynamic', store: ['prism.window.tabWidth'] },
   { id: 'tab-style', label: 'Tab style', sub: 'Flat tabs, or arrows like a prompt.', section: 'window', page: 'appearance', icon: 'prompt', keywords: 'chevron arrow segment shape powerline classic', store: ['prism.window.tabStyle'] },
   { id: 'tab-switch', label: 'Tab switching', sub: 'Which tab comes next when you switch.', section: 'window', page: 'appearance', icon: 'key', keywords: 'ctrl tab mru recent order cycle switch next previous last used', store: ['prism.window.tabSwitch'] },

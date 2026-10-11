@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ARROW, GAP, OVERLAP, SEAM, TUCK, edgeBand, ruleClip, segmentClip } from './promptGeometry'
+import { ARROW, GAP, OVERLAP, SEAM, TUCK, edgeBand, ruleClip, segmentClip, sideEdgeClip, sideSegmentClip } from './promptGeometry'
 
 // Checked against the mockup's placeEdges(): band left = right - ARROW - TUCK,
 // width = ARROW + o, o = TUCK + GAP + (next ? TUCK : 0).
@@ -59,5 +59,18 @@ describe('the Prompt geometry (#143)', () => {
   it('gives the first segment no notch', () => {
     expect(segmentClip(true)).not.toContain('12px 50%')
     expect(segmentClip(false)).toContain('12px 50%')
+  })
+})
+
+describe('Powerline in the sidebar (#162)', () => {
+  it('a row is the same arrow, with no notch', () => {
+    expect(sideSegmentClip()).toBe(`polygon(0 0, calc(100% - ${ARROW}px) 0, 100% 50%, calc(100% - ${ARROW}px) 100%, 0 100%)`)
+  })
+
+  it('its edge is a 3 px band along the arrow, inside the row', () => {
+    const c = sideEdgeClip()
+    expect(c).toContain(`calc(100% - ${ARROW + 3}px) 0`)
+    expect(c).toContain('100% 50%')
+    expect(c).toContain('calc(100% - 3px) 50%')
   })
 })

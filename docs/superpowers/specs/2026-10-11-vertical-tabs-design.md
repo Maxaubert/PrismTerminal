@@ -1,0 +1,55 @@
+# Vertical tabs and the mono Ring (#162)
+
+Date: 2026-10-11. Owner decisions are marked `(owner)`, in their words where they gave them.
+Mockups: `research/prism-terminal/mockups/2026-10-11-vertical-tabs/` (`vertical-tabs-chosen.html`
+is the approved one; `vertical-tab-styles.html` holds the 20 styles and 7 ring versions that were
+looked at on the way).
+
+## 1. What it is
+
+- A setting, **Tab position**: Horizontal (the strip, the default, nobody's window changes) or
+  Vertical, a sidebar down the window's left side. (owner: "we have a switch for horizontal and
+  vertical and another for classic or powerline")
+- The sidebar has **two tab styles, the same setting as the strip's**: Classic and Powerline, so the
+  UI gains no new style names. (owner: "bracket and prompt, but call them classic and powerline")
+  - Classic: one row a tab; the tab in front has a soft fill and the accent rule on the terminal's
+    side (the mockup's "Bracket").
+  - Powerline: each row an arrow pointing at the terminal; the arrow's edge carries the Minimal and
+    Full marks, as the chevrons do on the strip (the mockup's "Prompt").
+- **No outlined styles.** (owner: "none with borders, this also applies to the other tab styles")
+- **Two states for the sidebar**, kept between launches (owner: "a sidebar you can have open as a
+  static sidebar, or it can open as the cursor moves near it"):
+  - Open: beside the terminal; its right edge drags to resize (150 to 420 px, 220 at first).
+  - Collapsed: it takes no room and slides over the terminal while the pointer is at the window's
+    left edge (8 px), 90 ms in, 340 ms grace out. The terminal never resizes, so the shell is not
+    redrawn each time it shows.
+- **The collapse button is a sidebar-panel glyph with a chevron, in the sidebar only.** (owner: "not
+  a normal pin ... like a collapse sidebar icon"; "dont have the collapse sidebar button in the title
+  bar only in the actual sidebar")
+- **Title bar hidden with vertical tabs: no top row.** The bar slides down when the pointer reaches
+  the top edge, with only command help, Settings and the window buttons, and goes when the pointer
+  leaves. (owner: "the titlebar should be invisible, and only appear when your cursor is near the
+  top"; of the app's name: "dont show this in the hidden titlebar"). The sidebar's head is then the
+  window's handle. With horizontal tabs the hidden title bar is unchanged (#91).
+
+## 2. The indicators
+
+- **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new
+  look in terms of the indicators"): the same rule (`core/renderer/lib/tabMark.ts`), the same
+  Minimal and Full, in both directions.
+- **Ring becomes mono, in both directions** (owner: "the ring style should use just rings and dots
+  ... ultra minimal ... the spinning circle for working and a dot for done, and a dot for question,
+  and a dot for failure. maybe a checkmark could even work"; then "mono colour for ring, that should
+  be the same for horizontal version"). Picked from the seven ring versions: Mono.
+  - Working: the spinner. Finished: a check. Question: a breathing dot. Failed: a cross.
+  - All in the name's own ink (`currentColor`), no colour role, no line under the tab, no Powerline
+    edge. The rainbow switch does not touch it.
+  - This is a CORE change. Prism's strip does not offer Ring (its `tabMarks` leaves it out), so Prism
+    draws nothing new; the shared rule and component change.
+
+## 3. Not in this change
+
+- The sidebar on the RIGHT side (#162 lists it as a choice). Not asked for in the 2026-10-11
+  session; a follow-up if wanted.
+- A key to toggle the sidebar. Ctrl+B is Claude Code's own (background a task), so none is taken.
+- Ctrl+Tab, Most recent and Ctrl+1..9 are unchanged: they act on the tab list, whatever its shape.

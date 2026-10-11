@@ -22,6 +22,7 @@ import { setTabWidth, useTabWidth, type TabWidth } from '../../lib/tabWidthPrefs
 import { setTabStyle, useTabStyle, type TabStyle } from '../../lib/tabStylePrefs'
 import { setTabSwitch, useTabSwitch, type TabSwitch } from '../../lib/tabSwitchPrefs'
 import { setTitleBarMode, useTitleBarMode } from '../../lib/titleBarPrefs'
+import { setTabLayout, useTabLayout, type TabLayout } from '../../lib/tabLayoutPrefs'
 import { setWindowAccent, useWindowAccent } from '../../lib/accentPrefs'
 import { onWindowBackgroundChange, setWindowBackground, useWindowBackground, windowBackground } from '../../lib/backgroundPrefs'
 import { chromeTokens } from '../../lib/chromeTheme'
@@ -59,6 +60,12 @@ const EDGE_OPTIONS: Array<{ id: WindowEdges; name: string }> = WINDOW_EDGES.map(
 const TAB_WIDTH_OPTIONS: Array<{ id: TabWidth; name: string }> = [
   { id: 'dynamic', name: 'Dynamic' },
   { id: 'fixed', name: 'Fixed' }
+]
+
+// Horizontal first: it is the default, the strip as it always was (#162).
+const TAB_LAYOUT_OPTIONS: Array<{ id: TabLayout; name: string }> = [
+  { id: 'horizontal', name: 'Horizontal' },
+  { id: 'vertical', name: 'Vertical' }
 ]
 
 // Classic first: it is the default, the strip as it always was.
@@ -196,6 +203,8 @@ function WindowColours(): JSX.Element {
 
 export function AppearancePage(): JSX.Element {
   const edges = useWindowEdges()
+  const layout = useTabLayout()
+  const place = appOpt('tab-layout')
   const width = useTabWidth()
   const style = useTabStyle()
   const titleBar = useTitleBarMode()
@@ -208,6 +217,12 @@ export function AppearancePage(): JSX.Element {
   return (
     <>
       <SettingsSection id="window" title={APP_SECTIONS.window}>
+        {/* Where the tabs sit (#162): the strip along the top, or a sidebar
+            down the left. The sidebar's own open or collapsed state is its
+            button's, not a row here. */}
+        <SettingRow id="tab-layout" icon={place.icon} label={place.label} sub={place.sub}>
+          <Segmented value={layout} onChange={setTabLayout} options={TAB_LAYOUT_OPTIONS} />
+        </SettingRow>
         <SettingRow id="tab-width" icon={tab.icon} label={tab.label} sub={tab.sub}>
           <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
         </SettingRow>
@@ -228,7 +243,13 @@ export function AppearancePage(): JSX.Element {
         </SettingRow>
         {/* A switch over the same store the segmented control wrote: on is
             `shown`, the default, the window as it always was (#91). */}
-        <SettingRow id="title-bar" icon={bar.icon} label={bar.label} sub={bar.sub} tap>
+        <SettingRow
+          id="title-bar"
+          icon={bar.icon}
+          label={bar.label}
+          sub={layout === 'vertical' ? 'When off, it shows at the top edge.' : bar.sub}
+          tap
+        >
           <Switch on={titleBar === 'shown'} onChange={(on) => setTitleBarMode(on ? 'shown' : 'hidden')} label={bar.label} />
         </SettingRow>
         <SettingRow id="window-edges" icon={edge.icon} label={edge.label} sub={edge.sub}>

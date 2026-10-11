@@ -30,7 +30,7 @@ update window, command help, themes, the menu, settings), are in
 
 ## Scope
 
-In: tabs (a tab is ONE shell and its folder, nothing else), the agent indicator, themes + custom
+In: tabs (a tab is ONE shell and its folder, nothing else), along the top or as a sidebar (#162), the agent indicator, themes + custom
 theme + fonts + acrylic, tab restore with agent resume, the + with ask / fixed-folder modes and its
 pinned + recent list, the start screen, find in scrollback, the paste and drop rules, close
 confirmation, Explorer verbs, the update chip and its window, command help (#12), single instance.

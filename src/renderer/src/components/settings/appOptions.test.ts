@@ -32,6 +32,7 @@ describe("this app's own settings rows", () => {
   it('keep every storage key they have always had', () => {
     expect(APP_OPTIONS.map((o) => `${o.id}=${Array.isArray(o.store) ? o.store.join('+') : String(o.store)}`)).toMatchInlineSnapshot(`
       [
+        "tab-layout=prism.window.tabLayout+prism.window.sidebar+prism.window.sidebarWidth",
         "tab-width=prism.window.tabWidth",
         "tab-style=prism.window.tabStyle",
         "tab-switch=prism.window.tabSwitch",
@@ -96,5 +97,13 @@ describe('Find a setting', () => {
     const row = index.find((e) => e.id === 'tab-switch')
     expect(`${row?.page}/${row?.section}`).toBe('appearance/Window')
     for (const word of ['recent', 'ctrl', 'mru', 'order']) expect(row?.keywords).toContain(word)
+  })
+
+  it('finds Tab position by its words, first in the Window section (#162)', () => {
+    const index = settingsIndex(true)
+    const row = index.find((e) => e.id === 'tab-layout')
+    expect(`${row?.page}/${row?.section}`).toBe('appearance/Window')
+    expect(index.map((e) => e.id).indexOf('tab-layout')).toBe(0)
+    for (const word of ['vertical', 'sidebar']) expect(row?.keywords).toContain(word)
   })
 })
