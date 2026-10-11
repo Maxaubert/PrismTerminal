@@ -53,11 +53,13 @@ export function HoverTitleBar({
       data-title-bar="float"
       data-title-shown={shown || undefined}
       inert={!shown}
+      // No line under it (owner, 2026-10-11: "dont have a border on the
+      // titlebar on hidden"): its shadow says where it ends.
       // Slid by its TOP, never a transform: Windows is told where a drag
       // region is from the layout, and a transformed bar was reported where
       // its slide started, above the window, so it moved nothing (measured
       // with WM_NCHITTEST, 2026-10-11).
-      className={`drag p-styled-font absolute right-0 z-40 flex h-9 items-center justify-end gap-2.5 border-b border-[var(--p-divider)] bg-[var(--p-title)] pl-3 pr-1.5 text-[13px] transition-[top,box-shadow] duration-[200ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
+      className={`drag p-styled-font absolute right-0 z-40 flex h-9 items-center justify-end gap-2.5 bg-[var(--p-title)] pl-3 pr-1.5 text-[13px] transition-[top,box-shadow] duration-[200ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
         shown ? 'shadow-[0_10px_30px_-10px_rgba(0,0,0,.8)]' : ''
       }`}
       style={{ left, top: shown ? 0 : -48 }}
