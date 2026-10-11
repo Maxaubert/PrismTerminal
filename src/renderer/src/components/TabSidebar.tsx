@@ -274,7 +274,11 @@ export function TabSidebar({
         // Slid by its LEFT, never a transform: Windows is told where a drag
         // region is from the layout, and a transformed panel's grab strip was
         // reported where its slide started (measured, WM_NCHITTEST).
-        style={{ width, left: collapsed && !visible ? -(width + 16) : 0 }}
+        // The shadow falls on the terminal's side only: blurred, it reached up
+        // into the title bar too and drew a seam between the two (owner,
+        // 2026-10-12: "I can see a border between them"). Clipped above and
+        // below, open to the right.
+        style={{ width, left: collapsed && !visible ? -(width + 16) : 0, clipPath: 'inset(0 -60px 0 0)' }}
       >
         {/* A THIN STRIP TO GRAB, above the tabs, when there is no title bar
             (owner, 2026-10-11: "the tabs should start a bit further down on

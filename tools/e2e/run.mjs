@@ -2124,6 +2124,9 @@ const scenarios = {
         return { radius: col ? getComputedStyle(col).borderTopLeftRadius : null, barLine: bar ? getComputedStyle(bar).borderBottomWidth : null }
       })
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-merged.png') }).catch(() => {})
+      // No seam: the bar's colour right above the sidebar is the sidebar's own.
+      const seam = await page.evaluate(() => getComputedStyle(document.querySelector('[data-tab-sidebar]')).clipPath)
+      ok(seam.startsWith('inset(0px -60px 0px 0px)'), `the sidebar's shadow falls on the terminal's side only (${seam})`)
       ok(corner.radius === '10px' && corner.barLine === '0px', `the terminal is cut round where the bar and the sidebar meet, and the bar draws no line (${JSON.stringify(corner)})`)
       ok(open.line === '0px' && /rgba?\(0, 0, 0/.test(open.shadow ?? ''), `the sidebar casts a shadow and draws no line (${open.line}, ${open.shadow})`)
 
