@@ -552,20 +552,21 @@ export function TabStrip({
               }`}
               style={{ ...motion, marginRight: last ? 4 : -OVERLAP }}
             >
-              {/* With no mark the band is the plain border (owner, 2026-10-11):
+              {/* The plain border, the band with no mark (owner, 2026-10-11):
                   the tabs wear the ground, so a ground-coloured gap was no
                   border at all. It wears the divider's ink, so it matches every
                   other edge and follows the Edges setting (fainter on Faint,
                   gone on None): "the chevron border should match the edge
-                  border colour". */}
-              {!edge && (
-                <span
-                  data-prompt-border
-                  aria-hidden
-                  className="pointer-events-none absolute inset-y-0 z-0 bg-[var(--p-divider)]"
-                  style={{ right: band.right, width: band.width, clipPath: band.clip }}
-                />
-              )}
+                  border colour". It is drawn UNDER a mark too: the working
+                  edge GROWS, and while it was short the border was gone ("the
+                  border is gone when it's working, that edge border should
+                  still be there"). */}
+              <span
+                data-prompt-border
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 z-0 bg-[var(--p-divider)]"
+                style={{ right: band.right, width: band.width, clipPath: band.clip }}
+              />
               {edge && state && (
                 <span
                   data-mark="edge"
