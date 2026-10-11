@@ -554,7 +554,6 @@ export function TabStrip({
                   data-mark="edge"
                   data-prompt-edge={state}
                   data-mark-motion={edge.motion ?? undefined}
-                  data-mark-overlay={mark.overlay}
                   data-attention={state !== 'working' ? state : undefined}
                   data-rainbow={mark.place === 'edge' && mark.colour === 'rainbow' ? '' : undefined}
                   aria-hidden
