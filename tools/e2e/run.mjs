@@ -856,6 +856,96 @@ const scenarios = {
     }
   },
 
+  /**
+   * THE AGENT INDICATOR IN THE DIAGNOSTICS LOG (#152). A shell stands in for
+   * Claude through its hooks and titles, and the scenario profile's
+   * logs\diag.jsonl must then hold: the hooks, a run of the same state folded
+   * into one line with a count; each move of the tab's mark with the rule
+   * that fired; the title's meaning only when it changes; and nothing of the
+   * screen or the title's text (a marker string is on both).
+   */
+  async agentDiag(ok) {
+    const w = world()
+    const file = join(w.profile, 'logs', 'diag.jsonl')
+    const read = () => {
+      try {
+        return readFileSync(file, 'utf8').split('\n').filter(Boolean)
+      } catch {
+        return []
+      }
+    }
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    try {
+      await until(async () => (await tabLabels(page)).length === 2)
+      const tab = (i) => page.locator('[data-tab]').nth(i)
+      const state = (i) => tab(i).getAttribute('data-agent-state')
+      const say = (s) => hookSay(s)
+      const at = (i, cmd) => tab(i).click().then(() => typeLine(page, cmd))
+      const later = (cmd) => `Start-Sleep -Milliseconds 1500; ${cmd}`
+      const look = async (i) => {
+        await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+        await tab(i).click()
+      }
+      const SECRET = 'SECRET-7Q'
+      const title = (glyph) => `$Host.UI.RawUI.WindowTitle = [char]0x${glyph} + ' ${SECRET} fix the login'`
+      await polled(page)
+      // Nobody looking yet, as a parked window is not (it can start focused).
+      await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+
+      // A run of tool calls: three `working` signals, and the screen says the marker.
+      await at(0, `Write-Host '${SECRET} on screen'; ${say('working')}; ${say('working')}; ${say('working')}`)
+      ok(!!(await until(async () => (await state(0)) === 'working', 8000, 50)), 'working hooks light the tab')
+      // Finished on a background tab, then looked at.
+      await at(0, later(say('done')))
+      await tab(1).click()
+      ok(!!(await until(async () => (await state(0)) === 'done', 10000, 50)), 'a Stop on a background tab is Finished')
+      await look(0)
+      ok(!!(await until(async () => (await state(0)) === null, 4000, 50)), 'looking at it takes Finished down')
+      // A question on a background tab, answered by work on the tab in front.
+      await at(0, later(say('question')))
+      await tab(1).click()
+      ok(!!(await until(async () => (await state(0)) === 'question', 10000, 50)), 'a question hook marks it')
+      await look(0)
+      await typeLine(page, say('working'))
+      ok(!!(await until(async () => (await state(0)) === 'working', 8000, 50)), 'work answers it')
+      await typeLine(page, say('done'))
+      ok(!!(await until(async () => (await state(0)) === null, 8000, 50)), 'and a Stop in front leaves no mark')
+      // Titles: idle, two spinner frames, then no agent title at all.
+      await typeLine(page, `${title('2733')}; Start-Sleep -Milliseconds 400; ${title('25D0')}; Start-Sleep -Milliseconds 400; ${title('25D1')}; Start-Sleep -Milliseconds 400; $Host.UI.RawUI.WindowTitle = 'pwsh'`)
+
+      // The page sends every 250 ms and the writer writes every 250 ms.
+      const parsed = () => read().map((l) => JSON.parse(l))
+      const agentLines = (k) => parsed().filter((l) => l.k === k)
+      ok(!!(await until(() => agentLines('agent-title').some((l) => l.state === 'none'), 15000, 200)), 'the title lines arrive')
+      const hooks = agentLines('agent-hook')
+      const id = hooks[0]?.id
+      const hookSeq = hooks.filter((l) => l.id === id).map((l) => `${l.state}${l.repeats ? `x${l.repeats}` : ''}`)
+      ok(
+        JSON.stringify(hookSeq) === JSON.stringify(['working', 'workingx2', 'done', 'question', 'working', 'done']),
+        `agent-hook: every signal, the run of three working folded into one line and a count (${JSON.stringify(hookSeq)})`
+      )
+      const marks = agentLines('agent-mark').filter((l) => l.id === id)
+      const markSeq = marks.map((l) => `${l.from}>${l.to}: ${l.why}`)
+      const want = [
+        'none>working: hook working',
+        'working>done: hook done',
+        'done>none: tab looked at',
+        'none>question: hook question',
+        'question>working: hook working, tab in front',
+        'working>none: hook done, tab in front'
+      ]
+      ok(JSON.stringify(markSeq) === JSON.stringify(want), `agent-mark: each move, with the rule that fired (${JSON.stringify(markSeq)})`)
+      ok(marks.every((l) => l.agent === 'claude' && Array.isArray(l.held)), 'each mark names the agent and the marks held')
+      const titles = agentLines('agent-title').filter((l) => l.id === id).map((l) => l.state)
+      ok(JSON.stringify(titles) === JSON.stringify(['idle', 'working', 'none']), `agent-title: the meaning only when it changes, not each spinner frame (${JSON.stringify(titles)})`)
+      const leaks = read().filter((l) => l.includes(SECRET))
+      ok(leaks.length === 0, `no screen text or title text reaches the log (${leaks.length} lines carry the marker)`)
+      console.log(`      sample: ${[hooks[1], marks[1], marks[2], agentLines('agent-title')[0]].map((l) => JSON.stringify(l)).join('\n              ')}`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   /** A light theme makes a light window: measured, never read off a name. */
   async theme(ok) {
     const w = world()
@@ -1633,6 +1723,16 @@ const scenarios = {
       // Fixed and Dynamic both hold.
       const widths = () => page.evaluate(() => [...document.querySelectorAll('[data-tab]')].map((t) => Math.round(t.getBoundingClientRect().width)))
       const dyn = await widths()
+      // A CLICK MOVES NOTHING (#164; owner, 2026-10-10: "when you click tabs
+      // the ui shifts"). The tab in front is semi-bold here, and under Dynamic
+      // a heavier name was a wider tab that pushed the rest along.
+      const edgesX = () => page.evaluate(() => [...document.querySelectorAll('[data-tab]')].map((t) => { const r = t.getBoundingClientRect(); return [r.left, r.right].map((v) => Math.round(v * 2) / 2) }))
+      const before = await edgesX()
+      await page.locator('[data-tab]').nth(3).locator('[role="tab"]').click()
+      await sleep(200)
+      const after = await edgesX()
+      ok(JSON.stringify(before) === JSON.stringify(after), `Powerline, Dynamic: clicking a tab moves no tab (${JSON.stringify(before)} vs ${JSON.stringify(after)})`)
+      await backToFirst(page)
       await (await gotoPref(page, 'tab-width')).locator('[data-seg="fixed"]').click()
       await backToFirst(page)
       const fixed = await widths()
@@ -2409,6 +2509,19 @@ const scenarios = {
     const alt = 'https://example.org/alt/path?x=1'
     await typeLine(page, `Write-Host -NoNewline "$([char]27)[?1049h$([char]27)[H"; Write-Host 'open ${alt} here'`)
     ok(await until(async () => (await inked(BLUE)).includes(alt), 8000), 'on the alternate screen a printed link wears the link blue')
+    // HOVER AND LEAVE KEEP IT (#163; owner's recording, 2026-10-10: a hovered
+    // link in Claude Code's fullscreen view "turn[s] white" until a scroll).
+    // xterm underlines a hovered link by REPLACING the row's contents, with
+    // no onRender, which wiped the ink.
+    const box = await page.locator('.xterm-rows > div span', { hasText: 'example.org' }).first().boundingBox()
+    if (box) {
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await new Promise((r) => setTimeout(r, 600))
+      ok((await inked(BLUE)).includes(alt), 'a hovered link on the alternate screen keeps the link blue')
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height * 6)
+      await new Promise((r) => setTimeout(r, 600))
+      ok((await inked(BLUE)).includes(alt), 'and keeps it once the pointer leaves, with no scroll')
+    } else ok(false, 'the alternate-screen link is on screen to hover')
     await typeLine(page, `Write-Host -NoNewline "$([char]27)[H$([char]27)[2Kplain words where the link was"`)
     ok(
       await until(async () => !(await inked(BLUE)).some((t) => t.includes('plain') || t.includes('words')), 8000),
