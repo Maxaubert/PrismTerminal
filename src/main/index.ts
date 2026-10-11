@@ -22,6 +22,7 @@ import { killAll, shellsDying, shellsGone } from '@core/main/terminal'
 import { installUpdate, updateCalls, watchForUpdates } from './update'
 import { previewUpdate, runPreviewInstall, wantsPreview } from '@core/main/updatePreview'
 import { createVerbSwitch } from './verbSwitch'
+import { bellFlash } from './bellFlash'
 import { readWindowState, watchWindowState } from './windowState'
 
 // Prism Terminal's main process: the window, its lifecycle and the
@@ -89,6 +90,22 @@ const pathOpeners = {
     if (E2E) e2eOpenedPaths.push({ how: 'reveal', abs })
     else shell.showItemInFolder(abs)
   }
+}
+
+/**
+ * THE BELL FLASHES THE TASKBAR (#177; `bellFlash.ts` says when). Under --e2e
+ * it is COUNTED on `globalThis.__e2eFlashes` and nothing flashes: the parked
+ * window is never focused, so every test bell would otherwise blink the
+ * owner's taskbar (e2e has no side effects, #64).
+ */
+const e2eFlashes = { count: 0 }
+if (E2E) Object.assign(globalThis, { __e2eFlashes: e2eFlashes })
+function bellAttention(): void {
+  if (E2E) {
+    if (mainWindow && !mainWindow.isFocused()) e2eFlashes.count++
+    return
+  }
+  bellFlash(mainWindow)
 }
 
 /**
@@ -486,7 +503,9 @@ function wireIpc(): void {
     // AGENT STATES FROM CLAUDE CODE'S HOOKS (#131): the plugin ships beside
     // the app (electron-builder's extraResources), and a dev build reads the
     // core's own copy. A shell gets it while the page's setting is on.
-    claudePluginDir: claudePluginDir()
+    claudePluginDir: claudePluginDir(),
+    // A bell flashes the taskbar while the window is unfocused (#177).
+    attention: bellAttention
   })
   // DICTATION (#13) is the core's too. What is this app's own: where ITS
   // installer put the CPU engine, the folder it shares with Prism, and the GPU
