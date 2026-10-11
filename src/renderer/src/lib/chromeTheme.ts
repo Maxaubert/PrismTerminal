@@ -69,24 +69,28 @@ export interface ChromeTokens {
  *  core's (#114), which takes 0..1. */
 const pctHex = (pct: number): string => alphaHex(Math.min(100, Math.max(0, pct)) / 100)
 
-/** How far the Powerline border stands off the ground it separates (black,
- *  once reached, is as far as darker goes). */
-const TAB_EDGE_FLOOR = 1.5
+/** How far a darker border stands off the ground (black, once reached, is as
+ *  far as darker goes). */
+const TAB_EDGE_DARKER = 1.25
+/** A true-black ground's grey border: as dark a grey as still shows. */
+const TAB_EDGE_ON_BLACK = 1.2
+/** Under this ratio to black a ground counts as black (about #0a0a0a). */
+const BLACK_GROUND = 1.05
 
 /**
  * THE POWERLINE BORDER between two tabs (owner, 2026-10-11): the tabs sit on
- * the theme's own ground, so a border in the ground's colour vanished ("the
- * border which was black before"). It is DARKER than the tabs where the
- * ground leaves room (dark grey gets black, white gets light grey) and
- * lighter only where it does not (black gets grey): the first step that
- * clears TAB_EDGE_FLOOR against the ground.
+ * the theme's own ground, so a border in the ground's colour vanished. Every
+ * ground's border is that ground a bit DARKER ("all themes should have its bg
+ * color + a bit darker, except black themes since that's not possible"): a
+ * very dark grey gets black, white gets light grey. Only a true-black ground
+ * gets a lighter one, a dark grey.
  */
 export function tabEdge(bg: string, fg: string): string {
-  // Black is taken whenever it stands off at all visibly (1.3), even short of
-  // the floor: a dark grey ground's border is black, as asked.
-  const toward = contrastRatio(bg, '#000000') >= 1.3 ? '#000000' : fg
+  const black = contrastRatio(bg, '#000000') < BLACK_GROUND
+  const toward = black ? fg : '#000000'
+  const floor = black ? TAB_EDGE_ON_BLACK : TAB_EDGE_DARKER
   let edge = bg
-  for (let i = 1; i <= 25 && contrastRatio(bg, edge) < TAB_EDGE_FLOOR; i += 1) edge = mixHex(bg, toward, i * 0.04)
+  for (let i = 1; i <= 50 && contrastRatio(bg, edge) < floor; i += 1) edge = mixHex(bg, toward, i * 0.02)
   return edge
 }
 
