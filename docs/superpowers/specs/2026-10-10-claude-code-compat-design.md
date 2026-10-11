@@ -193,6 +193,25 @@ Claude writes `CSI ? 2031 h` (MEASURED) and re-queries OSC 11 only when the term
   the scenario picks Fawn in Settings; the probe receives `?997;2n` exactly once; back to PT Default
   gives `?997;1n`; a font size change sends nothing.
 
+### Measured after release: a live switch repaints only Claude's live frame (2026-10-11)
+
+Owner, on 0.38.0: switched dark to light with Claude Code 2.1.296 ("auto") running, and Claude
+"stayed dark". MEASURED, in this app (a dev build with the reports state traced) and over bare
+node-pty with the bundled ConPTY: PT does its part in every case tried (a typed `claude`, a
+restored tab's `claude --resume`, a PowerShell-tool turn, hooks, focus out and in, replies held
+back 8 s as a stalled restore would): `?2031h` is seen, the switch pushes `?997;2n` once, Claude
+asks OSC 11 again and its debug log says `detected=light`. Claude then REDRAWS ONLY ITS LIVE FRAME
+(the input box, the spinner line, the status, whatever of the last answer is still in the frame).
+Rows it has already committed above that frame keep the old palette: with a 22-line answer the
+prompt row's dark band (`48;2;55;55;55`) was not rewritten, and a long resumed session is almost all
+committed transcript, so it looks unchanged. A short session repaints whole because all of it is
+still the frame. Claude's own redraw (Ctrl+L) and a resize clear the screen and draw the viewport in
+the new palette (MEASURED); the scrollback above stays as written. So the rest is Claude Code's:
+it does not repaint committed output on a theme change. PT could force a redraw (Ctrl+L or a
+one-column resize nudge after the push), but the first is typing into the user's program (rule
+`only-command-is-resume`) and the second a resize every program sees (rule `conpty-resize`): an
+owner decision, not taken. The user's own Ctrl+L in Claude redraws the screen in the new palette.
+
 ## 5. #169 (medium): OSC 8 links open nothing
 
 ### What exists
