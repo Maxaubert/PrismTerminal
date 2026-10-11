@@ -107,7 +107,7 @@ export function TabSidebar({
   onOpenRecent: (path: string) => void
   /** The title bar is hidden: the sidebar's head is the window's handle. */
   titleRow: boolean
-  /** What leads the head: command help and Settings, when there is no title bar. */
+  /** Command help and Settings, at the foot, when there is no title bar. */
   headStart?: ReactNode
 }): JSX.Element | null {
   const prompt = useTabStyle() === 'prompt'
@@ -314,42 +314,15 @@ export function TabSidebar({
         } ${collapsed && visible ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]' : ''} ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         style={{ width, transform: collapsed && !visible ? 'translateX(calc(-100% - 16px))' : '' }}
       >
-        {/* The head: the +, at the right. With no
-            title bar, command help and Settings at its left (#162; owner,
-            2026-10-11: "settings and command help move to sidebar"), and its
-            empty space is what moves the window. */}
-        <div
-          data-sidebar-head
-          className={`${handle} flex h-9 shrink-0 items-center justify-end gap-0.5 px-1.5`}
-        >
-          {headStart && (
-            <div className="no-drag mr-auto flex items-center gap-0.5">{headStart}</div>
-          )}
-          <button
-            className={BTN}
-            title="New tab (Ctrl+T). Right-click for recent folders"
-            aria-label="New tab"
-            data-sidebar-new
-            onClick={onNew}
-            onContextMenu={menu.openPlusMenu}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width={14}
-              height={14}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              aria-hidden
-            >
-              <path d="M12 6v12m6-6H6" />
-            </svg>
-          </button>
-        </div>
         <div
           ref={rows}
-          className="p-scroll flex min-h-0 flex-1 flex-col gap-px overflow-y-auto pb-2"
+          data-sidebar-rows
+          // ONLY TABS AT THE TOP (owner, 2026-10-11: "the sidebar buttons
+          // should be near the bottom rather than the top. only tabs at the
+          // top"). With no title bar, the list's empty space below the tabs
+          // is what moves the window ("i cant drag the window"); each row is
+          // no-drag, so a tab still clicks and drags as a tab.
+          className={`${handle} p-scroll flex min-h-0 flex-1 flex-col gap-px overflow-y-auto pb-2 pt-1.5`}
         >
           {tabs.map((t, i) => {
             const on = t.id === activeId
@@ -522,9 +495,36 @@ export function TabSidebar({
             )
           })}
         </div>
-        {/* The sidebar's own button, at its foot (owner, 2026-10-11: "put the
-            sidebar button at the bottom"). */}
-        <div data-sidebar-foot className="flex h-9 shrink-0 items-center px-1.5">
+        {/* THE BUTTONS, AT THE FOOT (owner, 2026-10-11): the +, then, with no
+            title bar, command help and Settings, then the sidebar's own
+            button. The space between them moves the window too. */}
+        <div
+          data-sidebar-foot
+          className={`${handle} flex h-10 shrink-0 items-center gap-0.5 px-1.5`}
+        >
+          <button
+            className={BTN}
+            title="New tab (Ctrl+T). Right-click for recent folders"
+            aria-label="New tab"
+            data-sidebar-new
+            onClick={onNew}
+            onContextMenu={menu.openPlusMenu}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width={14}
+              height={14}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden
+            >
+              <path d="M12 6v12m6-6H6" />
+            </svg>
+          </button>
+          <span className="min-w-2 flex-1 self-stretch" />
+          {headStart && <div className="no-drag flex items-center gap-0.5">{headStart}</div>}
           <button
             className={BTN}
             data-sidebar-toggle={collapsed ? 'expand' : 'collapse'}

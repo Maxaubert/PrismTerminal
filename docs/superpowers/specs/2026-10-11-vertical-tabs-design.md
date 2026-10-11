@@ -50,6 +50,13 @@ looked at on the way).
 - The title bar shows the app's icon in outline, in the accent, and no name ("just show the logo
   ... an outline box with the outlined art inside").
 
+- **Only tabs at the top; every button at the foot** (owner: "the sidebar buttons should be near
+  the bottom rather than the top. only tabs at the top"): the +, then (with no title bar) command help
+  and Settings, then the collapse button. With no title bar the sidebar's empty space, below the tabs
+  and between the foot's buttons, moves the window ("i cant drag the window ... maybe we need a title
+  bar or some way to drag it"). The e2e asks Windows itself (WM_NCHITTEST) where a press moves the
+  window.
+
 ## 2. The indicators
 
 - **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new
