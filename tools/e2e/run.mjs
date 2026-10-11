@@ -2309,6 +2309,9 @@ const scenarios = {
       ok(down.bar.top === 0 && Math.abs(down.bar.left - down.navRight) <= 1 && down.bar.right === 0, `from the sidebar's edge to the right, not over it (${JSON.stringify(down.bar)}, sidebar ends ${down.navRight})`)
       ok(down.buttons && down.settings && !down.name, "with Settings, Help and the window's buttons, no icon or name")
       ok(await page.evaluate(() => !!document.querySelector('[data-title-bar="float"] [data-title-corner]')), 'with a curved corner where it meets the sidebar')
+      // No line where it meets the sidebar: the bar's shadow falls below it only.
+      const barClip = await page.evaluate(() => getComputedStyle(document.querySelector('[data-title-bar="float"]')).clipPath)
+      ok(barClip.startsWith('inset(0px 0px -48px'), `its shadow falls below it only, not across the sidebar (${barClip})`)
       ok((await top()).hostTop === 0, 'over the terminal, which keeps its size')
       // THE DRAG ITSELF, as Windows decides it: 2 (HTCAPTION) moves the window.
       const spots = await page.evaluate(() => {

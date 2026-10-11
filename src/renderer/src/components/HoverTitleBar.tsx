@@ -62,7 +62,10 @@ export function HoverTitleBar({
       className={`drag p-styled-font absolute right-0 z-40 flex h-9 items-center justify-end gap-2.5 bg-[var(--p-secondary)] pl-3 pr-1.5 text-[13px] transition-[top,box-shadow] duration-[200ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
         shown ? 'shadow-[0_10px_30px_-10px_rgba(0,0,0,.8)]' : ''
       }`}
-      style={{ left, top: shown ? 0 : -48 }}
+      // Its shadow falls below it only: spread sideways it darkened a strip of
+      // the sidebar along the bar's left end, a line between the two (owner,
+      // 2026-10-12: "i still see a visible line here").
+      style={{ left, top: shown ? 0 : -48, clipPath: 'inset(0 0 -48px 0)' }}
     >
       {children}
       {/* THE CORNER WHERE IT MEETS THE SIDEBAR (owner, 2026-10-12: rounded,
