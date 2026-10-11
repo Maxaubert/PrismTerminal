@@ -2320,6 +2320,39 @@ const scenarios = {
       await cursor({ x: 600, y: 60 })
       ok(!!(await until(barUp, 3000, 30)), 'and goes once the cursor is clearly below it')
       await cursor(null)
+      // A COLLAPSED SIDEBAR THAT HAS SLID OUT: the bar still starts at its
+      // edge, never over it (owner, 2026-10-11: "the titlebar should drop down
+      // from the sidebar edge and until the right edge. not overlay over the
+      // sidebar").
+      await page.locator('[data-sidebar-toggle="collapse"]').click()
+      await page.mouse.move(800, 400)
+      await sleep(600)
+      await cursor({ x: 10, y: 300 })
+      await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
+      await sleep(300)
+      await cursor({ x: down.navRight + 20, y: 4 })
+      await until(async () => (await top()).shown, 3000, 20)
+      const both = await page.evaluate(() => ({
+        bar: Math.round(document.querySelector('[data-title-bar="float"]').getBoundingClientRect().left),
+        side: Math.round(document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right),
+        sideShown: document.querySelector('[data-tab-sidebar]').hasAttribute('data-sidebar-shown')
+      }))
+      ok(!both.sideShown || Math.abs(both.bar - both.side) <= 1, `with the slid-out sidebar showing, the bar starts at its edge (${JSON.stringify(both)})`)
+      await cursor({ x: 600, y: 300 })
+      await until(barUp, 3000, 30)
+      await until(async () => !(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
+      await cursor({ x: 600, y: 4 })
+      await until(async () => (await top()).shown, 3000, 20)
+      await sleep(300)
+      const alone = Math.round(await page.evaluate(() => document.querySelector('[data-title-bar="float"]').getBoundingClientRect().left))
+      ok(alone === 0, `with the sidebar away, the bar spans the window (${alone})`)
+      await cursor({ x: 600, y: 300 })
+      await until(barUp, 3000, 30)
+      await cursor({ x: 10, y: 300 })
+      await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
+      await sleep(300)
+      await page.locator('[data-sidebar-toggle="expand"]').click()
+      await cursor(null)
       // Settings from the sidebar, and back.
       await (await gotoPref(page, 'title-bar')).locator('[role="switch"]').click()
       ok(!!(await until(() => page.evaluate(() => document.querySelectorAll('[data-title-bar]').length === 1 && !document.querySelector('[data-title-bar="clear"]') && !!document.querySelector('[data-app-mark]')), 3000, 50)), 'Show title bar puts the full bar back')

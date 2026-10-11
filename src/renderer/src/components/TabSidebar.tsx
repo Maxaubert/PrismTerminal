@@ -20,6 +20,7 @@ import { dropSlot, type Lane } from '../lib/tabDrop'
 import { useHoverReveal } from '../lib/hoverReveal'
 import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
+import { setSidebarEdge } from '../lib/sidebarEdge'
 import {
   SIDEBAR_WIDTH,
   setSidebarMode,
@@ -150,6 +151,12 @@ export function TabSidebar({
     shownNow.current = shown
   }, [shown])
   const visible = !collapsed || shown
+  // Where its edge is on screen, for the pop-out title bar to start at.
+  const onScreen = tabs.length > 0 && visible ? width : 0
+  useEffect(() => {
+    setSidebarEdge(onScreen)
+  }, [onScreen])
+  useEffect(() => () => setSidebarEdge(0), [])
 
   // ---- Reorder: the strip's pointer drag, along y ----
   const [dropAt, setDropAt] = useState<number | null>(null)

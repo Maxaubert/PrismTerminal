@@ -13,7 +13,7 @@ import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { useTabLayout } from './lib/tabLayoutPrefs'
-import { useSidebarMode, useSidebarWidth } from './lib/sidebarPrefs'
+import { useSidebarEdge } from './lib/sidebarEdge'
 import { HoverTitleBar } from './components/HoverTitleBar'
 import TitleBar, { AppButtons, TitleButtons, WindowButtons } from './components/TitleBar'
 import { useTitleBarMode } from './lib/titleBarPrefs'
@@ -167,8 +167,8 @@ export default function App(): JSX.Element {
   // the window buttons float at the top right. With no tab open there is no
   // sidebar, so the window keeps #91's top row to be moved by.
   const bare = vertical && titleBar === 'hidden' && state.tabs.length > 0
-  const sidebarOpen = useSidebarMode() === 'open'
-  const sidebarWidth = useSidebarWidth()
+  // Where the sidebar's edge is on screen: the pop-out bar starts there.
+  const sidebarEdge = useSidebarEdge()
   /** Which shell each tab was SPAWNED with. The Shell setting only names what
    *  the next terminal launches, so a tab opened before it was changed still
    *  speaks its old language, and the popup preselects by what is running. */
@@ -815,7 +815,7 @@ export default function App(): JSX.Element {
           over it at the top edge with the window's buttons, and moves the
           window while it is down. */}
       {bare && (
-        <HoverTitleBar hold={!!update.state.notice} left={sidebarOpen ? sidebarWidth : 0}>
+        <HoverTitleBar hold={!!update.state.notice} left={sidebarEdge}>
           {chip}
           <div data-window-buttons className="no-drag flex items-center gap-1">
             <WindowButtons />
