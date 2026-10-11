@@ -257,7 +257,7 @@ export function TabSidebar({
             if (path) onDropFolder(path)
           }
         }}
-        className={`p-styled-font absolute inset-y-0 left-0 flex flex-col border-r border-[var(--p-divider)] bg-[var(--p-secondary)] text-[13px] ${
+        className={`p-styled-font absolute inset-y-0 left-0 flex flex-col bg-[var(--p-secondary)] text-[13px] ${
           collapsed
             ? 'transition-[left,box-shadow] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
             : ''
@@ -265,6 +265,8 @@ export function TabSidebar({
           // A PLANE ABOVE THE TERMINAL (owner, 2026-10-12: "give the sidebar a
           // shadow, so it looks like it's on a higher plane than the rest of the
           // content"): always, deeper while it floats slid out over the terminal.
+          // No line at its edge: the shadow is the edge ("no border on sidebar
+          // though since we have that shadow now").
           collapsed && visible
             ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]'
             : 'shadow-[6px_0_22px_-6px_rgba(0,0,0,.5)]'

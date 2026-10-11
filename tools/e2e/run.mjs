@@ -2104,7 +2104,9 @@ const scenarios = {
             lefts: rows.map((r) => Math.round(r.getBoundingClientRect().left)),
             ruleAtRight: !!rule && !!first && Math.abs(rule.right - first.getBoundingClientRect().right) <= 1 && Math.round(rule.width) === 2,
             mode: nav?.getAttribute('data-sidebar-mode') ?? null,
-            shown: nav?.hasAttribute('data-sidebar-shown') ?? false
+            shown: nav?.hasAttribute('data-sidebar-shown') ?? false,
+            line: nav ? getComputedStyle(nav).borderRightWidth : null,
+            shadow: nav ? getComputedStyle(nav).boxShadow : null
           }
         })
       const open = await geo()
@@ -2113,6 +2115,8 @@ const scenarios = {
       ok(new Set(open.lefts).size === 1, 'all in one column')
       ok(open.nav.left === 0 && open.nav.width >= 150 && open.host.left >= open.nav.right - 1, `the sidebar on the left, the terminal beside it (${open.nav.width}px, terminal at ${open.host.left})`)
       ok(open.ruleAtRight, 'Classic: the tab in front has its accent rule on the terminal side')
+      // Owner, 2026-10-12: a shadow puts it on a higher plane, and with it no line.
+      ok(open.line === '0px' && /rgba?\(0, 0, 0/.test(open.shadow ?? ''), `the sidebar casts a shadow and draws no line (${open.line}, ${open.shadow})`)
 
       // THE SAME MARKS AS THE STRIP, in both tab styles.
       const marks = () =>
