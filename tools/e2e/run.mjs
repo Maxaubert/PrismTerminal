@@ -2205,8 +2205,10 @@ const scenarios = {
       await page.locator('[data-sidebar-toggle="expand"]').click()
       ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open' && (await geo()).host.left > 100, 'its button keeps it open again')
 
-      // NO TITLE BAR AT ALL (owner, 2026-10-11): command help and Settings in
-      // the sidebar's head, the window's three buttons floating at the top right.
+      // THE CLEAR TITLE BAR (owner, 2026-10-11: "there should be a title bar
+      // to drag from not the sidebar. how about making it transparent"):
+      // command help and Settings at the sidebar's foot, a bar of the
+      // terminal's own ground over the terminal, the window buttons in it.
       const bar = await gotoPref(page, 'title-bar')
       await bar.locator('[role="switch"]').click()
       await backToFirst(page)
@@ -2217,6 +2219,14 @@ const scenarios = {
           const b = btns?.getBoundingClientRect()
           return {
             rows: document.querySelectorAll('[data-title-bar]').length,
+            clear: (() => {
+              const c = document.querySelector('[data-title-bar="clear"]')
+              const r = c?.getBoundingClientRect()
+              return c && r ? { left: Math.round(r.left), top: Math.round(r.top), height: Math.round(r.height), bg: getComputedStyle(c).backgroundColor, holds: c.contains(btns), border: getComputedStyle(c).borderBottomWidth } : null
+            })(),
+            navRight: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().right ?? -1),
+            hostTop: Math.round(document.querySelector('[data-term-host]')?.getBoundingClientRect().top ?? -1),
+            termBg: getComputedStyle(document.querySelector('[data-term-host] .xterm-scrollable-element') ?? document.body).backgroundColor,
             mark: !!document.querySelector('[data-app-mark]'),
             inFoot: !!foot?.querySelector('[data-title-settings]') && !!foot?.querySelector('[data-sidebar-new]') && !!foot?.querySelector('[data-sidebar-toggle]'),
             help: !!foot?.querySelector('[data-title-help]'),
@@ -2229,11 +2239,13 @@ const scenarios = {
           }
         })
       const bare = await top()
-      ok(bare.rows === 0 && !bare.mark, `no title bar at all, nor the app's icon (${JSON.stringify(bare)})`)
+      ok(bare.rows === 1 && !!bare.clear && !bare.mark, `one bar, the clear one, with no icon or name (${JSON.stringify(bare.clear)})`)
+      ok(bare.clear.top === 0 && bare.clear.height >= 28 && Math.abs(bare.clear.left - bare.navRight) <= 1, `over the terminal only, from the sidebar's edge (${JSON.stringify(bare.clear)}, sidebar ends ${bare.navRight})`)
+      ok(bare.clear.border === '0px' && bare.hostTop === bare.clear.height, `no line under it, the terminal right below (${bare.clear.border}, terminal at ${bare.hostTop})`)
       ok(bare.navTop === 0, `the sidebar starts at the top of the window (${bare.navTop})`)
       ok(bare.inFoot, "the +, Settings and the sidebar's button are at its foot")
       ok(bare.firstRowTop <= 10, `only tabs at the top (the first row at ${bare.firstRowTop}px)`)
-      ok(bare.close && !bare.cog && bare.right <= 12 && bare.top <= 8, `the window's three buttons float at the top right, alone (${JSON.stringify(bare)})`)
+      ok(bare.close && !bare.cog && bare.clear.holds && bare.right <= 12 && bare.top <= 8, `the window's three buttons are in it, at the top right, alone (${JSON.stringify(bare)})`)
       // THE DRAG ITSELF, as Windows decides it (owner, 2026-10-11: "i cant drag
       // the window"): 2 is HTCAPTION, a press that moves the window.
       const spots = await page.evaluate(() => {
@@ -2243,7 +2255,9 @@ const scenarios = {
         const foot = document.querySelector('[data-sidebar-foot]').getBoundingClientRect()
         const plus = document.querySelector('[data-sidebar-new]').getBoundingClientRect()
         const row = rows[0].getBoundingClientRect()
+        const clear = document.querySelector('[data-title-bar="clear"]').getBoundingClientRect()
         return [
+          { x: clear.left + 80, y: clear.top + clear.height / 2 },
           { x: nav.left + 60, y: (last.bottom + foot.top) / 2 },
           { x: plus.right + 12, y: foot.top + foot.height / 2 },
           { x: row.left + 40, y: row.top + row.height / 2 },
@@ -2251,12 +2265,12 @@ const scenarios = {
         ]
       })
       const hit = await hitTest(app, spots)
-      ok(hit[0] === 2 && hit[1] === 2, `the sidebar's empty space and its foot move the window (${hit})`)
-      ok(hit[2] === 1 && hit[3] === 1, `a tab and the terminal do not (${hit})`)
+      ok(hit[0] === 2, `the clear bar moves the window (${hit})`)
+      ok(hit[1] === 1 && hit[2] === 1 && hit[3] === 1 && hit[4] === 1, `the sidebar's empty space, its foot, a tab and the terminal do not ("not the sidebar") (${hit})`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-no-titlebar.png') }).catch(() => {})
       // Settings from the sidebar, and back.
       await (await gotoPref(page, 'title-bar')).locator('[role="switch"]').click()
-      ok(!!(await until(() => page.evaluate(() => document.querySelectorAll('[data-title-bar]').length === 1 && !document.querySelector('[data-window-buttons]')), 3000, 50)), 'Show title bar puts the bar back, with the buttons in it')
+      ok(!!(await until(() => page.evaluate(() => document.querySelectorAll('[data-title-bar]').length === 1 && !document.querySelector('[data-title-bar="clear"]') && !!document.querySelector('[data-app-mark]')), 3000, 50)), 'Show title bar puts the full bar back')
       await setPref(page, 'tab-layout', 'horizontal')
       ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-tab-strip]') && !document.querySelector('[data-tab-sidebar]')), 3000, 50)), 'Horizontal puts the strip back')
       await quietStrip(page)

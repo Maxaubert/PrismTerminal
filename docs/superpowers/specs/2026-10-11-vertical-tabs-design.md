@@ -57,6 +57,12 @@ looked at on the way).
   bar or some way to drag it"). The e2e asks Windows itself (WM_NCHITTEST) where a press moves the
   window.
 
+- **A clear title bar, not the sidebar, moves the window** (owner: "there should be a title bar to
+  drag from not the sidebar. how about making it transparent"): with vertical tabs and the title bar
+  off, a 32 px row over the terminal only, in the terminal's own ground with no line and no name,
+  holds the window buttons and moves the window. The sidebar's empty space no longer does. With the
+  sidebar collapsed the row spans the window.
+
 ## 2. The indicators
 
 - **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new
