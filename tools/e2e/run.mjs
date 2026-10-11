@@ -2206,6 +2206,468 @@ const scenarios = {
     }
   },
 
+  /**
+   * A FOUND PATH NEVER FREEZES THE WINDOW (#167). One tab's found path woke
+   * every tab's painter, and each repainted its whole scrollback in one task:
+   * MEASURED in Stable's diag log (2026-10-10 16:58Z), 2009 ms and 2046 ms
+   * page stacks in the painter. Written to FAIL on the code before the fix
+   * (the 10,000 lines in tab B were repainted in one task when tab A found a
+   * path); the Gate confirms it on the parent commit if asked.
+   */
+  async linkPaintStall(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    const INK = '121,167,216' // LINK_BLUE on the default theme
+    const inked = () =>
+      page.evaluate((want) => {
+        const norm = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).join(',')
+        return [...document.querySelectorAll('.xterm .xterm-rows > div')].map((row) =>
+          [...row.querySelectorAll('span')]
+            .filter((sp) => norm(getComputedStyle(sp).color) === want)
+            .map((sp) => sp.textContent ?? '')
+            .join('')
+        )
+      }, INK)
+    const rowsText = () => page.evaluate(() => [...document.querySelectorAll('.xterm .xterm-rows > div')].map((r) => r.textContent ?? ''))
+    /** The longest task that STARTED after `since` (performance.now()). */
+    const longest = (since) =>
+      page.evaluate((s) => Math.max(0, ...(window.__longTasks ?? []).filter((t) => t.at >= s).map((t) => t.ms)), since)
+    const now = () => page.evaluate(() => performance.now())
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open')
+      // Tab B (beta, in front at launch): 10,000 lines, each with a path that
+      // names nothing (asked about, so painted lines wait on it) and a web
+      // link (painted at once, so the backlog's progress can be seen).
+      await typeLine(page, '1..10000 | % { "line $_ see docs/x.md at https://e.x/n$_" }')
+      ok(
+        !!(await until(async () => (await rowsText()).some((t) => t.includes('https://e.x/n10000')), 180000, 500)),
+        'tab B printed its 10,000 lines'
+      )
+      await page.waitForFunction(
+        () => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()),
+        null,
+        { timeout: 60000 }
+      )
+      await sleep(1500) // its own painting settles
+      await page.evaluate(() => {
+        window.__longTasks = []
+        new PerformanceObserver((list) => {
+          for (const e of list.getEntries()) window.__longTasks.push({ at: e.startTime, ms: Math.round(e.duration) })
+        }).observe({ type: 'longtask' })
+      })
+      // Tab A finds a path.
+      await page.locator('[data-tab]').nth(0).click()
+      await typeLine(page, "cls; Set-Content found-167.txt x; Write-Host 'made found-167.txt here'")
+      ok(
+        !!(await until(async () => (await inked()).some((t) => t.includes('found-167.txt')), 8000, 100)),
+        'the path tab A printed wears the link colour'
+      )
+      const lit = await now()
+      await sleep(5000)
+      const afterFind = await longest(lit - 500)
+      ok(afterFind < 200, `and no task held the window 200 ms or more while it lit up (longest ${afterFind} ms)`)
+
+      // A full pass over B's 10,000 lines: a theme, and back.
+      const before = await now()
+      await pickTheme(page, 'fawn')
+      await sleep(2000)
+      await pickTheme(page, 'prism')
+      await sleep(3000)
+      const afterTheme = await longest(before)
+      ok(afterTheme < 200, `a theme switch with 10,000 lines in a tab holds the window under 200 ms (longest ${afterTheme} ms)`)
+      await backToFirst(page)
+      await page.locator('[data-tab]').nth(1).click()
+      // B's oldest lines are painted by the backlog, a slice at a time.
+      const box = await page.locator('.xterm').first().boundingBox()
+      if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      for (let i = 0; i < 40; i += 1) await page.mouse.wheel(0, -20000)
+      ok(
+        !!(await until(async () => {
+          const text = await rowsText()
+          const ink = await inked()
+          const top = text.findIndex((t) => t.includes('https://e.x/n'))
+          return top >= 0 && ink[top].includes('https://e.x/n') ? text[top].trim() : null
+        }, 10000, 200)),
+        "and B's oldest lines are painted within 10 s (the backlog finished)"
+      )
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  // A PROGRAM IS TOLD THE GROUND IT SITS ON, AND HEARS A THEME SWITCH (#168,
+  // #172; rule replies-only-when-asked). A stand-in for Claude asks what
+  // Claude asks (MEASURED, 2.1.296: ?2031h, then OSC 11) plus OSC 10, ?996n
+  // and DECRQM 2031, then DA1 as a sentinel every terminal answers, and prints
+  // every chunk it reads as `IN <escaped>`. Before the fix OSC 11 came back
+  // rgb:0000/0000/0000 on every theme and a switch told the program nothing.
+  // Measured over bare node-pty and the bundled ConPTY (2026-10-11): every one
+  // of these queries and replies passes through ConPTY untouched.
+  async termReplies(ok) {
+    const w = world()
+    const probe = join(w.alpha, 'replies-probe.cjs')
+    writeFileSync(
+      probe,
+      [
+        'process.stdin.setRawMode(true)',
+        'process.stdin.resume()',
+        "const show = (s) => s.replace(/\\x1b/g, '\\\\e').replace(/\\x07/g, '\\\\a').replace(/\\r/g, '\\\\r').replace(/\\n/g, '\\\\n')",
+        "process.stdin.on('data', (b) => {",
+        '  const s = b.toString()',
+        "  if (s === 'q') process.exit(0)",
+        "  if (s === 't') { process.stdout.write('\\x1b]11;?\\x07\\x1b[?996n'); return }",
+        "  process.stdout.write('IN ' + show(s) + '\\r\\n')",
+        '})',
+        // XTVERSION three ways (#171): `> q` and `> 0 q` ask, `> 1 q` does not.
+        "process.stdout.write('\\x1b[?2031h\\x1b]11;?\\x07\\x1b]10;?\\x07\\x1b[?996n\\x1b[?2031$p\\x1b[>q\\x1b[>0q\\x1b[>1q\\x1b[c')"
+      ].join('\n')
+    )
+    const coreVersion = JSON.parse(readFileSync(resolve(process.cwd(), 'core/package.json'), 'utf8')).version
+    const xtermVersion = JSON.parse(readFileSync(resolve(process.cwd(), 'node_modules/@xterm/xterm/package.json'), 'utf8')).version
+    const XTVERSION = `\\eP>|PrismTerminal ${coreVersion} (xterm.js ${xtermVersion})\\e\\`
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    // Chunks may coalesce on the way through ConPTY, so the screen is read as
+    // one text and the escaped replies are counted in it.
+    const heard = async () => (await termText(page)).replace(/\u00a0/g, ' ')
+    const count = (text, s) => text.split(s).length - 1
+    const PT_GROUND = '\\e]11;rgb:1212/1212/1212\\e\\'
+    const FAWN_GROUND = '\\e]11;rgb:e6e6/d8d8/c0c0\\e\\'
+    const DARK = '\\e[?997;1n'
+    const LIGHT = '\\e[?997;2n'
+    const backToShell = async () => {
+      await backToFirst(page)
+      // Focused without a click: a click on the input line would send the
+      // caret's arrow keys to the program (click to put the caret there).
+      await page.locator('.xterm-helper-textarea').first().focus()
+    }
+    try {
+      await typeLine(page, `& '${process.execPath}' '${probe}'`)
+      ok(!!(await until(async () => (await heard()).includes('\\e[?1;2c'), 15000)), 'the stand-in program heard its DA1 answer')
+      const first = await heard()
+      ok(first.includes(PT_GROUND), `OSC 11 answers PT Default's ground, not black (${first.match(/\\e\]11;[^\\]*/)?.[0]})`)
+      ok(!first.includes('rgb:0000/0000/0000'), 'and nothing answers transparent black')
+      const ink = first.match(/\\e\]10;(rgb:[0-9a-f/]+)/)?.[1]
+      ok(!!ink && ink !== 'rgb:1212/1212/1212', `OSC 10 answers the theme's text (${ink})`)
+      ok(first.includes(DARK), 'CSI ? 996 n answers dark on PT Default')
+      ok(first.includes('\\e[?2031;1$y'), 'DECRQM says 2031 is set once the program set it')
+      ok(first.lastIndexOf('\\e[?1;2c') > first.lastIndexOf('\\e[?2031;1$y'), 'and the DA1 answer comes LAST: the replies keep stream order')
+      ok(
+        count(first, XTVERSION) === 2,
+        `XTVERSION answers CSI > q and CSI > 0 q, and not CSI > 1 q (${count(first, XTVERSION)} of ${XTVERSION})`
+      )
+      ok(count(first, '\\eP>|') === 2, 'and nothing else answers as a version')
+      ok(first.lastIndexOf('\\e[?1;2c') > first.lastIndexOf(XTVERSION), 'the version answers come before DA1, in stream order')
+
+      await pickTheme(page, 'fawn')
+      await backToShell()
+      ok(!!(await until(async () => count(await heard(), LIGHT) >= 1, 5000)), 'picking Fawn tells the program light')
+      await sleep(800)
+      ok(count(await heard(), LIGHT) === 1, `exactly once (${count(await heard(), LIGHT)})`)
+      await page.keyboard.type('t')
+      ok(!!(await until(async () => (await heard()).includes(FAWN_GROUND), 5000)), "asked again, OSC 11 answers Fawn's ground")
+
+      await pickTheme(page, 'pt-default')
+      await backToShell()
+      ok(!!(await until(async () => count(await heard(), DARK) >= 2, 5000)), 'back to PT Default tells the program dark')
+      await sleep(800)
+      const settled = await heard()
+      // A font size change restyles every session and must tell nothing.
+      await gotoPref(page, 'term-font')
+      await page.locator('[data-pref="term-font"] button[aria-haspopup="listbox"]').click()
+      await page.locator('[role="listbox"] [role="option"]').filter({ hasText: /^\s*120%\s*$/ }).first().click()
+      await backToShell()
+      await sleep(1000)
+      const after = await heard()
+      ok(
+        count(after, DARK) === count(settled, DARK) && count(after, LIGHT) === count(settled, LIGHT),
+        'a font size change sends the program nothing'
+      )
+      await page.keyboard.type('q')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * OSC 52 IS WRITE-ONLY (#176; rule replies-only-when-asked). A program puts
+   * text on the clipboard with `ESC]52;c;<base64>BEL` (Claude Code's /copy,
+   * anything over ssh), the "Copied" badge says so; a READ (`c;?`) gets no
+   * reply and leaves the clipboard alone, and a `p` selection changes nothing.
+   * Before the fix xterm 6.0.0 dropped every OSC 52. The clipboard is saved
+   * and put back, as `paste` does.
+   */
+  async termClipboard(ok) {
+    const w = world()
+    const probe = join(w.alpha, 'osc52-probe.cjs')
+    const b64 = (s) => Buffer.from(s, 'utf8').toString('base64')
+    writeFileSync(
+      probe,
+      [
+        'process.stdin.setRawMode(true)',
+        'process.stdin.resume()',
+        "const show = (s) => s.replace(/\\x1b/g, '\\\\e').replace(/\\x07/g, '\\\\a')",
+        "process.stdin.on('data', (b) => {",
+        '  const s = b.toString()',
+        "  if (s === 'q') process.exit(0)",
+        `  if (s === '1') { process.stdout.write('\\x1b]52;c;${b64('OSC52 æ')}\\x07W1\\r\\n'); return }`,
+        "  if (s === '2') { process.stdout.write('\\x1b]52;c;?\\x07R2\\r\\n'); return }",
+        `  if (s === '3') { process.stdout.write('\\x1b]52;p;${b64('PSEL52')}\\x07P3\\r\\n'); return }`,
+        "  process.stdout.write('IN ' + show(s) + '\\r\\n')",
+        '})',
+        "process.stdout.write('READY52\\r\\n')"
+      ].join('\n')
+    )
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const held = await app.evaluate(({ clipboard }) => ({
+      text: clipboard.readText(),
+      html: clipboard.readHTML(),
+      rtf: clipboard.readRTF(),
+      image: clipboard.readImage().isEmpty() ? null : clipboard.readImage().toDataURL(),
+      formats: clipboard.availableFormats()
+    }))
+    const clip = () => app.evaluate(({ clipboard }) => clipboard.readText())
+    const shown = () => page.evaluate(() => !!document.querySelector('[data-copied-badge="shown"]'))
+    try {
+      await app.evaluate(({ clipboard }) => clipboard.writeText('BEFORE-52'))
+      await typeLine(page, `& '${process.execPath}' '${probe}'`)
+      ok(!!(await until(async () => (await termText(page)).includes('READY52'), 15000)), 'the stand-in program is running')
+      await page.locator('.xterm-helper-textarea').first().focus()
+
+      await page.keyboard.type('1')
+      ok(!!(await until(async () => (await clip()) === 'OSC52 æ', 5000)), `a program's OSC 52 write lands on the clipboard, UTF-8 intact (${JSON.stringify(await clip())})`)
+      ok(!!(await until(shown, 3000)), 'and the "Copied" badge says so')
+      ok(!(await termText(page)).includes(']52;'), 'nothing of the sequence is drawn')
+
+      await app.evaluate(({ clipboard }) => clipboard.writeText('HELD-52'))
+      await page.keyboard.type('2')
+      await until(async () => (await termText(page)).includes('R2'), 5000)
+      await sleep(1000)
+      const afterRead = (await termText(page)).replace(/\u00a0/g, ' ')
+      ok(!afterRead.includes('IN \\e]52'), 'a READ gets no reply: the program hears nothing')
+      ok((await clip()) === 'HELD-52', 'and the clipboard is left as it was')
+
+      await page.keyboard.type('3')
+      await until(async () => (await termText(page)).includes('P3'), 5000)
+      await sleep(800)
+      ok((await clip()) === 'HELD-52', 'a "p" selection changes nothing')
+      await page.keyboard.type('q')
+    } finally {
+      await app
+        .evaluate(({ clipboard, nativeImage }, was) => {
+          const data = {}
+          if (was.text) data.text = was.text
+          if (was.html) data.html = was.html
+          if (was.rtf) data.rtf = was.rtf
+          if (was.image) data.image = nativeImage.createFromDataURL(was.image)
+          if (Object.keys(data).length) clipboard.write(data)
+          else clipboard.clear()
+        }, held)
+        .catch(() => {})
+      if (held.formats.some((f) => /FileName|uri-list/i.test(f))) console.log('  (the clipboard held copied FILES, which cannot be put back; it is empty now)')
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * AN IMAGE ON CTRL+V SENDS THE AGENT'S OWN KEY (#170). Claude Code on
+   * Windows pastes an image on Alt+V, not ^V (read in its binary), so with
+   * Claude in the tab the terminal sends ESC v, exactly one key; in a plain
+   * shell it stays ^V. A node probe that prints every byte it reads in hex
+   * stands in for both: saved as `claude` (no extension) the process poll's
+   * rule sees `...\claude` on its command line and calls it Claude; saved as
+   * `probe.cjs` it is no agent. Shift+Enter to the poll's Claude is Ctrl+J
+   * (#175, measured), and once the poll has seen it leave, a plain probe that
+   * titles itself "✳ Claude Code" arms it within 1 s, the title alone (#175).
+   * The clipboard is saved and put back, as `termClipboard` does.
+   */
+  async imagePaste(ok) {
+    const w = world()
+    const src = [
+      'process.stdin.setRawMode(true)',
+      'process.stdin.resume()',
+      "const tag = process.argv[2] || '?'",
+      "process.stdin.on('data', (b) => {",
+      "  if (b.toString() === 'q') process.exit(0)",
+      "  if (b.toString() === 't') { process.stdout.write('\\x1b]0;\\u2733 Claude Code\\x07TITLED\\r\\n'); return }",
+      "  process.stdout.write('IN ' + tag + ' ' + [...b].map((x) => x.toString(16).padStart(2, '0')).join(' ') + '\\r\\n')",
+      '})',
+      "process.stdout.write('READY ' + tag + '\\r\\n')"
+    ].join('\n')
+    const asClaude = join(w.alpha, 'claude')
+    const plain = join(w.alpha, 'probe.cjs')
+    writeFileSync(asClaude, src)
+    writeFileSync(plain, src)
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const held = await app.evaluate(({ clipboard }) => ({
+      text: clipboard.readText(),
+      html: clipboard.readHTML(),
+      rtf: clipboard.readRTF(),
+      image: clipboard.readImage().isEmpty() ? null : clipboard.readImage().toDataURL(),
+      formats: clipboard.availableFormats()
+    }))
+    const putImage = () =>
+      app.evaluate(({ clipboard, nativeImage }) =>
+        clipboard.writeImage(nativeImage.createFromBitmap(Buffer.alloc(16, 255), { width: 2, height: 2 }))
+      )
+    const text = async () => (await termText(page)).replace(/\u00a0/g, ' ')
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      await polled(page) // the poll's first "no agent" verdict, so the next one is a change
+
+      // A plain program: ^V.
+      await typeLine(page, `& '${process.execPath}' '${plain}' P`)
+      ok(!!(await until(async () => (await text()).includes('READY P'), 15000)), 'the plain probe is running')
+      await putImage()
+      await page.locator('.xterm-helper-textarea').first().focus()
+      await page.keyboard.press('Control+v')
+      ok(!!(await until(async () => /IN P 16\b/.test(await text()), 5000)), 'an image on Ctrl+V sends ^V to a program that is no agent')
+      await page.keyboard.type('q')
+
+      // Claude, as the poll sees it: ESC v, and only that.
+      await typeLine(page, `& '${process.execPath}' '${asClaude}' C`)
+      ok(!!(await until(async () => (await text()).includes('READY C'), 15000)), 'the stand-in for Claude is running')
+      ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-agent-present]')), 30000, 100)), 'and the poll calls it an agent')
+      await putImage()
+      await page.locator('.xterm-helper-textarea').first().focus()
+      await page.keyboard.press('Control+v')
+      ok(!!(await until(async () => /IN C 1b 76\b/.test(await text()), 5000)), 'an image on Ctrl+V sends Alt+V (ESC v) to Claude')
+      await sleep(500)
+      ok(!/IN C 16\b/.test(await text()), 'and no ^V with it: one key, one paste')
+      await page.keyboard.press('Shift+Enter')
+      ok(!!(await until(async () => /IN C 0a\b/.test(await text()), 5000)), "Shift+Enter is Ctrl+J, Claude's own newline (#175)")
+      await sleep(500)
+      // xterm sent a CR on Enter's keypress too, so Claude submitted (2026-10-11).
+      ok(!/IN C 0d/.test(await text()), 'and no Enter with it: the newline does not submit')
+      await page.keyboard.type('q')
+      ok(!!(await until(() => page.evaluate(() => !document.querySelector('[data-agent-present]')), 45000, 200)), 'the poll sees the agent leave')
+
+      // #175: Claude's TITLE arms Shift+Enter before any poll could. The probe
+      // is no agent to the poll, so only the title can have armed it.
+      await typeLine(page, `& '${process.execPath}' '${plain}' T`)
+      ok(!!(await until(async () => (await text()).includes('READY T'), 15000)), 'a plain probe again')
+      await page.locator('.xterm-helper-textarea').first().focus()
+      await page.keyboard.press('Shift+Enter')
+      ok(!!(await until(async () => /IN T 0d\b/.test(await text()), 5000)), 'with no agent, Shift+Enter is Enter (CR)')
+      await page.keyboard.type('t')
+      await until(async () => (await text()).includes('TITLED'), 5000, 50)
+      await page.keyboard.press('Shift+Enter')
+      ok(!!(await until(async () => /IN T 0a\b/.test(await text()), 1000, 50)), 'once it titles itself "✳ Claude Code", Shift+Enter is Ctrl+J within 1 s')
+      await sleep(500)
+      ok((await text()).split('IN T 0d').length - 1 === 1, 'and no Enter with it')
+      await page.keyboard.type('q')
+    } finally {
+      await app
+        .evaluate(({ clipboard, nativeImage }, was) => {
+          const data = {}
+          if (was.text) data.text = was.text
+          if (was.html) data.html = was.html
+          if (was.rtf) data.rtf = was.rtf
+          if (was.image) data.image = nativeImage.createFromDataURL(was.image)
+          if (Object.keys(data).length) clipboard.write(data)
+          else clipboard.clear()
+        }, held)
+        .catch(() => {})
+      if (held.formats.some((f) => /FileName|uri-list/i.test(f))) console.log('  (the clipboard held copied FILES, which cannot be put back; it is empty now)')
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * THE BELL FLASHES THE TASKBAR WHILE THE WINDOW IS UNFOCUSED (#177; owner's
+   * delegation). The parked window is never focused, so a bell counts one
+   * flash; under --e2e main COUNTS it on `__e2eFlashes` and flashes nothing.
+   * Ten bells in a burst count one: at most one a second per tab.
+   */
+  async bell(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const flashes = async () => (await app.evaluate(() => globalThis.__e2eFlashes?.count)) ?? -1
+    try {
+      await page.waitForFunction(() => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()), null, { timeout: 45000 })
+      ok((await flashes()) === 0, `no flash before a bell (${await flashes()})`)
+      await typeLine(page, '[Console]::Write([char]7)')
+      ok(!!(await until(async () => (await flashes()) === 1, 5000)), `one bell, one flash (${await flashes()})`)
+      await sleep(1300) // past the one-second gate
+      await typeLine(page, '1..10 | % { [Console]::Write([char]7); Start-Sleep -Milliseconds 20 }')
+      await sleep(1500)
+      ok((await flashes()) === 2, `ten bells in a burst flash once (${(await flashes()) - 1})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * A TAB RESIZED WHILE HIDDEN COMES BACK WITH A RIGHT SCROLL RANGE (#174,
+   * xterm.js #6117). Tab B runs a stand-in for Claude's fullscreen view: the
+   * alternate screen with mouse tracking on, every row drawn, redrawn on a
+   * resize. With B hidden the window shrinks; back on B, the alternate screen
+   * has no scrollback, so the vertical slider is invisible or as tall as its
+   * track, and the rows shown are the program's last frame. Written to fail on
+   * a stale range; if it never failed on the code before the fix, the scenario
+   * stays as the guard and #174 notes "not reproduced".
+   */
+  async hiddenResize(ok) {
+    const w = world()
+    const probe = join(w.beta, 'alt-probe.cjs')
+    writeFileSync(
+      probe,
+      [
+        'process.stdin.setRawMode(true)',
+        'process.stdin.resume()',
+        "const draw = () => { const r = process.stdout.rows, c = process.stdout.columns; let s = '\\x1b[H'; for (let i = 1; i <= r; i++) s += ('ALTROW ' + i + ' of ' + r).padEnd(c - 1).slice(0, c - 1) + (i < r ? '\\r\\n' : ''); process.stdout.write(s) }",
+        "process.stdout.on('resize', draw)",
+        "process.stdin.on('data', (b) => { if (b.toString() === 'q') { process.stdout.write('\\x1b[?1006l\\x1b[?1000l\\x1b[?1049l'); process.exit(0) } })",
+        "process.stdout.write('\\x1b[?1049h\\x1b[?1000h\\x1b[?1006h\\x1b[2J')",
+        'draw()'
+      ].join('\n')
+    )
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    const range = () =>
+      page.evaluate(() => {
+        const track = document.querySelector('.xterm .xterm-scrollable-element > .scrollbar.vertical')
+        const slider = track?.querySelector('.slider')
+        const t = track?.getBoundingClientRect()
+        const s = slider?.getBoundingClientRect()
+        const visible = !!slider && getComputedStyle(slider).display !== 'none' && (s?.height ?? 0) > 0 && getComputedStyle(track).visibility !== 'hidden'
+        const rows = [...document.querySelectorAll('.xterm .xterm-rows > div')].map((r) => (r.textContent ?? '').trim())
+        return { visible, track: Math.round(t?.height ?? 0), slider: Math.round(s?.height ?? 0), rows }
+      })
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open')
+      // Tab B (beta) is in front at launch.
+      await typeLine(page, `& '${process.execPath}' '${probe}'`)
+      ok(!!(await until(async () => (await range()).rows.some((t) => /^ALTROW 1 of \d+/.test(t)), 15000)), 'tab B is on the alternate screen, every row drawn')
+      await page.locator('[data-tab]').nth(0).click()
+      await sleep(500)
+      const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize())
+      await app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows()[0].setSize(s[0] - 300, s[1] - 300), size)
+      await sleep(1000)
+      await page.locator('[data-tab]').nth(1).click()
+      await page.mouse.move(400, 300)
+      // The program redraws for the new size; its last row says how many it has.
+      ok(
+        !!(await until(async () => {
+          const r = await range()
+          const last = r.rows.filter(Boolean).at(-1) ?? ''
+          const m = last.match(/^ALTROW (\d+) of (\d+)/)
+          return m && m[1] === m[2] && Number(m[2]) === r.rows.length
+        }, 10000)),
+        'back on tab B, the program drew a full frame for the new size'
+      )
+      await sleep(600)
+      const r = await range()
+      ok(!r.visible || r.slider >= r.track - 1, `no stale scroll range: the slider is hidden or fills its track (slider ${r.slider}px of ${r.track}px, visible ${r.visible})`)
+      await page.mouse.wheel(0, -200)
+      await sleep(300)
+      const top = (await range()).rows[0] ?? ''
+      ok(/^ALTROW 1 of/.test(top), `and nothing above the frame to scroll to (top row "${top.slice(0, 20)}")`)
+      await page.keyboard.type('q')
+    } finally {
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1100, 700)).catch(() => {})
+      await closeApp(app)
+    }
+  },
+
   async links(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
@@ -2320,6 +2782,121 @@ const scenarios = {
     ok(!!light, 'on a light theme the link takes another colour that reads there')
     ok(!!light && light.blue, `and it is still a blue (${light ? light.rgb + ' at ' + light.ratio.toFixed(1) + ':1' : 'none'})`)
     await closeApp(app)
+  },
+
+  /**
+   * OSC 8 LINKS (#169): a left click opens an http(s) one, with no confirm()
+   * box (xterm's default asked one, then opened a blank window main denied);
+   * a right click is the menu's, with Copy link; any other scheme opens
+   * nothing. Their cells wear the link colour, found by POSITION as in
+   * `links`, on the normal screen and on the alternate one (where Claude
+   * Code's fullscreen view prints "PR #165").
+   */
+  async osc8Links(ok) {
+    const w = world()
+    const URL8 = 'https://example.com/osc8'
+    const probe = join(w.alpha, 'osc8-probe.cjs')
+    writeFileSync(
+      probe,
+      [
+        'process.stdin.setRawMode(true)',
+        'process.stdin.resume()',
+        "process.stdin.on('data', (b) => { if (b.toString() === 'q') { process.stdout.write('\\x1b[?1049l'); process.exit(0) } })",
+        `process.stdout.write('\\x1b[?1049h\\x1b[2J\\x1b[5;3H\\x1b]8;;${URL8}\\x07ALTLABEL\\x1b]8;;\\x07\\x1b[9;1H')`
+      ].join('\n')
+    )
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const dialogs = []
+    page.on('dialog', (d) => {
+      dialogs.push(d.message())
+      d.dismiss().catch(() => {})
+    })
+    const BLUE = '121,167,216' // the link colour on PT Default
+    const opened = async () => (await app.evaluate(() => globalThis.__e2eOpenedLinks)) ?? []
+    // The row that holds exactly `label`: its first character's box and colour.
+    const label = (needle) =>
+      page.evaluate((n) => {
+        const norm = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).join(',')
+        const rows = [...document.querySelectorAll('.xterm .xterm-rows > div')]
+        for (let i = rows.length - 1; i >= 0; i -= 1) {
+          const text = (rows[i].textContent ?? '').replace(/\u00a0/g, ' ')
+          if (text.trim() !== n) continue
+          const at = text.indexOf(n)
+          const walker = document.createTreeWalker(rows[i], NodeFilter.SHOW_TEXT)
+          let left = at
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (left < node.textContent.length) {
+              const range = document.createRange()
+              range.setStart(node, left)
+              range.setEnd(node, left + 1)
+              const b = range.getBoundingClientRect()
+              return { x: b.left + b.width / 2, y: b.top + b.height / 2, color: norm(getComputedStyle(node.parentElement).color) }
+            }
+            left -= node.textContent.length
+          }
+        }
+        return null
+      }, needle)
+    // xterm finds a link only when the pointer comes onto it and rests.
+    const click = async (at, button = 'left') => {
+      await page.mouse.move(at.x + 60, at.y + 60)
+      await sleep(200)
+      await page.mouse.move(at.x, at.y)
+      await sleep(400)
+      await page.mouse.click(at.x, at.y, { button })
+    }
+    try {
+      // #173 set FORCE_HYPERLINK; the review of 2026-10-11 took it out (it put
+      // OSC 8 into pipes and redirects): no shell is told it.
+      await typeLine(page, 'Write-Host "FH-$env:FORCE_HYPERLINK-END"')
+      ok(!!(await until(async () => (await termText(page)).includes('FH--END'), 8000)), 'FORCE_HYPERLINK is not set in the shell')
+      const esc = (s) => `[char]27 + '${s}'`
+      const osc8 = (uri, text) => `[Console]::Write(${esc(`]8;;${uri}`)} + [char]7 + '${text}' + ${esc(']8;;')} + [char]7); Write-Host ''`
+      await typeLine(page, `cls; ${osc8(URL8, 'OSC8LABEL')}`)
+      const at = await until(async () => {
+        const l = await label('OSC8LABEL')
+        return l && l.color === BLUE ? l : null
+      }, 8000)
+      ok(!!at, `an OSC 8 label wears the link colour (${JSON.stringify(await label('OSC8LABEL'))})`)
+      if (at) {
+        await click(at, 'right')
+        const rows = await until(async () => {
+          const t = await page.locator('[role="menu"] [role="menuitem"]').allTextContents()
+          return t.length ? t : null
+        }, 4000)
+        await sleep(400)
+        ok(!!rows && rows.some((r) => r.includes('Copy link')), `a right click on it offers Copy link (${JSON.stringify(rows)})`)
+        ok((await opened()).length === 0, 'and opens nothing')
+        await page.keyboard.press('Escape')
+        await click(at)
+        ok(!!(await until(async () => (await opened()).filter((u) => u === URL8).length === 1, 4000)), 'a left click opens it, once (recorded under --e2e)')
+      }
+      // Any other scheme stays inert: xterm drops it, and nothing is painted.
+      await typeLine(page, `cls; ${osc8('file:///C:/x', 'FILELABEL')}`)
+      const file = await until(() => label('FILELABEL'), 8000)
+      if (file) {
+        ok(file.color !== BLUE, 'a file:// OSC 8 label is not painted as a link')
+        await click(file)
+        await sleep(600)
+        ok((await opened()).length === 1, `and a click on it opens nothing (${JSON.stringify(await opened())})`)
+      } else ok(false, 'the file:// label is on screen')
+      // The alternate screen, as in Claude Code's fullscreen view.
+      await typeLine(page, `& '${process.execPath}' '${probe}'`)
+      const alt = await until(async () => {
+        const l = await label('ALTLABEL')
+        return l && l.color === BLUE ? l : null
+      }, 8000)
+      ok(!!alt, `on the alternate screen an OSC 8 label wears the link colour too (${JSON.stringify(await label('ALTLABEL'))})`)
+      if (alt) {
+        await click(alt)
+        ok(!!(await until(async () => (await opened()).filter((u) => u === URL8).length === 2, 4000)), 'and a left click opens it')
+      }
+      await page.locator('.xterm-helper-textarea').first().focus()
+      await page.keyboard.type('q')
+      ok(dialogs.length === 0, `no dialog ever (${JSON.stringify(dialogs)})`)
+    } finally {
+      await closeApp(app)
+    }
   },
 
   /**
@@ -5733,7 +6310,7 @@ function collectStalls(scenario) {
   }
 }
 /** Scenarios that honestly take longer than the default limit. */
-const SLOW = { dictation: 360000, dictationParakeet: 360000, helpPanel: 300000, updateWindow: 300000, indicatorStyles: 360000 }
+const SLOW = { linkPaintStall: 300000, dictation: 360000, dictationParakeet: 360000, helpPanel: 300000, updateWindow: 300000, indicatorStyles: 360000 }
 reapStrays()
 for (const [name, run] of Object.entries(scenarios)) {
   if (only.length && !only.some((o) => name.toLowerCase().includes(o.toLowerCase()))) continue

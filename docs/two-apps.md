@@ -506,7 +506,9 @@ so an update never silently changes what an existing user sees; the bridge to ma
   the workflow warns and only releases the core.
 - <a id="terminal-change-in-core"></a>**A terminal change goes in `core/`**, and is a change to Prism too: say so in the PR, and ask the
   owner when it would conflict with how Prism works. App-shell changes (tabs, start screen, window)
-  stay in `src/`.
+  stay in `src/`. The bell (#177) is the one terminal behaviour that needs a line of the host's own:
+  `attention` in its `registerTermIpc` call (this app: `bellFlash`). Prism's bell stays silent until
+  its core-release PR adds that line ([bell-flashes](regression-rules.md#bell-flashes)).
 - <a id="core-lint-wall"></a>**`core/` is lint-walled** (`eslint.config.js`): relative imports only (a consumer resolves
   `@shared` against ITS OWN tree, MEASURED, silently), never `window.prism` (use `termApi()`), never
   a host's `src/`, never `electron`, never `chromeTheme`. The app reaches the core through `@core`.

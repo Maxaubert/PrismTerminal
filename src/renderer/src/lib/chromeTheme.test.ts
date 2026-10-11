@@ -3,6 +3,7 @@ import { CHROME_COLOUR_TOKENS, chromeTokens } from './chromeTheme'
 import { TERM_PRESETS, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
 import { composite } from '@core/renderer/lib/colour'
+import { groundMode } from '@core/renderer/lib/termReplies'
 import { WINDOW_EDGES } from '@shared/windowEdges'
 
 describe('chromeTokens', () => {
@@ -27,6 +28,13 @@ describe('chromeTokens', () => {
       expect(contrastRatio(vars['--p-on-accent'], vars['--p-sel-bg'])).toBeGreaterThanOrEqual(4.5)
     }
   )
+  // What a program is told (#168, #172) and what the chrome wears are one
+  // measurement: Claude must never pick light under a dark title bar. The
+  // core cannot import this file (its lint wall), so the agreement is pinned here.
+  it.each(TERM_PRESETS.map((p) => p.id))('%s: a program is told the mode the chrome wears', (id) => {
+    const theme = resolveTermTheme(id)
+    expect(groundMode(theme.background)).toBe(chromeTokens(theme).mode)
+  })
   it('wears a chosen accent exactly when the ground can show it', () => {
     const theme = resolveTermTheme('prism')
     const { vars } = chromeTokens(theme, 1, undefined, 'hairline', '#e07a2f')

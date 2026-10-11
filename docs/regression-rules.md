@@ -24,8 +24,17 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   that turns a screen cell into a place in the line's TEXT goes through `lib/termCells.ts`
   (`cellText`'s index), never by counting cells or `text.length`: the resize carry and link
   hit-testing were each one off after a trailing space, a wide character or an emoji. Ctrl+C and
-  Ctrl+V match `e.code` too (a Russian layout's C is 'с'). Shift+Enter sends the `\` continuation
-  ONLY where an agent runs; at a plain prompt it is Enter. The panel's attach is keyed on the
+  Ctrl+V match `e.code` too (a Russian layout's C is 'с'). Shift+Enter sends a newline ONLY where an
+  agent runs, at a plain prompt it is Enter: Ctrl+J to Claude and the `\` continuation otherwise
+  (`newlineKey`, measured: Codex 0.153.2 drops a bare LF), armed by Claude's title glyphs or Codex's
+  Action Required before the poll, never a bare braille spinner (#175). The shell's prompt report
+  takes them back at once and asks the poll for its next answer even if unchanged (`termAgentAgain`:
+  Ctrl+V's ESC v reached PSReadLine as RevertLine), the poll's "left" takes back only what the poll
+  saw (a resume's first "no agent" is asked again, not obeyed), and an agent only its title vouches
+  for goes when the title stops naming it: a WSL tab's poll sees wsl.exe and bash prints no prompt
+  report (`lib/agentArm.ts`, review 2026-10-11). An image on Ctrl+V sends the AGENT's key, Alt+V to Claude (on WSL
+  too) and ^V otherwise, exactly one, since a
+  keybindings.json binding both would paste twice (`imagePasteKey`, #170). The panel's attach is keyed on the
   session alone (a `cd` must not re-attach it and take the focus). Under a question or the update
   window the tab chords do nothing (Ctrl+W keeps its rule). A kill while a spawn is pending wins,
   and a warm shell's exit removes only itself. A stop during transcribing is not heard, so a clip is
@@ -161,6 +170,34 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   the FIRST token too: a native `claude.exe` started by bare name has the command line `claude`.
 - <a id="only-command-is-resume"></a>**The only command the app writes into a shell is the agent resume**, as the shell's STARTUP
   command, with the id shape-checked in main (`validResume`). Never type into a user's shell.
+- <a id="replies-only-when-asked"></a>**THE APP ANSWERS A PROGRAM ONLY WHAT IT ASKED** (#168, #171, #172, #176; spec
+  `docs/superpowers/specs/2026-10-10-claude-code-compat-design.md` section 15). Every byte the core writes into a pty that
+  no key produced is a reply to a query in that pty's own stream (OSC 10/11 `?`, `CSI ? 996 n`, `CSI > q`, DECRQM 2031)
+  or the `?997` report the program turned on with `?2031h`, only on a change and only while that program is there:
+  the shell's prompt report, an agent leaving (`agentArm`'s `gone`: the poll's "left" for an agent it saw, or a
+  title-armed agent's title going) and RIS turn the reports off; the poll's first "no agent" never does (review
+  2026-10-11: a push after a killed Claude reached PSReadLine as ESC, RevertLine, then typed `[?997;1n`). Replies hold no CR, LF or printable
+  command, go through `term.input(reply, false)` so `onData` and `looksTyped` treat them as the replies they are
+  ([typing on onKey](#typing-on-onkey)), and never read anything private: OSC 52 is write-only and a read gets no
+  answer. The pure half is `core/renderer/lib/termReplies.ts` (tested); the light/dark it reports is the chrome's own
+  measurement (`chromeTheme.test.ts` pins the two agree on every preset). MEASURED (Claude Code 2.1.296, 2026-10-10):
+  xterm had answered OSC 11 from the clear canvas as `rgb:0000/0000/0000`, so Claude was dark on every ground; Claude
+  writes `?2031h` without a DECRQM probe, never asks `?996n` or OSC 10, and on a pushed `?997;2n` re-asks OSC 11 and
+  turns light. XTVERSION (#171) answers `CSI > q` and `CSI > 0 q` only, as `PrismTerminal <core version> (xterm.js
+  <version>)` (the constants in `core/shared/termVersion.ts`, held to the package files by `termVersion.test.ts`); the
+  name must NOT start with `xterm.js`, which Claude reads as VS Code's terminal. MEASURED (Claude Code 2.1.296 --model
+  haiku, bundled ConPTY, one streamed answer, 2026-10-11): no reply, `synchronizedOutput=no` and 0 `?2026h`; with the
+  reply, `synchronizedOutput=yes` and 65 frames wrapped in `?2026h`/`?2026l`. OSC 52 (#176) is WRITE-ONLY: only the
+  `c` (or empty) selection, base64 of strict UTF-8, at most 1 MB (`OSC52_MAX`), through main
+  (`clipboard:term-write`, its own channel and cap, opaque to the diagnostics log), with the Copied badge; a read
+  (`?`) is swallowed and never answered, a clear is ignored, every OSC 52 is handled so none is drawn.
+- <a id="bell-flashes"></a>**The bell flashes the taskbar only while the window is unfocused** (#177; decided under the
+  owner's delegation, spec decision 1). At most one bell a second per tab reaches main (`bellGate`), which flashes
+  the taskbar button (`src/main/bellFlash.ts`) only while the window is NOT focused, stops it on focus, and never
+  makes a sound: a bell while focused is most often the user's own bad key (PSReadLine rings on one). A bridge
+  member (`TermApi.termBell?`, `TermIpcDeps.attention?`), not a `TermHostConfig` field; a host that passes no
+  `attention` (Prism, until its one line) stays silent. Under `--e2e` it is counted on `__e2eFlashes`, never
+  flashed (e2e `bell`).
 - <a id="closing-window-quits"></a>**Closing the window QUITS; closing the last tab does not** (owner, 2026-09-18, after using the
   first build, which hid the window and stayed resident: "the app should actually close when you
   close it"). The last tab lands on the start screen (`EmptyState`, Tabby's shape by owner
@@ -298,7 +335,24 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   wrapped in a span of the link colour; xterm replaces a row's contents when it draws it, so a
   rewritten row starts clean. Per row, since a TUI places its own text. Columns are counted in
   CELLS, since a wide character is one character and two cells. xterm splits a row into spans as
-  it likes, so the e2e finds a link's span by POSITION, never by its text.
+  it likes, so the e2e finds a link's span by POSITION, never by its text. **NO PASS HOLDS THE
+  PAGE** (#167; MEASURED 2 s stalls before, 2009 ms and 2046 ms in `scan`, Stable's diag log
+  2026-10-10): a full pass paints the live screen, then the scrollback bottom up in slices of 8 ms
+  or less (`lib/linkScanPlan.ts`, a marker as the cursor), and a found path repaints only the tab
+  and the lines that asked (`revisit`). The `linkPaintStall` e2e holds it. **OSC 8 LINKS** (#169)
+  open on a LEFT click, http(s) only, never through a confirm (the `linkHandler` option; xterm's
+  default asked `confirm()` and opened a blank window main denied, on any button). Their cells are
+  painted from the stream (`lib/termOsc8.ts`: the cursor at the open and at the close, MEASURED to
+  bracket Claude Code's label through the bundled ConPTY) while their text stands, on both screens,
+  and the menu's Copy link / Open link take where a click goes. A LABEL THAT SHOWS ANOTHER HOST'S
+  ADDRESS OPENS WHAT IT SHOWS (`osc8Target`, review 2026-10-11): xterm's OSC 8 provider outranks the
+  visible-text match, so `https://github.com/...` printed over a hidden `https://evil.example/`
+  opened evil.example. An OSC 8 label is a link to the click-caret gate too. A reflow or a buffer
+  switch forgets them. **THE APP NEVER SETS `FORCE_HYPERLINK`** (#173 did; review 2026-10-11 took
+  it out): supports-hyperlinks reads it BEFORE its isTTY test (read in claude.exe 2.1.296), so it
+  put raw OSC 8 into every pipe and redirect, Claude's own Bash tool commands among them. Claude
+  prints `label (long url)` without it; its `hyperlinks` setting, or a user's own variable, turns
+  OSC 8 on. The `osc8Links` e2e holds both.
 - <a id="path-links"></a>**A PATH ON SCREEN IS A LINK WHEN IT EXISTS** (#99; owner, 2026-09-29: "clickable links that would
   open the file or folder", then "go ahead"). `lib/termPaths` finds what COULD be a path (relative or
   absolute, sentence punctuation and `:12` taken off); main's `termPathOpen` answers which exist from
@@ -310,7 +364,9 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   stat). A prompt (`PS C:\x>`, `C:\x>`) is not a link. Menu: Open, Show in Explorer, Copy path.
   Under `--e2e` main records (`__e2eOpenedPaths`) and opens nothing. A host without `paths` in its
   main deps (Prism, until wired) paints no paths at all; `TermHostConfig.openPath` is where Prism
-  opens them inside Prism. The `pathLinks` e2e holds it.
+  opens them inside Prism. A found path repaints only the tab that asked and only the lines that
+  asked (#167: `linkRanges(text, cwd, owner)`, `onPathsFound(owner, fn)`, `takeAsked`); waking
+  every tab's full repaint froze the window 2 s (MEASURED). The `pathLinks` e2e holds it.
 - <a id="file-drop-and-menu"></a>**A file dropped on the terminal types its quoted path, and the terminal answers a right-click**
   (2026-09-19, #16). Both lived in Prism's `TermDock.tsx`, the split dock, and went with it when
   the dock was stripped, while the README, the spec and PR #3 went on listing the drop as shipped
