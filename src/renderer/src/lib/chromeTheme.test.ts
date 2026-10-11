@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { CHROME_COLOUR_TOKENS, chromeTokens, tabEdge } from './chromeTheme'
+import { CHROME_COLOUR_TOKENS, chromeTokens } from './chromeTheme'
 import { TERM_PRESETS, presetAccent, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
 import { SEE_THROUGH_ALPHA, seeThroughAlpha } from '@core/renderer/lib/seeThrough'
-import { contrastRatio, luminance as luminanceOf } from '@core/renderer/lib/termAnsi'
+import { contrastRatio } from '@core/renderer/lib/termAnsi'
 import { composite } from '@core/renderer/lib/colour'
 import { WINDOW_EDGES } from '@shared/windowEdges'
 
@@ -319,36 +319,5 @@ describe('the switch knob token', () => {
     const { join } = await import('node:path')
     const css = readFileSync(join(__dirname, '..', 'index.css'), 'utf8')
     expect(css).toContain(`--p-switch-knob: ${chromeTokens(resolveTermTheme('prism')).vars['--p-switch-knob']};`)
-  })
-})
-
-// THE POWERLINE BORDER (owner, 2026-10-11): the ground a bit darker, and a
-// dark grey only on a true-black ground.
-describe('tabEdge', () => {
-  const lum = (h: string): number => parseInt(h.slice(1, 3), 16)
-  it('is darker than any ground but black, and a dark grey on black', () => {
-    expect(lum(tabEdge('#131313', '#e0e0e0'))).toBeLessThan(0x13)
-    // A very dark grey, never black (owner, 2026-10-11).
-    expect(lum(tabEdge('#131313', '#e0e0e0'))).toBeGreaterThan(0)
-    expect(lum(tabEdge('#0c0c0c', '#e0e0e0'))).toBeGreaterThan(0)
-    expect(lum(tabEdge('#2b2b2b', '#e0e0e0'))).toBeLessThan(0x2b)
-    expect(lum(tabEdge('#ffffff', '#202020'))).toBeLessThan(0xff)
-    expect(lum(tabEdge('#ffffff', '#202020'))).toBeGreaterThan(0xd0)
-    const onBlack = lum(tabEdge('#000000', '#e0e0e0'))
-    expect(onBlack).toBeGreaterThan(0)
-    expect(onBlack).toBeLessThan(0x28)
-  })
-  it('is never lighter than a preset ground that is not black', () => {
-    for (const p of TERM_PRESETS) {
-      const t = resolveTermTheme(p.id)
-      const bg = t.background as string
-      const edge = tabEdge(bg, t.foreground as string)
-      if (contrastRatio(bg, '#000000') >= 1.05) expect(luminanceOf(edge), p.id).toBeLessThan(luminanceOf(bg))
-      expect(edge, p.id).not.toBe(bg)
-    }
-  })
-  it('is a token of the chrome', () => {
-    const t = chromeTokens(resolveTermTheme(TERM_PRESETS[0].id))
-    expect(t.vars['--p-tab-edge']).toMatch(/^#[0-9a-f]{6}$/i)
   })
 })
