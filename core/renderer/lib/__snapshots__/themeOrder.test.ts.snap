@@ -3,7 +3,6 @@
 exports[`orderTermThemes (#157) > holds the whole order 1`] = `
 [
   "pitch",
-  "high-contrast",
   "volt",
   "prism",
   "campbell",

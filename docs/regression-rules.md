@@ -208,7 +208,8 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   the choice is applied ONCE, where `chromeTokens` derives those two, and no component knows the
   setting exists. The numbers are in `src/shared/windowEdges.ts` (shared because main reads them
   too): hairline is 7/10% and 9/12% (dark/light), EXACTLY what was hard-coded before, so nobody's
-  window changed; faint (2.2/3.5%) and solid (16/18%) are Prism's `faint` and `strong`, the owner's
+  window changed (2026-10-11: the LIGHT column raised to 15% and 17%, faint 5%, solid 26%, the
+  owner finding light edges "too faint"); faint (2.2/3.5%) and solid (16/18%) are Prism's `faint` and `strong`, the owner's
   word for the latter being Solid; none is alpha 00, still a colour, so a border keeps its width
   and nothing shifts (the e2e compares the layout across all four). Unlike Prism, `--p-line`
   follows too: the owner asked for every edge, and "no edges" with ruled settings rows is half a

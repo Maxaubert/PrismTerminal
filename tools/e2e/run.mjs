@@ -1557,7 +1557,7 @@ const scenarios = {
   /**
    * THE PROMPT TAB STYLE (#143; owner, 2026-10-10). Six tabs in the mockups'
    * states: in front and working, idle, working, finished, question, failed.
-   * Measured: no line between tabs in either style; Powerline's segments are
+   * Measured: Classic has a faint line between tabs and Powerline none; Powerline's segments are
    * clipped and overlap by 9.5 px; a working background tab's edge band sits
    * flush in the gap and grows; the tab in front wears its rule; Fixed and
    * Dynamic both hold. Screenshots against the mockups.
@@ -1575,7 +1575,14 @@ const scenarios = {
             0
           )
         )
-      ok((await borders()) === 0, 'Classic: no line between tabs')
+      ok((await borders()) === 0, 'Classic: no full border on a tab')
+      // A faint line between tabs again (owner, 2026-10-11): one short divider-ink
+      // line after every tab but the last.
+      const seps = await page.evaluate(() => ({
+        n: document.querySelectorAll('[data-tab] [data-tab-sep]').length,
+        tabs: document.querySelectorAll('[data-tab]').length
+      }))
+      ok(seps.n === seps.tabs - 1, `Classic: a faint line between tabs (${seps.n} for ${seps.tabs} tabs)`)
       await shotStrip(page, 'tabs-classic')
       // The row: right after Tab width, Classic by default.
       const row = await gotoPref(page, 'tab-style')
@@ -1588,6 +1595,7 @@ const scenarios = {
       await backToFirst(page)
       ok((await page.locator('[data-tab-strip]').getAttribute('data-tab-style')) === 'prompt', 'the strip draws Powerline')
       ok((await borders()) === 0, 'Powerline: no line between tabs')
+      ok((await page.locator('[data-tab-sep]').count()) === 0, 'Powerline: no Classic line either, its border is the chevron')
       const geo = await page.evaluate(() => {
         const segs = [...document.querySelectorAll('[data-tab]')]
         const boxes = segs.map((s) => s.getBoundingClientRect())
@@ -4728,7 +4736,7 @@ const scenarios = {
     // A light theme: the same choice, in black ink at the light ground's alpha.
     await page.locator('[data-term-card="paper"]').first().click()
     const lightSolid = await settled(page, (q) => q.ink === '0,0,0' && q.pressed === 'solid')
-    ok(!!lightSolid && near(lightSolid.title, 0.18), `on a light theme Solid is black ink at 18% (${lightSolid?.titleInk} @ ${lightSolid?.title})`)
+    ok(!!lightSolid && near(lightSolid.title, 0.26), `on a light theme Solid is black ink at 26% (${lightSolid?.titleInk} @ ${lightSolid?.title})`)
 
     // AND IT SURVIVES A RELAUNCH: quit properly (localStorage is flushed on the
     // way out), come back, and measure before Settings is even opened.
@@ -4747,7 +4755,7 @@ const scenarios = {
     ok(exited, 'the app quits when it is asked to, before anything relaunches it')
     ;({ app, page } = await launch(w))
     ok(await until(async () => (await tabLabels(page)).length === 2, 20000), 'a relaunch brings the tabs back')
-    const back = await settled(page, (q) => q.stored === 'solid' && near(q.title, 0.18), 30000)
+    const back = await settled(page, (q) => q.stored === 'solid' && near(q.title, 0.26), 30000)
     ok(!!back, `the relaunched window draws Solid edges before Settings is opened (title ${back?.title}, stored ${back?.stored})`)
     ok(
       (await until(async () => (await page.evaluate(() => window.prism.e2eWindowEdges())) === 'solid', 5000)) === true,

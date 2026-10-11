@@ -146,8 +146,8 @@ describe('the window edges', () => {
     expect(dark['--p-divider']).toBe('#ffffff12')
     expect(dark['--p-line']).toBe('#ffffff17')
     const light = chromeTokens(resolveTermTheme('github')).vars
-    expect(light['--p-divider']).toBe('#0000001a')
-    expect(light['--p-line']).toBe('#0000001f')
+    expect(light['--p-divider']).toBe('#00000026')
+    expect(light['--p-line']).toBe('#0000002b')
     for (const id of ['prism', 'github']) {
       const t = resolveTermTheme(id)
       expect(chromeTokens(t, 1, undefined, 'hairline').vars).toEqual(chromeTokens(t).vars)
@@ -328,6 +328,9 @@ describe('tabEdge', () => {
   const lum = (h: string): number => parseInt(h.slice(1, 3), 16)
   it('is darker than any ground but black, and a dark grey on black', () => {
     expect(lum(tabEdge('#131313', '#e0e0e0'))).toBeLessThan(0x13)
+    // A very dark grey, never black (owner, 2026-10-11).
+    expect(lum(tabEdge('#131313', '#e0e0e0'))).toBeGreaterThan(0)
+    expect(lum(tabEdge('#0c0c0c', '#e0e0e0'))).toBeGreaterThan(0)
     expect(lum(tabEdge('#2b2b2b', '#e0e0e0'))).toBeLessThan(0x2b)
     expect(lum(tabEdge('#ffffff', '#202020'))).toBeLessThan(0xff)
     expect(lum(tabEdge('#ffffff', '#202020'))).toBeGreaterThan(0xd0)
