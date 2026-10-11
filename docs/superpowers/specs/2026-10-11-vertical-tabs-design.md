@@ -110,6 +110,12 @@ looked at on the way).
   forward history search and the terminal's pause. Ctrl+Shift+B is free, VS Code's sidebar key with
   Shift, and is taken only while the tabs are vertical (`isSidebarChord`, termHost's `ownsKey`).
 
+- **Light themes get a darker sidebar** (owner, 2026-10-12: "make sure that light themes have a
+  darker sidebar, not white ... go through each"). Every preset was drawn beside its terminal; the
+  4 percent step is right on every dark and grey one and reads as white on every light one, where
+  10 percent is a clearly darker panel in the theme's own tint (all eleven). Inks are held to it, so
+  on light themes `--p-dim2` and a hard accent move a step darker.
+
 ## 2. The indicators
 
 - **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new

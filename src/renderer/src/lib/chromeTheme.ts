@@ -120,10 +120,15 @@ export function chromeTokens(
   // should be this, but make that into a new setting called secondary colour
   // ... so the user can pick their own, but this is the gold standard. make it
   // fit with each theme"): the vertical tabs' sidebar and their title bar.
-  // Unpicked it IS the flat panel, the ground a step toward the text, which is
-  // the mockup's "a shade lighter" on every theme (darker on a light one). A
-  // pick is a surface the inks are held to as well.
-  const secondary = chosenSecondary ? normalizeColor(chosenSecondary, flat) : flat
+  // Unpicked, on a dark or grey theme it IS the flat panel, the ground 4 percent
+  // toward the text: the mockup's "a shade lighter". On a LIGHT theme that step
+  // reads as white (owner, 2026-10-12: "make sure that light themes have a
+  // darker sidebar, not white ... go through each"): every light preset was
+  // drawn at 4, 8, 10 and 12 percent beside its terminal, and 10 is a clearly
+  // darker panel in the theme's own tint on all eleven. A pick is a surface the
+  // inks are held to as well.
+  const ownSecondary = light ? mixHex(bg, ensureContrast(rawFg, bg, TEXT_FLOOR), 0.1) : flat
+  const secondary = chosenSecondary ? normalizeColor(chosenSecondary, ownSecondary) : ownSecondary
   const floorOn = (c: string, floor: number): string =>
     ensureContrast(ensureContrast(ensureContrast(c, flat, floor), secondary, floor), bg, floor)
   const fg = floorOn(rawFg, TEXT_FLOOR)

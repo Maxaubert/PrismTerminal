@@ -334,8 +334,10 @@ describe('the switch knob token', () => {
 // make it fit with each theme"): the mockup's "a shade lighter", per theme.
 describe('the secondary colour', () => {
   it.each(TERM_PRESETS.map((p) => p.id))('%s: unpicked, the ground a step toward the text, readable', (id) => {
-    const { vars } = chromeTokens(resolveTermTheme(id), 1, presetAccent(id))
-    expect(vars['--p-secondary']).toBe(vars['--p-side-flat'])
+    const { vars, mode } = chromeTokens(resolveTermTheme(id), 1, presetAccent(id))
+    // Dark and grey: the flat panel. Light: a deeper step, darker, never white.
+    if (mode === 'dark') expect(vars['--p-secondary']).toBe(vars['--p-side-flat'])
+    else expect(contrastRatio(vars['--p-secondary'], '#ffffff')).toBeGreaterThan(contrastRatio(vars['--p-bg-solid'], '#ffffff') + 0.08)
     expect(vars['--p-secondary']).not.toBe(vars['--p-bg-solid'])
     expect(contrastRatio(vars['--p-text'], vars['--p-secondary'])).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(vars['--p-dim'], vars['--p-secondary'])).toBeGreaterThanOrEqual(3)
