@@ -32,6 +32,18 @@ looked at on the way).
   top"; of the app's name: "dont show this in the hidden titlebar"). The sidebar's head is then the
   window's handle. With horizontal tabs the hidden title bar is unchanged (#91).
 
+### Follow-ups the same day (owner, 2026-10-11)
+- The hidden title bar starts at the open sidebar's edge and never covers it; with the sidebar
+  collapsed it spans the window ("dont have the titlebar go over the sidebar ... when the sidebar is
+  collapsed then it can go across the whole thing").
+- Both edge reveals also listen to MAIN (`src/main/edgeWatch.ts`, the cursor read from Windows while
+  asked): on a window that is not maximized the outermost pixels are the resize border, where the
+  page hears no pointer move, so the bar often did not come ("doesnt always appear ... maximized
+  seems a bit more stable").
+- The sidebar's resize grip shows one hairline, not a 6 px bar ("more minimalist").
+- The title bar shows the app's icon in outline, in the accent, and no name ("just show the logo
+  ... an outline box with the outlined art inside").
+
 ## 2. The indicators
 
 - **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new

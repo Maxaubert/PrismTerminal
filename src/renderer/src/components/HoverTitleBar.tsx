@@ -1,5 +1,6 @@
 import { useRef, type JSX, type ReactNode } from 'react'
 import { REVEAL, useHoverReveal } from '../lib/hoverReveal'
+import { useEdgeNear } from '../lib/edgeNear'
 
 /**
  * THE TITLE BAR THAT IS NOT THERE (#162; owner, 2026-10-11): with the tabs in
@@ -16,20 +17,29 @@ import { REVEAL, useHoverReveal } from '../lib/hoverReveal'
  */
 export function HoverTitleBar({
   children,
-  hold = false
+  hold = false,
+  left = 0
 }: {
   children: ReactNode
   hold?: boolean
+  /** Where the bar starts: the open sidebar's edge, so it never covers the
+   *  sidebar (owner, 2026-10-11: "dont have the titlebar go over the sidebar
+   *  ... when the sidebar is collapsed then it can go across the whole thing"). */
+  left?: number
 }): JSX.Element {
   const bar = useRef<HTMLDivElement>(null)
+  // Main's word too: over the resize border of a window that is not maximized
+  // the page hears nothing (edgeWatch.ts).
+  const edge = useEdgeNear(true)
   const shown = useHoverReveal(
     true,
     (e) => {
+      if (e.clientX < left) return false
       if (e.clientY <= REVEAL.zone) return true
       const box = bar.current?.getBoundingClientRect()
       return !!box && box.bottom > 0 && e.clientY <= box.bottom
     },
-    hold
+    hold || (edge.top && edge.x >= left)
   )
   return (
     <div
@@ -37,10 +47,10 @@ export function HoverTitleBar({
       data-title-bar="float"
       data-title-shown={shown || undefined}
       inert={!shown}
-      className={`${shown ? 'drag' : 'no-drag'} p-styled-font absolute inset-x-0 top-0 z-40 flex h-9 items-center justify-end gap-2.5 border-b border-[var(--p-divider)] bg-[var(--p-title)] pl-3 pr-1.5 text-[13px] transition-[transform,box-shadow] duration-[220ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
+      className={`${shown ? 'drag' : 'no-drag'} p-styled-font absolute right-0 top-0 z-40 flex h-9 items-center justify-end gap-2.5 border-b border-[var(--p-divider)] bg-[var(--p-title)] pl-3 pr-1.5 text-[13px] transition-[transform,box-shadow] duration-[220ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
         shown ? 'shadow-[0_10px_30px_-10px_rgba(0,0,0,.8)]' : ''
       }`}
-      style={{ transform: shown ? 'none' : 'translateY(calc(-100% - 12px))' }}
+      style={{ left, transform: shown ? 'none' : 'translateY(calc(-100% - 12px))' }}
     >
       {children}
     </div>

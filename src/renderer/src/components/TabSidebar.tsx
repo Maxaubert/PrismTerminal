@@ -10,6 +10,7 @@ import { useTabStyle } from '../lib/tabStylePrefs'
 import { sideEdgeClip, sideSegmentClip } from '../lib/promptGeometry'
 import { dropSlot, type Lane } from '../lib/tabDrop'
 import { REVEAL, useHoverReveal } from '../lib/hoverReveal'
+import { useEdgeNear } from '../lib/edgeNear'
 import {
   SIDEBAR_WIDTH,
   setSidebarMode,
@@ -117,6 +118,8 @@ export function TabSidebar({
   const [dragW, setDragW] = useState<number | null>(null)
   const width = dragW ?? storedWidth
   const collapsed = mode === 'collapsed'
+  // Main's word too: the page hears nothing over the resize border (edgeWatch.ts).
+  const edge = useEdgeNear(collapsed)
   // COLLAPSED: shown while the pointer is at the window's left edge or on the
   // sidebar itself, and held while one of its menus is open.
   const shown = useHoverReveal(
@@ -131,7 +134,7 @@ export function TabSidebar({
         beside && (e.clientX <= REVEAL.zone || (e.clientX >= box.left && e.clientX <= box.right))
       )
     },
-    menu.open || dragW !== null
+    menu.open || dragW !== null || (edge.left && edge.y >= (titleRow ? 0 : 36)) // 36: the title bar's h-9
   )
   const visible = !collapsed || shown
 
@@ -510,12 +513,24 @@ export function TabSidebar({
         </div>
         {/* The resize grip, on the sidebar's right edge, while it is open. */}
         {!collapsed && (
+          // A 6 px target, and what it shows is one hairline over the
+          // sidebar's own edge (owner, 2026-10-11: the 6 px accent bar was
+          // too much, "make it more minimalist").
           <div
             data-sidebar-grip
             aria-hidden
             onPointerDown={resize}
-            className="no-drag absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize transition-colors hover:bg-[color-mix(in_srgb,var(--p-accent-hi)_50%,transparent)]"
-          />
+            className="no-drag group/grip absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize"
+          >
+            <span
+              data-sidebar-grip-line
+              className={`pointer-events-none absolute inset-y-0 left-[2px] w-px transition-colors duration-150 ${
+                dragW !== null
+                  ? 'bg-[var(--p-accent-hi)]'
+                  : 'bg-transparent group-hover/grip:bg-[color-mix(in_srgb,var(--p-accent-hi)_60%,transparent)]'
+              }`}
+            />
+          </div>
         )}
       </nav>
       {menu.menus}
