@@ -54,7 +54,7 @@ const TAB_WIDTH_OPTIONS: Array<{ id: TabWidth; name: string }> = [
 // Classic first: it is the default, the strip as it always was.
 const TAB_STYLE_OPTIONS: Array<{ id: TabStyle; name: string }> = [
   { id: 'classic', name: 'Classic' },
-  { id: 'prompt', name: 'Prompt' }
+  { id: 'prompt', name: 'Powerline' }
 ]
 
 /** What the THEME in force would give the window, which is what a swatch
@@ -181,7 +181,7 @@ export function AppearancePage(): JSX.Element {
         <SettingRow id="tab-width" icon={tab.icon} label={tab.label} sub={tab.sub}>
           <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
         </SettingRow>
-        {/* The tab style (#143): the flat strip, or Prompt's chevrons. */}
+        {/* The tab style (#143): the flat strip, or Powerline's chevrons. */}
         <SettingRow id="tab-style" icon={shape.icon} label={shape.label} sub={shape.sub}>
           <Segmented value={style} onChange={setTabStyle} options={TAB_STYLE_OPTIONS} />
         </SettingRow>

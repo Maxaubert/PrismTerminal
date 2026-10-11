@@ -33,6 +33,22 @@ describe('the Prompt geometry (#143)', () => {
     expect(b.clip).toBe('polygon(0 0, 3.5px 0, 15.5px 50%, 3.5px 100%, 0 100%, 12px 50%)')
   })
 
+  // 2026-10-10 rework: an idle segment paints nothing, so a tuck under it
+  // would widen the edge. A side that does not paint gets no tuck.
+  it('tucks only under a segment that paints, and still covers the gap exactly', () => {
+    const segment = 122
+    for (const self of [true, false])
+      for (const next of [true, false]) {
+        const b = edgeBand(false, { self, next })
+        const left = segment - b.right - b.width
+        expect(b.o, `${self}/${next}`).toBe((self ? TUCK : 0) + GAP + (next ? TUCK : 0))
+        expect(left + (self ? TUCK : 0)).toBe(segment - ARROW)
+        expect(left + b.o - (next ? TUCK : 0)).toBe(segment - OVERLAP)
+      }
+    expect(edgeBand(false, { self: false, next: false }).o).toBe(GAP)
+    expect(edgeBand(true, { self: true, next: true }).o).toBe(TUCK + GAP)
+  })
+
   it('cuts the active rule along the slant, half a pixel past it, no notch on the first', () => {
     const r = ruleClip(32, false)
     expect(r.d).toBe(1.5)

@@ -38,7 +38,9 @@ export function validWindowEdges(v: unknown): WindowEdges {
  * a control's outline, a menu's border); `line` is the list's (between settings
  * rows), which has always sat two points above it.
  *
- * Hairline is 7/10 and 9/12, EXACTLY what chromeTheme hard-coded before #27.
+ * Hairline is 7/10 and 9/12, EXACTLY what chromeTheme hard-coded before #27,
+ * with the LIGHT column raised about half again since (owner, 2026-10-11: on a
+ * white theme the edges were "too faint", "should be a bit easier to see").
  * Faint and solid are Prism's 2.2/3.5 and 16/18 for the divider, with the list
  * line kept the same small step above. None is 0: the token stays a colour
  * (#rrggbb00), so a border keeps its pixel of layout and nothing shifts.
@@ -47,9 +49,9 @@ export const EDGE_ALPHA: Record<
   WindowEdges,
   { divider: { dark: number; light: number }; line: { dark: number; light: number } }
 > = {
-  hairline: { divider: { dark: 7, light: 10 }, line: { dark: 9, light: 12 } },
-  faint: { divider: { dark: 2.2, light: 3.5 }, line: { dark: 3, light: 4.5 } },
-  solid: { divider: { dark: 16, light: 18 }, line: { dark: 18, light: 20 } },
+  hairline: { divider: { dark: 7, light: 15 }, line: { dark: 9, light: 17 } },
+  faint: { divider: { dark: 2.2, light: 5 }, line: { dark: 3, light: 6.5 } },
+  solid: { divider: { dark: 16, light: 26 }, line: { dark: 18, light: 28 } },
   none: { divider: { dark: 0, light: 0 }, line: { dark: 0, light: 0 } }
 }
 
@@ -61,8 +63,8 @@ export const EDGE_ALPHA: Record<
  * proportions the line tokens keep.
  */
 export const EDGE_BORDER_STEP: Record<WindowEdges, { dark: number; light: number } | null> = {
-  hairline: { dark: 0.13, light: 0.16 },
-  faint: { dark: 0.045, light: 0.055 },
-  solid: { dark: 0.3, light: 0.34 },
+  hairline: { dark: 0.13, light: 0.22 },
+  faint: { dark: 0.045, light: 0.075 },
+  solid: { dark: 0.3, light: 0.44 },
   none: null
 }
