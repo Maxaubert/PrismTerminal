@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type JSX, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type JSX, type ReactNode, type RefObject } from 'react'
 import { LAYER } from './layers'
 
 /**
@@ -73,6 +73,9 @@ export function Modal({
 }): JSX.Element {
   const own = useRef<HTMLDivElement>(null)
   const box = boxRef ?? own
+  // Where the focus was BEFORE this opened: read while rendering, since the
+  // focus effect below moves it inside before any later effect could look.
+  const [before] = useState(() => document.activeElement as HTMLElement | null)
   const live = useRef({ onCancel, locked, onKeyDown })
   useEffect(() => {
     live.current = { onCancel, locked, onKeyDown }
@@ -86,7 +89,6 @@ export function Modal({
   }, [focusKey])
 
   useEffect(() => {
-    const before = document.activeElement as HTMLElement | null
     const onKey = (e: KeyboardEvent): void => {
       const inPopover = !!(e.target as Element | null)?.closest?.('[data-colour-popover]')
       if (e.key === 'Escape') {
