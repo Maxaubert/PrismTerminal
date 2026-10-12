@@ -285,9 +285,14 @@ export function TabSidebar({
               state && (mark.place === 'run' || mark.place === 'line') ? (
                 <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
               ) : null
-            // RING: at the card's end, in the close button's place (TabEnd).
-            const ring =
-              mark.place === 'ring' ? <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} /> : null
+            // RING: at the card's end, in the close button's place (TabEnd),
+            // the loading ring of a tab coming back (#106) included (owner,
+            // 2026-10-13).
+            const ring = loadingIds?.has(t.id) ? (
+              <TabLoading />
+            ) : mark.place === 'ring' ? (
+              <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
+            ) : null
             return (
               <div
                 key={t.id}
@@ -321,7 +326,6 @@ export function TabSidebar({
                   style={{ width: ROW_H }}
                 >
                   <TabIcon agent={agentIds.has(t.id) ? agentKinds?.current.get(t.id) : null} settings={t.kind === 'settings'} />
-                  {loadingIds?.has(t.id) && <TabLoading className="absolute right-1 top-1" />}
                 </span>
                 {t.kind !== 'settings' && <DictationTabMark sessionId={t.id} />}
                 <button

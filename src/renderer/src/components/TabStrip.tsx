@@ -110,13 +110,19 @@ export function TabStrip({
           state && (mark.place === 'run' || mark.place === 'line') ? (
             <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
           ) : null
-        // RING: at the tab's end, in the close button's place (TabEnd).
-        const ring = mark.place === 'ring' ? <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} /> : null
+        // RING: at the tab's end, in the close button's place (TabEnd). A tab
+        // still coming back to its agent (#106) wears its loading ring there
+        // too (owner, 2026-10-13: "make that ring appear where the ring style
+        // agent indicator goes, not on the left side").
+        const ring = loadingIds?.has(t.id) ? (
+          <TabLoading />
+        ) : mark.place === 'ring' ? (
+          <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
+        ) : null
         const body = (
           <>
             {bar}
             {t.kind !== 'settings' && <DictationTabMark sessionId={t.id} />}
-            {loadingIds?.has(t.id) && <TabLoading className="no-drag -mr-0.5" />}
             {/* THE AGENT'S ICON (owner, 2026-10-12, option 3 of the tab looks
                 mockup): at the left, no box, the name centred in the rest. */}
             <TabIcon agent={agentIds.has(t.id) ? agentKinds?.current.get(t.id) : null} settings={t.kind === 'settings'} />

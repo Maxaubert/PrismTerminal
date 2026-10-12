@@ -2895,6 +2895,8 @@ const scenarios = {
           return {
             skeleton: !!document.querySelector('[data-resume-skeleton="shown"]'),
             rings: document.querySelectorAll('[data-tab-loading]').length,
+            // At the tab's end, in the close's place (owner, 2026-10-13).
+            ringsAtEnd: document.querySelectorAll('[data-tab-end] [data-tab-loading]').length,
             prompt: rows.includes('NOISE-BEFORE'),
             ready: rows.includes('FAKE CLAUDE READY')
           }
@@ -2903,6 +2905,7 @@ const scenarios = {
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/launch-skeleton.png') }).catch(() => {})
       ok(early.skeleton, 'the tab in front wears the skeleton while its conversation comes back')
       ok(early.rings === 3, `every tab shows the loading ring (${early.rings})`)
+      ok(early.ringsAtEnd === 3, `each at the tab's end, where the Ring goes (${early.ringsAtEnd})`)
       let bare = false
       const settle = await until(async () => {
         const l = await look()
