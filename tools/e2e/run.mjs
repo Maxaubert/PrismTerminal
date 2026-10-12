@@ -394,6 +394,18 @@ async function setPref(page, id, seg) {
   await (await gotoPref(page, id)).locator(`[data-seg="${seg}"]`).click()
 }
 
+/** Bar, for a scenario that measures the line along a tab's foot: Ring is the
+ *  default since 2026-10-12. Settings is closed again, so tab indices hold. */
+async function useBar(page) {
+  await setPref(page, 'agent-indicator', 'minimal')
+  // Closed by hand, not by backToFirst: that says the window lost the focus,
+  // which changes what counts as looking at a tab for the rest of a scenario.
+  const settings = page.locator('[data-tab]').filter({ hasText: 'Settings' })
+  await settings.first().locator('[data-tab-close]').click({ force: true })
+  await until(async () => (await settings.count()) === 0, 4000, 50)
+  await page.locator('[data-tab]').nth(0).click()
+}
+
 /** Pick a theme from the wall. */
 async function pickTheme(page, id) {
   await gotoPref(page, 'term-theme')
@@ -496,8 +508,19 @@ const scenarios = {
     await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x25D0 + ' Claude Code'")
     const lit = await until(() => page.evaluate(() => !!document.querySelector('[data-agent-state="working"]')), 8000, 50)
     ok(lit, 'a working title lights the tab')
-    // MINIMAL is the default, and its line wears the THEME'S accent: measured
-    // off the computed styles, since a colour is only right on the glass.
+    // RING is the default (2026-10-12); Bar's line wears the THEME'S accent:
+    // measured off the computed styles, since a colour is only right on the glass.
+    ok((await page.evaluate(() => document.querySelector('[data-agent-state="working"]')?.getAttribute('data-agent'))) === 'ring', 'the indicator is Ring out of the box')
+    await page.locator('[data-title-settings]').click()
+    // On Agents, with the marks and their colours (2026-10-05).
+    await gotoPref(page, 'agent-indicator')
+    ok(
+      (await page.locator('[data-pref="agent-indicator"] [data-seg]').allTextContents()).join('|') === 'Ring|Bar',
+      'the indicator offers Ring and Bar'
+    )
+    await page.locator('[data-pref="agent-indicator"] [data-seg="minimal"]').click()
+    await page.locator('[data-tab]').nth(0).click()
+    await sleep(200)
     const mark = await page.evaluate(() => {
       const rgb = (c) => (c.match(/\d+/g) ?? []).slice(0, 3).join(',')
       const probe = document.createElement('span')
@@ -512,33 +535,19 @@ const scenarios = {
         accent
       }
     })
-    ok(mark.mode === 'minimal', `the indicator is minimal out of the box (${mark.mode})`)
+    ok(mark.mode === 'minimal', `Bar is stored as minimal (${mark.mode})`)
     ok(!!mark.bar && mark.bar === mark.accent, `and its line is the theme's accent (${mark.bar} vs ${mark.accent})`)
     ok(await page.evaluate(() => !document.querySelector('[data-activity]')), 'no brain icon inside a working tab any more (#143)')
-    // FULL (#143): every marked tab NOT in front is filled solid; the tab in
-    // front never is, and shows Minimal's run instead.
-    await page.locator('[data-title-settings]').click()
-    // On Agents, with the marks and their colours (2026-10-05).
-    await gotoPref(page, 'agent-indicator')
-    ok(
-      (await page.locator('[data-pref="agent-indicator"] [data-seg]').allTextContents()).join('|') === 'Off|Minimal|Ring|Full',
-      'the indicator offers Off, Minimal, Ring and Full'
-    )
-    await page.locator('[data-pref="agent-indicator"] [data-seg="full"]').click()
-    await page.locator('[data-tab]').nth(0).click()
-    ok(
-      !!(await until(() => page.evaluate(() => !!document.querySelector('[data-agent-state="working"]:not([data-tab-active]) [data-mark="fill"]')))),
-      'Full fills a working tab that is not in front'
-    )
+    // BAR on the tab in front too: its run.
     await page.locator('[data-tab]').nth(1).click()
     ok(
       !!(await until(() =>
         page.evaluate(() => {
           const el = document.querySelector('[data-agent-state="working"]')
-          return !!el && el.hasAttribute('data-tab-active') && !el.querySelector('[data-mark="fill"]') && !!el.querySelector('[data-mark="run"]')
+          return !!el && el.hasAttribute('data-tab-active') && !!el.querySelector('[data-mark="run"]')
         })
       )),
-      'and never the tab in front, which shows the run'
+      'the tab in front shows the run'
     )
     // Walk away, then let it finish behind our back.
     await page.locator('[data-tab]').nth(0).click()
@@ -570,6 +579,7 @@ const scenarios = {
     const { app, page } = await launch(w, { args: [w.alpha, w.beta, gamma, one] })
     try {
       await until(async () => (await tabLabels(page)).length === 4)
+      await useBar(page)
       const tab = (i) => page.locator('[data-tab]').nth(i)
       const at = (i, cmd) => tab(i).click().then(() => typeLine(page, cmd))
       const state = (i) => tab(i).getAttribute('data-agent-state')
@@ -724,6 +734,7 @@ const scenarios = {
     const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
     try {
       await until(async () => (await tabLabels(page)).length === 2)
+      await useBar(page)
       const tab = (i) => page.locator('[data-tab]').nth(i)
       const state = (i) => tab(i).getAttribute('data-agent-state')
       const line = (i) => tab(i).locator('[data-attention]').getAttribute('data-attention').catch(() => null)
@@ -1724,7 +1735,7 @@ const scenarios = {
     const three = (await boxes()).slice(0, 3)
     const widths = [...new Set(three.map((b) => b.w))]
     ok(widths.length === 1, `every tab is the same width, whatever its name (${three.map((b) => b.w).join(' / ')})`)
-    ok(widths[0] >= 104 && widths[0] <= 124, `a fixed width, not a content one (${widths[0]}px)`)
+    ok(widths[0] >= 140 && widths[0] <= 152, `a fixed width, not a content one (${widths[0]}px; 150 since the icons, 2026-10-12)`)
     ok(three[1].cut && !three[0].cut, 'the long name is truncated inside the tab, the short one is whole')
     // Selecting a tab must not move anything either: the active one used to be
     // no wider, but it is the case that shows it if a mark ever takes room.
@@ -5084,7 +5095,7 @@ const scenarios = {
       // the edges exactly as they were, and asks nothing about them.
       await pickFrom('term-font', '140%')
       await (await gotoPref(page, 'window-edges')).locator('[data-seg="solid"]').click()
-      await (await gotoPref(page, 'agent-indicator')).locator('[data-seg="full"]').click()
+      await (await gotoPref(page, 'agent-indicator')).locator('[data-seg="minimal"]').click()
       await gotoPref(page, 'term-font-family')
       const fontIds = await page.locator('[data-pref="term-font-family"] button[aria-haspopup="listbox"]').click().then(() =>
         page.locator('[role="listbox"] [role="option"]').allTextContents()
@@ -5327,7 +5338,7 @@ const scenarios = {
       ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-agent-state="working"]')), 8000, 50)), 'a working stand-in agent is on the strip')
 
       await gotoPref(page, 'agent-indicator')
-      await page.locator('[data-pref="agent-indicator"] [data-seg="full"]').click()
+      await page.locator('[data-pref="agent-indicator"] [data-seg="minimal"]').click()
       const row = page.locator('[data-pref="agent-color"]')
       const swatch = row.locator('[data-colour-swatch]')
       const field = row.locator('input:not([type])')
@@ -5363,36 +5374,17 @@ const scenarios = {
       }, 3000, 50)
       ok(!!stored && stored.endsWith('80'), `the working colour is stored as hex8 (${stored})`)
       ok(/^#[0-9a-f]{8}$/.test(await field.inputValue()), `and the code field shows the eight digits (${await field.inputValue()})`)
-      // FULL FILLS SOLID, AND ONLY A TAB NOT IN FRONT (#143): Settings is the
-      // tab in front, so the working shell's tab is filled, OPAQUE, with the
-      // half-alpha colour laid on the ground; its name is the theme's text
-      // unless that reads under 2:1 on the fill (the owner's rule).
-      const tab = await until(async () => {
-        const l = await page.evaluate(() => {
-          const el = document.querySelector('[data-agent-state="working"] [data-mark="fill"]')
-          if (!el) return null
-          const name = el.closest('[data-tab]').querySelector('[role="tab"]')
-          const root = getComputedStyle(document.documentElement)
-          const probe = document.createElement('span')
-          probe.style.color = root.getPropertyValue('--p-text')
-          document.body.appendChild(probe)
-          const text = getComputedStyle(probe).color
-          probe.remove()
-          return { bg: getComputedStyle(el).backgroundColor, ink: getComputedStyle(name).color, text, ground: root.getPropertyValue('--p-bg-solid') }
+      // A SEE-THROUGH WORKING COLOUR IS DRAWN OPAQUE (#112, #143): the run
+      // is the colour laid on the ground, never a see-through bar.
+      const run = await until(async () => {
+        const bg = await page.evaluate(() => {
+          const el = document.querySelector('[data-agent-state="working"] .p-agent-run')
+          return el ? getComputedStyle(el).backgroundColor : null
         })
-        return l && rgba(l.bg).a === 1 ? l : null
+        return bg && rgba(bg).a === 1 ? bg : null
       }, 4000, 50)
-      ok(!!tab, `the Full tab's fill is opaque (${tab?.bg})`)
-      if (tab && stored) {
-        const g = hexRgb(tab.ground)
-        const want = hexRgb(stored).map((v, i) => Math.round(g[i] + (v - g[i]) * (0x80 / 255)))
-        const got = rgba(tab.bg).rgb
-        ok(got.every((v, i) => Math.abs(v - want[i]) <= 1), `the half-alpha colour laid on the ground (${got} vs ${want})`)
-        const textRatio = ratio(rgba(tab.text).rgb, got)
-        const keeps = rgba(tab.ink).rgb.join() === rgba(tab.text).rgb.join()
-        ok(keeps === textRatio >= 2, `the name is the theme's text unless it reads under 2:1 (${textRatio.toFixed(2)}:1, ${keeps ? 'kept' : 'flipped'})`)
-      }
-      await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/colour-picker-full-tab.png') }).catch(() => {})
+      ok(!!run, `the working line is opaque (${run})`)
+      await page.locator('[data-tab-strip]').screenshot({ path: resolve(process.cwd(), '.e2e-shots/colour-picker-bar.png') }).catch(() => {})
       await shot('alpha')
 
       // Escape after a write: the row follows the theme again.
