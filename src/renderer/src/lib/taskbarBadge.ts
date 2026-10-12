@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { useAgentDoneOn, useAgentFailedOn, useAgentQuestionOn } from '@core/renderer/lib/termLook'
 import { boolPref } from '@core/renderer/lib/prefStore'
 
 /**
@@ -87,4 +89,29 @@ export function drawBadge(count: number, scale: number): string {
   // Segoe's figures sit a touch high on the middle line: a nudge down centres them.
   g.fillText(text, c, c + size * 0.04)
   return canvas.toDataURL('image/png')
+}
+
+/** The badge kept in step with the marks, the switches and the setting
+ *  (moved out of App, audit 2026-10-12): a small grey disc with a white
+ *  number (2026-09-29, the owner's look), or none. */
+export function useTaskbarBadge(ids: {
+  doneIds: ReadonlySet<string>
+  questionIds: ReadonlySet<string>
+  workingIds: ReadonlySet<string>
+  failedIds: ReadonlySet<string>
+}): void {
+  const badgeOn = useTaskbarBadgeOn()
+  const doneOn = useAgentDoneOn()
+  const questionOn = useAgentQuestionOn()
+  const failedOn = useAgentFailedOn()
+  const need = attentionCount({ ...ids, doneOn, questionOn, failedOn })
+  useEffect(() => {
+    if (!badgeOn || need.count === 0) {
+      window.prism.setTaskbarBadge(null, '')
+      return
+    }
+    const said = `${need.count} ${need.count === 1 ? 'tab needs' : 'tabs need'} a look`
+    const scale = window.devicePixelRatio || 1
+    window.prism.setTaskbarBadge(drawBadge(need.count, scale) || null, said, scale)
+  }, [badgeOn, need.count])
 }

@@ -82,28 +82,10 @@ import {
   closeQuestionTitle,
   holdsWindowClose
 } from '@core/renderer/lib/agentClose'
-import {
-  onTermLookChange,
-  termAcrylic,
-  termFontStack,
-  termGroundAlpha,
-  termThemeId
-} from '@core/renderer/lib/termLook'
-import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
-import { applyChrome, chromeTokens } from './lib/chromeTheme'
-import { onWindowEdgesChange, windowEdges } from './lib/edgesPrefs'
-import { windowAccent } from './lib/accentPrefs'
-import { windowBackground } from './lib/backgroundPrefs'
-import { windowSecondary } from './lib/secondaryPrefs'
-import { onAnyWindowColourChange } from './lib/customWindowColours'
-import { attentionCount, drawBadge, useTaskbarBadgeOn } from './lib/taskbarBadge'
+import { agentHooksOn, termFontStack } from '@core/renderer/lib/termLook'
+import { useTaskbarBadge } from './lib/taskbarBadge'
+import { usePaintedChrome } from './lib/paintChrome'
 import { BAR_H, SIDEBAR_SLIDE } from './lib/chromeLayout'
-import {
-  agentHooksOn,
-  useAgentDoneOn,
-  useAgentFailedOn,
-  useAgentQuestionOn
-} from '@core/renderer/lib/termLook'
 import { isResumable } from '@core/shared/types'
 import { homeDir, useAppVersion } from './lib/appFacts'
 
@@ -129,36 +111,6 @@ interface Ask {
 
 let seq = 0
 const nextId = (): string => 't' + Date.now().toString(36) + '-' + String((seq += 1))
-
-/** The window wears the terminal's theme; main hears about the material. The
- *  edges setting (#27) rides the same paint: it changes two of the tokens, and
- *  main is told so the DWM border round the window follows the lines in it. */
-function paintChrome(): void {
-  const acrylic = termAcrylic()
-  const id = termThemeId()
-  const edges = windowEdges()
-  // A picked background replaces the theme's for the whole window; the panel
-  // paints the terminal's ground from the same token, so it follows too.
-  const theme = resolveTermTheme(id)
-  const background = windowBackground()
-  // THE WINDOW'S SEE-THROUGH IS THE GROUND'S ALPHA (#114, in place of the
-  // Opacity slider): the picked Background's, else the theme's own (a Custom
-  // may carry one), the same order the core reads. Passed as the byte's
-  // fraction, unrounded, so the field and the window name the same alpha.
-  // An opaque ground under the switch paints the default see-through (#156).
-  const tokens = chromeTokens(
-    background ? { ...theme, background } : theme,
-    acrylic ? termGroundAlpha() : 1,
-    presetAccent(id),
-    edges,
-    windowAccent(),
-    windowSecondary()
-  )
-  applyChrome(tokens)
-  window.prism.setWindowBg(tokens.vars['--p-bg-solid'])
-  window.prism.setWindowEdges(edges)
-  void window.prism.setAcrylic(acrylic)
-}
 
 /** The terminal's cut top-left corner, beside the open sidebar: the inside of
  *  the curve (lib/cornerShapes), the corner piece the outside. */
@@ -318,17 +270,8 @@ export default function App(): JSX.Element {
     }
   }, [commitWalk])
 
-  useEffect(() => {
-    paintChrome()
-    const offLook = onTermLookChange(paintChrome)
-    const offEdges = onWindowEdgesChange(paintChrome)
-    const offColours = onAnyWindowColourChange(paintChrome)
-    return () => {
-      offColours()
-      offLook()
-      offEdges()
-    }
-  }, [])
+  // The window wears the terminal's theme (lib/paintChrome).
+  usePaintedChrome()
 
   /** Start the shell for a tab that has (or is about to have) its place. */
   const spawnSession = useCallback((id: string, cwd: string, resume?: string): void => {
@@ -582,30 +525,8 @@ export default function App(): JSX.Element {
     window.prism.setAgentBusy(holdsWindowClose(workingIds.size))
   }, [workingIds])
 
-  // THE TASKBAR BADGE (2026-09-28): how many tabs show a mark, as a small grey
-  // disc with a white number (2026-09-29, the owner's look).
-  const badgeOn = useTaskbarBadgeOn()
-  const doneOn = useAgentDoneOn()
-  const questionOn = useAgentQuestionOn()
-  const failedOn = useAgentFailedOn()
-  const need = attentionCount({
-    doneIds,
-    questionIds,
-    workingIds,
-    doneOn,
-    questionOn,
-    failedIds,
-    failedOn
-  })
-  useEffect(() => {
-    if (!badgeOn || need.count === 0) {
-      window.prism.setTaskbarBadge(null, '')
-      return
-    }
-    const said = `${need.count} ${need.count === 1 ? 'tab needs' : 'tabs need'} a look`
-    const scale = window.devicePixelRatio || 1
-    window.prism.setTaskbarBadge(drawBadge(need.count, scale) || null, said, scale)
-  }, [badgeOn, need.count])
+  // THE TASKBAR BADGE (2026-09-28): how many tabs show a mark (lib/taskbarBadge).
+  useTaskbarBadge({ doneIds, questionIds, workingIds, failedIds })
 
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
   // keyboard back: clicking or dragging a tab is not "I left the shell".
