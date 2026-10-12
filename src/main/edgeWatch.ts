@@ -1,4 +1,5 @@
 import type { BrowserWindow, Point, Rectangle } from 'electron'
+import { REVEAL_ZONE } from '@shared/revealZones'
 
 /**
  * THE POINTER AT THE WINDOW'S TOP OR LEFT EDGE, AS WINDOWS SEES IT (#162
@@ -16,8 +17,8 @@ import type { BrowserWindow, Point, Rectangle } from 'electron'
  */
 
 /** How far inside the content edge counts as "at" it, and how far outside it
- *  (the resize border's own band), in DIPs. */
-export const EDGE = { top: 16, left: 24, outside: 8, everyMs: 50 } as const
+ *  (the resize border's own band), in DIPs: the shared REVEAL_ZONE. */
+export const EDGE = { ...REVEAL_ZONE, everyMs: 50 } as const
 
 export interface EdgeNear {
   top: boolean

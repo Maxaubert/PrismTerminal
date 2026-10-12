@@ -29,3 +29,12 @@ describe('the pointer at the window edge (#162)', () => {
     expect([n.x, n.y]).toEqual([250, 3])
   })
 })
+
+describe('one reveal zone (audit 2026-10-12)', () => {
+  it("main's edge and the page's reveal read the same REVEAL_ZONE", async () => {
+    const { REVEAL_ZONE } = await import('@shared/revealZones')
+    const { REVEAL } = await import('../renderer/src/lib/hoverReveal')
+    expect({ top: EDGE.top, left: EDGE.left, outside: EDGE.outside }).toEqual(REVEAL_ZONE)
+    expect({ top: REVEAL.top, left: REVEAL.left }).toEqual({ top: REVEAL_ZONE.top, left: REVEAL_ZONE.left })
+  })
+})

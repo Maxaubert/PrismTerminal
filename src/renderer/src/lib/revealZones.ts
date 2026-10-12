@@ -1,4 +1,4 @@
-import { REVEAL } from './hoverReveal'
+import { REVEAL_ZONE } from '@shared/revealZones'
 
 /**
  * WHERE THE POINTER KEEPS A REVEALED PANEL (#162; owner, 2026-10-11: "make it
@@ -13,9 +13,8 @@ import { REVEAL } from './hoverReveal'
  * bar's bottom edge does not flicker it.
  */
 export const KEEP = 4
-/** How far outside the window still counts as at its edge: the resize
- *  border's band, where Windows has the pointer (edgeWatch's `outside`). */
-const BORDER = 8
+/** How far outside the window still counts as at its edge (REVEAL_ZONE). */
+const BORDER = REVEAL_ZONE.outside
 
 export interface Point {
   x: number
@@ -25,6 +24,6 @@ export interface Point {
 /** The collapsed sidebar, from `top` down, `width` wide. */
 export function sideWants(p: Point | null, shown: boolean, top: number, width: number): boolean {
   if (!p || p.y < top || p.x < -BORDER) return false
-  if (p.x <= REVEAL.left) return true
+  if (p.x <= REVEAL_ZONE.left) return true
   return shown && p.x <= width + KEEP
 }
