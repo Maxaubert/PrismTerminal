@@ -106,16 +106,25 @@ const SEEDS = {
 export const ANSI_CONTRAST_FLOOR = 3
 
 /**
+ * WHICH WAY A COLOUR WALKS TO CLEAR A FLOOR ON `ground`: toward whichever of
+ * white and black has more room. A luminance threshold gets mid-lightness
+ * grounds wrong: on a lavender, "lighter" runs out of contrast before the
+ * floor, while black has plenty. The one direction rule every floor walk in
+ * both apps takes (audit 2026-10-12: typed three times); HOW each walks (steps,
+ * bisection, OKLab, several grounds) stays its own, each measured.
+ */
+export function towardRoom(ground: string): '#ffffff' | '#000000' {
+  return contrastRatio('#ffffff', ground) >= contrastRatio('#000000', ground) ? '#ffffff' : '#000000'
+}
+
+/**
  * Walk `colour` toward white or black - whichever direction the background
  * leaves room in - until it clears the floor. Steps are small so hue bleaches
  * as little as the floor allows.
  */
 export function ensureContrast(colour: string, bg: string, floor = ANSI_CONTRAST_FLOOR): string {
   if (contrastRatio(colour, bg) >= floor) return colour
-  // Walk toward whichever endpoint actually has room. A luminance threshold
-  // gets mid-lightness backgrounds wrong: on a lavender, "lighter" runs out
-  // of contrast before the floor, while black has plenty.
-  const towards = contrastRatio('#ffffff', bg) >= contrastRatio('#000000', bg) ? '#ffffff' : '#000000'
+  const towards = towardRoom(bg)
   let c = colour
   for (let i = 0; i < 24 && contrastRatio(c, bg) < floor; i += 1) {
     c = mixHex(c, towards, 0.08)

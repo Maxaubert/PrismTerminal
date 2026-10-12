@@ -1,4 +1,4 @@
-import { contrastRatio, mixHex } from './termAnsi'
+import { contrastRatio, mixHex, towardRoom } from './termAnsi'
 
 // ONE COLOUR, WITH ALPHA, FOR EVERY COLOUR SETTING IN BOTH APPS (#112; owner,
 // 2026-10-03: "the colour pickers should be the same for both apps, i need an
@@ -262,7 +262,7 @@ export function composite(c: string, ground: string): string {
  */
 function towardsFloor(colour: string, ground: string, floor: number): string {
   if (contrastRatio(colour, ground) >= floor) return colour
-  const to = contrastRatio('#ffffff', ground) >= contrastRatio('#000000', ground) ? '#ffffff' : '#000000'
+  const to = towardRoom(ground)
   if (contrastRatio(to, ground) < floor) return to
   let lo = 0
   let hi = 1
