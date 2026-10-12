@@ -1,23 +1,15 @@
-import { useEffect, useState, type JSX } from 'react'
+import type { JSX } from 'react'
 import { SettingBlock } from '@core/renderer/settings/layout/SettingBlock'
 import { SettingRow } from '@core/renderer/settings/layout/SettingRow'
 import { SettingsSection } from '@core/renderer/settings/layout/SettingsSection'
 import appIcon from '../../assets/app-icon.png'
 import { appOpt } from './appOptions'
+import { useAppVersion } from '../../lib/appFacts'
 
 /** ABOUT: the app's own icon and one line, then the version it runs. The old
  *  "Prism Terminal" word under the rail went: this page says it. */
 export function AboutPage(): JSX.Element {
-  const [version, setVersion] = useState('')
-  useEffect(() => {
-    let live = true
-    void window.prism.appVersion().then((v) => {
-      if (live) setVersion(v)
-    })
-    return () => {
-      live = false
-    }
-  }, [])
+  const version = useAppVersion()
   const o = appOpt('app-version')
   return (
     <SettingsSection id="about">

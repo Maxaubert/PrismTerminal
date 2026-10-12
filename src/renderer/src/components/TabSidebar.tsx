@@ -24,6 +24,7 @@ import {
 } from '../lib/sidebarPrefs'
 import { BAR_H, SIDEBAR_SLIDE } from '../lib/chromeLayout'
 import { LAYER } from '@core/renderer/components/layers'
+import { useHomeDir } from '../lib/appFacts'
 
 /** One row's height: the row's own size and the tile a flowing edge repeats
  *  on, so the two cannot part (audit 2026-10-12: the tile was 34 on a 46 row). */
@@ -88,16 +89,7 @@ export function TabSidebar({
     return () => window.removeEventListener('prism:find-tab', go)
   }, [])
   // The user's own folder, for the folder line's `~`. Asked once.
-  const [home, setHome] = useState('')
-  useEffect(() => {
-    let live = true
-    void window.prism.homeDir().then((h) => {
-      if (live) setHome(h)
-    })
-    return () => {
-      live = false
-    }
-  }, [])
+  const home = useHomeDir()
   // A width being dragged lives here until the drag ends; only then is it stored.
   const [dragW, setDragW] = useState<number | null>(null)
   // On a whole screen pixel, where it meets the bar and the terminal (lib/devicePixels).

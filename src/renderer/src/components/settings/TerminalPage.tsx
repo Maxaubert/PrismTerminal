@@ -7,6 +7,7 @@ import { ShellSection } from '@core/renderer/settings/sections/ShellSection'
 import { TerminalTextSection } from '@core/renderer/settings/sections/TerminalTextSection'
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../../lib/newTabPrefs'
 import { APP_SECTIONS, appOpt } from './appOptions'
+import { useHomeDir } from '../../lib/appFacts'
 
 /**
  * Where a new tab opens and the Explorer menu: this app's own rows about how
@@ -46,10 +47,7 @@ function OpeningSection(): JSX.Element {
       if (dir) setNewTabMode('folder', dir)
     })
   }
-  const [home, setHome] = useState('')
-  useEffect(() => {
-    void window.prism.homeDir().then(setHome)
-  }, [])
+  const home = useHomeDir()
   const newTab = appOpt('newtab-mode')
   const menu = appOpt('explorer-verb')
   return (

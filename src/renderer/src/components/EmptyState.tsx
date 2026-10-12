@@ -1,9 +1,10 @@
-import { useEffect, useState, type JSX, type ReactNode } from 'react'
+import { useState, type JSX, type ReactNode } from 'react'
 import { baseName } from '@core/shared/folderNames'
 import { AppMark } from './AppMark'
 import { COG_PATH } from './glyphPaths'
 import { plusMenuRows } from './tabMenus'
 import { keyLabel } from '../lib/keymap'
+import { useAppVersion } from '../lib/appFacts'
 
 /**
  * The start screen: the window with no tab open (owner, 2026-09-18, with
@@ -63,10 +64,7 @@ export default function EmptyState({
   onOpenFolder: (path: string) => void
   onSettings: () => void
 }): JSX.Element {
-  const [version, setVersion] = useState('')
-  useEffect(() => {
-    void window.prism.appVersion().then(setVersion)
-  }, [])
+  const version = useAppVersion()
   // Read when the screen appears: the tab that was just closed is on it.
   const [places] = useState(plusMenuRows)
 

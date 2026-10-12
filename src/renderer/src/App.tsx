@@ -105,6 +105,7 @@ import {
   useAgentQuestionOn
 } from '@core/renderer/lib/termLook'
 import { isResumable } from '@core/shared/types'
+import { homeDir, useAppVersion } from './lib/appFacts'
 
 const Settings = lazy(() => import('./components/settings/Settings'))
 // Loaded when it is first opened: the popup brings the whole catalogue with it,
@@ -382,7 +383,7 @@ export default function App(): JSX.Element {
   const newTab = useCallback(async () => {
     const cwd =
       newTabMode() === 'folder'
-        ? newTabFolder() || home.current || (await window.prism.homeDir())
+        ? newTabFolder() || home.current || (await homeDir())
         : // Cancelling the chooser opens nothing.
           await window.prism.pickFolder()
     if (!cwd) return
@@ -410,7 +411,7 @@ export default function App(): JSX.Element {
   }, [boot.slots, spawnSession, prewarm])
 
   useEffect(() => {
-    void window.prism.homeDir().then((dir) => {
+    void homeDir().then((dir) => {
       home.current = dir
     })
     restore()
@@ -574,10 +575,7 @@ export default function App(): JSX.Element {
     live.current = { state, workingIds, agentIds, blocked: !!ask || updateOpen, front: inFront }
   })
   /** The running version, for the window's "You have" line. Asked once. */
-  const [version, setVersion] = useState('')
-  useEffect(() => {
-    void window.prism.appVersion().then(setVersion)
-  }, [])
+  const version = useAppVersion()
 
   // Tell main what is open, whenever it changes: persistence for next launch,
   // and whether closing the window would interrupt anything.
