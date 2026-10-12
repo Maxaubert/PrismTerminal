@@ -17,6 +17,7 @@ import { useTabMenus } from './tabMenus'
 import { useTabStyle } from '../lib/tabStylePrefs'
 import { OVERLAP, edgeBand, ruleClip, segmentClip } from '../lib/promptGeometry'
 import { dropSlot, type Lane } from '../lib/tabDrop'
+import { CARRY_SLIDE, DRAG_SLOP } from '../lib/chromeLayout'
 
 /**
  * The open shells, as a row under the title bar.
@@ -25,9 +26,6 @@ import { dropSlot, type Lane } from '../lib/tabDrop'
  * chrome never shifts under you when a second tab opens. It goes only when
  * there is nothing open at all, where EmptyState is already offering the way in.
  */
-/** How far the pointer must travel before a press becomes a drag rather than
- *  a click on the tab. */
-const DRAG_SLOP = 4
 
 export function TabStrip({
   tabs,
@@ -417,7 +415,7 @@ export function TabStrip({
           // only really rearranges when the drop lands. The neighbours sliding
           // open the gap are the preview.
           transition:
-            carry && carry.id !== t.id ? 'transform 170ms cubic-bezier(.23,1,.32,1)' : undefined
+            carry && carry.id !== t.id ? `transform ${CARRY_SLIDE}` : undefined
         }
         if (prompt) {
           // PROMPT (#143): a chevron segment whose arrow EDGE is the mark. The

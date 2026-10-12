@@ -97,6 +97,7 @@ import { onWindowAccentChange, windowAccent } from './lib/accentPrefs'
 import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPrefs'
 import { onWindowSecondaryChange, windowSecondary } from './lib/secondaryPrefs'
 import { attentionCount, drawBadge, useTaskbarBadgeOn } from './lib/taskbarBadge'
+import { BAR_H, SIDEBAR_SLIDE } from './lib/chromeLayout'
 import {
   agentHooksOn,
   useAgentDoneOn,
@@ -174,7 +175,7 @@ const CORNER_CUT = {
 const COVER_CUT = {
   ...CORNER_CUT,
   maskPosition: 'var(--p-sidebar-cover, 0px) 0',
-  transition: 'mask-position 240ms cubic-bezier(.16,1,.3,1)'
+  transition: `mask-position ${SIDEBAR_SLIDE}`
 } as const
 
 export default function App(): JSX.Element {
@@ -779,7 +780,8 @@ export default function App(): JSX.Element {
       {beside ? null : (
         <div
           data-title-bar="tabs"
-          className="drag p-styled-font flex h-9 shrink-0 items-stretch border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1.5 text-[13px]"
+          style={{ height: BAR_H }}
+          className="drag p-styled-font flex shrink-0 items-stretch border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1.5 text-[13px]"
         >
           {tabs.length > 0 ? <TabStrip {...tabProps} /> : <span className="min-w-0 flex-1" />}
           <div className="flex shrink-0 items-center gap-2.5 pl-2">
@@ -804,7 +806,8 @@ export default function App(): JSX.Element {
       {beside && (
         <div
           data-title-bar="beside"
-          className="drag p-styled-font flex h-9 shrink-0 items-center gap-2.5 bg-[var(--p-secondary)] pl-4 pr-1.5 text-[13px]"
+          style={{ height: BAR_H }}
+          className="drag p-styled-font flex shrink-0 items-center gap-2.5 bg-[var(--p-secondary)] pl-4 pr-1.5 text-[13px]"
         >
           <div data-app-brand className="flex min-w-0 items-center gap-2.5">
             <AppMark size={18} className="shrink-0 text-[var(--p-accent-solid)]" />

@@ -21,12 +21,8 @@ import {
   useSidebarMode,
   useSidebarWidth
 } from '../lib/sidebarPrefs'
+import { BAR_H, CARRY_SLIDE, DRAG_SLOP, SIDEBAR_SLIDE } from '../lib/chromeLayout'
 
-/** The bar across the window's top (App's `data-title-bar="beside"`, h-9). */
-const BAR_H = 36
-/** How far the pointer must travel before a press becomes a drag rather than
- *  a click on the tab: the strip's own slop. */
-const DRAG_SLOP = 4
 
 /**
  * THE TABS AS A SIDEBAR (#162; owner, 2026-10-11): the strip's tabs, one row
@@ -292,11 +288,7 @@ export function TabSidebar({
         // never shows through. CSS backdrop blur does nothing in a see-through
         // window (measured in the e2e window, 2026-10-12). It lies ABOVE the
         // page beside it: Settings' search icon showed through (same day).
-        className={`p-styled-font absolute inset-y-0 left-0 z-30 flex flex-col bg-[var(--p-secondary)] text-[13px] ${
-          collapsed
-            ? 'transition-[left] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
-            : ''
-        } ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
+        className={`p-styled-font absolute inset-y-0 left-0 z-30 flex flex-col bg-[var(--p-secondary)] text-[13px] ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         // Slid by its LEFT, never a transform: Windows is told where a drag
         // region is from the layout, and a transformed panel's grab strip was
         // reported where its slide started (measured, WM_NCHITTEST).
@@ -306,6 +298,7 @@ export function TabSidebar({
         style={{
           width,
           left: collapsed && !visible ? -(width + 16) : 0,
+          transition: collapsed ? `left ${SIDEBAR_SLIDE}` : undefined,
           clipPath: 'inset(0 -60px 0 0)'
         }}
       >
@@ -464,9 +457,7 @@ export function TabSidebar({
                   transform: `translateY(${carry?.id === t.id ? carry.dy : slide(i)}px)`,
                   zIndex: carry?.id === t.id ? 5 : undefined,
                   transition:
-                    carry && carry.id !== t.id
-                      ? 'transform 170ms cubic-bezier(.23,1,.32,1)'
-                      : undefined,
+                    carry && carry.id !== t.id ? `transform ${CARRY_SLIDE}` : undefined,
                   ...(prompt ? { clipPath: sideSegmentClip() } : {})
                 }}
               >
