@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { CLAWD_ORANGE, CLAWD_PIXELS, OPENAI_PATH, type IconKind } from '../lib/agentIcon'
+import { CLAWD_ORANGE, CLAWD_PIXELS, COG_PATH, OPENAI_PATH, type IconKind } from '../lib/agentIcon'
 
 /**
  * THE AGENT'S OWN MARK ON ITS TAB (owner, 2026-10-12, from the tab looks
@@ -11,7 +11,7 @@ import { CLAWD_ORANGE, CLAWD_PIXELS, OPENAI_PATH, type IconKind } from '../lib/a
  *   the Claude spark and the Anthropic A).
  * - Codex: the OpenAI mark, in the name's ink (monochrome).
  * - No agent, or another: a `>_` prompt, in the name's ink.
- * - Settings: the cog.
+ * - Settings: the title bar's own cog (COG_PATH).
  *
  * Core, so Prism's tabs can wear it too; nothing there changes until they do.
  */
@@ -34,9 +34,10 @@ export function AgentIcon({ kind, size }: { kind: IconKind; size: number }): JSX
       )
     case 'settings':
       return (
-        <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+        // The title bar's own cog (owner, 2026-10-13: "the title bar cog").
+        <svg {...common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="3" />
-          <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" />
+          <path d={COG_PATH} />
         </svg>
       )
     default:
