@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { enumPref } from '@core/renderer/lib/prefStore'
 
 // WHERE THE TABS SIT (#162; owner, 2026-10-11: "we have a switch for horizontal
 // and vertical"): `horizontal`, the strip under the title bar as it has always
@@ -9,28 +9,10 @@ import { useSyncExternalStore } from 'react'
 
 export type TabLayout = 'horizontal' | 'vertical'
 
-const KEY = 'prism.window.tabLayout'
+const pref = enumPref<TabLayout>('prism.window.tabLayout', ['horizontal', 'vertical'], 'horizontal')
 
-let listeners: Array<() => void> = []
-
-export function validTabLayout(v: unknown): TabLayout {
-  return v === 'vertical' ? 'vertical' : 'horizontal'
-}
-
-export function tabLayout(): TabLayout {
-  return validTabLayout(localStorage.getItem(KEY))
-}
-
-export function setTabLayout(layout: TabLayout): void {
-  localStorage.setItem(KEY, validTabLayout(layout))
-  listeners.forEach((l) => l())
-}
-
-export function onTabLayoutChange(cb: () => void): () => void {
-  listeners.push(cb)
-  return () => {
-    listeners = listeners.filter((l) => l !== cb)
-  }
-}
-
-export const useTabLayout = (): TabLayout => useSyncExternalStore(onTabLayoutChange, tabLayout)
+export const validTabLayout = pref.valid
+export const tabLayout = pref.get
+export const setTabLayout = pref.set
+export const onTabLayoutChange = pref.onChange
+export const useTabLayout = pref.use

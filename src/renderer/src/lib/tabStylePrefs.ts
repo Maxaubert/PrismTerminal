@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { enumPref } from '@core/renderer/lib/prefStore'
 
 // THE TAB STYLE (#143; owner, 2026-10-10): Classic, the flat strip as it has
 // always been and the DEFAULT, so nobody's window changes with the update; or
@@ -10,28 +10,10 @@ import { useSyncExternalStore } from 'react'
 
 export type TabStyle = 'classic' | 'prompt'
 
-const KEY = 'prism.window.tabStyle'
+const pref = enumPref<TabStyle>('prism.window.tabStyle', ['classic', 'prompt'], 'classic')
 
-let listeners: Array<() => void> = []
-
-export function validTabStyle(v: unknown): TabStyle {
-  return v === 'prompt' ? 'prompt' : 'classic'
-}
-
-export function tabStyle(): TabStyle {
-  return validTabStyle(localStorage.getItem(KEY))
-}
-
-export function setTabStyle(style: TabStyle): void {
-  localStorage.setItem(KEY, validTabStyle(style))
-  listeners.forEach((l) => l())
-}
-
-export function onTabStyleChange(cb: () => void): () => void {
-  listeners.push(cb)
-  return () => {
-    listeners = listeners.filter((l) => l !== cb)
-  }
-}
-
-export const useTabStyle = (): TabStyle => useSyncExternalStore(onTabStyleChange, tabStyle)
+export const validTabStyle = pref.valid
+export const tabStyle = pref.get
+export const setTabStyle = pref.set
+export const onTabStyleChange = pref.onChange
+export const useTabStyle = pref.use

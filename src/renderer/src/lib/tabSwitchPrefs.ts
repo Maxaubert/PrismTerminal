@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { enumPref } from '@core/renderer/lib/prefStore'
 
 // WHERE CTRL+TAB GOES (#158; owner, 2026-10-10: "add a new tab switching mode
 // called most recent. so you can either switch chronologically or by most
@@ -10,28 +10,10 @@ import { useSyncExternalStore } from 'react'
 
 export type TabSwitch = 'order' | 'recent'
 
-const KEY = 'prism.window.tabSwitch'
+const pref = enumPref<TabSwitch>('prism.window.tabSwitch', ['order', 'recent'], 'order')
 
-let listeners: Array<() => void> = []
-
-export function validTabSwitch(v: unknown): TabSwitch {
-  return v === 'recent' ? 'recent' : 'order'
-}
-
-export function tabSwitch(): TabSwitch {
-  return validTabSwitch(localStorage.getItem(KEY))
-}
-
-export function setTabSwitch(mode: TabSwitch): void {
-  localStorage.setItem(KEY, validTabSwitch(mode))
-  listeners.forEach((l) => l())
-}
-
-export function onTabSwitchChange(cb: () => void): () => void {
-  listeners.push(cb)
-  return () => {
-    listeners = listeners.filter((l) => l !== cb)
-  }
-}
-
-export const useTabSwitch = (): TabSwitch => useSyncExternalStore(onTabSwitchChange, tabSwitch)
+export const validTabSwitch = pref.valid
+export const tabSwitch = pref.get
+export const setTabSwitch = pref.set
+export const onTabSwitchChange = pref.onChange
+export const useTabSwitch = pref.use

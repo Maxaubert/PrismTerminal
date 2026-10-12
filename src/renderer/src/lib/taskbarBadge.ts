@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { boolPref } from '@core/renderer/lib/prefStore'
 
 /**
  * THE TASKBAR BADGE (2026-09-28; owner: "a badge on the taskbar icon, where
@@ -9,31 +9,11 @@ import { useSyncExternalStore } from 'react'
  * the window's OVERLAY icon: a small disc drawn here and set by main. This
  * app's own setting, on by default (`prism.window.taskbarBadge`).
  */
-const KEY = 'prism.window.taskbarBadge'
-let listeners: Array<() => void> = []
+const pref = boolPref('prism.window.taskbarBadge', true)
 
-export function taskbarBadgeOn(): boolean {
-  try {
-    return localStorage.getItem(KEY) !== '0'
-  } catch {
-    return true
-  }
-}
-export function setTaskbarBadgeOn(on: boolean): void {
-  try {
-    localStorage.setItem(KEY, on ? '1' : '0')
-  } catch {
-    /* a blocked store loses the choice, not the app */
-  }
-  listeners.forEach((l) => l())
-}
-const sub = (cb: () => void): (() => void) => {
-  listeners.push(cb)
-  return () => {
-    listeners = listeners.filter((l) => l !== cb)
-  }
-}
-export const useTaskbarBadgeOn = (): boolean => useSyncExternalStore(sub, taskbarBadgeOn)
+export const taskbarBadgeOn = pref.get
+export const setTaskbarBadgeOn = pref.set
+export const useTaskbarBadgeOn = pref.use
 
 /** How many tabs want a look: the marks the strip is showing. Pure. */
 export function attentionCount(p: {

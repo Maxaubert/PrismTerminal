@@ -15,6 +15,7 @@ import { seeThroughAlpha } from './seeThrough'
 // the other at module load (only inside functions, at call time), so either may
 // be evaluated first.
 import { resolveTermTheme } from './termTheme'
+import { readPref, writePref } from './prefStore'
 
 export type { AgentIndicator }
 
@@ -32,6 +33,17 @@ export const FONT_PCTS = [50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160,
 
 let listeners: Array<() => void> = []
 const notify = (): void => listeners.forEach((l) => l())
+
+/** A switch, on unless switched off ('0'), read and written defensively
+ *  (prefStore) and announced on this module's listeners: the five agent
+ *  switches below were each the same two functions (audit 2026-10-12). */
+const onSwitch = (key: string): [() => boolean, (on: boolean) => void] => [
+  () => readPref(key) !== '0',
+  (on) => {
+    writePref(key, on ? '1' : '0')
+    notify()
+  }
+]
 
 /** Names a preset (or 'custom'). 'prism' is the default. Inside Prism the
  *  default was 'style', follow the app style; there is no app style here, so a
@@ -186,20 +198,8 @@ const QUESTION_ON_KEY = 'prism.term.agentQuestionOn'
  * a tab that needs you says so. Switches, not theme settings, so a theme
  * never turns them on or off.
  */
-export function agentDoneOn(): boolean {
-  return localStorage.getItem(DONE_ON_KEY) !== '0'
-}
-export function setAgentDoneOn(on: boolean): void {
-  localStorage.setItem(DONE_ON_KEY, on ? '1' : '0')
-  notify()
-}
-export function agentQuestionOn(): boolean {
-  return localStorage.getItem(QUESTION_ON_KEY) !== '0'
-}
-export function setAgentQuestionOn(on: boolean): void {
-  localStorage.setItem(QUESTION_ON_KEY, on ? '1' : '0')
-  notify()
-}
+export const [agentDoneOn, setAgentDoneOn] = onSwitch(DONE_ON_KEY)
+export const [agentQuestionOn, setAgentQuestionOn] = onSwitch(QUESTION_ON_KEY)
 
 const RAINBOW_KEY = 'prism.term.agentRainbow'
 
@@ -209,13 +209,7 @@ const RAINBOW_KEY = 'prism.term.agentRainbow'
  * colour, still. Not a theme setting: a theme pick never touches it. Drawn
  * only where the host's strip draws it (`tabMarks.rainbow`).
  */
-export function agentRainbow(): boolean {
-  return localStorage.getItem(RAINBOW_KEY) !== '0'
-}
-export function setAgentRainbow(on: boolean): void {
-  localStorage.setItem(RAINBOW_KEY, on ? '1' : '0')
-  notify()
-}
+export const [agentRainbow, setAgentRainbow] = onSwitch(RAINBOW_KEY)
 
 const FAILED_ON_KEY = 'prism.term.agentFailedOn'
 const HOOKS_KEY = 'prism.term.agentHooks'
@@ -225,26 +219,14 @@ const HOOKS_KEY = 'prism.term.agentHooks'
  * overload), told by Claude Code's own hook. A switch beside the other two,
  * on by default for their reason.
  */
-export function agentFailedOn(): boolean {
-  return localStorage.getItem(FAILED_ON_KEY) !== '0'
-}
-export function setAgentFailedOn(on: boolean): void {
-  localStorage.setItem(FAILED_ON_KEY, on ? '1' : '0')
-  notify()
-}
+export const [agentFailedOn, setAgentFailedOn] = onSwitch(FAILED_ON_KEY)
 
 /**
  * "EXACT STATUS FROM CLAUDE CODE" (#131; owner, 2026-10-05: on by default,
  * with a switch). On, a NEW shell is handed the bundled plugin; off, it is
  * not, and no plugin loads. A running shell keeps what it started with.
  */
-export function agentHooksOn(): boolean {
-  return localStorage.getItem(HOOKS_KEY) !== '0'
-}
-export function setAgentHooksOn(on: boolean): void {
-  localStorage.setItem(HOOKS_KEY, on ? '1' : '0')
-  notify()
-}
+export const [agentHooksOn, setAgentHooksOn] = onSwitch(HOOKS_KEY)
 /** A stored agent colour: six digits, or eight with an alpha (#112), in its
  *  canonical form, or null. */
 const agentHex = canonicalStored
