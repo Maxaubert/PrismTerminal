@@ -16,15 +16,14 @@ import TerminalPanel, {
   focusTermSession,
   focusedTermFullScreen,
   openTermPath,
-  termContextAt,
-  type TermPathAt
+  termContextAt
 } from '@core/renderer/components/TerminalPanel'
 import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
 import { toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
-import { CHORDS, chordOf, keyLabel } from './lib/keymap'
+import { CHORDS, chordOf } from './lib/keymap'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
 import { AppMark } from './components/AppMark'
@@ -71,7 +70,7 @@ import { ResumeSkeleton } from '@core/renderer/components/ResumeSkeleton'
 import { peekState, settleRestore } from './lib/restorePlan'
 import { quotePaths } from '@core/renderer/lib/termPaste'
 import { ContextMenu } from './components/ContextMenu'
-import { MenuIcon } from './components/MenuIcon'
+import { termMenuItems, type TermMenuAt } from './components/termMenu'
 import { rememberRoot } from '@core/renderer/lib/recentRoots'
 import { savedShellId } from '@core/renderer/lib/termPrefs'
 import { helpEnabled, helpShell, setHelpShell, useHelpEnabled } from '@core/renderer/lib/helpPrefs'
@@ -192,19 +191,7 @@ export default function App(): JSX.Element {
   const [findFor, setFindFor] = useState<string | null>(null)
   const [ask, setAsk] = useState<Ask | null>(null)
   /** The terminal's own right-click menu, at the pointer. */
-  const [termMenu, setTermMenu] = useState<{
-    /** The session it was opened on (code review 2026-09-24, #32): the menu
-     *  shows only over that one, so a Ctrl+Tab never turns its Paste on the
-     *  next shell while its Copy still holds the last one's selection. */
-    id: string
-    x: number
-    y: number
-    /** What was selected when the menu opened, and the link under the point. */
-    selection: string
-    link: string | null
-    /** A file or folder under the point that exists (#99). */
-    path: TermPathAt | null
-  } | null>(null)
+  const [termMenu, setTermMenu] = useState<TermMenuAt | null>(null)
   /** The command help popup (#12). The core's, the same in Prism; what is this
    *  app's is the way in (F1, the ? in the title bar, the terminal's menu). */
   const [helpOpen, setHelpOpen] = useState(false)
@@ -949,86 +936,14 @@ export default function App(): JSX.Element {
           x={termMenu.x}
           y={termMenu.y}
           onClose={() => setTermMenu(null)}
-          items={[
-            // THE MENU FITS WHAT WAS CLICKED (owner, 2026-09-23: "if i click it
-            // on a link it shows copy link, if i click it with text marked it
-            // says copy"). Both copy exactly through the core's `copyText`, like
-            // the command help, which also raises the "Copied" badge once the
-            // clipboard has it. Close tab left this menu the same day ("remove close
-            // tab from the right click menu"); the tab's own menu still has it.
-            // A PATH (#99; owner, 2026-09-29): open it as a click would, show
-            // it in Explorer, or copy it whole and absolute.
-            ...(termMenu.path
-              ? [
-                  {
-                    label: termMenu.path.kind === 'dir' ? 'Open folder' : 'Open',
-                    icon: <MenuIcon name={termMenu.path.kind === 'dir' ? 'folder' : 'open'} />,
-                    onPick: () => openTermPath(termMenu.id, termMenu.path!, 'open')
-                  },
-                  {
-                    label: 'Show in Explorer',
-                    icon: <MenuIcon name="folder" />,
-                    onPick: () => openTermPath(termMenu.id, termMenu.path!, 'reveal')
-                  },
-                  {
-                    label: 'Copy path',
-                    icon: <MenuIcon name="copy" />,
-                    onPick: () => void copyText(termMenu.path!.abs)
-                  }
-                ]
-              : []),
-            ...(termMenu.link
-              ? [
-                  {
-                    label: 'Copy link',
-                    icon: <MenuIcon name="link" />,
-                    onPick: () => void copyText(termMenu.link!)
-                  },
-                  // A right-click never opens it (2026-09-28), so the menu does.
-                  {
-                    label: 'Open link',
-                    icon: <MenuIcon name="open" />,
-                    onPick: () => window.prism.openExternal(termMenu.link!)
-                  }
-                ]
-              : []),
-            ...(termMenu.selection
-              ? [
-                  {
-                    label: 'Copy',
-                    icon: <MenuIcon name="copy" />,
-                    hint: 'Ctrl+C',
-                    onPick: () => void copyText(termMenu.selection)
-                  }
-                ]
-              : []),
-            // Paste through the terminal's own rule (an image forwards the
-            // keystroke to the agent, files become quoted paths, text is a
-            // bracketed paste).
-            {
-              label: 'Paste',
-              icon: <MenuIcon name="paste" />,
-              hint: 'Ctrl+V',
-              onPick: () => void pasteInto(activeShell.id)
-            },
-            {
-              label: 'Find in scrollback',
-              icon: <MenuIcon name="find" />,
-              hint: keyLabel('find'),
-              onPick: () => setFindFor(activeShell.id)
-            },
-            // Only while the setting is on: off means the app offers it nowhere.
-            ...(helpOn
-              ? [
-                  {
-                    label: 'Command help',
-                    icon: <MenuIcon name="help" />,
-                    hint: keyLabel('help'),
-                    onPick: toggleHelp
-                  }
-                ]
-              : [])
-          ]}
+          items={termMenuItems(termMenu, {
+            openPath: (path, how) => openTermPath(termMenu.id, path, how),
+            copy: (text) => void copyText(text),
+            openLink: (url) => window.prism.openExternal(url),
+            paste: () => void pasteInto(activeShell.id),
+            find: () => setFindFor(activeShell.id),
+            help: helpOn ? toggleHelp : undefined
+          })}
         />
       )}
 
