@@ -35,3 +35,21 @@ export interface Restored {
  *  core's since #28, because the chip and the window that show it are: both
  *  apps carry the same offer to the same components. */
 export type { UpdateInfo } from '@core/shared/updateTypes'
+
+/** The pointer at the window's top or left edge, as main reads it (#162,
+ *  `src/main/edgeWatch.ts`), handed to the page. */
+export interface EdgeNear {
+  top: boolean
+  left: boolean
+  /** The cursor relative to the content's top left, so the page can ask
+   *  whether it is over its own part of the edge. */
+  x: number
+  y: number
+}
+
+/** The taskbar badge as main last drew it (an e2e reads it back). */
+export interface BadgeImage {
+  png: string
+  scale: number
+  width: number
+}

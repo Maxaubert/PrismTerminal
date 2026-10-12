@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import type { EdgeNear } from '@shared/types'
 
 /**
  * WHERE THE POINTER IS AGAINST THE WINDOW'S TOP AND LEFT EDGES, AS MAIN READS
@@ -7,12 +8,7 @@ import { useSyncExternalStore } from 'react'
  * collapsed sidebar also listen to main. Main polls only while someone here is
  * listening; the last one to go stops it.
  */
-export interface EdgeNear {
-  top: boolean
-  left: boolean
-  x: number
-  y: number
-}
+export type { EdgeNear }
 
 const NONE: EdgeNear = { top: false, left: false, x: -1, y: -1 }
 let near: EdgeNear = NONE

@@ -60,8 +60,12 @@ describe('isStableCopy', () => {
 
 describe('handoffCommand quoting (audit 2026-10-12)', () => {
   it('a curly apostrophe in a path stays inside its quotes', () => {
-    const dir = 'C:\Users\O\u2019Brien\AppData\Local\Programs\PrismTerminal'
-    const cmd = handoffCommand({ ...base, installedDir: dir, execPath: `${dir}\PrismTerminal.exe`, userDataDir: null })
-    expect(cmd).toContain("Start-Process -FilePath 'C:\Users\O\u2019\u2019Brien\AppData\Local\Programs\PrismTerminal\PrismTerminal.exe'")
+    const dir = 'C:\\Users\\O\u2019Brien\\AppData\\Local\\Programs\\PrismTerminal'
+    const cmd = handoffCommand({ ...base, installedDir: dir, execPath: `${dir}\\PrismTerminal.exe`, userDataDir: null })
+    expect(cmd).toContain(
+      "Start-Process -FilePath 'C:\\Users\\O\u2019\u2019Brien\\AppData\\Local\\Programs\\PrismTerminal\\PrismTerminal.exe'"
+    )
+    // Before psQuote the curly quote ended the literal: the rest was code.
+    expect(cmd).not.toContain("O\u2019Brien\\AppData")
   })
 })
