@@ -1,12 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type JSX,
-  type MouseEvent,
-  type PointerEvent,
-  type ReactNode
-} from 'react'
+import { useEffect, useRef, useState, type JSX, type MouseEvent, type PointerEvent } from 'react'
 import { tabLabels, type Tab } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
 import { TabMark } from '@core/renderer/components/TabMark'
@@ -17,43 +9,24 @@ import { useTabMenus } from './tabMenus'
 import { useTabStyle } from '../lib/tabStylePrefs'
 import { sideEdgeClip, sideSegmentClip } from '../lib/promptGeometry'
 import { dropSlot, type Lane } from '../lib/tabDrop'
-import { REVEAL, useHoverReveal } from '../lib/hoverReveal'
-import { useEdgeNear } from '../lib/edgeNear'
+import { useHoverReveal } from '../lib/hoverReveal'
+import { useEdgeWants } from '../lib/edgeNear'
+import { sideWants } from '../lib/revealZones'
+import { findKeeps, folderLine } from '../lib/sidebarRows'
+import { onDevicePixels, useDevicePixelRatio } from '../lib/devicePixels'
+import { OUTSIDE_CORNER } from '../lib/cornerShapes'
 import {
   SIDEBAR_WIDTH,
-  setSidebarMode,
   setSidebarWidth,
   useSidebarMode,
   useSidebarWidth
 } from '../lib/sidebarPrefs'
 
+/** The bar across the window's top (App's `data-title-bar="beside"`, h-9). */
+const BAR_H = 36
 /** How far the pointer must travel before a press becomes a drag rather than
  *  a click on the tab: the strip's own slop. */
 const DRAG_SLOP = 4
-
-/** The sidebar's own button: a panel with its left column and a chevron, the
- *  way editors draw "collapse the sidebar" (owner, 2026-10-11: "not a normal
- *  pin ... like a collapse sidebar icon"). The chevron points the way it goes. */
-const PanelGlyph = ({ open }: { open: boolean }): JSX.Element => (
-  <svg
-    viewBox="0 0 24 24"
-    width={15}
-    height={15}
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.7"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <rect x="3" y="3.5" width="18" height="17" rx="2.5" />
-    <path d="M9 3.5v17" />
-    <path d={open ? 'M16 15l-3-3 3-3' : 'M13 9l3 3-3 3'} />
-  </svg>
-)
-
-const BTN =
-  'no-drag grid h-[26px] w-7 shrink-0 place-items-center rounded text-[var(--p-icon)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)]'
 
 /**
  * THE TABS AS A SIDEBAR (#162; owner, 2026-10-11): the strip's tabs, one row
@@ -86,9 +59,7 @@ export function TabSidebar({
   onNew,
   onDropFolder,
   onReorder,
-  onOpenRecent,
-  titleRow,
-  headStart
+  onOpenRecent
 }: {
   tabs: Tab[]
   activeId: string | null
@@ -106,9 +77,6 @@ export function TabSidebar({
   onReorder: (id: string, toIndex: number) => void
   onOpenRecent: (path: string) => void
   /** The title bar is hidden: the sidebar starts at the window's top. */
-  titleRow: boolean
-  /** Command help and Settings, at the foot, when there is no title bar. */
-  headStart?: ReactNode
 }): JSX.Element | null {
   const prompt = useTabStyle() === 'prompt'
   const mode = useSidebarMode()
@@ -125,37 +93,68 @@ export function TabSidebar({
   })
   const menu = useTabMenus({ onClose, onOpenRecent })
   const nav = useRef<HTMLElement>(null)
+  // FIND A TAB (owner, 2026-10-12, of the sidebar looks mockup): typing keeps
+  // the rows whose name or folder has every word; Enter puts the first in
+  // front, Escape lets go. Ctrl+Shift+K (App) comes here.
+  const [query, setQuery] = useState('')
+  const [finding, setFinding] = useState(false)
+  const find = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const go = (): void => find.current?.focus()
+    window.addEventListener('prism:find-tab', go)
+    return () => window.removeEventListener('prism:find-tab', go)
+  }, [])
+  // The user's own folder, for the folder line's `~`. Asked once.
+  const [home, setHome] = useState('')
+  useEffect(() => {
+    let live = true
+    void window.prism.homeDir().then((h) => {
+      if (live) setHome(h)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
   // A width being dragged lives here until the drag ends; only then is it stored.
   const [dragW, setDragW] = useState<number | null>(null)
-  const width = dragW ?? storedWidth
+  // On a whole screen pixel, where it meets the bar and the terminal (lib/devicePixels).
+  const ratio = useDevicePixelRatio()
+  const width = onDevicePixels(dragW ?? storedWidth, ratio)
   const collapsed = mode === 'collapsed'
-  // Main's word too: the page hears nothing over the resize border (edgeWatch.ts).
-  const edge = useEdgeNear(collapsed)
   // COLLAPSED: shown while the pointer is at the window's left edge or on the
-  // sidebar itself, and held while one of its menus is open.
+  // sidebar itself, and held while one of its menus is open. One rule for the
+  // page's pointer and main's (lib/revealZones): over the grab strip at its
+  // top the page hears nothing, a press there being Windows', and the sidebar
+  // went away under the hand (owner, 2026-10-11: "if i have the cursor on the
+  // sidebar at the top of it it will disappear when im still on the sidebar").
+  // Measured to where it COMES TO REST, never the half-slid box ("closes before
+  // my cursor is near the edge"): its stored width, not a rectangle.
   const shownNow = useRef(false)
+  // The sidebar starts under the bar across the window's top.
+  const top = BAR_H
+  const fromMain = useEdgeWants(collapsed, (p) => sideWants(p, shownNow.current, top, width))
   const shown = useHoverReveal(
     collapsed,
-    (e) => {
-      const el = nav.current
-      if (!el) return false
-      // Its own height (under a title bar there is one).
-      const box = el.getBoundingClientRect()
-      if (e.clientY < box.top || e.clientY > box.bottom) return false
-      if (e.clientX <= REVEAL.left) return true
-      // ON IT once shown, measured to where it COMES TO REST, not where the
-      // slide has got to (owner, 2026-10-11: "the sidebar closes before my
-      // cursor is near the edge"): a pointer that outran the 260 ms slide was
-      // outside the half-drawn box, so it was put away under the hand. The
-      // layout width ignores the slide; a few pixels past the edge are its.
-      return shownNow.current && e.clientX <= el.offsetWidth + REVEAL.zone
-    },
-    menu.open || dragW !== null || (edge.left && edge.y >= (titleRow ? 0 : 36)) // 36: the title bar's h-9
+    (e) => sideWants({ x: e.clientX, y: e.clientY }, shownNow.current, top, width),
+    menu.open || dragW !== null || finding || fromMain
   )
   useEffect(() => {
     shownNow.current = shown
   }, [shown])
   const visible = !collapsed || shown
+  // How much of the page beside it a slid-out sidebar covers: App cuts that
+  // strip of the page away, so only the window's acrylic lies under it.
+  const cover = collapsed && visible && tabs.length > 0 ? width : 0
+  useEffect(() => {
+    const root = document.documentElement.style
+    root.setProperty('--p-sidebar-cover', `${cover}px`)
+  }, [cover])
+  useEffect(
+    () => () => {
+      document.documentElement.style.setProperty('--p-sidebar-cover', '0px')
+    },
+    []
+  )
 
   // ---- Reorder: the strip's pointer drag, along y ----
   const [dropAt, setDropAt] = useState<number | null>(null)
@@ -180,7 +179,7 @@ export function TabSidebar({
     if (el && document.contains(el)) requestAnimationFrame(() => el.focus())
   }
   const onRowDown = (e: PointerEvent<HTMLDivElement>, id: string, i: number): void => {
-    if (e.button !== 0) return
+    if (e.button !== 0 || query) return
     if ((e.target as HTMLElement).closest('[data-tab-close]')) return
     heldFocus.current = document.activeElement as HTMLElement | null
     // The lanes run down the column: `left` and `width` are a row's top and height.
@@ -250,6 +249,10 @@ export function TabSidebar({
 
   if (!tabs.length) return null
   const labels = tabLabels(tabs)
+  const kept = query
+    ? tabs.map((t, i) => findKeeps(query, labels[i], t.kind === 'settings' ? '' : t.cwd))
+    : null
+  const firstKept = kept ? tabs.find((_, i) => kept[i]) : undefined
   const auxClose = (e: MouseEvent, id: string): void => {
     if (e.button === 1) {
       e.preventDefault()
@@ -285,21 +288,112 @@ export function TabSidebar({
             if (path) onDropFolder(path)
           }
         }}
-        className={`p-styled-font absolute inset-y-0 left-0 flex flex-col border-r border-[var(--p-divider)] bg-[var(--p-tabs)] text-[13px] ${
+        // SLID OUT UNDER SEE-THROUGH, ACRYLIC LIKE THE REST (owner,
+        // 2026-10-12: "make sure its acrylic like the rest not just see
+        // through"): the window's tint over the window's own acrylic, the page
+        // under it cut away (App, --p-sidebar-cover) so the terminal's text
+        // never shows through. CSS backdrop blur does nothing in a see-through
+        // window (measured in the e2e window, 2026-10-12). It lies ABOVE the
+        // page beside it: Settings' search icon showed through (same day).
+        className={`p-styled-font absolute inset-y-0 left-0 z-30 flex flex-col bg-[var(--p-secondary)] text-[13px] ${
           collapsed
-            ? 'transition-[left,box-shadow] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
+            ? 'transition-[left] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
             : ''
-        } ${collapsed && visible ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]' : ''} ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
+        } ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         // Slid by its LEFT, never a transform: Windows is told where a drag
         // region is from the layout, and a transformed panel's grab strip was
         // reported where its slide started (measured, WM_NCHITTEST).
-        style={{ width, left: collapsed && !visible ? -(width + 16) : 0 }}
+        // OPEN, it draws no edge: the terminal's own (TermEdge) runs down its
+        // side and round the corner into the bar's. Clipped to itself, open to
+        // the right for its slid-out corner (below).
+        style={{
+          width,
+          left: collapsed && !visible ? -(width + 16) : 0,
+          clipPath: 'inset(0 -60px 0 0)'
+        }}
       >
-        {/* A STRIP TO GRAB, above the tabs, when there is no title bar (owner,
-            2026-10-11: "the tabs should start a bit further down on the
-            sidebar so that you can grab that area"). The pop-out bar's height,
-            so the two read as one top edge. */}
-        {titleRow && <div data-sidebar-grab aria-hidden className="drag h-9 shrink-0" />}
+        {/* SLID OUT, THE CORNER WHERE IT MEETS THE BAR: a quarter circle of
+            the shared colour under the bar's end, as the open sidebar's
+            terminal is cut round there, so the two read as one surface. */}
+        {collapsed && visible && (
+          <span
+            data-sidebar-corner
+            aria-hidden
+            className="pointer-events-none absolute left-full top-0 h-2.5 w-2.5"
+          >
+            {/* The fill, the sidebar's tint cut to the curve by a mask. */}
+            <span
+              className="absolute inset-0 bg-[var(--p-secondary)]"
+              style={{ maskImage: OUTSIDE_CORNER, maskSize: '100% 100%' }}
+            />
+            {/* The line, round the curve into the bar's. */}
+            <span
+              className="absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(circle at 100% 100%, transparent 9px, var(--p-divider) 9.5px, var(--p-divider) 10px, transparent 10.5px)'
+              }}
+            />
+          </span>
+        )}
+        {/* Slid out, its line: from the bar down, meeting the bar's line
+            through the corner above (owner, 2026-10-12: it "has no border ...
+            it has that when it's in static mode"), as Panel edges draws it. */}
+        {collapsed && visible && (
+          <span
+            data-sidebar-line
+            aria-hidden
+            className="pointer-events-none absolute bottom-0 right-0 w-px bg-[var(--p-divider)]"
+            style={{ top: 10 }}
+          />
+        )}
+        <label
+          data-sidebar-find
+          className="no-drag mx-2 mb-2 mt-2.5 flex h-8 shrink-0 cursor-text items-center gap-2 rounded-md bg-[var(--p-hover)] px-2.5 text-[var(--p-dim)] focus-within:ring-1 focus-within:ring-[var(--p-accent-hi)]"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width={14}
+            height={14}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            className="shrink-0"
+            aria-hidden
+          >
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="M16 16l4 4" />
+          </svg>
+          <input
+            ref={find}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setFinding(true)}
+            onBlur={() => setFinding(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setQuery('')
+                find.current?.blur()
+              } else if (e.key === 'Enter' && firstKept) {
+                e.preventDefault()
+                setQuery('')
+                find.current?.blur()
+                onPick(firstKept.id)
+              }
+            }}
+            placeholder="Find a tab"
+            aria-label="Find a tab"
+            spellCheck={false}
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-[var(--p-text)] outline-none placeholder:text-[var(--p-dim)]"
+          />
+          {!query && (
+            <kbd className="shrink-0 font-[inherit] text-[11.5px] text-[var(--p-dim2)]">
+              Ctrl+Shift+K
+            </kbd>
+          )}
+        </label>
         <div
           ref={rows}
           data-sidebar-rows
@@ -308,17 +402,16 @@ export function TabSidebar({
           // top"). With no title bar, the list's empty space below the tabs
           // is what moves the window ("i cant drag the window"); each row is
           // no-drag, so a tab still clicks and drags as a tab.
-          className="p-scroll flex min-h-0 flex-1 flex-col gap-px overflow-y-auto pb-2 pt-1.5"
+          className="p-scroll flex min-h-0 flex-1 flex-col gap-px overflow-y-auto pb-2"
         >
           {tabs.map((t, i) => {
             const on = t.id === activeId
             const { failed, state, mark } = looks[i]
             const filled = mark.place === 'fill' && state !== null
             const ink = filled ? palette.ink[state] : undefined
-            const nameInk =
-              on || indicator === 'full'
-                ? 'text-[var(--p-text)]'
-                : 'text-[var(--p-dim)] hover:text-[var(--p-text)]'
+            // Every name in the sidebar's own ink, held to 7:1 (chromeTheme):
+            // the accent pill, not a dimmer name, says which tab is in front.
+            const nameInk = 'text-[var(--p-side-text)]'
             // The flat marks lie along the row's foot, as along a strip tab's;
             // under Powerline they are the arrow's edge instead.
             const flatMark =
@@ -360,9 +453,16 @@ export function TabSidebar({
                 onPointerMove={onRowMove}
                 onPointerUp={onRowUp}
                 onPointerCancel={() => carry && endDrag()}
-                className={`no-drag group relative isolate flex h-[34px] shrink-0 items-center gap-2 overflow-hidden transition-colors ${nameInk} ${
+                hidden={kept ? !kept[i] : undefined}
+                className={`no-drag group relative isolate flex h-[46px] shrink-0 items-center gap-2 overflow-hidden transition-colors ${nameInk} ${
                   prompt ? 'mr-1 pl-3 pr-6' : 'mx-1.5 rounded-[4px] pl-3 pr-1.5'
-                } ${on ? 'bg-[var(--p-hover)]' : 'hover:bg-[var(--p-hover)]'}`}
+                } ${
+                  // The tab in front is a clear filled pill in the accent's tint
+                  // (Warp's way, 2026-10-12); the rest light only on hover.
+                  on
+                    ? 'bg-[color-mix(in_srgb,var(--p-accent-hi)_18%,transparent)]'
+                    : 'hover:bg-[var(--p-hover)]'
+                }`}
                 style={{
                   transform: `translateY(${carry?.id === t.id ? carry.dy : slide(i)}px)`,
                   zIndex: carry?.id === t.id ? 5 : undefined,
@@ -424,14 +524,19 @@ export function TabSidebar({
                     className="pointer-events-none relative z-[1] inline-block h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--p-text)_22%,transparent)] border-t-[var(--p-accent-solid)] motion-safe:animate-spin"
                   />
                 )}
-                {mark.place === 'ring' && (
+                {mark.place === 'ring' ? (
                   <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
+                ) : (
+                  // Under Ring every name starts at one x: a tab with no mark
+                  // keeps the mark's 12 px slot, as the New tab row's + does.
+                  indicator === 'ring' &&
+                  !loadingIds?.has(t.id) && <span aria-hidden className="-mr-0.5 w-3 shrink-0" />
                 )}
                 <button
                   role="tab"
                   aria-selected={on}
                   tabIndex={on ? 0 : -1}
-                  className={`relative z-[1] min-w-0 flex-1 truncate py-1 text-left ${filled || on ? 'font-semibold' : ''}`}
+                  className="relative z-[1] flex min-w-0 flex-1 flex-col py-1 text-left"
                   style={ink ? { color: ink } : undefined}
                   title={
                     t.kind === 'settings'
@@ -449,7 +554,20 @@ export function TabSidebar({
                     onPick(t.id)
                   }}
                 >
-                  {labels[i]}
+                  <span className={`truncate ${filled || on ? 'font-semibold' : ''}`}>
+                    {labels[i]}
+                  </span>
+                  {/* The folder it sits in (owner, 2026-10-12: "Second line:
+                      Folder path"), dim, so two tabs with one name differ. */}
+                  {t.kind !== 'settings' && (
+                    <span
+                      data-tab-folder
+                      className="truncate text-[11.5px] font-normal text-[var(--p-side-dim)]"
+                      style={ink ? { color: ink, opacity: 0.75 } : undefined}
+                    >
+                      {folderLine(t.cwd, home)}
+                    </span>
+                  )}
                 </button>
                 <button
                   className={`relative z-[1] grid h-[18px] w-[18px] shrink-0 place-items-center rounded-sm text-[var(--p-icon)] transition-opacity hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] ${
@@ -481,45 +599,30 @@ export function TabSidebar({
             )
           })}
         </div>
-        {/* THE BUTTONS, AT THE FOOT (owner, 2026-10-11): the +, then, with no
-            title bar, command help and Settings, then the sidebar's own
-            button. The space between them moves the window too. */}
-        <div data-sidebar-foot className="flex h-10 shrink-0 items-center gap-0.5 px-1.5">
+        {/* NEW TAB, A BUTTON AT THE FOOT (owner, 2026-10-12, of the sidebar
+            looks mockup: "New tab: Button at the bottom"). Its right click is
+            the +'s list of places, as on the strip. */}
+        <div className="shrink-0 border-t border-[var(--p-divider)] p-2">
           <button
-            className={BTN}
-            title="New tab (Ctrl+T). Right-click for recent folders"
-            aria-label="New tab"
             data-sidebar-new
+            title="New tab (Ctrl+T). Right-click for recent folders"
             onClick={onNew}
             onContextMenu={menu.openPlusMenu}
+            className="no-drag flex h-[34px] w-full items-center justify-center gap-2 rounded-md border border-[var(--p-divider)] bg-[var(--p-hover)] text-[13px] text-[var(--p-text)] transition-colors hover:bg-[var(--p-hover-hi)]"
           >
             <svg
               viewBox="0 0 24 24"
-              width={14}
-              height={14}
+              width={13}
+              height={13}
               fill="none"
               stroke="currentColor"
-              strokeWidth="2"
+              strokeWidth="2.2"
               strokeLinecap="round"
               aria-hidden
             >
-              <path d="M12 6v12m6-6H6" />
+              <path d="M12 5v14m7-7H5" />
             </svg>
-          </button>
-          <span className="min-w-2 flex-1 self-stretch" />
-          {headStart && <div className="no-drag flex items-center gap-0.5">{headStart}</div>}
-          <button
-            className={BTN}
-            data-sidebar-toggle={collapsed ? 'expand' : 'collapse'}
-            title={
-              collapsed
-                ? 'Keep the sidebar open'
-                : 'Collapse the sidebar: it shows when the pointer reaches the left edge'
-            }
-            aria-label={collapsed ? 'Keep the sidebar open' : 'Collapse the sidebar'}
-            onClick={() => setSidebarMode(collapsed ? 'open' : 'collapsed')}
-          >
-            <PanelGlyph open={!collapsed} />
+            New tab
           </button>
         </div>
         {/* The resize grip, on the sidebar's right edge, while it is open. */}

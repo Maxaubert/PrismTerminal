@@ -38,7 +38,7 @@ const PAGE_OF: Record<SettingsSectionId, AppPageId> = {
 /** Every row in the order the pages draw them, which is the order Find a
  *  setting lists matches in. A test holds this to the lists. */
 export const ROW_ORDER = [
-  'tab-layout', 'tab-width', 'tab-style', 'tab-switch', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-accent',
+  'tab-layout', 'tab-style', 'tab-switch', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-secondary', 'window-accent',
   'term-shell', 'newtab-mode', 'explorer-verb', 'term-font-family', 'term-font', 'help-enabled',
   'agent-indicator', 'agent-done-on', 'agent-rainbow', 'agent-question-on', 'agent-failed-on', 'taskbar-badge', 'agent-hooks',
   'agent-color', 'agent-done-color', 'agent-question-color',

@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore, type JSX } from 'react'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
-import { RESET_LINK, Segmented, Switch } from '@core/renderer/settings/fields'
+import { RESET_LINK, Segmented } from '@core/renderer/settings/fields'
 import { ColourField } from '@core/renderer/settings/ColourPicker'
 import { SettingRow } from '@core/renderer/settings/layout/SettingRow'
 import { SettingsSection } from '@core/renderer/settings/layout/SettingsSection'
@@ -13,18 +13,34 @@ import {
   termGroundAlpha,
   termThemeId,
   useTermAcrylic,
-  useTermGroundAlpha
+  useTermGroundAlpha,
+  useTermThemeId
 } from '@core/renderer/lib/termLook'
 import { SEE_THROUGH_MAX } from '@core/renderer/lib/seeThrough'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { setWindowEdges, useWindowEdges } from '../../lib/edgesPrefs'
-import { setTabWidth, useTabWidth, type TabWidth } from '../../lib/tabWidthPrefs'
 import { setTabStyle, useTabStyle, type TabStyle } from '../../lib/tabStylePrefs'
 import { setTabSwitch, useTabSwitch, type TabSwitch } from '../../lib/tabSwitchPrefs'
-import { setTitleBarMode, useTitleBarMode } from '../../lib/titleBarPrefs'
 import { setTabLayout, useTabLayout, type TabLayout } from '../../lib/tabLayoutPrefs'
 import { setWindowAccent, useWindowAccent } from '../../lib/accentPrefs'
-import { onWindowBackgroundChange, setWindowBackground, useWindowBackground, windowBackground } from '../../lib/backgroundPrefs'
+import {
+  onWindowBackgroundChange,
+  setWindowBackground,
+  useWindowBackground,
+  windowBackground
+} from '../../lib/backgroundPrefs'
+import {
+  onWindowSecondaryChange,
+  setWindowSecondary,
+  useWindowSecondary
+} from '../../lib/secondaryPrefs'
+import {
+  NO_COLOURS,
+  coloursDiffer,
+  customWindowColours,
+  setCustomWindowColours,
+  useCustomWindowColours
+} from '../../lib/customWindowColours'
 import { chromeTokens } from '../../lib/chromeTheme'
 import { APP_SECTIONS, appOpt } from './appOptions'
 
@@ -54,13 +70,6 @@ const EDGE_OPTIONS: Array<{ id: WindowEdges; name: string }> = WINDOW_EDGES.map(
   id,
   name: EDGE_NAMES[id]
 }))
-
-// Dynamic first: it is the default (owner, 2026-09-23: "call it dynamic ...
-// have dynamic be the default").
-const TAB_WIDTH_OPTIONS: Array<{ id: TabWidth; name: string }> = [
-  { id: 'dynamic', name: 'Dynamic' },
-  { id: 'fixed', name: 'Fixed' }
-]
 
 // Horizontal first: it is the default, the strip as it always was (#162).
 const TAB_LAYOUT_OPTIONS: Array<{ id: TabLayout; name: string }> = [
@@ -98,10 +107,10 @@ const themeColours = (): string => {
   // so the Alpha reads 73 on a dark preset rather than 100.
   const own = id === 'custom' ? customTermTheme() : null
   const alpha = termAcrylic() ? termGroundAlpha() : own ? alphaOf(own.bg) : 1
-  return `${vars['--p-accent']}|${withAlpha(themeBg, alpha)}`
+  return `${vars['--p-accent']}|${withAlpha(themeBg, alpha)}|${vars['--p-secondary']}`
 }
 const onColoursChange = (cb: () => void): (() => void) => {
-  const offs = [onTermLookChange(cb), onWindowBackgroundChange(cb)]
+  const offs = [onTermLookChange(cb), onWindowBackgroundChange(cb), onWindowSecondaryChange(cb)]
   return () => offs.forEach((off) => off())
 }
 
@@ -123,7 +132,7 @@ function WindowColour({
   onPick,
   range
 }: {
-  id: 'window-background' | 'window-accent'
+  id: 'window-background' | 'window-accent' | 'window-secondary'
   sub: string
   chosen: string | null
   /** What the field shows of the choice, where it paints otherwise than it
@@ -138,13 +147,23 @@ function WindowColour({
   return (
     <SettingRow id={id} icon={o.icon} label={o.label} sub={sub}>
       {chosen && (
-        <button data-follow-theme={id.replace('window-', '')} onClick={() => onPick(null)} className={RESET_LINK}>
+        <button
+          data-follow-theme={id.replace('window-', '')}
+          onClick={() => onPick(null)}
+          className={RESET_LINK}
+        >
           Reset
         </button>
       )}
       {/* Escape in the picker puts back what was chosen when it opened, a
           row that followed the theme included (#112). */}
-      <ColourField label={o.label} value={shown ?? fromTheme} onChange={onPick} onRevert={() => onPick(chosen)} {...range} />
+      <ColourField
+        label={o.label}
+        value={shown ?? fromTheme}
+        onChange={onPick}
+        onRevert={() => onPick(chosen)}
+        {...range}
+      />
     </SettingRow>
   )
 }
@@ -152,7 +171,11 @@ function WindowColour({
 function WindowColours(): JSX.Element {
   const accent = useWindowAccent()
   const background = useWindowBackground()
-  const [themeAccent, themeBg] = useSyncExternalStore(onColoursChange, themeColours).split('|')
+  const [themeAccent, themeBg, themeSecondary] = useSyncExternalStore(
+    onColoursChange,
+    themeColours
+  ).split('|')
+  const secondary = useWindowSecondary()
   const acrylicOn = useTermAcrylic()
   const groundAlpha = useTermGroundAlpha()
   // The material is Windows 11's (1809 has none): where main says it cannot
@@ -188,6 +211,17 @@ function WindowColours(): JSX.Element {
         onPick={setWindowBackground}
         range={{ alphaMin: 0.3, alphaMax: acrylic ? SEE_THROUGH_MAX : 1, alphaDisabled: !acrylic }}
       />
+      {/* THE SECONDARY COLOUR (owner, 2026-10-12): the vertical tabs'
+          sidebar and title bar. The theme's own, a step off its ground, until
+          one is picked; solid, its see-through is the window's. */}
+      <WindowColour
+        id="window-secondary"
+        sub={appOpt('window-secondary').sub}
+        chosen={secondary}
+        fromTheme={themeSecondary}
+        onPick={setWindowSecondary}
+        range={{ alpha: false }}
+      />
       {/* The accent's alpha is for its FILLS; its lines stay solid. */}
       <WindowColour
         id="window-accent"
@@ -202,17 +236,19 @@ function WindowColours(): JSX.Element {
 }
 
 export function AppearancePage(): JSX.Element {
+  // The window colours in force and what Custom keeps (Save changes).
+  const background = useWindowBackground()
+  const accent = useWindowAccent()
+  const secondary = useWindowSecondary()
+  const kept = useCustomWindowColours()
+  const themeId = useTermThemeId()
   const edges = useWindowEdges()
   const layout = useTabLayout()
   const place = appOpt('tab-layout')
-  const width = useTabWidth()
   const style = useTabStyle()
-  const titleBar = useTitleBarMode()
-  const tab = appOpt('tab-width')
   const shape = appOpt('tab-style')
   const switching = useTabSwitch()
   const swap = appOpt('tab-switch')
-  const bar = appOpt('title-bar')
   const edge = appOpt('window-edges')
   return (
     <>
@@ -222,9 +258,6 @@ export function AppearancePage(): JSX.Element {
             button's, not a row here. */}
         <SettingRow id="tab-layout" icon={place.icon} label={place.label} sub={place.sub}>
           <Segmented value={layout} onChange={setTabLayout} options={TAB_LAYOUT_OPTIONS} />
-        </SettingRow>
-        <SettingRow id="tab-width" icon={tab.icon} label={tab.label} sub={tab.sub}>
-          <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
         </SettingRow>
         {/* The tab style (#143): the flat strip, or Powerline's chevrons. */}
         <SettingRow id="tab-style" icon={shape.icon} label={shape.label} sub={shape.sub}>
@@ -237,20 +270,13 @@ export function AppearancePage(): JSX.Element {
           id="tab-switch"
           icon={swap.icon}
           label={swap.label}
-          sub={switching === 'recent' ? 'Back to the tab you used last.' : 'The next tab along the strip.'}
+          sub={
+            switching === 'recent'
+              ? 'Back to the tab you used last.'
+              : 'The next tab along the strip.'
+          }
         >
           <Segmented value={switching} onChange={setTabSwitch} options={TAB_SWITCH_OPTIONS} />
-        </SettingRow>
-        {/* A switch over the same store the segmented control wrote: on is
-            `shown`, the default, the window as it always was (#91). */}
-        <SettingRow
-          id="title-bar"
-          icon={bar.icon}
-          label={bar.label}
-          sub={layout === 'vertical' ? 'When off, it shows at the top edge.' : bar.sub}
-          tap
-        >
-          <Switch on={titleBar === 'shown'} onChange={(on) => setTitleBarMode(on ? 'shown' : 'hidden')} label={bar.label} />
         </SettingRow>
         <SettingRow id="window-edges" icon={edge.icon} label={edge.label} sub={edge.sub}>
           <Segmented value={edges} onChange={setWindowEdges} options={EDGE_OPTIONS} />
@@ -263,10 +289,23 @@ export function AppearancePage(): JSX.Element {
         // it doesn't change the altered bg and accent colours, though it
         // should"): the two picks are forgotten, as Reset does, so the new
         // theme's own background and accent are what the window wears.
-        onThemePicked={() => {
-          setWindowBackground(null)
-          setWindowAccent(null)
+        // CUSTOM KEEPS ITS OWN (owner, 2026-10-12: Save changes "never grey when
+        // there are changes to save"): picking Custom brings back the window
+        // colours its Save kept; the editor's save starts Custom afresh.
+        onThemePicked={(id) => {
+          const kept = id === 'custom' ? customWindowColours() : NO_COLOURS
+          if (id === 'edited') setCustomWindowColours(null)
+          setWindowBackground(kept.background)
+          setWindowAccent(kept.accent)
+          setWindowSecondary(kept.secondary)
         }}
+        // The window colours in force are changes to save while they differ
+        // from what the theme in front keeps; Save keeps them with Custom.
+        extraDirty={coloursDiffer(
+          { background, accent, secondary },
+          themeId === 'custom' ? kept : NO_COLOURS
+        )}
+        onSaved={() => setCustomWindowColours({ background, accent, secondary })}
       />
     </>
   )

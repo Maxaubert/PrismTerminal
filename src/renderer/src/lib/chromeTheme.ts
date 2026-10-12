@@ -1,7 +1,15 @@
 import type { TermTheme } from '@core/renderer/lib/termTheme'
-import { contrastRatio, ensureContrast, luminance, mixHex, normalizeColor } from '@core/renderer/lib/termAnsi'
+import {
+  contrastRatio,
+  ensureContrast,
+  luminance,
+  mixHex,
+  normalizeColor
+} from '@core/renderer/lib/termAnsi'
 import { alphaHex, alphaOf, composite, selectionFor } from '@core/renderer/lib/colour'
 import { switchKnob } from '@core/renderer/lib/switchKnob'
+import { sidebarGround } from './sidebarGround'
+import { atLightness, liftToFloor, okLightness } from './oklab'
 import { EDGE_ALPHA, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 
 // The window wears the terminal's theme. Every chrome colour is derived from
@@ -26,6 +34,10 @@ const FALLBACK_FG = '#e7e7ee'
 // on the same colour, and the active tab is told from the rest by its INK.
 const TEXT_FLOOR = 4.5
 const QUIET_FLOOR = 3
+/** White text on the accent is tried from this ratio up (see onAccent). */
+const WHITE_ON_ACCENT = 3
+/** The sidebar's tab names: AAA, for an owner who works zoomed in (#162). */
+const SIDE_TEXT_FLOOR = 7
 
 /** Every COLOUR token the components read. Radius, font and size tokens are
  *  index.css's, since no theme changes them. */
@@ -34,6 +46,7 @@ export const CHROME_COLOUR_TOKENS = [
   '--p-bg-solid',
   '--p-side',
   '--p-side-flat',
+  '--p-secondary',
   '--p-title',
   '--p-tabs',
   '--p-tab-active',
@@ -55,7 +68,11 @@ export const CHROME_COLOUR_TOKENS = [
   '--p-preview',
   '--p-sel-bg',
   '--p-tree-folder',
-  '--p-switch-knob'
+  '--p-switch-knob',
+  '--p-pressed',
+  '--p-pressed-ink',
+  '--p-side-text',
+  '--p-side-dim'
 ] as const
 
 export interface ChromeTokens {
@@ -95,7 +112,10 @@ export function chromeTokens(
   edges: WindowEdges = 'hairline',
   /** The accent the USER chose (accentPrefs), or nothing to follow the theme.
    *  It may carry an alpha (#114). */
-  chosenAccent?: string | null
+  chosenAccent?: string | null,
+  /** The SECONDARY colour the user chose (secondaryPrefs), or nothing for the
+   *  theme's own: the sidebar and the title bar beside the terminal. */
+  chosenSecondary?: string | null
 ): ChromeTokens {
   // Flattened before any maths: a theme may publish rgba() or #rrggbbaa, which
   // is fine to paint and NaN to measure, and NaN is how a hue walks to black.
@@ -112,8 +132,31 @@ export function chromeTokens(
   // between the ground and the text, so it is the harder of the two for
   // anything on the text's side; the ground is checked after it for the rare
   // colour that sits on the other side.
+  // THE SECONDARY COLOUR (owner, 2026-10-12: "the sidebar and titlebar colour
+  // should be this, but make that into a new setting called secondary colour
+  // ... so the user can pick their own, but this is the gold standard. make it
+  // fit with each theme"): the vertical tabs' sidebar and their title bar.
+  // THE SIDEBAR'S GROUND, unpicked (owner, 2026-10-12: "black theme should
+  // have black sidebar and all the others have the old style where its a bit
+  // darker than the bg + shadow", then "should follow a general scheme"): one
+  // even step darker on every theme (sidebarGround); a black theme keeps its
+  // black. The edge between it and the terminal is one line (TermEdge). A pick
+  // is a surface the inks are held to.
+  const ownSecondary = sidebarGround(bg)
+  const secondary = chosenSecondary ? normalizeColor(chosenSecondary, ownSecondary) : ownSecondary
+  // The form control's fill (below), a step off the ground: on a light theme
+  // the quiet inks sit on it too, a segment's name or a field's hint.
+  const controlFill = mixHex(bg, rawFg, light ? 0.09 : 0.035)
   const floorOn = (c: string, floor: number): string =>
-    ensureContrast(ensureContrast(c, flat, floor), bg, floor)
+    ensureContrast(
+      ensureContrast(
+        ensureContrast(ensureContrast(c, flat, floor), secondary, floor),
+        light ? controlFill : bg,
+        floor
+      ),
+      bg,
+      floor
+    )
   const fg = floorOn(rawFg, TEXT_FLOOR)
   // The theme's own blue first, its cursor second, Prism's indigo last, and the
   // first that is VISIBLE on this ground wins. If none is, the theme's blue is
@@ -132,10 +175,10 @@ export function chromeTokens(
   const chosen = chosenAccent ? normalizeColor(chosenAccent, INDIGO) : null
   // The accent as a LINE: rings, rules, progress, the spinner. Never
   // see-through (#114); a picked alpha belongs to the fills below.
-  const solid = chosen
+  let solid = chosen
     ? visible(chosen)
       ? chosen
-      : floorOn(chosen, QUIET_FLOOR)
+      : floorOn(liftToFloor(chosen, [bg, flat], QUIET_FLOOR) ?? chosen, QUIET_FLOOR)
     : (candidates.find(visible) ?? floorOn(candidates[0], QUIET_FLOOR))
   const glass = groundAlpha < 1
   let accent = solid
@@ -157,8 +200,29 @@ export function chromeTokens(
   } else {
     // What sits on the accent is white or near-black, whichever reads better:
     // the better of two, not a midpoint test, since both can be poor at a midpoint.
-    onAccent =
-      contrastRatio('#ffffff', accent) >= contrastRatio(FALLBACK_BG, accent) ? '#ffffff' : FALLBACK_BG
+    const onWhite = contrastRatio('#ffffff', accent)
+    const onDark = contrastRatio(FALLBACK_BG, accent)
+    onAccent = onWhite >= onDark ? '#ffffff' : FALLBACK_BG
+    // WHITE ON A STRONG MID COLOUR (owner, 2026-10-12, of near-black on a red
+    // Save changes: "the text colour should shift to white"). A red or a blue
+    // measures a little better in black by the WCAG sum but reads better in
+    // white, so when white is close (3:1 up, black not half as good again) the
+    // accent is taken a shade deeper, by lightness alone so it stays its hue,
+    // until white clears the body floor: only as far as the ground still shows
+    // it at the accent floor. Where that runs out first, the ink stays dark. A
+    // pale accent (the PT orange, a yellow) never gets here.
+    if (onAccent !== '#ffffff' && onWhite >= WHITE_ON_ACCENT && onWhite * 1.5 >= onDark) {
+      let deeper = accent
+      for (let i = 0; i < 40 && contrastRatio('#ffffff', deeper) < TEXT_FLOOR; i += 1) {
+        const next = atLightness(deeper, okLightness(deeper) - 0.005)
+        if (!visible(next)) break
+        deeper = next
+      }
+      if (contrastRatio('#ffffff', deeper) >= TEXT_FLOOR) {
+        accent = solid = deeper
+        onAccent = '#ffffff'
+      }
+    }
     // A selected row carries TEXT, so its fill is the accent moved until that ink
     // clears the text floor on it (Prism's selectionBg): away from the ink.
     selBg = accent
@@ -177,7 +241,27 @@ export function chromeTokens(
     selBg = composite(selBg, bg)
   }
   const accentHi = floorOn(mixHex(solid, fg, 0.25), QUIET_FLOOR)
-  const dim = floorOn(mixHex(fg, bg, 0.38), QUIET_FLOOR)
+  // ON A LIGHT THEME the quiet inks sit nearer the text (owner, 2026-10-12:
+  // "the ui buttons on light themes are often a bit too hard to see, would be
+  // better if they were darker grey or black"): the dim text and the icons are
+  // held to the BODY floor there, and the icons a further step darker. A dark
+  // theme keeps the quieter greys it was tuned with.
+  // THE SIDEBAR'S INKS (owner, 2026-10-12, of the sidebar steps mockup: "very
+  // light themes have bad contrast ratios"; then "yes thats good" to the names
+  // held to 7:1 and the folder lines to 4.5:1): on the sidebar's ground AND on
+  // the accent pill of the tab in front, which TabSidebar lays at 18 percent.
+  const sideSolid = composite(secondary, bg)
+  const pill = mixHex(sideSolid, accentHi, 0.18)
+  const sideHeld = (c: string, floor: number): string =>
+    ensureContrast(ensureContrast(c, sideSolid, floor), pill, floor)
+  const sideInks = {
+    '--p-side-text': sideHeld(fg, SIDE_TEXT_FLOOR),
+    '--p-side-dim': sideHeld(mixHex(fg, sideSolid, light ? 0.42 : 0.55), TEXT_FLOOR)
+  }
+  const dim = light
+    ? floorOn(mixHex(fg, bg, 0.28), TEXT_FLOOR)
+    : floorOn(mixHex(fg, bg, 0.38), QUIET_FLOOR)
+  const icon = light ? floorOn(mixHex(fg, bg, 0.18), TEXT_FLOOR) : dim
   // A raised stage rather than a sunken one: a true-black ground has nothing
   // darker to go to, so this always steps towards the text colour.
   const stage = mixHex(bg, fg, light ? 0.16 : 0.13)
@@ -203,6 +287,8 @@ export function chromeTokens(
     // change when you turn on see through window, like the sidebar").
     '--p-side': glass ? bg + '00' : bg,
     '--p-side-flat': flat,
+    // On glass it is see-through at the ground's own alpha, as the sheet is.
+    '--p-secondary': glass ? secondary + alphaHex(groundAlpha) : secondary,
     '--p-title': sheet,
     '--p-tabs': sheet,
     // The active tab is told by its ink, not a fill. On glass it must paint
@@ -212,12 +298,16 @@ export function chromeTokens(
     '--p-text': fg,
     '--p-text-soft': floorOn(mixHex(fg, bg, 0.14), TEXT_FLOOR),
     '--p-dim': dim,
-    '--p-dim2': floorOn(mixHex(fg, bg, 0.55), QUIET_FLOOR),
+    // The quietest ink, a hint or a disabled button's word: on a light theme
+    // held to the body floor too, so a disabled Save changes still reads.
+    '--p-dim2': light
+      ? floorOn(mixHex(fg, bg, 0.42), TEXT_FLOOR)
+      : floorOn(mixHex(fg, bg, 0.55), QUIET_FLOOR),
     '--p-accent': accent,
     '--p-accent-solid': solid,
     '--p-accent-hi': accentHi,
     '--p-on-accent': onAccent,
-    '--p-icon': dim,
+    '--p-icon': icon,
     '--p-hover': ink + pctHex(light ? 7 : 6),
     '--p-hover-hi': ink + pctHex(light ? 12 : 11),
     '--p-divider': ink + pctHex(edgeAlpha.divider[shade]),
@@ -227,7 +317,9 @@ export function chromeTokens(
     '--p-control': mixHex(bg, fg, light ? 0.09 : 0.035),
     // The unfilled part of a bar sits ON the stage, where a divider-strength
     // grey disappears.
-    '--p-track': mixHex(stage, fg, light ? 0.34 : 0.26),
+    // An off switch's track: on a light theme a mid grey the white knob stands
+    // out on, not a pale one.
+    '--p-track': mixHex(stage, fg, light ? 0.5 : 0.26),
     '--p-sel-bg': selBg,
     // The folder in the + menu's list of places: the accent's brighter cut,
     // already held to the non-text floor on the panel it is drawn on.
@@ -237,7 +329,15 @@ export function chromeTokens(
     // close"): the theme's own ink, measured off the ground, flipped only where
     // it reads under 2:1 on the ON track (`--p-sel-bg`, as the eye sees it over
     // the ground: a see-through accent's fill is measured composited).
-    '--p-switch-knob': switchKnob(composite(selBg, bg), !light)
+    '--p-switch-knob': switchKnob(composite(selBg, bg), !light),
+    // A PRESSED SEGMENT (owner, 2026-10-12: "make sure to fix the contrast on
+    // light themes ... white themes having a very light gray color for
+    // buttons"): on a light theme the text colour as a pill with the ground's
+    // ink on it, the clearest pair the theme has; on a dark one the quiet grey
+    // it always was.
+    '--p-pressed': light ? mixHex(fg, bg, 0.08) : mixHex(mixHex(bg, fg, 0.035), fg, 0.16),
+    '--p-pressed-ink': light ? bg : fg,
+    ...sideInks
   }
   return { mode, vars }
 }

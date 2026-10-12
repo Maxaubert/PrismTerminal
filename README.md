@@ -26,7 +26,7 @@ session comes back when you reopen the app.
 |---|---|
 | **Agent indicator on every tab** | A tab lights the moment Claude Code or Codex starts working and shows when the answer has landed, a question is waiting, or a turn failed. Pick Minimal, Ring or Full: Ring is one small mark by the name in its own ink (a spinner, a check, a dot or a cross); with Minimal and Full a finished tab wears the app icon's rainbow, flowing. |
 | **Two tab styles** | Classic flat tabs, or Powerline: chevron segments whose arrow edge is the agent's mark. `Ctrl+Tab` goes along the strip or back to the tab you used last. |
-| **Tabs along the top or down the side** | A sidebar of tabs instead of the strip: kept open beside the terminal and resized at its edge, or collapsed, sliding over the terminal when the pointer reaches the window's left edge. With the title bar off, the window's buttons slide down at the top edge. |
+| **Tabs along the top or down the side** | A sidebar of tabs instead of the strip: kept open beside the terminal and resized at its edge, or collapsed, sliding over the terminal when the pointer reaches the window's left edge; `Ctrl+Shift+B` switches between the two. The sidebar runs from the window's top, with the window's buttons in a bar beside it. |
 | **Sessions that come back** | Close the app and reopen it: every tab returns in its folder, and agent conversations resume on their own. |
 | **Local dictation** | Hold `Right Alt` and speak. [whisper.cpp](https://github.com/ggml-org/whisper.cpp) runs on your PC, offline, and never presses Enter. |
 | **Command help** | Press `F1`, describe a task in plain words and copy the command. Works offline. |
