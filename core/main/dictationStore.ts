@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { mkdir, open, readdir, rename, rm, stat, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
+import { SYS } from './sysTools'
 import type {
   CatalogEntry,
   DictationStore,
@@ -91,9 +92,8 @@ const EXPAND_COMMAND =
  */
 export const expandArchive: Unzip = (zip, outDir, signal) =>
   new Promise<void>((resolve, reject) => {
-    const exe = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
     execFile(
-      exe,
+      SYS.powershell,
       ['-NoProfile', '-NonInteractive', '-Command', EXPAND_COMMAND],
       {
         windowsHide: true,

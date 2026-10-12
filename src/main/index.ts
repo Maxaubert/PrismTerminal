@@ -24,7 +24,8 @@ import { installUpdate, updateCalls, watchForUpdates } from './update'
 import { previewUpdate, runPreviewInstall, wantsPreview } from '@core/main/updatePreview'
 import { createVerbSwitch } from './verbSwitch'
 import { bellFlash } from './bellFlash'
-import { readWindowState, watchWindowState } from './windowState'
+import { localAppData } from './appPaths'
+import { MIN_WINDOW, readWindowState, watchWindowState } from './windowState'
 import { APP_CH, E2E_CH } from '@shared/channels'
 
 // Prism Terminal's main process: the window, its lifecycle and the
@@ -283,8 +284,8 @@ function createWindow(): void {
     height: remembered.height,
     x: remembered.x,
     y: remembered.y,
-    minWidth: 560,
-    minHeight: 400,
+    minWidth: MIN_WINDOW.width,
+    minHeight: MIN_WINDOW.height,
     show: false,
     ...(E2E ? { focusable: false, skipTaskbar: true } : {}),
     // Not `frame: false`: DWM refuses to composite acrylic behind a frameless
@@ -523,7 +524,7 @@ function wireIpc(): void {
     },
     sharedRoot:
       process.env.PT_DICTATION_ROOT ??
-      join(process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'), 'PrismDictation'),
+      join(localAppData(), 'PrismDictation'),
     hasNvidia: async () => {
       if (process.env.PT_E2E_NVIDIA) return process.env.PT_E2E_NVIDIA === '1'
       const info = (await app.getGPUInfo('basic')) as { gpuDevice?: Array<{ vendorId?: number }> }
