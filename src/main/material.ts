@@ -1,5 +1,6 @@
 import { nativeTheme, type BrowserWindow } from 'electron'
 import { release } from 'os'
+import { DEFAULT_GROUND } from '@core/shared/ground'
 
 /**
  * Acrylic, and why fullscreen takes it away (2026-08-25).
@@ -23,7 +24,7 @@ export function acrylicOk(rel: string = release(), platform: string = process.pl
 
 /** The `prism` preset's ground: what the window is before the renderer has
  *  said which theme it is wearing. */
-export const DEFAULT_BG = '#0b0b0f'
+export const DEFAULT_BG = DEFAULT_GROUND
 
 export const validBg = (hex: unknown): hex is string =>
   typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex)

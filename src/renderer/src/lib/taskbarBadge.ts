@@ -1,4 +1,6 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect } from 'react'
+import { useAgentDoneOn, useAgentFailedOn, useAgentQuestionOn } from '@core/renderer/lib/termLook'
+import { boolPref } from '@core/renderer/lib/prefStore'
 
 /**
  * THE TASKBAR BADGE (2026-09-28; owner: "a badge on the taskbar icon, where
@@ -9,31 +11,11 @@ import { useSyncExternalStore } from 'react'
  * the window's OVERLAY icon: a small disc drawn here and set by main. This
  * app's own setting, on by default (`prism.window.taskbarBadge`).
  */
-const KEY = 'prism.window.taskbarBadge'
-let listeners: Array<() => void> = []
+const pref = boolPref('prism.window.taskbarBadge', true)
 
-export function taskbarBadgeOn(): boolean {
-  try {
-    return localStorage.getItem(KEY) !== '0'
-  } catch {
-    return true
-  }
-}
-export function setTaskbarBadgeOn(on: boolean): void {
-  try {
-    localStorage.setItem(KEY, on ? '1' : '0')
-  } catch {
-    /* a blocked store loses the choice, not the app */
-  }
-  listeners.forEach((l) => l())
-}
-const sub = (cb: () => void): (() => void) => {
-  listeners.push(cb)
-  return () => {
-    listeners = listeners.filter((l) => l !== cb)
-  }
-}
-export const useTaskbarBadgeOn = (): boolean => useSyncExternalStore(sub, taskbarBadgeOn)
+export const taskbarBadgeOn = pref.get
+export const setTaskbarBadgeOn = pref.set
+export const useTaskbarBadgeOn = pref.use
 
 /** How many tabs want a look: the marks the strip is showing. Pure. */
 export function attentionCount(p: {
@@ -107,4 +89,29 @@ export function drawBadge(count: number, scale: number): string {
   // Segoe's figures sit a touch high on the middle line: a nudge down centres them.
   g.fillText(text, c, c + size * 0.04)
   return canvas.toDataURL('image/png')
+}
+
+/** The badge kept in step with the marks, the switches and the setting
+ *  (moved out of App, audit 2026-10-12): a small grey disc with a white
+ *  number (2026-09-29, the owner's look), or none. */
+export function useTaskbarBadge(ids: {
+  doneIds: ReadonlySet<string>
+  questionIds: ReadonlySet<string>
+  workingIds: ReadonlySet<string>
+  failedIds: ReadonlySet<string>
+}): void {
+  const badgeOn = useTaskbarBadgeOn()
+  const doneOn = useAgentDoneOn()
+  const questionOn = useAgentQuestionOn()
+  const failedOn = useAgentFailedOn()
+  const need = attentionCount({ ...ids, doneOn, questionOn, failedOn })
+  useEffect(() => {
+    if (!badgeOn || need.count === 0) {
+      window.prism.setTaskbarBadge(null, '')
+      return
+    }
+    const said = `${need.count} ${need.count === 1 ? 'tab needs' : 'tabs need'} a look`
+    const scale = window.devicePixelRatio || 1
+    window.prism.setTaskbarBadge(drawBadge(need.count, scale) || null, said, scale)
+  }, [badgeOn, need.count])
 }

@@ -19,3 +19,11 @@ describe('where the pointer keeps a revealed panel (#162)', () => {
     expect(sideWants(null, true, 0, 220)).toBe(false)
   })
 })
+
+describe('one reveal zone (audit 2026-10-12)', () => {
+  it("the page's reveal reads the shared REVEAL_ZONE (main's: edgeWatch.test)", async () => {
+    const { REVEAL_ZONE } = await import('@shared/revealZones')
+    const { REVEAL } = await import('./hoverReveal')
+    expect({ top: REVEAL.top, left: REVEAL.left }).toEqual({ top: REVEAL_ZONE.top, left: REVEAL_ZONE.left })
+  })
+})

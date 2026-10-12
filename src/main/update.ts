@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { localAppData } from './appPaths'
 import { MAX_BODY_CHARS } from '@core/shared/releaseNotes'
 import type { UpdateInfo } from '@shared/types'
 import { handoffCommand } from './updateHandoff'
@@ -184,7 +185,7 @@ export async function installUpdate(
           userDataDir: app.commandLine.hasSwitch('user-data-dir')
             ? app.commandLine.getSwitchValue('user-data-dir')
             : null,
-          installedDir: join(process.env.LOCALAPPDATA ?? '', 'Programs', 'PrismTerminal')
+          installedDir: join(localAppData(), 'Programs', 'PrismTerminal')
         })
       ],
       { detached: true, stdio: 'ignore' }

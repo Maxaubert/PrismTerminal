@@ -1,4 +1,5 @@
 import { win32 } from 'node:path'
+import { psQuote } from '@core/shared/psQuote'
 
 // Windows paths on every host the tests run on.
 const { basename, dirname, join } = win32
@@ -46,8 +47,8 @@ export function isStableCopy(execPath: string, installedDir: string): boolean {
   )
 }
 
-/** PowerShell's own quoting: single quotes, a quote doubled. */
-const q = (s: string): string => `'${s.replace(/'/g, "''")}'`
+/** PowerShell's own quoting, curly quotes included (core's psQuote). */
+const q = psQuote
 
 export function handoffCommand(i: HandoffInput): string {
   const args = i.userDataDir ? ` -ArgumentList ${q(`--user-data-dir="${i.userDataDir}"`)}` : ''

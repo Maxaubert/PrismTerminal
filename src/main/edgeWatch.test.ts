@@ -29,3 +29,10 @@ describe('the pointer at the window edge (#162)', () => {
     expect([n.x, n.y]).toEqual([250, 3])
   })
 })
+
+describe('one reveal zone (audit 2026-10-12)', () => {
+  it("main's edge reads the shared REVEAL_ZONE (the page's: revealZones.test)", async () => {
+    const { REVEAL_ZONE } = await import('@shared/revealZones')
+    expect({ top: EDGE.top, left: EDGE.left, outside: EDGE.outside }).toEqual(REVEAL_ZONE)
+  })
+})

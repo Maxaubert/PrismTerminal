@@ -16,15 +16,14 @@ import TerminalPanel, {
   focusTermSession,
   focusedTermFullScreen,
   openTermPath,
-  termContextAt,
-  type TermPathAt
+  termContextAt
 } from '@core/renderer/components/TerminalPanel'
 import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
-import { isSidebarChord, toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
-import { isFindTabChord } from './lib/sidebarRows'
+import { toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
+import { CHORDS, chordOf } from './lib/keymap'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
 import { AppMark } from './components/AppMark'
@@ -71,7 +70,7 @@ import { ResumeSkeleton } from '@core/renderer/components/ResumeSkeleton'
 import { peekState, settleRestore } from './lib/restorePlan'
 import { quotePaths } from '@core/renderer/lib/termPaste'
 import { ContextMenu } from './components/ContextMenu'
-import { MenuIcon } from './components/MenuIcon'
+import { termMenuItems, type TermMenuAt } from './components/termMenu'
 import { rememberRoot } from '@core/renderer/lib/recentRoots'
 import { savedShellId } from '@core/renderer/lib/termPrefs'
 import { helpEnabled, helpShell, setHelpShell, useHelpEnabled } from '@core/renderer/lib/helpPrefs'
@@ -83,26 +82,12 @@ import {
   closeQuestionTitle,
   holdsWindowClose
 } from '@core/renderer/lib/agentClose'
-import {
-  onTermLookChange,
-  termAcrylic,
-  termFontStack,
-  termGroundAlpha,
-  termThemeId
-} from '@core/renderer/lib/termLook'
-import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
-import { applyChrome, chromeTokens } from './lib/chromeTheme'
-import { onWindowEdgesChange, windowEdges } from './lib/edgesPrefs'
-import { onWindowAccentChange, windowAccent } from './lib/accentPrefs'
-import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPrefs'
-import { onWindowSecondaryChange, windowSecondary } from './lib/secondaryPrefs'
-import { attentionCount, drawBadge, useTaskbarBadgeOn } from './lib/taskbarBadge'
-import {
-  agentHooksOn,
-  useAgentDoneOn,
-  useAgentFailedOn,
-  useAgentQuestionOn
-} from '@core/renderer/lib/termLook'
+import { agentHooksOn, termFontStack } from '@core/renderer/lib/termLook'
+import { useTaskbarBadge } from './lib/taskbarBadge'
+import { usePaintedChrome } from './lib/paintChrome'
+import { BAR_H, SIDEBAR_SLIDE } from './lib/chromeLayout'
+import { isResumable } from '@core/shared/types'
+import { homeDir, useAppVersion } from './lib/appFacts'
 
 const Settings = lazy(() => import('./components/settings/Settings'))
 // Loaded when it is first opened: the popup brings the whole catalogue with it,
@@ -127,36 +112,6 @@ interface Ask {
 let seq = 0
 const nextId = (): string => 't' + Date.now().toString(36) + '-' + String((seq += 1))
 
-/** The window wears the terminal's theme; main hears about the material. The
- *  edges setting (#27) rides the same paint: it changes two of the tokens, and
- *  main is told so the DWM border round the window follows the lines in it. */
-function paintChrome(): void {
-  const acrylic = termAcrylic()
-  const id = termThemeId()
-  const edges = windowEdges()
-  // A picked background replaces the theme's for the whole window; the panel
-  // paints the terminal's ground from the same token, so it follows too.
-  const theme = resolveTermTheme(id)
-  const background = windowBackground()
-  // THE WINDOW'S SEE-THROUGH IS THE GROUND'S ALPHA (#114, in place of the
-  // Opacity slider): the picked Background's, else the theme's own (a Custom
-  // may carry one), the same order the core reads. Passed as the byte's
-  // fraction, unrounded, so the field and the window name the same alpha.
-  // An opaque ground under the switch paints the default see-through (#156).
-  const tokens = chromeTokens(
-    background ? { ...theme, background } : theme,
-    acrylic ? termGroundAlpha() : 1,
-    presetAccent(id),
-    edges,
-    windowAccent(),
-    windowSecondary()
-  )
-  applyChrome(tokens)
-  window.prism.setWindowBg(tokens.vars['--p-bg-solid'])
-  window.prism.setWindowEdges(edges)
-  void window.prism.setAcrylic(acrylic)
-}
-
 /** The terminal's cut top-left corner, beside the open sidebar: the inside of
  *  the curve (lib/cornerShapes), the corner piece the outside. */
 const CORNER_CUT = {
@@ -174,7 +129,7 @@ const CORNER_CUT = {
 const COVER_CUT = {
   ...CORNER_CUT,
   maskPosition: 'var(--p-sidebar-cover, 0px) 0',
-  transition: 'mask-position 240ms cubic-bezier(.16,1,.3,1)'
+  transition: `mask-position ${SIDEBAR_SLIDE}`
 } as const
 
 export default function App(): JSX.Element {
@@ -188,19 +143,7 @@ export default function App(): JSX.Element {
   const [findFor, setFindFor] = useState<string | null>(null)
   const [ask, setAsk] = useState<Ask | null>(null)
   /** The terminal's own right-click menu, at the pointer. */
-  const [termMenu, setTermMenu] = useState<{
-    /** The session it was opened on (code review 2026-09-24, #32): the menu
-     *  shows only over that one, so a Ctrl+Tab never turns its Paste on the
-     *  next shell while its Copy still holds the last one's selection. */
-    id: string
-    x: number
-    y: number
-    /** What was selected when the menu opened, and the link under the point. */
-    selection: string
-    link: string | null
-    /** A file or folder under the point that exists (#99). */
-    path: TermPathAt | null
-  } | null>(null)
+  const [termMenu, setTermMenu] = useState<TermMenuAt | null>(null)
   /** The command help popup (#12). The core's, the same in Prism; what is this
    *  app's is the way in (F1, the ? in the title bar, the terminal's menu). */
   const [helpOpen, setHelpOpen] = useState(false)
@@ -327,21 +270,8 @@ export default function App(): JSX.Element {
     }
   }, [commitWalk])
 
-  useEffect(() => {
-    paintChrome()
-    const offLook = onTermLookChange(paintChrome)
-    const offEdges = onWindowEdgesChange(paintChrome)
-    const offAccent = onWindowAccentChange(paintChrome)
-    const offBackground = onWindowBackgroundChange(paintChrome)
-    const offSecondary = onWindowSecondaryChange(paintChrome)
-    return () => {
-      offSecondary()
-      offBackground()
-      offLook()
-      offEdges()
-      offAccent()
-    }
-  }, [])
+  // The window wears the terminal's theme (lib/paintChrome).
+  usePaintedChrome()
 
   /** Start the shell for a tab that has (or is about to have) its place. */
   const spawnSession = useCallback((id: string, cwd: string, resume?: string): void => {
@@ -380,7 +310,7 @@ export default function App(): JSX.Element {
   const newTab = useCallback(async () => {
     const cwd =
       newTabMode() === 'folder'
-        ? newTabFolder() || home.current || (await window.prism.homeDir())
+        ? newTabFolder() || home.current || (await homeDir())
         : // Cancelling the chooser opens nothing.
           await window.prism.pickFolder()
     if (!cwd) return
@@ -408,7 +338,7 @@ export default function App(): JSX.Element {
   }, [boot.slots, spawnSession, prewarm])
 
   useEffect(() => {
-    void window.prism.homeDir().then((dir) => {
+    void homeDir().then((dir) => {
       home.current = dir
     })
     restore()
@@ -471,28 +401,35 @@ export default function App(): JSX.Element {
   // The shell ended: typed exit, or died. Its tab goes with it, unasked.
   useEffect(() => window.prism.onTermExit((id) => closeNow(id)), [closeNow])
 
+  // THE WINDOW'S QUESTION, built once for both ways the window goes (audit
+  // 2026-10-12: the close and the install each built it, one by the core's
+  // rule and one by hand): the agent working longest named, the others
+  // counted, or null when the core's `holdsWindowClose` says nothing holds it.
+  const windowAsk = useCallback((): Ask | null => {
+    const { state: st, workingIds: working } = live.current
+    const busy = shellTabs(st)
+      .filter((t) => working.has(t.id))
+      .map((t) => ({ t, forMs: workingFor(t.id) ?? 0 }))
+      .sort((a, b) => b.forMs - a.forMs)
+    if (!holdsWindowClose(busy.length)) return null
+    const first = busy[0]
+    return {
+      target: 'window',
+      label: tabLabels(st.tabs)[st.tabs.indexOf(first.t)],
+      agent: { kind: agentKinds.current.get(first.t.id) ?? 'other', forMs: first.forMs },
+      others: busy.length - 1
+    }
+  }, [agentKinds])
+
   // The window is closing while an agent works: main held the close and asks.
   useEffect(
     () =>
       window.prism.onCloseRequest(() => {
-        const { state: st, workingIds: working } = live.current
-        const busy = shellTabs(st)
-          .filter((t) => working.has(t.id))
-          .map((t) => ({ t, forMs: workingFor(t.id) ?? 0 }))
-          .sort((a, b) => b.forMs - a.forMs)
-        if (!busy.length) {
-          window.prism.confirmClose()
-          return
-        }
-        const first = busy[0]
-        setAsk({
-          target: 'window',
-          label: tabLabels(st.tabs)[st.tabs.indexOf(first.t)],
-          agent: { kind: agentKinds.current.get(first.t.id) ?? 'other', forMs: first.forMs },
-          others: busy.length - 1
-        })
+        const ask = windowAsk()
+        if (ask) setAsk(ask)
+        else window.prism.confirmClose()
       }),
-    [agentKinds]
+    [windowAsk]
   )
 
   /**
@@ -508,25 +445,11 @@ export default function App(): JSX.Element {
    */
   const installGuard = useCallback(
     (start: () => void) => {
-      const { state: st, workingIds: working } = live.current
-      const busy = shellTabs(st)
-        .filter((t) => working.has(t.id))
-        .map((t) => ({ t, forMs: workingFor(t.id) ?? 0 }))
-        .sort((a, b) => b.forMs - a.forMs)
-      if (!holdsWindowClose(busy.length)) {
-        start()
-        return
-      }
-      const first = busy[0]
-      setAsk({
-        target: 'window',
-        label: tabLabels(st.tabs)[st.tabs.indexOf(first.t)],
-        agent: { kind: agentKinds.current.get(first.t.id) ?? 'other', forMs: first.forMs },
-        others: busy.length - 1,
-        install: start
-      })
+      const ask = windowAsk()
+      if (ask) setAsk({ ...ask, install: start })
+      else start()
     },
-    [agentKinds]
+    [windowAsk]
   )
   // ONE QUESTION AT A TIME. The app's chords still work while the update window
   // is up (Ctrl+W, Alt+F4), and a close question raised from behind it mounted
@@ -579,10 +502,7 @@ export default function App(): JSX.Element {
     live.current = { state, workingIds, agentIds, blocked: !!ask || updateOpen, front: inFront }
   })
   /** The running version, for the window's "You have" line. Asked once. */
-  const [version, setVersion] = useState('')
-  useEffect(() => {
-    void window.prism.appVersion().then(setVersion)
-  }, [])
+  const version = useAppVersion()
 
   // Tell main what is open, whenever it changes: persistence for next launch,
   // and whether closing the window would interrupt anything.
@@ -591,8 +511,7 @@ export default function App(): JSX.Element {
     window.prism.tabsChanged({
       tabs: shells.map((t) => {
         const kind = agentIds.has(t.id) ? agentKinds.current.get(t.id) : undefined
-        const agent: AgentKind | undefined =
-          kind === 'claude' || kind === 'codex' ? kind : undefined
+        const agent: AgentKind | undefined = isResumable(kind) ? kind : undefined
         return agent ? { cwd: t.cwd, agent } : { cwd: t.cwd }
       }),
       active: Math.max(
@@ -606,30 +525,8 @@ export default function App(): JSX.Element {
     window.prism.setAgentBusy(holdsWindowClose(workingIds.size))
   }, [workingIds])
 
-  // THE TASKBAR BADGE (2026-09-28): how many tabs show a mark, as a small grey
-  // disc with a white number (2026-09-29, the owner's look).
-  const badgeOn = useTaskbarBadgeOn()
-  const doneOn = useAgentDoneOn()
-  const questionOn = useAgentQuestionOn()
-  const failedOn = useAgentFailedOn()
-  const need = attentionCount({
-    doneIds,
-    questionIds,
-    workingIds,
-    doneOn,
-    questionOn,
-    failedIds,
-    failedOn
-  })
-  useEffect(() => {
-    if (!badgeOn || need.count === 0) {
-      window.prism.setTaskbarBadge(null, '')
-      return
-    }
-    const said = `${need.count} ${need.count === 1 ? 'tab needs' : 'tabs need'} a look`
-    const scale = window.devicePixelRatio || 1
-    window.prism.setTaskbarBadge(drawBadge(need.count, scale) || null, said, scale)
-  }, [badgeOn, need.count])
+  // THE TASKBAR BADGE (2026-09-28): how many tabs show a mark (lib/taskbarBadge).
+  useTaskbarBadge({ doneIds, questionIds, workingIds, failedIds })
 
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
   // keyboard back: clicking or dragging a tab is not "I left the shell".
@@ -640,94 +537,100 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'F11') {
-        e.preventDefault()
-        window.prism.windowToggleFullscreen()
-        return
-      }
-      // F1 is command help, bare, and only while the setting is on: off, the
-      // key is the shell's (termHost's ownsKey makes the same test, so xterm
-      // yields it exactly when this takes it).
-      if (e.key === 'F1' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey && helpEnabled()) {
-        e.preventDefault()
-        e.stopPropagation()
-        toggleHelp()
-        return
-      }
-      if (!e.ctrlKey || e.altKey) return
-      const k = e.key.toLowerCase()
+      // Any other Ctrl chord ends a Most recent walk first (#158), then acts:
+      // the tab the walk landed on counts as used. Control and Shift are the
+      // hold itself (Shift walks the other way), and Control repeats while held.
+      if (e.ctrlKey && !e.altKey && e.key !== 'Tab' && e.key !== 'Control' && e.key !== 'Shift')
+        commitWalk()
+      // THE APP'S KEYS ARE ONE TABLE (lib/keymap), the one termHost's ownsKey
+      // reads too, so xterm yields exactly the chords acted on here.
+      const id = chordOf(e, {
+        help: helpEnabled(),
+        vertical: tabLayout() === 'vertical',
+        fullScreen: focusedTermFullScreen()
+      })
+      if (!id) return
       const hit = (): void => {
         e.preventDefault()
         e.stopPropagation()
       }
-      // Any other Ctrl chord ends a Most recent walk first (#158), then acts:
-      // the tab the walk landed on counts as used. Control and Shift are the
-      // hold itself (Shift walks the other way), and Control repeats while held.
-      if (e.key !== 'Tab' && e.key !== 'Control' && e.key !== 'Shift') commitWalk()
-      // ONE QUESTION AT A TIME, for the tab chords too (code review
-      // 2026-09-24, #10): under a close question or the update window, Ctrl+Tab
-      // or Ctrl+T moved the keyboard into a shell behind it, and the Enter
-      // meant for the question went there. They do nothing until it is
-      // answered; Ctrl+W keeps its own rule.
-      if (live.current.blocked && k !== 'w') {
-        if (e.key === 'Tab' || /^[1-9]$/.test(e.key) || e.key === ',' || k === 't' || k === 'f')
-          hit()
+      // ONE QUESTION AT A TIME, for the tab chords too: under a close question
+      // or the update window they do nothing until it is answered (keymap's
+      // `underModal`).
+      if (live.current.blocked && CHORDS[id].underModal === 'swallow') {
+        hit()
         return
       }
-      if (e.key === 'Tab') {
-        hit()
-        const dir = e.shiftKey ? -1 : 1
-        if (tabSwitch() === 'recent') {
-          // The walk is a snapshot taken at the hold's first press, of the
-          // list as it stands with the tab in front first (tabMru).
-          const { state: st } = live.current
-          if (!walk.current) {
-            const ids = st.tabs.map((t) => t.id)
-            const now = syncMru(mru.current, ids, st.activeId)
-            walk.current = startWalk(st.activeId ? touchMru(now, st.activeId) : now)
-          }
-          if (!walk.current) return
-          walk.current = stepWalk(walk.current, dir)
-          const id = walkTarget(walk.current)
-          setState((s) => pickTab(s, id))
-        } else {
-          setState((s) => stepTab(s, dir))
-        }
-      } else if (!e.shiftKey && /^[1-9]$/.test(e.key)) {
-        const t = live.current.state.tabs[Number(e.key) - 1]
-        if (t) {
+      switch (id) {
+        case 'fullscreen':
+          e.preventDefault()
+          window.prism.windowToggleFullscreen()
+          return
+        case 'help':
           hit()
-          setState((s) => pickTab(s, t.id))
+          toggleHelp()
+          return
+        case 'next-tab': {
+          hit()
+          const dir = e.shiftKey ? -1 : 1
+          if (tabSwitch() === 'recent') {
+            // The walk is a snapshot taken at the hold's first press, of the
+            // list as it stands with the tab in front first (tabMru).
+            const { state: st } = live.current
+            if (!walk.current) {
+              const ids = st.tabs.map((t) => t.id)
+              const now = syncMru(mru.current, ids, st.activeId)
+              walk.current = startWalk(st.activeId ? touchMru(now, st.activeId) : now)
+            }
+            if (!walk.current) return
+            walk.current = stepWalk(walk.current, dir)
+            const to = walkTarget(walk.current)
+            setState((s) => pickTab(s, to))
+          } else {
+            setState((s) => stepTab(s, dir))
+          }
+          return
         }
-      } else if (!e.shiftKey && e.key === ',') {
-        hit()
-        setState(openSettings)
-      } else if (isFindTabChord(e) && tabLayout() === 'vertical') {
-        // FIND A TAB (#162): the sidebar's find box.
-        hit()
-        window.dispatchEvent(new Event('prism:find-tab'))
-      } else if (isSidebarChord(e) && tabLayout() === 'vertical') {
-        // THE SIDEBAR (#162): open, or collapsed to the left edge.
-        hit()
-        toggleSidebar()
-      } else if (k === 't') {
-        // With or without shift: Ctrl+T is the chord, Ctrl+Shift+T the habit
-        // Windows Terminal leaves in the hand.
-        hit()
-        void newTab()
-      } else if (k === 'w') {
-        // Ctrl+W closes a tab in BOTH apps (owner, 2026-09-19), with or without
-        // shift. Known cost, accepted: the shell loses delete-word on that
-        // chord; Ctrl+Backspace does the same job.
-        hit()
-        const id = live.current.state.activeId
-        if (id) requestClose(id)
-      } else if (k === 'f' && (e.shiftKey || !focusedTermFullScreen())) {
-        // Ctrl+F finds (owner, 2026-09-23), except over a full-screen program,
-        // whose page down it is; Ctrl+Shift+F finds everywhere (termHost).
-        hit()
-        const id = live.current.state.activeId
-        setFindFor((was) => (was === id ? null : id))
+        case 'jump-tab': {
+          const t = live.current.state.tabs[Number(e.key) - 1]
+          if (t) {
+            hit()
+            setState((s) => pickTab(s, t.id))
+          }
+          return
+        }
+        case 'settings':
+          hit()
+          setState(openSettings)
+          return
+        case 'find-tab':
+          // FIND A TAB (#162): the sidebar's find box.
+          hit()
+          window.dispatchEvent(new Event('prism:find-tab'))
+          return
+        case 'sidebar':
+          // THE SIDEBAR (#162): open, or collapsed to the left edge.
+          hit()
+          toggleSidebar()
+          return
+        case 'new-tab':
+          hit()
+          void newTab()
+          return
+        case 'close-tab': {
+          // Known cost, accepted: the shell loses delete-word on Ctrl+W;
+          // Ctrl+Backspace does the same job.
+          hit()
+          const tab = live.current.state.activeId
+          if (tab) requestClose(tab)
+          return
+        }
+        case 'find': {
+          hit()
+          const tab = live.current.state.activeId
+          setFindFor((was) => (was === tab ? null : tab))
+          return
+        }
       }
     }
     window.addEventListener('keydown', onKey, true)
@@ -776,9 +679,6 @@ export default function App(): JSX.Element {
       setState((s) => ({ ...s, tabs: reorderTabs(s.tabs, id, to) })),
     onOpenRecent: openRecent
   }
-  const strip = (inTitleRow: boolean): JSX.Element => (
-    <TabStrip {...tabProps} inTitleRow={inTitleRow} />
-  )
   return (
     <div className="flex h-full w-full flex-col overflow-hidden text-[var(--p-text)]">
       {/* NO TITLE BAR (#91, owner's pick "tabs in the top row"): the tabs
@@ -789,9 +689,10 @@ export default function App(): JSX.Element {
       {beside ? null : (
         <div
           data-title-bar="tabs"
-          className="drag p-styled-font flex h-9 shrink-0 items-stretch border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1.5 text-[13px]"
+          style={{ height: BAR_H }}
+          className="drag p-styled-font flex shrink-0 items-stretch border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1.5 text-[13px]"
         >
-          {tabs.length > 0 ? strip(true) : <span className="min-w-0 flex-1" />}
+          {tabs.length > 0 ? <TabStrip {...tabProps} /> : <span className="min-w-0 flex-1" />}
           <div className="flex shrink-0 items-center gap-2.5 pl-2">
             <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
           </div>
@@ -814,7 +715,8 @@ export default function App(): JSX.Element {
       {beside && (
         <div
           data-title-bar="beside"
-          className="drag p-styled-font flex h-9 shrink-0 items-center gap-2.5 bg-[var(--p-secondary)] pl-4 pr-1.5 text-[13px]"
+          style={{ height: BAR_H }}
+          className="drag p-styled-font flex shrink-0 items-center gap-2.5 bg-[var(--p-secondary)] pl-4 pr-1.5 text-[13px]"
         >
           <div data-app-brand className="flex min-w-0 items-center gap-2.5">
             <AppMark size={18} className="shrink-0 text-[var(--p-accent-solid)]" />
@@ -955,86 +857,17 @@ export default function App(): JSX.Element {
           x={termMenu.x}
           y={termMenu.y}
           onClose={() => setTermMenu(null)}
-          items={[
-            // THE MENU FITS WHAT WAS CLICKED (owner, 2026-09-23: "if i click it
-            // on a link it shows copy link, if i click it with text marked it
-            // says copy"). Both copy exactly through the core's `copyText`, like
-            // the command help, which also raises the "Copied" badge once the
-            // clipboard has it. Close tab left this menu the same day ("remove close
-            // tab from the right click menu"); the tab's own menu still has it.
-            // A PATH (#99; owner, 2026-09-29): open it as a click would, show
-            // it in Explorer, or copy it whole and absolute.
-            ...(termMenu.path
-              ? [
-                  {
-                    label: termMenu.path.kind === 'dir' ? 'Open folder' : 'Open',
-                    icon: <MenuIcon name={termMenu.path.kind === 'dir' ? 'folder' : 'open'} />,
-                    onPick: () => openTermPath(termMenu.id, termMenu.path!, 'open')
-                  },
-                  {
-                    label: 'Show in Explorer',
-                    icon: <MenuIcon name="folder" />,
-                    onPick: () => openTermPath(termMenu.id, termMenu.path!, 'reveal')
-                  },
-                  {
-                    label: 'Copy path',
-                    icon: <MenuIcon name="copy" />,
-                    onPick: () => void copyText(termMenu.path!.abs)
-                  }
-                ]
-              : []),
-            ...(termMenu.link
-              ? [
-                  {
-                    label: 'Copy link',
-                    icon: <MenuIcon name="link" />,
-                    onPick: () => void copyText(termMenu.link!)
-                  },
-                  // A right-click never opens it (2026-09-28), so the menu does.
-                  {
-                    label: 'Open link',
-                    icon: <MenuIcon name="open" />,
-                    onPick: () => window.prism.openExternal(termMenu.link!)
-                  }
-                ]
-              : []),
-            ...(termMenu.selection
-              ? [
-                  {
-                    label: 'Copy',
-                    icon: <MenuIcon name="copy" />,
-                    hint: 'Ctrl+C',
-                    onPick: () => void copyText(termMenu.selection)
-                  }
-                ]
-              : []),
-            // Paste through the terminal's own rule (an image forwards the
-            // keystroke to the agent, files become quoted paths, text is a
-            // bracketed paste).
-            {
-              label: 'Paste',
-              icon: <MenuIcon name="paste" />,
-              hint: 'Ctrl+V',
-              onPick: () => void pasteInto(activeShell.id)
-            },
-            {
-              label: 'Find in scrollback',
-              icon: <MenuIcon name="find" />,
-              hint: 'Ctrl+F',
-              onPick: () => setFindFor(activeShell.id)
-            },
-            // Only while the setting is on: off means the app offers it nowhere.
-            ...(helpOn
-              ? [
-                  {
-                    label: 'Command help',
-                    icon: <MenuIcon name="help" />,
-                    hint: 'F1',
-                    onPick: toggleHelp
-                  }
-                ]
-              : [])
-          ]}
+          // The rows' actions run on a pick, never while rendering: the
+          // compiler's ref rule cannot see that through termMenuItems.
+          // eslint-disable-next-line react-hooks/refs
+          items={termMenuItems(termMenu, {
+            openPath: (path, how) => openTermPath(termMenu.id, path, how),
+            copy: (text) => void copyText(text),
+            openLink: (url) => window.prism.openExternal(url),
+            paste: () => void pasteInto(activeShell.id),
+            find: () => setFindFor(activeShell.id),
+            help: helpOn ? toggleHelp : undefined
+          })}
         />
       )}
 

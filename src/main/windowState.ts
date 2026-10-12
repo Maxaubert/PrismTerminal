@@ -1,6 +1,6 @@
 import { app, screen, type BrowserWindow } from 'electron'
 import { readFileSync } from 'fs'
-import { writeAtomic } from './atomicWrite'
+import { writeAtomic } from '@core/main/atomicWrite'
 import { join } from 'path'
 
 /**
@@ -37,14 +37,17 @@ const WINDOW_STATE = (): string => join(app.getPath('userData'), 'window.json')
  * the rules are testable: the raw file text and the work areas of the displays
  * that are attached NOW.
  */
+/** The smallest the window may be, and the floor a remembered size is held to. */
+export const MIN_WINDOW = { width: 560, height: 400 } as const
+
 export function parseWindowState(raw: string, areas: Area[]): WindowState {
   const fallback: WindowState = { width: 1180, height: 780 }
   try {
     const saved = JSON.parse(raw) as WindowState
     if (!Number.isFinite(saved.width) || !Number.isFinite(saved.height)) return fallback
     const size = {
-      width: Math.max(560, Math.round(saved.width)),
-      height: Math.max(400, Math.round(saved.height)),
+      width: Math.max(MIN_WINDOW.width, Math.round(saved.width)),
+      height: Math.max(MIN_WINDOW.height, Math.round(saved.height)),
       maximised: saved.maximised === true
     }
     if (!Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return size

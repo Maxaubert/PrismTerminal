@@ -3075,8 +3075,23 @@ const scenarios = {
     await page.locator('[data-tab-close]').nth(1).click({ force: true })
     ok(await until(async () => (await dialog().count()) === 1, 4000), 'closing its tab asks, though the agent is only idle')
     ok(/Claude/.test((await dialog().textContent()) ?? ''), 'and the question names the agent')
-    await page.keyboard.press('Escape')
+    // THE CORE'S MODAL (audit 2026-10-12): Tab never leaves the question for
+    // the shell behind it, and a press over the title bar (a drag region) is
+    // a press outside, so it cancels.
+    for (let i = 0; i < 5; i++) await page.keyboard.press('Tab')
+    ok(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]')), 'Tab stays inside the question')
+    await page.keyboard.press('Shift+Tab')
+    ok(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]')), 'and so does Shift+Tab')
+    {
+      const bar = await page.locator('[data-title-bar]').boundingBox()
+      await page.mouse.click(bar.x + bar.width - 260, bar.y + bar.height / 2)
+      ok(await until(async () => (await dialog().count()) === 0, 3000), 'a press over the title bar cancels it')
+    }
     ok((await tabLabels(page)).length === 2, 'Cancel keeps the tab')
+    await page.locator('[data-tab-close]').nth(1).click({ force: true })
+    await until(async () => (await dialog().count()) === 1, 4000)
+    await page.keyboard.press('Escape')
+    ok(await until(async () => (await dialog().count()) === 0, 3000), 'and Escape cancels too')
     // Mid-answer, the question says how long it has been at it.
     await page.locator('.xterm').first().click({ force: true })
     await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x25D0 + ' Claude Code'")

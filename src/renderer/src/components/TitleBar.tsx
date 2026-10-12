@@ -1,4 +1,6 @@
 import type { JSX, ReactNode } from 'react'
+import { COG_PATH } from './glyphPaths'
+import { keyLabel } from '../lib/keymap'
 
 /**
  * The window's buttons (#91, #162): the update chip, command help, the cog and
@@ -14,11 +16,7 @@ import type { JSX, ReactNode } from 'react'
 const BTN =
   'grid h-7 w-8 place-items-center rounded text-[var(--p-icon)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)]'
 
-/**
- * The title bar's right end: the update chip, command help, the cog and the
- * three window buttons. Its own component because with the title bar hidden
- * (#91) the same group sits at the end of the tab row instead.
- */
+/** The group itself: the end of the tab row, or of the bar across the top. */
 export function TitleButtons({
   onSettings,
   onHelp,
@@ -39,9 +37,8 @@ export function TitleButtons({
   )
 }
 
-/** Command help (while its setting is on) and the cog: with vertical tabs and
- *  no title bar they sit at the top of the sidebar instead (#162). */
-export function AppButtons({
+/** Command help (while its setting is on) and the cog. */
+function AppButtons({
   onSettings,
   onHelp
 }: {
@@ -54,7 +51,7 @@ export function AppButtons({
         <button
           className={BTN}
           onClick={onHelp}
-          title="Command help (F1)"
+          title={`Command help (${keyLabel('help')})`}
           aria-label="Command help"
           data-title-help
         >
@@ -78,7 +75,7 @@ export function AppButtons({
       <button
         className={BTN}
         onClick={onSettings}
-        title="Settings (Ctrl+,)"
+        title={`Settings (${keyLabel('settings')})`}
         aria-label="Settings"
         data-title-settings
       >
@@ -94,16 +91,15 @@ export function AppButtons({
           aria-hidden
         >
           <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          <path d={COG_PATH} />
         </svg>
       </button>
     </>
   )
 }
 
-/** Minimize, maximize and close. With vertical tabs and no title bar they are
- *  all that is left of it, floating at the window's top right (#162). */
-export function WindowButtons(): JSX.Element {
+/** Minimize, maximize and close. */
+function WindowButtons(): JSX.Element {
   const w = window.prism
   return (
     <>

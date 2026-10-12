@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { REVEAL_ZONE } from '@shared/revealZones'
 
 /**
  * SOMETHING THAT SHOWS WHILE THE POINTER IS NEAR IT (#162): the collapsed tab
@@ -13,14 +14,10 @@ import { useEffect, useRef, useState } from 'react'
  * pointer does: a menu it opened is still in use.
  */
 export const REVEAL = {
-  /** How close to the window's edge the pointer must be, in CSS pixels: the
-   *  left edge 24 (owner, 2026-10-11: "it reacts a bit too late, my cursor
-   *  needs to be essentially at the edge, could be better if it was like
-   *  20px further into the window"), the top 16, where the terminal's first
-   *  row also lives. */
-  zone: 8,
-  left: 24,
-  top: 16,
+  /** How close to the window's edge the pointer must be: the shared
+   *  REVEAL_ZONE (src/shared/revealZones.ts). */
+  left: REVEAL_ZONE.left,
+  top: REVEAL_ZONE.top,
   openDelay: 60,
   closeDelay: 340
 } as const

@@ -1,7 +1,8 @@
-import { LEGACY_OPACITY_KEY, customTermTheme, legacyTermOpacity, opacityPct, termAcrylic, termThemeId } from '@core/renderer/lib/termLook'
+import { CUSTOM_KEY, customTermTheme, LEGACY_OPACITY_KEY, legacyTermOpacity, opacityPct, termAcrylic, termThemeId } from '@core/renderer/lib/termLook'
 import { resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { alphaOf, opaque, parseColour, withAlpha } from '@core/renderer/lib/colour'
 import { setWindowBackground, windowBackground } from './backgroundPrefs'
+import { DEFAULT_GROUND } from '@core/shared/ground'
 
 // THE OPACITY SLIDER BECOMES THE BACKGROUND'S ALPHA, AND NOBODY'S WINDOW
 // CHANGES ON UPDATE (#114; owner, 2026-10-03: alpha "should be built into the
@@ -16,8 +17,6 @@ import { setWindowBackground, windowBackground } from './backgroundPrefs'
 //
 // A saved N becomes the alpha byte round(N / 100 * 255), which is exactly what
 // the window painted for Opacity N, so the window is byte for byte the same.
-
-const CUSTOM_KEY = 'prism.term.custom'
 
 /** The alpha a saved Opacity N painted at. */
 const alphaFor = (n: number): number => n / 100
@@ -88,7 +87,7 @@ function foldLive(customFolded: boolean): void {
     if (picked) {
       if (n < 100) setWindowBackground(withAlpha(picked, a))
     } else if (own ? !sameByte(alphaOf(own.bg), a) : n < 100) {
-      setWindowBackground(withAlpha(opaque(resolveTermTheme(termThemeId()).background, '#0b0b0f'), a))
+      setWindowBackground(withAlpha(opaque(resolveTermTheme(termThemeId()).background, DEFAULT_GROUND), a))
     }
   }
   if (hasLive) localStorage.removeItem(LEGACY_OPACITY_KEY)

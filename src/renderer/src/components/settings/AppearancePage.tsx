@@ -39,6 +39,7 @@ import {
   coloursDiffer,
   customWindowColours,
   setCustomWindowColours,
+  setWindowColours,
   useCustomWindowColours
 } from '../../lib/customWindowColours'
 import { chromeTokens } from '../../lib/chromeTheme'
@@ -295,9 +296,7 @@ export function AppearancePage(): JSX.Element {
         onThemePicked={(id) => {
           const kept = id === 'custom' ? customWindowColours() : NO_COLOURS
           if (id === 'edited') setCustomWindowColours(null)
-          setWindowBackground(kept.background)
-          setWindowAccent(kept.accent)
-          setWindowSecondary(kept.secondary)
+          setWindowColours(kept)
         }}
         // The window colours in force are changes to save while they differ
         // from what the theme in front keeps; Save keeps them with Custom.

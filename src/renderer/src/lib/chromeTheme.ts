@@ -9,8 +9,9 @@ import {
 import { alphaHex, alphaOf, composite, selectionFor } from '@core/renderer/lib/colour'
 import { switchKnob } from '@core/renderer/lib/switchKnob'
 import { sidebarGround } from './sidebarGround'
-import { atLightness, liftToFloor, okLightness } from './oklab'
+import { atLightness, liftToFloor, okLightness } from '@core/renderer/lib/oklab'
 import { EDGE_ALPHA, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
+import { DEFAULT_GROUND, LIGHT_GROUND, ON_DARK_INK } from '@core/shared/ground'
 
 // The window wears the terminal's theme. Every chrome colour is derived from
 // the theme's background, foreground and blue, and whatever falls short of a
@@ -24,7 +25,7 @@ import { EDGE_ALPHA, validWindowEdges, type WindowEdges } from '@shared/windowEd
 // the mode's ink at a low alpha, so they sit on whatever is behind them.
 
 const INDIGO = '#5b5bd6'
-const FALLBACK_BG = '#0b0b0f'
+const FALLBACK_BG = DEFAULT_GROUND
 const FALLBACK_FG = '#e7e7ee'
 
 // Body text clears WCAG's 4.5; the dim inks, the icons and the accent clear 3,
@@ -122,7 +123,7 @@ export function chromeTokens(
   const bg = normalizeColor(theme.background ?? '', FALLBACK_BG)
   const rawFg = normalizeColor(theme.foreground ?? '', FALLBACK_FG)
   // Measured, never read off a name: a custom ground is whatever somebody made it.
-  const mode = luminance(bg) > 0.4 ? 'light' : 'dark'
+  const mode = luminance(bg) > LIGHT_GROUND ? 'light' : 'dark'
   const light = mode === 'light'
   // mixHex(a, b, t): t is the share of b.
   // The flat panel (menus, dialogs, the find bar) is the ground lifted a touch
@@ -201,8 +202,8 @@ export function chromeTokens(
     // What sits on the accent is white or near-black, whichever reads better:
     // the better of two, not a midpoint test, since both can be poor at a midpoint.
     const onWhite = contrastRatio('#ffffff', accent)
-    const onDark = contrastRatio(FALLBACK_BG, accent)
-    onAccent = onWhite >= onDark ? '#ffffff' : FALLBACK_BG
+    const onDark = contrastRatio(ON_DARK_INK, accent)
+    onAccent = onWhite >= onDark ? '#ffffff' : ON_DARK_INK
     // WHITE ON A STRONG MID COLOUR (owner, 2026-10-12, of near-black on a red
     // Save changes: "the text colour should shift to white"). A red or a blue
     // measures a little better in black by the WCAG sum but reads better in

@@ -1,7 +1,7 @@
 import { luminance } from '@core/renderer/lib/termAnsi'
-import { fromLab, toLab } from './oklab'
+import { fromLab, toLab } from '@core/renderer/lib/oklab'
 
-export { okLightness } from './oklab'
+export { okLightness } from '@core/renderer/lib/oklab'
 
 /**
  * THE SIDEBAR'S GROUND, unpicked (#162; owner, 2026-10-12, of the sidebar

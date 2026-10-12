@@ -1,6 +1,10 @@
-import { useEffect, useState, type JSX, type ReactNode } from 'react'
-import { pinnedRoots, plusMenuList, recentRoots } from '@core/renderer/lib/recentRoots'
+import { useState, type JSX, type ReactNode } from 'react'
+import { baseName } from '@core/shared/folderNames'
 import { AppMark } from './AppMark'
+import { COG_PATH } from './glyphPaths'
+import { plusMenuRows } from './tabMenus'
+import { keyLabel } from '../lib/keymap'
+import { useAppVersion } from '../lib/appFacts'
 
 /**
  * The start screen: the window with no tab open (owner, 2026-09-18, with
@@ -38,11 +42,6 @@ const Glyph = ({ children }: { children: ReactNode }): JSX.Element => (
   </svg>
 )
 
-const baseName = (p: string): string =>
-  p
-    .split(/[\\/]+/)
-    .filter(Boolean)
-    .at(-1) ?? p
 /** Where a folder lives, from its NEAR end: the last two folders above it.
  *  A long path cut at its far end loses exactly the part that tells two
  *  "api" apart; the whole path is the row's tooltip. */
@@ -65,12 +64,9 @@ export default function EmptyState({
   onOpenFolder: (path: string) => void
   onSettings: () => void
 }): JSX.Element {
-  const [version, setVersion] = useState('')
-  useEffect(() => {
-    void window.prism.appVersion().then(setVersion)
-  }, [])
+  const version = useAppVersion()
   // Read when the screen appears: the tab that was just closed is on it.
-  const [places] = useState(() => plusMenuList(pinnedRoots(), recentRoots()))
+  const [places] = useState(plusMenuRows)
 
   return (
     <div data-empty-state className="p-styled-font relative flex h-full w-full flex-col">
@@ -88,7 +84,7 @@ export default function EmptyState({
               <path d="M12 5.5v13M5.5 12h13" />
             </Glyph>
             <span className="min-w-0 flex-1 truncate text-[var(--p-text)]">New terminal</span>
-            <span className="shrink-0 text-[11.5px] text-[var(--p-dim)]">Ctrl+T</span>
+            <span className="shrink-0 text-[11.5px] text-[var(--p-dim)]">{keyLabel('new-tab')}</span>
           </button>
 
           {places.length > 0 && (
@@ -119,10 +115,10 @@ export default function EmptyState({
             <Glyph>
               {/* The title bar's cog: one glyph for one destination. */}
               <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              <path d={COG_PATH} />
             </Glyph>
             <span className="min-w-0 flex-1 truncate">Settings</span>
-            <span className="shrink-0 text-[11.5px] text-[var(--p-dim)]">Ctrl+,</span>
+            <span className="shrink-0 text-[11.5px] text-[var(--p-dim)]">{keyLabel('settings')}</span>
           </button>
         </nav>
       </div>

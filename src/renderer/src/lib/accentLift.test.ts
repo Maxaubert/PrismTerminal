@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { contrastRatio } from '@core/renderer/lib/termAnsi'
 import { resolveTermTheme } from '@core/renderer/lib/termTheme'
-import { liftToFloor } from './oklab'
+import { liftToFloor } from '@core/renderer/lib/oklab'
 import { chromeTokens } from './chromeTheme'
 
 const rgb = (h: string): number[] => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))

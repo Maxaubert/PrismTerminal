@@ -1,4 +1,5 @@
 import { useState, type JSX, type MouseEvent } from 'react'
+import { keyLabel } from '../lib/keymap'
 import type { Tab } from '../lib/tabs'
 import {
   pinnedRoots,
@@ -12,7 +13,7 @@ import { MenuIcon } from './MenuIcon'
 import { FolderGlyph, PinGlyph } from './menuGlyphs'
 
 /** What the + menu lists right now: pins first, then the newest recents. */
-const plusMenuRows = (): Array<{ path: string; pinned: boolean }> =>
+export const plusMenuRows = (): Array<{ path: string; pinned: boolean }> =>
   plusMenuList(pinnedRoots(), recentRoots())
 
 /**
@@ -66,7 +67,7 @@ export function useTabMenus({
             {
               label: 'Close tab',
               icon: <MenuIcon name="close" />,
-              hint: 'Ctrl+Shift+W',
+              hint: keyLabel('close-tab'),
               onPick: () => onClose(tabMenu.id)
             },
             // Settings is a tab with no folder. Offering this there wrote an

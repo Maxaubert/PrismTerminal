@@ -4,7 +4,7 @@ import { existsSync } from 'fs'
 import { stat } from 'fs/promises'
 import { homedir } from 'os'
 import { dirname, join } from 'path'
-import type { Restored, SavedTabs, UpdateInfo } from '@shared/types'
+import type { BadgeImage, Restored, SavedTabs, UpdateInfo } from '@shared/types'
 import { claudeSessionsAsync } from '@core/main/agentResume'
 import { registerTermIpc } from '@core/main/ipc'
 import { registerDictationIpc } from '@core/main/dictationIpc'
@@ -24,7 +24,12 @@ import { installUpdate, updateCalls, watchForUpdates } from './update'
 import { previewUpdate, runPreviewInstall, wantsPreview } from '@core/main/updatePreview'
 import { createVerbSwitch } from './verbSwitch'
 import { bellFlash } from './bellFlash'
-import { readWindowState, watchWindowState } from './windowState'
+import { localAppData } from './appPaths'
+import { MIN_WINDOW, readWindowState, watchWindowState } from './windowState'
+import { APP_CH, E2E_CH } from '@shared/channels'
+import { isWebUrl } from '@core/shared/webUrl'
+import { createCloseFlow } from './closeFlow'
+import { createUpdateGate } from './updateGate'
 
 // Prism Terminal's main process: the window, its lifecycle and the
 // IPC wiring. Everything with rules of its own lives in its own file (the pty,
@@ -206,15 +211,13 @@ const isDir = (p: unknown): Promise<boolean> =>
  * screen. While the app runs it is still single-instance: a second launch
  * hands its folder over and ends.
  * ------------------------------------------------------------------ */
-let quitting = false // app.quit() is under way
+/** The close question's state (closeFlow.ts, rule 7). */
+const closeFlow = createCloseFlow()
 /** The diagnostics log (#140). Started first thing in the instance that holds
  *  the lock, before any IPC is registered: the timing wraps ipcMain itself. */
 let diag: Diagnostics | null = null
 /** Kills dictation's children (the speech server, the media helper). Set by wireIpc. */
 let stopDictation: () => void = () => {}
-let quitWanted = false // a quit the close question interrupted; confirm resumes it
-let agentBusy = false // mirrored from the renderer: an agent is WORKING
-let closeAgreed = false // the renderer's "go ahead" for the close in flight
 /**
  * The renderer has no tab list worth saving: it has not restored yet (launch,
  * a reload). Two things follow.
@@ -233,18 +236,16 @@ const tabs = createTabsStore(join(app.getPath('userData'), 'tabs.json'))
  *  still hears about it (`update:announce`), and so `update:install` can tell a
  *  preview from a release by what main ITSELF offered. */
 let pendingUpdate: UpdateInfo | null = null
-/** The install that is running, if one is: what `update:cancel` aborts. */
-let updateRun: AbortController | null = null
 function offerUpdate(info: UpdateInfo): void {
   pendingUpdate = info
-  send('update:available', info)
+  send(APP_CH.updateAvailable, info)
 }
 
 /** A folder handed over by the verb, argv or a second launch: ALWAYS a new tab,
  *  even if another tab already sits in that folder. */
 function handFolders(folders: string[]): void {
   if (awaitingRestore) pendingFolders.push(...folders)
-  else for (const f of folders) send('open:folder', f)
+  else for (const f of folders) send(APP_CH.openFolder, f)
 }
 
 /**
@@ -282,8 +283,8 @@ function createWindow(): void {
     height: remembered.height,
     x: remembered.x,
     y: remembered.y,
-    minWidth: 560,
-    minHeight: 400,
+    minWidth: MIN_WINDOW.width,
+    minHeight: MIN_WINDOW.height,
     show: false,
     ...(E2E ? { focusable: false, skipTaskbar: true } : {}),
     // Not `frame: false`: DWM refuses to composite acrylic behind a frameless
@@ -343,22 +344,15 @@ function createWindow(): void {
   // of them until the user answers; the renderer asks (it knows which agent
   // and for how long) and answers `close:confirmed`, or says nothing.
   win.on('close', (e) => {
-    if (agentBusy && !closeAgreed) {
+    if (closeFlow.onClose() === 'ask') {
       e.preventDefault()
-      // The veto cancels an app.quit() too. Remember that this was one, so the
-      // go-ahead finishes the quit, and drop the flag, so that "Cancel" leaves
-      // an ordinary window behind.
-      quitWanted = quitting
-      quitting = false
       // A minimised or background window can't show its own dialog usefully.
       if (!E2E) raise(win)
-      send('close:request')
+      send(APP_CH.closeRequest)
       return
     }
-    closeAgreed = false
     tabs.flush()
     killAll()
-    agentBusy = false
     // Not prevented: the window closes, and window-all-closed ends the app.
   })
   // Windows is shutting down or logging off: no before-quit is coming, nor
@@ -371,12 +365,12 @@ function createWindow(): void {
   })
 
   win.on('enter-full-screen', () => {
-    send('window:fullscreen', true)
+    send(APP_CH.windowFullscreen, true)
     material.settled()
     edge.apply()
   })
   win.on('leave-full-screen', () => {
-    send('window:fullscreen', false)
+    send(APP_CH.windowFullscreen, false)
     material.settled()
     edge.apply()
   })
@@ -388,7 +382,7 @@ function createWindow(): void {
    * Same test as the `shell:open-external` handler, and for the same reason.
    */
   win.webContents.setWindowOpenHandler((d) => {
-    if (/^https?:\/\//i.test(d.url)) openLink(d.url)
+    if (isWebUrl(d.url)) openLink(d.url)
     return { action: 'deny' }
   })
   // A page cannot navigate the window away from the app either: the renderer
@@ -398,7 +392,7 @@ function createWindow(): void {
     if (dev && url.startsWith(dev)) return
     if (url.startsWith('file://')) return
     e.preventDefault()
-    if (/^https?:\/\//i.test(url)) openLink(url)
+    if (isWebUrl(url)) openLink(url)
   })
   // A RELOAD (dev, or a renderer that crashed and came back) is a page with no
   // tab list over shells it has never heard of: they are orphans, and the page
@@ -436,11 +430,11 @@ function wireIpc(): void {
   // a small file, so the page's FIRST frame already has its tabs. No stat and
   // no session scan: those are tabs:restore's, which follows and settles each
   // tab. Nothing here is spawned from; it only draws.
-  ipcMain.on('tabs:peek', (e) => {
+  ipcMain.on(APP_CH.tabsPeek, (e) => {
     e.returnValue = tabs.load()
   })
 
-  ipcMain.handle('tabs:restore', async (): Promise<Restored> => {
+  ipcMain.handle(APP_CH.tabsRestore, async (): Promise<Restored> => {
     const saved = tabs.load()
     // Looked up off main's thread, and only then handed to the pure planner: a
     // saved folder on a drive that has gone can take seconds to say no.
@@ -470,11 +464,11 @@ function wireIpc(): void {
     pendingFolders = []
     // AFTER the answer: the reply resolves the renderer's promise first, so
     // these land on the restored list rather than under it.
-    if (queued.length) setTimeout(() => queued.forEach((f) => send('open:folder', f)), 0)
+    if (queued.length) setTimeout(() => queued.forEach((f) => send(APP_CH.openFolder, f)), 0)
     return plan
   })
   // The renderer owns the tab list; main persists the last report.
-  ipcMain.on('tabs:changed', (_e, state: SavedTabs) => {
+  ipcMain.on(APP_CH.tabsChanged, (_e, state: SavedTabs) => {
     if (awaitingRestore || !state || !Array.isArray(state.tabs)) return
     tabs.save(state)
   })
@@ -522,23 +516,16 @@ function wireIpc(): void {
     },
     sharedRoot:
       process.env.PT_DICTATION_ROOT ??
-      join(process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'), 'PrismDictation'),
+      join(localAppData(), 'PrismDictation'),
     hasNvidia: async () => {
       if (process.env.PT_E2E_NVIDIA) return process.env.PT_E2E_NVIDIA === '1'
       const info = (await app.getGPUInfo('basic')) as { gpuDevice?: Array<{ vendorId?: number }> }
       return (info.gpuDevice ?? []).some((d) => d.vendorId === 0x10de)
     }
   })
-  // A tab's "Show in File Explorer": a folder that exists, and nothing else.
-  ipcMain.on('shell:show-folder', (_e, p: string) => {
-    void isDir(p).then((ok) => {
-      // Never under --e2e (#64): a test run opens no Explorer window.
-      if (ok && !E2E) void shell.openPath(p)
-    })
-  })
   // Something dropped on the window: a folder is itself, a file means the
   // folder it is in, anything else is nothing. The renderer cannot stat.
-  ipcMain.handle('path:folder-of', async (_e, p: string): Promise<string | null> => {
+  ipcMain.handle(APP_CH.pathFolderOf, async (_e, p: string): Promise<string | null> => {
     if (typeof p !== 'string' || !p) return null
     if (await isDir(p)) return p
     const parent = dirname(p)
@@ -549,7 +536,7 @@ function wireIpc(): void {
   // the window - unparented, Windows makes the dialog modeless and a fullscreen
   // window never shows it at all. The e2e answers it from the environment, a
   // native dialog being the one thing CDP cannot drive.
-  ipcMain.handle('dialog:pick-folder', async (_e, from?: string): Promise<string | null> => {
+  ipcMain.handle(APP_CH.dialogPickFolder, async (_e, from?: string): Promise<string | null> => {
     if (E2E) return process.env['PT_E2E_PICK'] || null
     const opts: Electron.OpenDialogOptions = {
       properties: ['openDirectory'],
@@ -568,10 +555,10 @@ function wireIpc(): void {
     exe: () => app.getPath('exe'),
     offMarker: () => join(app.getPath('userData'), 'shell-verb-off')
   })
-  ipcMain.handle('shell:verb-status', () => verb.status())
-  ipcMain.handle('shell:verb-set', (_e, on: boolean) => verb.set(on))
+  ipcMain.handle(APP_CH.shellVerbStatus, () => verb.status())
+  ipcMain.handle(APP_CH.shellVerbSet, (_e, on: boolean) => verb.set(on))
   // The e2e's verbGuard reads this after pressing the switch: it must stay 0.
-  ipcMain.handle('e2e:reg-writes', () => verb.writes())
+  if (E2E) ipcMain.handle(E2E_CH.regWrites, () => verb.writes())
   void verb.reconcile()
 
   /* ----- the update check ----- */
@@ -600,59 +587,32 @@ function wireIpc(): void {
       url: process.env.PT_E2E_UPDATE_OFFER,
       notes: process.env.PT_E2E_UPDATE_NOTES ?? ''
     })
-  ipcMain.on('update:announce', (e) => {
-    if (pendingUpdate) e.sender.send('update:available', pendingUpdate)
+  ipcMain.on(APP_CH.updateAnnounce, (e) => {
+    if (pendingUpdate) e.sender.send(APP_CH.updateAvailable, pendingUpdate)
   })
   // Installing quits the app so NSIS can replace it, and a working agent
   // VETOES a quit (the close flow above) - the installer would then run over a
   // live exe while a dialog waited. The renderer settles that question before
-  // it asks for the install (App's install guard), so the quit is pre-answered
-  // here.
-  ipcMain.handle('update:install', async (_e, url: string) => {
-    // WHAT IS ON OFFER decides, never what the page sent: while the offer is a
-    // preview there is nothing this handler will download, whatever url it is
-    // handed. The fake runs the chip's progress and answers false, "nothing
-    // was installed", which is true. No fetch, no file, no installer, no quit,
-    // and the close question is NOT pre-answered.
-    // ONE AT A TIME, and the controller is this run's own: `update:cancel`
-    // aborts whatever is current, and a second Install cannot orphan the first
-    // one's controller (the page refuses a second anyway; this does not rely
-    // on it).
-    if (updateRun) return false
-    const run = new AbortController()
-    updateRun = run
-    try {
-      if (pendingUpdate?.mock)
-        return await runPreviewInstall((pct) => send('update:progress', pct), {
-          cancelled: () => run.signal.aborted
-        })
-      // WHAT MAIN OFFERED is installed, never a url the page sent (code review
-      // 2026-09-24, #15): a page that could name any past release asset could
-      // downgrade the app silently. No offer, nothing to install. The page's
-      // argument is only checked to be the same offer it was shown.
-      const offer = pendingUpdate
-      if (!offer || typeof url !== 'string' || url !== offer.url) return false
-      // The close question is pre-answered at the QUIT, not now (#14): a
-      // download takes minutes, and an agent that starts working meanwhile
-      // must still be asked about before a close ends it.
-      return await installUpdate(offer.url, (pct) => send('update:progress', pct), run.signal, () => {
-        closeAgreed = true
-      })
-    } finally {
-      updateRun = null
-    }
+  // it asks for the install (App's install guard); what the install may do is
+  // updateGate's (rule 3), with its tests.
+  const updateGate = createUpdateGate({
+    offer: () => pendingUpdate,
+    preview: (cancelled) => runPreviewInstall((pct) => send(APP_CH.updateProgress, pct), { cancelled }),
+    install: (url, signal, agree) => installUpdate(url, (pct) => send(APP_CH.updateProgress, pct), signal, agree),
+    agree: closeFlow.agree
   })
+  ipcMain.handle(APP_CH.updateInstall, (_e, url: unknown) => updateGate.install(url))
   // The update window's Cancel (#32). It names nothing: there is one download
   // at most, and the page has no say in which.
-  ipcMain.on('update:cancel', () => updateRun?.abort())
+  ipcMain.on(APP_CH.updateCancel, () => updateGate.cancel())
   // The e2e's updateWindow reads this after a whole preview, fake install
   // included: release checks sent and installs attempted. Both must be 0.
-  if (E2E) ipcMain.handle('e2e:update-calls', () => updateCalls())
+  if (E2E) ipcMain.handle(E2E_CH.updateCalls, () => updateCalls())
   // package.json's, not app.getVersion(): unpackaged, that one answers with
   // ELECTRON's version, and Settings then shows 43.x as the app's own.
-  ipcMain.handle('app:version', () => pkg.version)
+  ipcMain.handle(APP_CH.appVersion, () => pkg.version)
   // Where a new tab opens when Settings names no folder: the user's own.
-  ipcMain.handle('app:home', () => homedir())
+  ipcMain.handle(APP_CH.appHome, () => homedir())
 
   /* ----- the window ----- */
 
@@ -670,35 +630,30 @@ function wireIpc(): void {
       }
       return screen.getCursorScreenPoint()
     },
-    (near) => mainWindow?.webContents.send('window:edge-near', near)
+    (near) => mainWindow?.webContents.send(APP_CH.windowEdgeNear, near)
   )
-  ipcMain.on('window:edge-watch', (_e, on: unknown) => edgeWatch.set(on === true))
+  ipcMain.on(APP_CH.windowEdgeWatch, (_e, on: unknown) => edgeWatch.set(on === true))
   app.on('will-quit', () => edgeWatch.stop())
 
-  ipcMain.on('window:minimize', () => mainWindow?.minimize())
-  ipcMain.on('window:toggle-maximize', () =>
+  ipcMain.on(APP_CH.windowMinimize, () => mainWindow?.minimize())
+  ipcMain.on(APP_CH.windowToggleMaximize, () =>
     mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow?.maximize()
   )
   // The X: the same path as Alt+F4.
-  ipcMain.on('window:close', () => mainWindow?.close())
-  ipcMain.on('agent:busy', (_e, busy: boolean) => {
-    agentBusy = busy === true
-  })
-  ipcMain.on('close:confirmed', () => {
-    closeAgreed = true
-    if (quitWanted) {
-      quitWanted = false
-      app.quit()
-    } else mainWindow?.close()
+  ipcMain.on(APP_CH.windowClose, () => mainWindow?.close())
+  ipcMain.on(APP_CH.agentBusy, (_e, busy: boolean) => closeFlow.setBusy(busy === true))
+  ipcMain.on(APP_CH.closeConfirmed, () => {
+    if (closeFlow.confirm() === 'quit') app.quit()
+    else mainWindow?.close()
   })
   // A quit asked for from the page (the e2e ends its runs with it).
-  ipcMain.on('app:quit', () => {
-    quitting = true
+  ipcMain.on(APP_CH.appQuit, () => {
+    closeFlow.quitStarted()
     app.quit()
   })
   // The OS's own fullscreen: a terminal has no film to flash around, so none of
   // the borderless machinery a viewer needs. Opaque first, then the OS is asked.
-  ipcMain.on('window:fullscreen-toggle', () => {
+  ipcMain.on(APP_CH.windowFullscreenToggle, () => {
     const win = mainWindow
     if (!win) return
     const on = !win.isFullScreen()
@@ -706,38 +661,38 @@ function wireIpc(): void {
     win.setFullScreen(on)
   })
 
-  ipcMain.handle('acrylic:supported', () => acrylicOk())
+  ipcMain.handle(APP_CH.acrylicSupported, () => acrylicOk())
   // False = the material does not exist here (Windows 10).
-  ipcMain.handle('acrylic:set', (_e, on: boolean): boolean => {
+  ipcMain.handle(APP_CH.acrylicSet, (_e, on: boolean): boolean => {
     const ok = material.setAcrylic(on)
     edge.apply() // Chromium rewrites the DWM attributes when the backdrop changes
     return ok
   })
   // The theme's solid ground: the window's colour when the material is off,
   // and what shows for the frame before the page paints after a resize.
-  ipcMain.on('window:bg', (_e, hex: string) => {
+  ipcMain.on(APP_CH.windowBg, (_e, hex: string) => {
     material.setBg(hex)
     edge.apply() // the edge is a step off the ground, so it follows the theme
   })
   // The edges setting (#27). Validated, never trusted: anything that is not one
   // of the four words is the default. Not persisted here: the page says it at
   // every launch, as it says the ground.
-  ipcMain.on('window:edges', (_e, edges: unknown) => {
+  ipcMain.on(APP_CH.windowEdges, (_e, edges: unknown) => {
     windowEdges = validWindowEdges(edges)
     edge.apply()
   })
   // The DWM border itself is off under --e2e, so the suite asks what main HEARD.
-  if (E2E) ipcMain.handle('e2e:window-edges', () => windowEdges)
+  if (E2E) ipcMain.handle(E2E_CH.windowEdges, () => windowEdges)
   // The e2e's diagLog (#140): a call that answers after 600 ms, so the IPC
   // timing's ipc-slow line (500 ms+) is proved on a real channel.
-  if (E2E) ipcMain.handle('e2e:slow-ipc', () => new Promise((r) => setTimeout(() => r(true), 600)))
+  if (E2E) ipcMain.handle(E2E_CH.slowIpc, () => new Promise((r) => setTimeout(() => r(true), 600)))
   // THE TASKBAR BADGE (2026-09-28): the page draws the disc, main puts it on
   // the window's taskbar button as its overlay icon. Only a small PNG data url
   // is taken; anything else, or null, clears it.
   let badgeSaid = ''
   /** What was last set, for the e2e to measure and look at (#108). */
-  let badgeImage: { png: string; scale: number; width: number } | null = null
-  ipcMain.on('window:badge', (_e, png: unknown, description: unknown, scale: unknown) => {
+  let badgeImage: BadgeImage | null = null
+  ipcMain.on(APP_CH.windowBadge, (_e, png: unknown, description: unknown, scale: unknown) => {
     const win = mainWindow
     if (!win || win.isDestroyed()) return
     const text = typeof description === 'string' ? description.slice(0, 120) : ''
@@ -763,8 +718,8 @@ function wireIpc(): void {
     badgeSaid = ''
     badgeImage = null
   })
-  if (E2E) ipcMain.handle('e2e:taskbar-badge', () => badgeSaid)
-  if (E2E) ipcMain.handle('e2e:taskbar-badge-image', () => badgeImage)
+  if (E2E) ipcMain.handle(E2E_CH.taskbarBadge, () => badgeSaid)
+  if (E2E) ipcMain.handle(E2E_CH.taskbarBadgeImage, () => badgeImage)
 }
 
 // Single instance: a second launch (the verb, a shortcut, a command line)
@@ -789,7 +744,7 @@ if (!app.requestSingleInstanceLock()) {
     // Never under --e2e: recorded, like every path the app opens (#64).
     openFolder: (dir) => pathOpeners.openPath(dir),
     // These wait on the user (the picker) or a download: never a stall.
-    longWaitChannels: ['dialog:pick-folder', 'update:install'],
+    longWaitChannels: [APP_CH.dialogPickFolder, APP_CH.updateInstall],
     powerMonitor: () => powerMonitor
   })
   app.on('second-instance', (_e, argv, workingDirectory) => {
@@ -819,9 +774,7 @@ if (!app.requestSingleInstanceLock()) {
     handFolders(folders)
   })
 
-  app.on('before-quit', () => {
-    quitting = true
-  })
+  app.on('before-quit', () => closeFlow.quitStarted())
   app.on('window-all-closed', () => app.quit())
   // Every shell dies with the app; a pty with no window is an orphan. And the
   // app waits for them to be GONE before it ends (#127): a shell still dying

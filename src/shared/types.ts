@@ -2,12 +2,6 @@
 export type { AgentKind, DetectedAgent, ShellDef } from '@core/shared/types'
 import type { AgentKind } from '@core/shared/types'
 
-/** The two agents whose sessions can be resumed, each by its own flag:
- *  `claude --resume <id>` and `codex resume --last`. */
-
-/** What the agent poll can find under a shell. 'other' (aider, gemini) still
- *  lights the tab, it just has nothing to come back to, so it is never saved. */
-
 /** A tab as tabs.json holds it: the folder its shell was in, and the agent it
  *  hosted at the last report, when that agent is one that can be resumed. */
 export interface SavedTab {
@@ -41,3 +35,21 @@ export interface Restored {
  *  core's since #28, because the chip and the window that show it are: both
  *  apps carry the same offer to the same components. */
 export type { UpdateInfo } from '@core/shared/updateTypes'
+
+/** The pointer at the window's top or left edge, as main reads it (#162,
+ *  `src/main/edgeWatch.ts`), handed to the page. */
+export interface EdgeNear {
+  top: boolean
+  left: boolean
+  /** The cursor relative to the content's top left, so the page can ask
+   *  whether it is over its own part of the edge. */
+  x: number
+  y: number
+}
+
+/** The taskbar badge as main last drew it (an e2e reads it back). */
+export interface BadgeImage {
+  png: string
+  scale: number
+  width: number
+}

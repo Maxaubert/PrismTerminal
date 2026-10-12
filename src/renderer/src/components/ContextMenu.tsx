@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react'
+import { LAYER } from '@core/renderer/components/layers'
 
 // The right-click menu (a tab, the +, the title bar's menu button). Just the
 // actions: you right-clicked the thing, so you know what it applies to. Small,
@@ -222,16 +223,15 @@ export function ContextMenu({
   }
 
   return (
-    // data-owns-escape: the app's own (earlier, capture-phase) Escape handler
-    // yields to any element carrying it, so closing this menu can't close the
-    // window underneath.
+    // data-owns-escape: the marker Prism's window Escape yields to; this app
+    // has no window Escape, so here it only names the menu as the owner.
     // no-drag over the WHOLE window while the menu is up: the title bar and
     // the tab strip are window-drag regions, and Chromium hands those clicks
     // to the OS instead of the page - so a press there never reached the
     // dismiss listener and the menu just sat there. Carving the region out
     // for the life of the menu makes every click dismiss it, wherever it
     // lands. (Dragging the window by its bar can wait until the menu is shut.)
-    <div data-owns-escape className="no-drag fixed inset-0 z-[45] pointer-events-none">
+    <div data-owns-escape className={`no-drag fixed inset-0 ${LAYER.menu} pointer-events-none`}>
       <div
         ref={box}
         role="menu"

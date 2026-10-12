@@ -1,3 +1,4 @@
+import { baseName, parentName, pathParts } from '@core/shared/folderNames'
 /**
  * The tab list, as pure data. A tab is one shell and the folder it is in.
  * Every rule about which tab is in front after a change lives here, so it can
@@ -94,13 +95,8 @@ export function reorderTabs(tabs: readonly Tab[], id: string, toIndex: number): 
   return next
 }
 
-const parts = (p: string): string[] => p.split(/[\\/]+/).filter(Boolean)
-/** The last segment. A drive root has only its letter, so `D:\` reads `D:`. */
-const baseOf = (p: string): string => parts(p).at(-1) ?? p
-/** The parent folder's name, for disambiguating a collision. */
-const parentOf = (p: string): string => parts(p).at(-2) ?? ''
 /** One folder however it was spelled: case, slash direction, trailing separator. */
-const folderKey = (p: string): string => parts(p).join('\\').toLowerCase()
+const folderKey = (p: string): string => pathParts(p).join('\\').toLowerCase()
 
 /**
  * What each tab is called: the folder's last segment, and the parent's name
@@ -108,7 +104,7 @@ const folderKey = (p: string): string => parts(p).join('\\').toLowerCase()
  * are genuinely ambiguous; every other tab keeps the short label it deserves.
  */
 export function tabLabels(tabs: readonly Tab[]): string[] {
-  const bases = tabs.map((t) => (t.kind === 'settings' ? 'Settings' : baseOf(t.cwd)))
+  const bases = tabs.map((t) => (t.kind === 'settings' ? 'Settings' : baseName(t.cwd)))
   // A collision is one basename over DIFFERENT folders. Two tabs in the very
   // same folder have nothing to tell apart, so they keep the plain name rather
   // than both growing an identical suffix.
@@ -120,7 +116,7 @@ export function tabLabels(tabs: readonly Tab[]): string[] {
   })
   return tabs.map((t, i) => {
     const clash = (byBase.get(bases[i])?.size ?? 0) > 1
-    const parent = parentOf(t.cwd)
+    const parent = parentName(t.cwd)
     return clash && parent ? bases[i] + ' - ' + parent : bases[i]
   })
 }

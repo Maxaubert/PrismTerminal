@@ -1,5 +1,4 @@
-import { isSidebarChord } from './lib/sidebarPrefs'
-import { isFindTabChord } from './lib/sidebarRows'
+import { appOwnsKey } from './lib/keymap'
 import { tabLayout } from './lib/tabLayoutPrefs'
 import { focusedTermFullScreen } from '@core/renderer/components/TerminalPanel'
 import { configureTermCore } from '@core/renderer/host'
@@ -59,30 +58,8 @@ configureTermCore({
   // the controller null when the start screen or Settings is in front, so
   // there is nothing further for this app to refuse.
   dictation: { api: window.prism, canDictate: () => true },
-  ownsKey: (e) => {
-    // COMMAND HELP IS F1 (#12), the key every Windows program answers help
-    // with. Bare, and only while the setting is on: switched off, F1 is the
-    // shell's again. Known cost, accepted: PSReadLine's own F1 (the help page
-    // for the command under the cursor) and F1 in a full-screen program under
-    // WSL (vim, htop, mc) do not arrive while it is on. Shift+F1 and Ctrl+F1
-    // are left to the shell.
-    if (e.key === 'F1' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) return helpEnabled()
-    if (!e.ctrlKey || e.altKey) return false
-    // THE SIDEBAR'S KEY (#162), while the tabs are vertical only.
-    if (isSidebarChord(e) || isFindTabChord(e)) return tabLayout() === 'vertical'
-    const k = e.key.toLowerCase()
-    // Next / previous tab, jump to a tab, Settings.
-    if (e.key === 'Tab' || /^[1-9]$/.test(e.key) || e.key === ',') return true
-    // New tab is Ctrl+T and close tab is Ctrl+W (owner, 2026-09-18 and -19),
-    // with or without shift, as in Prism and in every browser. That takes
-    // both chords from whatever runs in the shell (Claude Code's task list;
-    // readline's delete-word, for which Ctrl+Backspace remains): the owner's
-    // trade, made knowingly.
-    if (k === 't' || k === 'w') return true
-    // FIND IS CTRL+F (owner, 2026-09-23: "can the find hotkey be ctrl f"),
-    // except in a full-screen program, where Ctrl+F is page down (vim, less)
-    // and stays the program's; Ctrl+Shift+F finds everywhere. Known cost,
-    // accepted: bash and readline lose Ctrl+F as cursor-right at a prompt.
-    return k === 'f' && (e.shiftKey || !focusedTermFullScreen())
-  }
+  // The app's keys (lib/keymap), the same table App's handler reads, so xterm
+  // yields exactly the chords the app acts on.
+  ownsKey: (e) =>
+    appOwnsKey(e, { help: helpEnabled(), vertical: tabLayout() === 'vertical', fullScreen: focusedTermFullScreen() })
 })
