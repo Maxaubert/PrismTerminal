@@ -74,8 +74,8 @@ import {
   releaseCaretHold,
   type CaretPos
 } from '../lib/termCaretHold'
-import { cellFrom, cellText, type CellInfo } from '../lib/termCells'
-import { bufferRowCells, isWebLink, osc8Target, Osc8Spans, parseOsc8, spanText, type SpanAnchor } from '../lib/termOsc8'
+import { bufferRowCells, cellFrom, charAtCell, logicalLine, type LogicalLine } from '../lib/termCells'
+import { isWebLink, osc8Target, Osc8Spans, parseOsc8, spanText, type SpanAnchor } from '../lib/termOsc8'
 import {
   onTermLookChange,
   termBaseFontPx,
@@ -177,7 +177,7 @@ function fitKeepingCursorLine(term: Terminal, fit: FitAddon): void {
   }
   const oldCols = term.cols
   const y = b.baseY + b.cursorY
-  const { first, last, index, text: whole, textEnd } = logicalLine(term, y)
+  const { first, last, index, text: whole, textEnd } = lineAt(term, y)
   // Everything up to the last printed cell, and where the cursor is, both in
   // CELLS (#20): the cursor goes back by cells, never by string length.
   const text = whole.slice(0, index[textEnd])
@@ -249,7 +249,7 @@ function attachClickCaret(
       const col = Math.max(0, Math.min(term.cols, Math.round((e.clientX - r.left) / cellW)))
       const row = Math.floor((e.clientY - r.top) / cellH)
       const y = b.baseY + b.cursorY
-      const { first, last, widths, text, textEnd, index } = logicalLine(term, y)
+      const { first, last, widths, text, textEnd, index } = lineAt(term, y)
       const clicked = b.viewportY + row
       let textBelow = false
       for (let i = last + 1; i < b.length && !textBelow; i += 1)
@@ -299,42 +299,15 @@ function attachClickCaret(
  *  by `attachClickCaret` for the selection delete as well. */
 const hiddenCursor = new Map<string, boolean>()
 
-/** The LOGICAL line holding buffer row `y`: its first and last rows across
- *  wraps, every cell's width, the joined text, and the cell just past the
- *  last printed one. */
-function logicalLine(term: Terminal, y: number): {
-  first: number
-  last: number
-  widths: number[]
-  text: string
-  /** Cell -> where its text starts in `text` (termCells). */
-  index: number[]
-  textEnd: number
-} {
-  const b = term.buffer.active
-  let first = y
-  while (first > 0 && b.getLine(first)?.isWrapped) first -= 1
-  let last = y
-  while (last + 1 < b.length && b.getLine(last + 1)?.isWrapped) last += 1
-  const cells: CellInfo[] = []
-  for (let i = first; i <= last; i += 1) {
-    const line = b.getLine(i)
-    for (let x = 0; x < term.cols; x += 1) {
-      const cell = line?.getCell(x)
-      cells.push({ chars: cell?.getChars() ?? '', width: cell?.getWidth() ?? 1 })
-    }
-  }
-  const { text, index, textEnd } = cellText(cells)
-  return { first, last, widths: cells.map((c) => c.width), text, index, textEnd }
-}
+/** The logical line holding buffer row `y` (termCells, rule 11). */
+const lineAt = (term: Terminal, y: number): LogicalLine => logicalLine(term.buffer.active, term.cols, y)
 
 /** The web address SHOWN over an OSC 8 link's cells (xterm's range: 1-based,
  *  one row, the end cell included), read across the whole logical line so a
  *  shown address that wraps still counts. */
 function shownLinkOver(term: Terminal, range: IBufferRange): string | null {
-  const line = logicalLine(term, range.start.y - 1)
-  const charOf = (p: { x: number; y: number }): number =>
-    line.index[Math.min(Math.max(0, (p.y - 1 - line.first) * term.cols + p.x - 1), line.index.length - 1)]
+  const line = lineAt(term, range.start.y - 1)
+  const charOf = (p: { x: number; y: number }): number => charAtCell(line, term.cols, p.y - 1, p.x - 1)
   const from = charOf(range.start)
   const to = charOf(range.end)
   const hit = findLinks(line.text).find((l) => l.start <= to && l.end > from)
@@ -352,7 +325,7 @@ function deleteSelection(term: Terminal, id: string): boolean {
   if (!range) return false
   const b = term.buffer.active
   const y = b.baseY + b.cursorY
-  const line = logicalLine(term, y)
+  const line = lineAt(term, y)
   let textBelow = false
   for (let i = line.last + 1; i < b.length && !textBelow; i += 1)
     if ((b.getLine(i)?.translateToString(true) ?? '').length) textBelow = true
@@ -448,9 +421,8 @@ export function termContextAt(
   const row = Math.floor((clientY - r.top) / (r.height / term.rows))
   if (col < 0 || col >= term.cols || row < 0 || row >= term.rows) return { selection, link: null, path: null }
   const y = term.buffer.active.viewportY + row
-  const line = logicalLine(term, y)
-  const target = (y - line.first) * term.cols + col
-  const at = line.index[Math.min(target, line.index.length - 1)]
+  const line = lineAt(term, y)
+  const at = charAtCell(line, term.cols, y, col)
   // An OSC 8 label ("PR #165") is a link though its text is not (#169); where
   // a left click goes (`osc8Target`) is what the menu copies and opens.
   const shown = linkAt(line.text, at)
@@ -734,7 +706,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   term.registerLinkProvider({
     provideLinks: (y, done) => {
       if (!termApi().termPathKinds) return done(undefined)
-      const line = logicalLine(term, y - 1)
+      const line = lineAt(term, y - 1)
       const out = []
       for (const c of pathCandidates(line.text)) {
         const hit = knownPath(cwdNow, c.path)

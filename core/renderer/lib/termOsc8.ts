@@ -1,5 +1,4 @@
-import type { IBufferLine } from '@xterm/xterm'
-import { cellText, type CellInfo } from './termCells'
+import { bufferRowCells, cellText, type CellInfo } from './termCells'
 import { isWebUrl } from '../../shared/webUrl'
 
 /**
@@ -169,16 +168,8 @@ export function spanTextRange(row: readonly CellInfo[], from: number, to: number
   return { start: at(from), end: at(to) }
 }
 
-/** A buffer row's cells, for the cell arithmetic above. */
-export function bufferRowCells(line: IBufferLine | undefined, cols: number): CellInfo[] | undefined {
-  if (!line) return undefined
-  const out: CellInfo[] = []
-  for (let x = 0; x < cols; x += 1) {
-    const cell = line.getCell(x)
-    out.push({ chars: cell?.getChars() ?? '', width: cell?.getWidth() ?? 1 })
-  }
-  return out
-}
+/** A buffer row's cells: termCells' (rule 11), kept importable from here. */
+export { bufferRowCells }
 
 /** What the span's cells hold now, or null when a row of it is gone. */
 export function spanText(
