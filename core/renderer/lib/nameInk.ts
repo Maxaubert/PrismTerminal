@@ -1,12 +1,13 @@
 import { ICON_RAINBOW } from './markColours'
 import { contrastRatio, luminance, mixHex } from './termAnsi'
+import { LIGHT_GROUND } from '../../shared/ground'
 
 /** Under this, the theme's text on a fill is gone and the name flips. */
 export const NAME_FLIP = 2
 
 /** Dark or light, MEASURED off the ground (regression rule 15), with the
- *  chrome's own threshold (`chromeTokens`: light above 0.4). */
-export const groundIsDark = (ground: string): boolean => luminance(ground) <= 0.4
+ *  one threshold (`LIGHT_GROUND`). */
+export const groundIsDark = (ground: string): boolean => luminance(ground) <= LIGHT_GROUND
 
 /**
  * THE NAME ON A FULL TAB (#143; owner, 2026-10-10: "Every tab name in Full

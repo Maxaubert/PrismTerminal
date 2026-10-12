@@ -2,6 +2,7 @@ import { LEGACY_OPACITY_KEY, customTermTheme, legacyTermOpacity, opacityPct, ter
 import { resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { alphaOf, opaque, parseColour, withAlpha } from '@core/renderer/lib/colour'
 import { setWindowBackground, windowBackground } from './backgroundPrefs'
+import { DEFAULT_GROUND } from '@core/shared/ground'
 
 // THE OPACITY SLIDER BECOMES THE BACKGROUND'S ALPHA, AND NOBODY'S WINDOW
 // CHANGES ON UPDATE (#114; owner, 2026-10-03: alpha "should be built into the
@@ -88,7 +89,7 @@ function foldLive(customFolded: boolean): void {
     if (picked) {
       if (n < 100) setWindowBackground(withAlpha(picked, a))
     } else if (own ? !sameByte(alphaOf(own.bg), a) : n < 100) {
-      setWindowBackground(withAlpha(opaque(resolveTermTheme(termThemeId()).background, '#0b0b0f'), a))
+      setWindowBackground(withAlpha(opaque(resolveTermTheme(termThemeId()).background, DEFAULT_GROUND), a))
     }
   }
   if (hasLive) localStorage.removeItem(LEGACY_OPACITY_KEY)

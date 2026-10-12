@@ -16,6 +16,7 @@ import {
   type TabMark
 } from '@core/renderer/lib/tabMark'
 import type { AgentIndicator } from '@core/renderer/host'
+import { DEFAULT_GROUND } from '@core/shared/ground'
 
 /** One tab's agent state and the mark it wears. */
 export interface TabLook {
@@ -69,7 +70,7 @@ export function useTabLooks({
   const root = getComputedStyle(document.documentElement)
   const read = (name: string, fallback: string): string =>
     root.getPropertyValue(name).trim() || fallback
-  const solidGround = read('--p-bg-solid', '#0b0b0f')
+  const solidGround = read('--p-bg-solid', DEFAULT_GROUND)
   // Powerline's segments are the strip's own ground now (2026-10-10 rework: idle
   // paints nothing, the tab in front is --p-tab-active, exactly Classic's), so
   // every mark sits on the one ground in both styles.

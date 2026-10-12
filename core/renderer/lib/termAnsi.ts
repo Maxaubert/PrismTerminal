@@ -1,3 +1,4 @@
+import { DEFAULT_GROUND } from '../../shared/ground'
 // The adaptive ANSI palette: sixteen syntax colours DERIVED from a background
 // instead of assumed. The stock palette presumes near-black; the moment a
 // style's background is edited towards red, stock red text vanishes into it.
@@ -130,7 +131,7 @@ export function ensureContrast(colour: string, bg: string, floor = ANSI_CONTRAST
  * theme; the twelve hues are the seeds pushed to readability.
  */
 export function deriveAnsi(rawBg: string, rawFg: string): Ansi16 {
-  const bg = normalizeColor(rawBg, '#101215')
+  const bg = normalizeColor(rawBg, DEFAULT_GROUND)
   const fg = normalizeColor(rawFg, '#e3e6ea')
   const dark = luminance(bg) <= 0.35
   const adapt = (c: string): string => ensureContrast(c, bg)
@@ -171,7 +172,7 @@ export function legiblePalette<T extends Ansi16 | Record<string, string>>(ansi: 
   // rgba(), a hex8 with its alpha) must never reach hexToRgb, which reads it
   // as NaN. A plain #rrggbb passes through as it is, case and all.
   const plain = (c: string, fallback: string): string => (/^#[0-9a-f]{6}$/i.test(c) ? c : normalizeColor(c, fallback))
-  const ground = plain(bg, '#101215')
+  const ground = plain(bg, DEFAULT_GROUND)
   const out: Record<string, string> = { ...ansi }
   for (const k of Object.keys(out)) out[k] = ensureContrast(plain(out[k], '#888888'), ground)
   return out as T
