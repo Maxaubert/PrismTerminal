@@ -290,9 +290,11 @@ export function TabSidebar({
             ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]'
             : edge === 'line'
               ? 'border-r border-[var(--p-divider)]'
-              : edge === 'shadow-light'
-                ? 'shadow-[4px_0_16px_-6px_rgba(0,0,0,.22)]'
-                : 'shadow-[6px_0_22px_-6px_rgba(0,0,0,.55)]'
+              : edge === 'none'
+                ? ''
+                : edge === 'shadow-light'
+                  ? 'shadow-[4px_0_16px_-6px_rgba(0,0,0,.22)]'
+                  : 'shadow-[6px_0_22px_-6px_rgba(0,0,0,.55)]'
         } ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         // Slid by its LEFT, never a transform: Windows is told where a drag
         // region is from the layout, and a transformed panel's grab strip was

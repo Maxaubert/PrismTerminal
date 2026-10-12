@@ -154,6 +154,20 @@ function paintChrome(): void {
   void window.prism.setAcrylic(acrylic)
 }
 
+/** The terminal's cut top-left corner, beside the open sidebar: a mask, not a
+ *  border-radius, so its edge is the exact inverse of the corner piece's. One
+ *  full layer with the piece's shape taken out (`exclude`): tiled layers left a
+ *  hairline seam where they met. */
+const CORNER_IN = '9.5px'
+const CORNER_OUT = '10px'
+const CORNER_CUT = {
+  maskImage: `linear-gradient(#000, #000), radial-gradient(circle at 100% 100%, transparent ${CORNER_IN}, #000 ${CORNER_OUT})`,
+  maskPosition: '0 0, 0 0',
+  maskSize: '100% 100%, 10px 10px',
+  maskRepeat: 'no-repeat',
+  maskComposite: 'exclude'
+} as const
+
 export default function App(): JSX.Element {
   // TABS FROM THE FIRST FRAME (#106): the saved strip, read at once, drawn as
   // placeholders; the restore settles each when it answers (lib/restorePlan).
@@ -791,15 +805,19 @@ export default function App(): JSX.Element {
           terminal's top rows stay in sight; a sidebar that slides out from
           collapsed lies over its left end. */}
           {/* The cut corner's outside, in the secondary colour: one coat
-              where the terminal is clipped round, nothing anywhere else. */}
+              where the terminal is clipped round, nothing anywhere else. Its
+              curve is the exact inverse of the terminal's (CORNER_CUT), so
+              every edge pixel is covered once between them: a border-radius
+              clip beside a gradient overlapped on the edge and drew a dark
+              arc under See-through (owner, 2026-10-12: "the corner here on the
+              transparent looks pretty bad"). */}
           {beside && sidebarOpen && (
             <span
               data-term-corner
               aria-hidden
               className="pointer-events-none absolute left-0 top-9 z-10 h-2.5 w-2.5"
               style={{
-                background:
-                  'radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary) 10px)'
+                background: `radial-gradient(circle at 100% 100%, transparent ${CORNER_IN}, var(--p-secondary) ${CORNER_OUT})`
               }}
             />
           )}
@@ -815,9 +833,8 @@ export default function App(): JSX.Element {
           )}
           <div
             data-term-column
-            className={`relative flex min-h-0 min-w-0 flex-1 flex-col ${
-              beside && sidebarOpen ? 'overflow-hidden rounded-tl-[10px]' : ''
-            }`}
+            className="relative flex min-h-0 min-w-0 flex-1 flex-col"
+            style={beside && sidebarOpen ? CORNER_CUT : undefined}
           >
             <div
               className="relative min-h-0 min-w-0 flex-1"

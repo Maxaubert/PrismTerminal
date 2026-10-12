@@ -2115,13 +2115,13 @@ const scenarios = {
       const corner = await page.evaluate(() => {
         const col = document.querySelector('[data-term-column]')
         const bar = document.querySelector('[data-title-bar]')
-        return { radius: col ? getComputedStyle(col).borderTopLeftRadius : null, barLine: bar ? getComputedStyle(bar).borderBottomWidth : null }
+        return { radius: col && /radial-gradient/.test(getComputedStyle(col).maskImage) ? 'cut' : 'square', barLine: bar ? getComputedStyle(bar).borderBottomWidth : null }
       })
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-merged.png') }).catch(() => {})
       // No seam: the bar's colour right above the sidebar is the sidebar's own.
       const seam = await page.evaluate(() => getComputedStyle(document.querySelector('[data-tab-sidebar]')).clipPath)
       ok(seam.startsWith('polygon(0px 0px, 100% 0px, 100% 36px, calc(100% + 60px) 36px'), `the sidebar's shadow falls on the terminal's side only, below the bar (${seam})`)
-      ok(corner.radius === '10px' && corner.barLine === '0px', `the terminal is cut round where the bar and the sidebar meet, and the bar draws no line (${JSON.stringify(corner)})`)
+      ok(corner.radius === 'cut' && corner.barLine === '0px', `the terminal is cut round where the bar and the sidebar meet, and the bar draws no line (${JSON.stringify(corner)})`)
       // THE EDGE (owner, 2026-10-12: "only show border on the sidebar if bg and
       // secondary color is black, since then shadows dont work, otherwise
       // shadow works as a border"). PT Default is not black: a shadow, no line.
@@ -2323,7 +2323,7 @@ const scenarios = {
               probe.remove()
               return { secondary: sec, side: getComputedStyle(document.querySelector('[data-tab-sidebar]')).backgroundColor, bar: f ? getComputedStyle(f).backgroundColor : null }
             })(),
-            radius: getComputedStyle(document.querySelector('[data-term-column]')).borderTopLeftRadius,
+            radius: /radial-gradient/.test(getComputedStyle(document.querySelector('[data-term-column]')).maskImage) ? 'cut' : 'square',
             navTop: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().top ?? -1),
             navRight: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().right ?? -1),
             hostTop: Math.round(document.querySelector('[data-term-host]')?.getBoundingClientRect().top ?? -1),
@@ -2336,7 +2336,7 @@ const scenarios = {
       ok(up.buttons && up.settings, "with Settings, Help and the window's buttons")
       ok(up.hostTop === 36, `the terminal sits below it, nothing covered (${up.hostTop})`)
       ok(up.navTop === 0 && up.firstRowTop >= 76 && up.firstRowTop <= 100, `the sidebar starts at the top, not pushed down, its tabs under the app's name and Find a tab (${up.firstRowTop}px)`)
-      ok(up.radius === '10px', `the terminal is cut round where the bar and the sidebar meet (${up.radius})`)
+      ok(up.radius === 'cut', `the terminal is cut round where the bar and the sidebar meet (${up.radius})`)
       // Owner, 2026-10-12, of the sidebar looks mockup: "New tab: Button at the
       // bottom".
       ok(!!up.newBtn && !up.newBtn.inRows && up.newBtn.gapBelow <= 12 && up.newBtn.w >= up.newBtn.navW - 20, `New tab is a button across the sidebar's foot (${JSON.stringify(up.newBtn)})`)
@@ -2380,7 +2380,7 @@ const scenarios = {
       await page.mouse.move(800, 400)
       await sleep(600)
       const across = await top()
-      ok(across.bar.left === 0 && across.bar.right === 0 && across.radius === '0px', `collapsed, the bar spans the window and the corner goes (${JSON.stringify(across.bar)}, ${across.radius})`)
+      ok(across.bar.left === 0 && across.bar.right === 0 && across.radius === 'square', `collapsed, the bar spans the window and the corner goes (${JSON.stringify(across.bar)}, ${across.radius})`)
       // SLID OUT, it still meets the bar as one surface (owner, 2026-10-12: "it
       // doesn't seem like it connects with the title bar"): its curved corner
       // under the bar's end, and its shadow below the bar only.
@@ -2430,6 +2430,15 @@ const scenarios = {
       const glassy = await coat()
       const once = Object.values(glassy)
       ok(once.every((a) => a > 0.5 && a < 0.9) && new Set(once).size === 1, `see-through: the sidebar, the bar and the terminal each one coat (${JSON.stringify(glassy)})`)
+      // No shadow and no line over glass (owner, 2026-10-12: "there's also a
+      // border"): a shadow on a see-through terminal is a dark band.
+      const glassEdge = await page.evaluate(() => {
+        const nav = document.querySelector('[data-tab-sidebar]')
+        return { edge: nav.getAttribute('data-sidebar-edge'), line: getComputedStyle(nav).borderRightWidth, shadow: getComputedStyle(nav).boxShadow }
+      })
+      ok(glassEdge.edge === 'none' && glassEdge.line === '0px' && !/rgba\(0, 0, 0, 0\.[1-9]/.test(glassEdge.shadow), `see-through: the open sidebar draws no shadow and no line (${JSON.stringify(glassEdge)})`)
+      const nr = await page.evaluate(() => Math.round(document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right))
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/glass-corner.png'), clip: { x: nr - 40, y: 0, width: 120, height: 100 } }).catch(() => {})
       await page.keyboard.press('Control+Shift+B')
       await page.mouse.move(800, 400)
       await sleep(500)
