@@ -14,6 +14,7 @@ export const APP_CH = {
   appVersion: 'app:version',
   closeConfirmed: 'close:confirmed',
   closeRequest: 'close:request',
+  openFolder: 'open:folder',
   dialogPickFolder: 'dialog:pick-folder',
   pathFolderOf: 'path:folder-of',
   shellVerbSet: 'shell:verb-set',

@@ -247,7 +247,7 @@ function offerUpdate(info: UpdateInfo): void {
  *  even if another tab already sits in that folder. */
 function handFolders(folders: string[]): void {
   if (awaitingRestore) pendingFolders.push(...folders)
-  else for (const f of folders) send('open:folder', f)
+  else for (const f of folders) send(APP_CH.openFolder, f)
 }
 
 /**
@@ -473,7 +473,7 @@ function wireIpc(): void {
     pendingFolders = []
     // AFTER the answer: the reply resolves the renderer's promise first, so
     // these land on the restored list rather than under it.
-    if (queued.length) setTimeout(() => queued.forEach((f) => send('open:folder', f)), 0)
+    if (queued.length) setTimeout(() => queued.forEach((f) => send(APP_CH.openFolder, f)), 0)
     return plan
   })
   // The renderer owns the tab list; main persists the last report.

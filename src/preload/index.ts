@@ -52,7 +52,7 @@ const api = {
   tabsChanged: (s: SavedTabs): void => ipcRenderer.send(APP_CH.tabsChanged, s),
   /** A folder handed over (the Explorer verb, a second launch): open a NEW tab
    *  there, whatever else is open. Only ever arrives after a restore answered. */
-  onOpenFolder: (cb: (cwd: string) => void): (() => void) => on('open:folder', cb),
+  onOpenFolder: (cb: (cwd: string) => void): (() => void) => on(APP_CH.openFolder, cb),
 
   /* ----- closing ----- */
 
