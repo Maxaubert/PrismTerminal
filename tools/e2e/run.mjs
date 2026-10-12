@@ -2588,6 +2588,7 @@ const scenarios = {
       }))
       ok(solid.sidebar === glassy.sidebar && solid.bar === glassy.bar && cut.mask.startsWith(`${cut.width}px`), `collapsed and slid out, the sidebar is the window's acrylic: the same tint, the page under it cut away (${JSON.stringify(solid)}, ${JSON.stringify(cut)})`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-slid-acrylic.png') }).catch(() => {})
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/slid-glass-corner.png'), clip: { x: cut.width - 40, y: 0, width: 120, height: 100 } }).catch(() => {})
       await page.mouse.move(800, 400)
       await sleep(500)
       await page.keyboard.press('Control+Shift+B')

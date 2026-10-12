@@ -145,9 +145,18 @@ export function TabSidebar({
   // strip of the page away, so only the window's acrylic lies under it.
   const cover = collapsed && visible && tabs.length > 0 ? width : 0
   useEffect(() => {
-    document.documentElement.style.setProperty('--p-sidebar-cover', `${cover}px`)
+    const root = document.documentElement.style
+    root.setProperty('--p-sidebar-cover', `${cover}px`)
+    // Its curved corner piece, beyond its edge: cut out too (App's COVER_CUT).
+    root.setProperty('--p-sidebar-corner', cover ? `${cover}px` : '-20px')
   }, [cover])
-  useEffect(() => () => document.documentElement.style.setProperty('--p-sidebar-cover', '0px'), [])
+  useEffect(
+    () => () => {
+      document.documentElement.style.setProperty('--p-sidebar-cover', '0px')
+      document.documentElement.style.setProperty('--p-sidebar-corner', '-20px')
+    },
+    []
+  )
 
   // ---- Reorder: the strip's pointer drag, along y ----
   const [dropAt, setDropAt] = useState<number | null>(null)

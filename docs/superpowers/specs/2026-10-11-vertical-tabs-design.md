@@ -229,7 +229,9 @@ looked at on the way).
   window's own acrylic lies beneath. CSS `backdrop-filter` was tried and does NOTHING in a
   see-through window (measured in the e2e window: a test box blurred the terminal with See-through
   off and not at all with it on); the dialogs' backdrop blur is the same, so it only shows on a
-  solid window. `--p-secondary-solid` is gone.
+  solid window. `--p-secondary-solid` is gone. The cut also takes the shape of the sidebar's curved corner piece beyond
+  its edge (`exclude`, `--p-sidebar-corner`): under that piece the terminal was a second coat, a
+  darker square in the corner (owner: "we get the shadow issue again in that corner").
 
 ## 2. The indicators
 
