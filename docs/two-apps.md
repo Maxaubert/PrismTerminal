@@ -165,7 +165,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
     real is on offer. An unpackaged build previews unasked (it replaced the old inert mock chip);
     under `--e2e` without the flag there is no chip and no network, as before.
   - **INSTALL IS HELD BY THE WINDOW'S OWN RULE.** Installing ends in a quit that main pre-answers
-    (`closeAgreed`), so App's install guard asks first while an agent is WORKING
+    (`closeFlow.agree`, `src/main/closeFlow.ts`), so App's install guard asks first while an agent is WORKING
     (`holdsWindowClose`; title `closeQuestionTitle('install', ...)`, button "Install and restart").
     Until #28 nothing in this app asked: main's comment said the page settles it, which was true of
     Prism's page and never of this one. A preview asks nothing, since it quits nothing. A download

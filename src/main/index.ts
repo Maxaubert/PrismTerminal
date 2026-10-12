@@ -29,6 +29,7 @@ import { MIN_WINDOW, readWindowState, watchWindowState } from './windowState'
 import { APP_CH, E2E_CH } from '@shared/channels'
 import { isWebUrl } from '@core/shared/webUrl'
 import { createCloseFlow } from './closeFlow'
+import { createUpdateGate } from './updateGate'
 
 // Prism Terminal's main process: the window, its lifecycle and the
 // IPC wiring. Everything with rules of its own lives in its own file (the pty,
@@ -235,8 +236,6 @@ const tabs = createTabsStore(join(app.getPath('userData'), 'tabs.json'))
  *  still hears about it (`update:announce`), and so `update:install` can tell a
  *  preview from a release by what main ITSELF offered. */
 let pendingUpdate: UpdateInfo | null = null
-/** The install that is running, if one is: what `update:cancel` aborts. */
-let updateRun: AbortController | null = null
 function offerUpdate(info: UpdateInfo): void {
   pendingUpdate = info
   send(APP_CH.updateAvailable, info)
@@ -594,43 +593,18 @@ function wireIpc(): void {
   // Installing quits the app so NSIS can replace it, and a working agent
   // VETOES a quit (the close flow above) - the installer would then run over a
   // live exe while a dialog waited. The renderer settles that question before
-  // it asks for the install (App's install guard), so the quit is pre-answered
-  // here.
-  ipcMain.handle(APP_CH.updateInstall, async (_e, url: string) => {
-    // WHAT IS ON OFFER decides, never what the page sent: while the offer is a
-    // preview there is nothing this handler will download, whatever url it is
-    // handed. The fake runs the chip's progress and answers false, "nothing
-    // was installed", which is true. No fetch, no file, no installer, no quit,
-    // and the close question is NOT pre-answered.
-    // ONE AT A TIME, and the controller is this run's own: `update:cancel`
-    // aborts whatever is current, and a second Install cannot orphan the first
-    // one's controller (the page refuses a second anyway; this does not rely
-    // on it).
-    if (updateRun) return false
-    const run = new AbortController()
-    updateRun = run
-    try {
-      if (pendingUpdate?.mock)
-        return await runPreviewInstall((pct) => send(APP_CH.updateProgress, pct), {
-          cancelled: () => run.signal.aborted
-        })
-      // WHAT MAIN OFFERED is installed, never a url the page sent (code review
-      // 2026-09-24, #15): a page that could name any past release asset could
-      // downgrade the app silently. No offer, nothing to install. The page's
-      // argument is only checked to be the same offer it was shown.
-      const offer = pendingUpdate
-      if (!offer || typeof url !== 'string' || url !== offer.url) return false
-      // The close question is pre-answered at the QUIT, not now (#14): a
-      // download takes minutes, and an agent that starts working meanwhile
-      // must still be asked about before a close ends it.
-      return await installUpdate(offer.url, (pct) => send(APP_CH.updateProgress, pct), run.signal, closeFlow.agree)
-    } finally {
-      updateRun = null
-    }
+  // it asks for the install (App's install guard); what the install may do is
+  // updateGate's (rule 3), with its tests.
+  const updateGate = createUpdateGate({
+    offer: () => pendingUpdate,
+    preview: (cancelled) => runPreviewInstall((pct) => send(APP_CH.updateProgress, pct), { cancelled }),
+    install: (url, signal, agree) => installUpdate(url, (pct) => send(APP_CH.updateProgress, pct), signal, agree),
+    agree: closeFlow.agree
   })
+  ipcMain.handle(APP_CH.updateInstall, (_e, url: unknown) => updateGate.install(url))
   // The update window's Cancel (#32). It names nothing: there is one download
   // at most, and the page has no say in which.
-  ipcMain.on(APP_CH.updateCancel, () => updateRun?.abort())
+  ipcMain.on(APP_CH.updateCancel, () => updateGate.cancel())
   // The e2e's updateWindow reads this after a whole preview, fake install
   // included: release checks sent and installs attempted. Both must be 0.
   if (E2E) ipcMain.handle(E2E_CH.updateCalls, () => updateCalls())

@@ -15,7 +15,7 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   (`core/main/sysTools.ts`, pwsh by `where`'s answer minus the current folder), and main leaves its
   launch folder at startup: a bare name is searched for in the current folder first.
 - <a id="main-installs-only-offered"></a>**MAIN INSTALLS ONLY WHAT MAIN OFFERED** (#67). `update:install` installs `pendingUpdate.url`
-  and refuses any other url; the close question is pre-answered at the QUIT, not when the download
+  and refuses any other url (`src/main/updateGate.ts`, with its tests); the close question is pre-answered at the QUIT, not when the download
   starts; the installer handoff waits for PowerShell to start (an 'error' keeps the app running)
   and removes its temp folder after the install. `tabs.json` and `window.json` are written
   atomically (`atomicWrite.ts`). A command-line path is resolved against the folder it was typed
