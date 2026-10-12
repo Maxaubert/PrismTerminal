@@ -19,7 +19,7 @@ describe('the tab layouts', () => {
   it('carry a tab through the one reorder hook', () => {
     for (const { f, src } of layouts) {
       expect(src, f).toMatch(/useTabReorder\(\{ axis: '[xy]'/)
-      expect(src.includes('setPointerCapture'), f).toBe(false)
+      expect(src.includes('dropSlot'), f).toBe(false)
       expect(src.includes('DRAG_SLOP'), f).toBe(false)
     }
   })
