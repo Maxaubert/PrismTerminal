@@ -232,6 +232,13 @@ looked at on the way).
   solid window. `--p-secondary-solid` is gone. The cut also takes the shape of the sidebar's curved corner piece beyond
   its edge (`exclude`, `--p-sidebar-corner`): under that piece the terminal was a second coat, a
   darker square in the corner (owner: "we get the shadow issue again in that corner").
+- **One curve for both sides of the corner** (owner, 2026-10-12: "a weird border, its square darker
+  and not following the curve"). `lib/cornerShapes.ts`: the terminal's cut (pinned at its top-left,
+  slid-out moved right by the sidebar's width) and the corner piece filling the outside are masks
+  from the SAME SVG path, one the inverse of the other. A small radial mask layer over a full one
+  sampled half clear at its own edges and drew a square line round the corner; a border-radius
+  beside a gradient never quite matched. The e2e lays a light striped desktop behind the page for
+  its corner shots, since the parked window's black hides a second coat.
 
 ## 2. The indicators
 

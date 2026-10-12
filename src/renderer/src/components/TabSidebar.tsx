@@ -14,6 +14,7 @@ import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
 import { findKeeps, folderLine } from '../lib/sidebarRows'
 import { onDevicePixels, useDevicePixelRatio } from '../lib/devicePixels'
+import { OUTSIDE_CORNER } from '../lib/cornerShapes'
 import {
   SIDEBAR_WIDTH,
   setSidebarWidth,
@@ -147,13 +148,10 @@ export function TabSidebar({
   useEffect(() => {
     const root = document.documentElement.style
     root.setProperty('--p-sidebar-cover', `${cover}px`)
-    // Its curved corner piece, beyond its edge: cut out too (App's COVER_CUT).
-    root.setProperty('--p-sidebar-corner', cover ? `${cover}px` : '-20px')
   }, [cover])
   useEffect(
     () => () => {
       document.documentElement.style.setProperty('--p-sidebar-cover', '0px')
-      document.documentElement.style.setProperty('--p-sidebar-corner', '-20px')
     },
     []
   )
@@ -326,9 +324,7 @@ export function TabSidebar({
             {/* The fill, the sidebar's tint cut to the curve by a mask. */}
             <span
               className="absolute inset-0 bg-[var(--p-secondary)]"
-              style={{
-                maskImage: 'radial-gradient(circle at 100% 100%, transparent 9.5px, #000 10px)'
-              }}
+              style={{ maskImage: OUTSIDE_CORNER, maskSize: '100% 100%' }}
             />
             {/* The line, round the curve into the bar's. */}
             <span

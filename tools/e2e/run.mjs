@@ -2115,7 +2115,7 @@ const scenarios = {
       const corner = await page.evaluate(() => {
         const col = document.querySelector('[data-term-column]')
         const bar = document.querySelector('[data-title-bar]')
-        return { radius: col && /radial-gradient/.test(getComputedStyle(col).maskImage) ? 'cut' : 'square', barLine: bar ? getComputedStyle(bar).borderBottomWidth : null }
+        return { radius: col && /svg/.test(getComputedStyle(col).maskImage) ? 'cut' : 'square', barLine: bar ? getComputedStyle(bar).borderBottomWidth : null }
       })
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-merged.png') }).catch(() => {})
       // No seam: the bar's colour right above the sidebar is the sidebar's own.
@@ -2195,7 +2195,7 @@ const scenarios = {
         return { line: l ? { top: Math.round(l.top), right: Math.round(l.right), navRight: Math.round(nav.getBoundingClientRect().right) } : null, barLine: t.borderTopWidth, corner: [...nav.querySelector('[data-sidebar-corner]').children].map((c) => `${getComputedStyle(c).maskImage} ${getComputedStyle(c).backgroundImage}`).join(' '), shadow: getComputedStyle(nav).boxShadow }
       })
       ok(!!slidLine.line && slidLine.line.top >= 36 && slidLine.line.right === slidLine.line.navRight && parseFloat(slidLine.barLine) > 0 && slidLine.shadow === 'none', `slid out, a line from the bar down, the bar's own line along the top, no shadow (${JSON.stringify(slidLine)})`)
-      ok((slidLine.corner.match(/radial-gradient/g) ?? []).length === 2, 'and the corner carries the line round into the bar')
+      ok(/svg/.test(slidLine.corner) && /radial-gradient/.test(slidLine.corner), `and the corner, filled to the curve, carries the line round into the bar (${slidLine.corner.slice(0, 80)})`)
       await page.mouse.move(800, 400)
       await sleep(500)
       await page.keyboard.press('Control+Shift+B')
@@ -2398,7 +2398,7 @@ const scenarios = {
               probe.remove()
               return { secondary: sec, side: getComputedStyle(document.querySelector('[data-tab-sidebar]')).backgroundColor, bar: f ? getComputedStyle(f).backgroundColor : null }
             })(),
-            radius: /radial-gradient/.test(getComputedStyle(document.querySelector('[data-term-column]')).maskImage) ? 'cut' : 'square',
+            radius: /svg/.test(getComputedStyle(document.querySelector('[data-term-column]')).maskImage) ? 'cut' : 'square',
             navTop: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().top ?? -1),
             navRight: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().right ?? -1),
             hostTop: Math.round(document.querySelector('[data-term-host]')?.getBoundingClientRect().top ?? -1),
@@ -2513,7 +2513,15 @@ const scenarios = {
       const glassEdge = await edge()
       ok(lineOn(glassEdge), `see-through: the same line (${JSON.stringify(glassEdge)})`)
       const nr = await page.evaluate(() => Math.round(document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right))
-      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/glass-corner.png'), clip: { x: nr - 40, y: 0, width: 120, height: 100 } }).catch(() => {})
+      await page.evaluate(() => {
+        const d = document.createElement('div')
+        d.id = 'e2e-desk'
+        d.style.cssText = 'position:fixed;inset:0;z-index:-1;background:repeating-linear-gradient(45deg,#c8d0c0 0 6px,#b8c0b0 6px 12px)'
+        document.body.prepend(d)
+      })
+      await sleep(200)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/glass-corner.png'), clip: { x: nr - 40, y: 0, width: 120, height: 140 } }).catch(() => {})
+      await page.evaluate(() => document.getElementById('e2e-desk')?.remove())
       // AT 125 %, A 235 PX SIDEBAR (the owner's, 2026-10-12: "the sidebar
       // border is still there"): its edge lands on a whole screen pixel, or
       // the desktop shows through between it and the bar as a line.
@@ -2588,7 +2596,17 @@ const scenarios = {
       }))
       ok(solid.sidebar === glassy.sidebar && solid.bar === glassy.bar && cut.mask.startsWith(`${cut.width}px`), `collapsed and slid out, the sidebar is the window's acrylic: the same tint, the page under it cut away (${JSON.stringify(solid)}, ${JSON.stringify(cut)})`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-slid-acrylic.png') }).catch(() => {})
-      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/slid-glass-corner.png'), clip: { x: cut.width - 40, y: 0, width: 120, height: 100 } }).catch(() => {})
+      // A LIGHT DESKTOP behind the page (the parked window's own is black,
+      // where a second coat cannot be seen): every coat shows as a step.
+      await page.evaluate(() => {
+        const d = document.createElement('div')
+        d.id = 'e2e-desk'
+        d.style.cssText = 'position:fixed;inset:0;z-index:-1;background:repeating-linear-gradient(45deg,#c8d0c0 0 6px,#b8c0b0 6px 12px)'
+        document.body.prepend(d)
+      })
+      await sleep(200)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/slid-glass-corner.png'), clip: { x: cut.width - 40, y: 0, width: 120, height: 140 } }).catch(() => {})
+      await page.evaluate(() => document.getElementById('e2e-desk')?.remove())
       await page.mouse.move(800, 400)
       await sleep(500)
       await page.keyboard.press('Control+Shift+B')

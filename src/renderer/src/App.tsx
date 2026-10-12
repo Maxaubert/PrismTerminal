@@ -28,6 +28,7 @@ import { isFindTabChord } from './lib/sidebarRows'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
 import { AppMark } from './components/AppMark'
+import { INSIDE_CORNER, INSIDE_SIZE, OUTSIDE_CORNER } from './lib/cornerShapes'
 import { tabSwitch } from './lib/tabSwitchPrefs'
 import {
   startWalk,
@@ -156,35 +157,23 @@ function paintChrome(): void {
   void window.prism.setAcrylic(acrylic)
 }
 
-/** The terminal's cut top-left corner, beside the open sidebar: a mask, not a
- *  border-radius, so its edge is the exact inverse of the corner piece's. One
- *  full layer with the piece's shape taken out (`exclude`): tiled layers left a
- *  hairline seam where they met. */
-const CORNER_IN = '9.5px'
-const CORNER_OUT = '10px'
+/** The terminal's cut top-left corner, beside the open sidebar: the inside of
+ *  the curve (lib/cornerShapes), the corner piece the outside. */
 const CORNER_CUT = {
-  maskImage: `linear-gradient(#000, #000), radial-gradient(circle at 100% 100%, transparent ${CORNER_IN}, #000 ${CORNER_OUT})`,
-  maskPosition: '0 0, 0 0',
-  maskSize: '100% 100%, 10px 10px',
+  maskImage: INSIDE_CORNER,
   maskRepeat: 'no-repeat',
-  maskComposite: 'exclude'
+  maskSize: INSIDE_SIZE,
+  maskPosition: '0 0'
 } as const
 
 /** Under a collapsed sidebar slid out over it, the page is cut away (owner,
- *  2026-10-12: the slid-out sidebar "acrylic like the rest"): one mask layer
- *  moved right by the sidebar's width (TabSidebar's --p-sidebar-cover), on the
- *  sidebar's own slide, so only the window's acrylic lies under its tint. */
+ *  2026-10-12: the slid-out sidebar "acrylic like the rest"): the same shape,
+ *  moved right by the sidebar's width (TabSidebar's --p-sidebar-cover) on the
+ *  sidebar's own slide, so only the window's acrylic lies under its tint, and
+ *  its corner piece fills the outside of the curve. */
 const COVER_CUT = {
-  // The page from the sidebar's edge on, less the shape of the sidebar's own
-  // curved corner piece beyond it (`exclude`): under that piece the terminal
-  // would be a second coat, a darker square at the corner (owner, 2026-10-12:
-  // "we get the shadow issue again in that corner"). The corner layer waits
-  // off the page's left edge while nothing is slid out.
-  maskImage: `linear-gradient(#000, #000), radial-gradient(circle at 100% 100%, transparent ${CORNER_IN}, #000 ${CORNER_OUT})`,
-  maskRepeat: 'no-repeat',
-  maskSize: '100% 100%, 10px 10px',
-  maskPosition: 'var(--p-sidebar-cover, 0px) 0, var(--p-sidebar-corner, -20px) 0',
-  maskComposite: 'exclude',
+  ...CORNER_CUT,
+  maskPosition: 'var(--p-sidebar-cover, 0px) 0',
   transition: 'mask-position 240ms cubic-bezier(.16,1,.3,1)'
 } as const
 
@@ -859,10 +848,8 @@ export default function App(): JSX.Element {
             <span
               data-term-corner
               aria-hidden
-              className="pointer-events-none absolute left-0 top-0 z-10 h-2.5 w-2.5"
-              style={{
-                background: `radial-gradient(circle at 100% 100%, transparent ${CORNER_IN}, var(--p-secondary) ${CORNER_OUT})`
-              }}
+              className="pointer-events-none absolute left-0 top-0 z-10 h-2.5 w-2.5 bg-[var(--p-secondary)]"
+              style={{ maskImage: OUTSIDE_CORNER, maskSize: '100% 100%' }}
             />
           )}
           {/* The terminal's edge, one line (TermEdge), drawn once over it,
