@@ -283,18 +283,11 @@ export function TabSidebar({
             ? 'transition-[left,box-shadow] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
             : ''
         } ${
-          // SLID OUT over the terminal it floats: the deep shadow. Open: a
-          // shadow as its edge, or on black, where a shadow cannot show, a
-          // hairline.
-          collapsed && visible
-            ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]'
-            : edge === 'line'
-              ? 'border-r border-[var(--p-divider)]'
-              : edge === 'none'
-                ? ''
-                : edge === 'shadow-light'
-                  ? 'shadow-[4px_0_16px_-6px_rgba(0,0,0,.22)]'
-                  : 'shadow-[6px_0_22px_-6px_rgba(0,0,0,.55)]'
+          // OPEN, it draws no edge: the terminal's own (App's data-term-edge)
+          // runs down its side and round the corner into the bar's. SLID OUT
+          // over the terminal it floats: the deep shadow, or on black, where a
+          // shadow cannot show, its line from the bar down (below).
+          collapsed && visible && edge !== 'line' ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]' : ''
         } ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         // Slid by its LEFT, never a transform: Windows is told where a drag
         // region is from the layout, and a transformed panel's grab strip was
@@ -320,9 +313,23 @@ export function TabSidebar({
             className="pointer-events-none absolute left-full h-2.5 w-2.5"
             style={{
               top: BAR_H,
-              background:
-                'radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary-solid) 10px)'
+              background: `${
+                edge === 'line'
+                  ? 'radial-gradient(circle at 100% 100%, transparent 9px, var(--p-divider) 9.5px, var(--p-divider) 10px, transparent 10.5px), '
+                  : ''
+              }radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary-solid) 10px)`
             }}
+          />
+        )}
+        {/* Slid out on black, its line: from the bar down, meeting the bar's
+            line through the corner above (owner, 2026-10-12: it "has no border
+            on black. It should have, it has that when it's in static mode"). */}
+        {collapsed && visible && edge === 'line' && (
+          <span
+            data-sidebar-line
+            aria-hidden
+            className="pointer-events-none absolute bottom-0 right-0 w-px bg-[var(--p-divider)]"
+            style={{ top: BAR_H + 10 }}
           />
         )}
         {/* THE APP'S NAME, at the top (owner, 2026-10-12: "a prism terminal

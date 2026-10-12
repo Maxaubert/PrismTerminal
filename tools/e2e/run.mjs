@@ -2125,13 +2125,32 @@ const scenarios = {
       // THE EDGE (owner, 2026-10-12: "only show border on the sidebar if bg and
       // secondary color is black, since then shadows dont work, otherwise
       // shadow works as a border"). PT Default is not black: a shadow, no line.
+      // DRAWN ONCE, ON THE TERMINAL (owner, 2026-10-12: the sidebar's border
+      // "should only go up to the title bar border so they can connect
+      // there"; two shadows met darker at the corner): the sidebar itself
+      // draws nothing while open.
       const edge = () =>
         page.evaluate(() => {
           const nav = document.querySelector('[data-tab-sidebar]')
-          return { edge: nav.getAttribute('data-sidebar-edge'), line: getComputedStyle(nav).borderRightWidth, shadow: getComputedStyle(nav).boxShadow }
+          const t = document.querySelector('[data-term-edge]')
+          const cs = t ? getComputedStyle(t) : null
+          return {
+            edge: t?.getAttribute('data-term-edge') ?? null,
+            top: cs?.borderTopWidth ?? null,
+            left: cs?.borderLeftWidth ?? null,
+            radius: cs?.borderTopLeftRadius ?? null,
+            shadow: cs?.boxShadow ?? null,
+            navLine: getComputedStyle(nav).borderRightWidth,
+            navShadow: getComputedStyle(nav).boxShadow
+          }
         })
       const grey = await edge()
-      ok(grey.edge === 'shadow' && grey.line === '0px' && /rgba\(0, 0, 0, 0\.5/.test(grey.shadow), `PT Default: the sidebar's edge is a shadow, no line (${JSON.stringify(grey)})`)
+      ok(grey.edge === 'shadow' && grey.top === '0px' && /inset/.test(grey.shadow) && /rgba\(0, 0, 0, 0\.5/.test(grey.shadow) && grey.radius === '10px', `PT Default: one inset shadow round the terminal's top, side and corner, no line (${JSON.stringify(grey)})`)
+      {
+        const r = await page.evaluate(() => Math.round(document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right))
+        await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/shadow-corner.png'), clip: { x: r - 40, y: 0, width: 120, height: 100 } }).catch(() => {})
+      }
+      ok(grey.navLine === '0px' && grey.navShadow === 'none', `and the open sidebar draws no edge of its own (${grey.navLine}, ${grey.navShadow})`)
       const tones = await page.evaluate(() => {
         const css = getComputedStyle(document.documentElement)
         return { bg: css.getPropertyValue('--p-bg-solid').trim(), side: css.getPropertyValue('--p-secondary').trim() }
@@ -2139,7 +2158,32 @@ const scenarios = {
       ok(tones.side.slice(0, 7) !== tones.bg.slice(0, 7), `and the sidebar a step darker than the terminal (${JSON.stringify(tones)})`)
       await pickTheme(page, 'campbell')
       const blackEdge = await edge()
-      ok(blackEdge.edge === 'line' && parseFloat(blackEdge.line) > 0 && !/rgba\(0, 0, 0, 0\.[1-9]/.test(blackEdge.shadow), `Campbell, black on black: a hairline and no shadow (${JSON.stringify(blackEdge)})`)
+      {
+        const r = await page.evaluate(() => Math.round(document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right))
+        await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/black-corner.png'), clip: { x: r - 40, y: 0, width: 120, height: 100 } }).catch(() => {})
+      }
+      ok(blackEdge.edge === 'line' && parseFloat(blackEdge.top) > 0 && parseFloat(blackEdge.left) > 0 && blackEdge.radius === '10px' && blackEdge.shadow === 'none' && blackEdge.navLine === '0px', `Campbell, black on black: one hairline along the bar, round the corner and down the sidebar, no shadow (${JSON.stringify(blackEdge)})`)
+      // SLID OUT ON BLACK, its line from the bar down (owner, 2026-10-12: "it
+      // has no border on black. It should have").
+      await backToFirst(page)
+      await page.keyboard.press('Control+Shift+B')
+      await page.mouse.move(800, 400)
+      await sleep(500)
+      await page.mouse.move(2, 400)
+      await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
+      await sleep(300)
+      const slidBlack = await page.evaluate(() => {
+        const nav = document.querySelector('[data-tab-sidebar]')
+        const l = nav.querySelector('[data-sidebar-line]')?.getBoundingClientRect()
+        const t = getComputedStyle(document.querySelector('[data-term-edge]'))
+        return { line: l ? { top: Math.round(l.top), right: Math.round(l.right), navRight: Math.round(nav.getBoundingClientRect().right) } : null, barLine: t.borderTopWidth, corner: getComputedStyle(nav.querySelector('[data-sidebar-corner]')).backgroundImage }
+      })
+      ok(!!slidBlack.line && slidBlack.line.top >= 36 && slidBlack.line.right === slidBlack.line.navRight && parseFloat(slidBlack.barLine) > 0, `slid out on black, a line from the bar down, the bar's own line along the top (${JSON.stringify(slidBlack)})`)
+      ok((slidBlack.corner.match(/radial-gradient/g) ?? []).length === 2, 'and the corner carries the line round into the bar')
+      await page.mouse.move(800, 400)
+      await sleep(500)
+      await page.keyboard.press('Control+Shift+B')
+      await sleep(300)
       await pickTheme(page, 'pt-default')
       await backToFirst(page)
       ok((await edge()).edge === 'shadow', 'and back on PT Default, the shadow again')
@@ -2430,13 +2474,10 @@ const scenarios = {
       const glassy = await coat()
       const once = Object.values(glassy)
       ok(once.every((a) => a > 0.5 && a < 0.9) && new Set(once).size === 1, `see-through: the sidebar, the bar and the terminal each one coat (${JSON.stringify(glassy)})`)
-      // No shadow and no line over glass (owner, 2026-10-12: "there's also a
-      // border"): a shadow on a see-through terminal is a dark band.
-      const glassEdge = await page.evaluate(() => {
-        const nav = document.querySelector('[data-tab-sidebar]')
-        return { edge: nav.getAttribute('data-sidebar-edge'), line: getComputedStyle(nav).borderRightWidth, shadow: getComputedStyle(nav).boxShadow }
-      })
-      ok(glassEdge.edge === 'none' && glassEdge.line === '0px' && !/rgba\(0, 0, 0, 0\.[1-9]/.test(glassEdge.shadow), `see-through: the open sidebar draws no shadow and no line (${JSON.stringify(glassEdge)})`)
+      // The same rule over glass (owner, 2026-10-12: "only black themes should
+      // have borders ... the rest will use shadows").
+      const glassEdge = await edge()
+      ok(glassEdge.edge === 'shadow' && glassEdge.top === '0px' && /inset/.test(glassEdge.shadow), `see-through, PT Default: the one inset shadow, no line (${JSON.stringify(glassEdge)})`)
       const nr = await page.evaluate(() => Math.round(document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right))
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/glass-corner.png'), clip: { x: nr - 40, y: 0, width: 120, height: 100 } }).catch(() => {})
       await page.keyboard.press('Control+Shift+B')

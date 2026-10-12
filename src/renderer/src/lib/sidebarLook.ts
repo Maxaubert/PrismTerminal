@@ -7,31 +7,20 @@ import { BLACK_GROUND } from './sidebarGround'
  * if bg and secondary colour is black, since then shadows dont work, otherwise
  * shadow works as a border"): a hairline where the terminal's ground and the
  * sidebar's are both black, a shadow everywhere else, lighter on a light theme.
- * SEE-THROUGH, NEITHER (owner, 2026-10-12, of a see-through window: "there's
- * also a border, which I thought we only did on a black theme"): over glass a
- * shadow is a dark band down the terminal's edge, so the two tints alone say
- * where the sidebar ends.
+ * Drawn ONCE, on the terminal's top and left edge (App's `data-term-edge`), so
+ * the bar's edge and the sidebar's are one line round the cut corner (owner,
+ * 2026-10-12: "the sidebar border should not go all the way up. It should
+ * only go up to the title bar border so they can connect"; two shadows met at
+ * the corner and read darker there). See-through follows the same rule.
  */
-export type SidebarEdge = 'line' | 'shadow' | 'shadow-light' | 'none'
+export type SidebarEdge = 'line' | 'shadow' | 'shadow-light'
 
 const black = (c: string): boolean => {
   const hex = c.trim().slice(0, 7)
   return /^#[0-9a-f]{6}$/i.test(hex) && luminance(hex) < BLACK_GROUND
 }
 
-/** Whether a ground is see-through: a #rrggbbaa with an alpha under ff. */
-const glass = (c: string): boolean => {
-  const v = c.trim()
-  return /^#[0-9a-f]{8}$/i.test(v) && v.slice(7).toLowerCase() !== 'ff'
-}
-
-export function sidebarEdge(
-  bg: string,
-  secondary: string,
-  mode: string | undefined,
-  ground = ''
-): SidebarEdge {
-  if (glass(ground)) return 'none'
+export function sidebarEdge(bg: string, secondary: string, mode: string | undefined): SidebarEdge {
   if (black(bg) && black(secondary)) return 'line'
   return mode === 'light' ? 'shadow-light' : 'shadow'
 }
@@ -42,8 +31,7 @@ function read(): SidebarEdge {
   return sidebarEdge(
     css.getPropertyValue('--p-bg-solid'),
     css.getPropertyValue('--p-secondary'),
-    root.dataset.mode,
-    css.getPropertyValue('--p-bg')
+    root.dataset.mode
   )
 }
 

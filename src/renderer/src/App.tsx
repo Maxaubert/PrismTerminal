@@ -24,6 +24,7 @@ import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
 import { isSidebarChord, toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
+import { useSidebarEdge } from './lib/sidebarLook'
 import { isFindTabChord } from './lib/sidebarRows'
 import { TitleButtons } from './components/TitleBar'
 import { tabSwitch } from './lib/tabSwitchPrefs'
@@ -208,6 +209,8 @@ export default function App(): JSX.Element {
   // the top row (#91) to be moved by.
   const beside = vertical && state.tabs.length > 0
   const sidebarOpen = useSidebarMode() === 'open'
+  // The sidebar's edge, line or shadow, drawn on the terminal (data-term-edge).
+  const edge = useSidebarEdge()
   /** Which shell each tab was SPAWNED with. The Shell setting only names what
    *  the next terminal launches, so a tab opened before it was changed still
    *  speaks its old language, and the popup preselects by what is running. */
@@ -819,6 +822,29 @@ export default function App(): JSX.Element {
               style={{
                 background: `radial-gradient(circle at 100% 100%, transparent ${CORNER_IN}, var(--p-secondary) ${CORNER_OUT})`
               }}
+            />
+          )}
+          {/* THE EDGE, DRAWN ONCE (owner, 2026-10-12): along the terminal's
+              top and, beside the open sidebar, its left and the cut corner,
+              so the bar's edge and the sidebar's are one. On black (both
+              grounds), a line: a shadow cannot show there. Everywhere else a
+              single inset shadow, so no two shadows meet darker at the
+              corner. Over the terminal, never clipped by its corner cut. */}
+          {beside && (
+            <span
+              data-term-edge={edge}
+              aria-hidden
+              className={`pointer-events-none absolute inset-x-0 bottom-0 top-9 z-10 ${sidebarOpen ? 'rounded-tl-[10px]' : ''} ${
+                edge === 'line'
+                  ? `border-t border-[var(--p-divider)] ${sidebarOpen ? 'border-l' : ''}`
+                  : edge === 'shadow-light'
+                    ? sidebarOpen
+                      ? 'shadow-[inset_5px_5px_16px_-8px_rgba(0,0,0,.22)]'
+                      : 'shadow-[inset_0_5px_16px_-8px_rgba(0,0,0,.22)]'
+                    : sidebarOpen
+                      ? 'shadow-[inset_7px_7px_22px_-8px_rgba(0,0,0,.55)]'
+                      : 'shadow-[inset_0_7px_22px_-8px_rgba(0,0,0,.55)]'
+              }`}
             />
           )}
           {beside && (

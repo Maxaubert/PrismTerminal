@@ -190,6 +190,15 @@ looked at on the way).
   terminal's corner is cut by a mask that is the exact inverse of the corner piece (`CORNER_CUT`),
   one full layer with the piece's shape excluded: a border-radius clip beside a gradient left a dark
   arc, and tiled mask layers a hairline seam.
+- **The edge drawn once, on the terminal** (owner, 2026-10-12: "only black themes should have
+  borders on the sidebar, the rest will use shadows"; the corner looked darker because "two shadow
+  layers overlapping from the title bar and from the sidebar"; "the sidebar border should not go
+  all the way up. It should only go up to the title bar border so they can connect there"). App's
+  `data-term-edge` lies over the terminal from the bar down: on black (both grounds) a hairline
+  along its top and, beside the open sidebar, its left, rounded through the corner; elsewhere one
+  inset shadow the same way. The open sidebar draws no edge. Slid out on black, the collapsed
+  sidebar draws its line from the bar down and its corner carries the line into the bar's.
+  See-through follows the same rule (the earlier 'none' over glass is gone).
 
 ## 2. The indicators
 
