@@ -24,6 +24,10 @@ describe('the app channels', () => {
     const typed = names.filter((n) => main.includes(`'${n}'`) || preload.includes(`'${n}'`))
     expect(typed).toEqual([])
   })
+  it('no channel-shaped string is left outside it (open:folder slipped past once)', () => {
+    const stray = [main, preload].flatMap((src) => src.match(/'[a-z]+:[a-z-]+'/g) ?? [])
+    expect(stray.filter((s) => !/^'(https?|file|data|about):/.test(s))).toEqual([])
+  })
   it('none is spelled twice', () => {
     const names = [...Object.values(APP_CH), ...Object.values(E2E_CH)]
     expect(new Set(names).size).toBe(names.length)
