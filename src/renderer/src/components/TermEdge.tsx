@@ -17,7 +17,7 @@ export function TermEdge({ open }: { open: boolean }): JSX.Element {
     <span
       data-term-edge
       aria-hidden
-      className={`pointer-events-none absolute inset-x-0 bottom-0 top-9 z-10 border-t border-[var(--p-divider)] ${
+      className={`pointer-events-none absolute inset-0 z-10 border-t border-[var(--p-divider)] ${
         open ? 'rounded-tl-[10px] border-l' : ''
       }`}
     />

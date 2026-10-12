@@ -214,6 +214,14 @@ looked at on the way).
   Settings' search icon showed through it. `z-30` alone tied with Settings' own raised search (also
   `z-30`, later in the page), so the page's column is `isolate`d: nothing inside it rises above the
   sidebar. The `verticalTabs` e2e slides the sidebar out over Settings and checks the icon is under it.
+- **The app's name in the bar, the sidebar under it** (owner, 2026-10-12: "make this part of the
+  title bar instead of the sidebar, and make sure that when the sidebar in unpinned mode doesnt
+  overlay over it ... the sidebar should probably start under it ... the border should look the
+  same with it curving on the sidebar into the title bar"). The bar spans the window: the mark and
+  "Prism Terminal" at its left, the window's buttons at its right, the whole of it the drag handle.
+  The sidebar, pinned or slid out, starts below it; the terminal's line runs along the bar's foot,
+  round the corner and down the sidebar's edge, and the slid-out sidebar covers the line where it
+  lies over the terminal and curves into it at its corner.
 
 ## 2. The indicators
 

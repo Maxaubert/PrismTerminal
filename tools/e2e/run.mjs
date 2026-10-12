@@ -2120,7 +2120,7 @@ const scenarios = {
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-merged.png') }).catch(() => {})
       // No seam: the bar's colour right above the sidebar is the sidebar's own.
       const seam = await page.evaluate(() => getComputedStyle(document.querySelector('[data-tab-sidebar]')).clipPath)
-      ok(seam.startsWith('polygon(0px 0px, 100% 0px, 100% 36px, calc(100% + 60px) 36px'), `the sidebar's shadow falls on the terminal's side only, below the bar (${seam})`)
+      ok(seam.startsWith('inset(0px -60px 0px 0px)'), `the sidebar is clipped to itself, open to the right for its slid-out corner (${seam})`)
       ok(corner.radius === 'cut' && corner.barLine === '0px', `the terminal is cut round where the bar and the sidebar meet, and the bar draws no line (${JSON.stringify(corner)})`)
       // THE EDGE (owner, 2026-10-12: "only show border on the sidebar if bg and
       // secondary color is black, since then shadows dont work, otherwise
@@ -2407,10 +2407,12 @@ const scenarios = {
         })
       const up = await top()
       ok(up.rows === 1 && !!up.bar && up.bar.top === 0 && up.bar.height === 36, `one bar, at the top, always there (${JSON.stringify(up.bar)})`)
-      ok(Math.abs(up.bar.left - up.navRight) <= 1 && up.bar.right === 0, `from the sidebar's edge to the right, not over it (${JSON.stringify(up.bar)}, sidebar ends ${up.navRight})`)
+      // Across the whole window (owner, 2026-10-12: the app's name "part of the
+      // title bar instead of the sidebar"), the sidebar under it.
+      ok(up.bar.left === 0 && up.bar.right === 0, `across the whole window, over the sidebar's column too (${JSON.stringify(up.bar)})`)
       ok(up.buttons && up.settings, "with Settings, Help and the window's buttons")
       ok(up.hostTop === 36, `the terminal sits below it, nothing covered (${up.hostTop})`)
-      ok(up.navTop === 0 && up.firstRowTop >= 76 && up.firstRowTop <= 100, `the sidebar starts at the top, not pushed down, its tabs under the app's name and Find a tab (${up.firstRowTop}px)`)
+      ok(up.navTop === 36 && up.firstRowTop >= 76 && up.firstRowTop <= 100, `the sidebar starts under the bar, its tabs under Find a tab (${up.navTop}px, rows at ${up.firstRowTop}px)`)
       ok(up.radius === 'cut', `the terminal is cut round where the bar and the sidebar meet (${up.radius})`)
       // Owner, 2026-10-12, of the sidebar looks mockup: "New tab: Button at the
       // bottom".
@@ -2420,7 +2422,7 @@ const scenarios = {
       // there"; then "use this for the sidebar logo ... it should adapt to the
       // accent color".
       const brand = await page.evaluate(() => {
-        const b = document.querySelector('[data-tab-sidebar] [data-sidebar-brand]')
+        const b = document.querySelector('[data-title-bar="beside"] [data-app-brand]')
         const mark = b?.querySelector('[data-app-mark]')
         const probe = document.createElement('span')
         probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-accent-solid')
@@ -2429,25 +2431,25 @@ const scenarios = {
         probe.remove()
         return { text: b?.textContent?.trim() ?? null, paths: mark?.querySelectorAll('path').length ?? 0, ink: mark ? getComputedStyle(mark).color : null, accent }
       })
-      ok(brand.text === 'Prism Terminal' && brand.paths === 2 && brand.ink === brand.accent, `the sidebar's top says Prism Terminal beside the app's mark, in the accent (${JSON.stringify(brand)})`)
+      ok(brand.text === 'Prism Terminal' && brand.paths === 2 && brand.ink === brand.accent, `the bar says Prism Terminal beside the app's mark, in the accent (${JSON.stringify(brand)})`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-beside-bar.png') }).catch(() => {})
       // THE DRAG ITSELF, as Windows decides it: 2 (HTCAPTION) moves the window.
       const spots = await page.evaluate(() => {
         const f = document.querySelector('[data-title-bar="beside"]').getBoundingClientRect()
-        const grab = document.querySelector('[data-sidebar-grab]').getBoundingClientRect()
+        const grab = document.querySelector('[data-app-brand]').getBoundingClientRect()
         const row = document.querySelector('[data-tab-sidebar] [data-tab]').getBoundingClientRect()
         const nav = document.querySelector('[data-tab-sidebar]').getBoundingClientRect()
         return [
           { x: f.left + 120, y: f.top + f.height / 2 },
           // Below Windows' own resize border at the window's top.
-          { x: grab.left + 160, y: grab.bottom - 6 },
+          { x: grab.left + 40, y: grab.top + grab.height / 2 + 4 },
           { x: row.left + 40, y: row.top + row.height / 2 },
           { x: nav.right + 200, y: 300 }
         ]
       })
       const hit = await hitTest(app, spots)
       ok(hit[0] === 2, `the bar moves the window (${hit})`)
-      ok(hit[1] === 2, `the app's name above the tabs moves the window (${hit})`)
+      ok(hit[1] === 2, `the app's name in the bar moves the window (${hit})`)
       ok(hit[2] === 1 && hit[3] === 1, `a tab and the terminal do not (${hit})`)
       // COLLAPSED, the bar spans the window and the terminal is square; the
       // sidebar slides out over the bar's left end.
@@ -2465,10 +2467,12 @@ const scenarios = {
       const slid = await page.evaluate(() => {
         const nav = document.querySelector('[data-tab-sidebar]').getBoundingClientRect()
         const c = document.querySelector('[data-tab-sidebar] [data-sidebar-corner]')?.getBoundingClientRect()
-        return { navRight: Math.round(nav.right), corner: c ? { left: Math.round(c.left), top: Math.round(c.top) } : null, clip: getComputedStyle(document.querySelector('[data-tab-sidebar]')).clipPath }
+        return { navRight: Math.round(nav.right), navTop: Math.round(nav.top), corner: c ? { left: Math.round(c.left), top: Math.round(c.top) } : null }
       })
       ok(!!slid.corner && Math.abs(slid.corner.left - slid.navRight) <= 1 && slid.corner.top === 36, `slid out, a curved corner joins it to the bar (${JSON.stringify(slid)})`)
-      ok(slid.clip.includes('100% 36px'), `and its shadow stays off the bar (${slid.clip})`)
+      // Owner, 2026-10-12: the sidebar, unpinned, must not "overlay over it or
+      // bring its own"; it starts under the bar.
+      ok(slid.navTop === 36, `slid out, it starts under the bar, never over it (${slid.navTop}px)`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-slid-out.png') }).catch(() => {})
       await page.mouse.move(800, 400)
       await sleep(500)
@@ -2525,9 +2529,9 @@ const scenarios = {
       await page.mouse.up()
       await page.mouse.move(700, 500)
       await sleep(400)
-      const px = await page.evaluate(() => ({ right: document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right, bar: document.querySelector('[data-title-bar="beside"]').getBoundingClientRect().left, ratio: devicePixelRatio, stored: localStorage.getItem('prism.window.sidebarWidth') }))
+      const px = await page.evaluate(() => ({ right: document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right, bar: document.querySelector('[data-term-column]').getBoundingClientRect().left, ratio: devicePixelRatio, stored: localStorage.getItem('prism.window.sidebarWidth') }))
       const dev = px.right * px.ratio
-      ok(px.ratio !== Math.round(px.ratio) && Math.abs(dev - Math.round(dev)) < 0.01 && Math.abs(px.bar - px.right) < 0.01, `at a scale that is not whole the sidebar meets the bar on a whole screen pixel (${JSON.stringify(px)}, ${dev.toFixed(2)} device px)`)
+      ok(px.ratio !== Math.round(px.ratio) && Math.abs(dev - Math.round(dev)) < 0.01 && Math.abs(px.bar - px.right) < 0.01, `at a scale that is not whole the sidebar meets the terminal on a whole screen pixel (${JSON.stringify(px)}, ${dev.toFixed(2)} device px)`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/glass-edge-125.png'), clip: { x: Math.round(px.right * 1.25) - 30, y: 0, width: 60, height: 120 } }).catch(() => {})
       await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1))
       await page.evaluate(() => localStorage.removeItem('prism.window.sidebarWidth'))

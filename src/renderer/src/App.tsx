@@ -27,6 +27,7 @@ import { isSidebarChord, toggleSidebar, useSidebarMode } from './lib/sidebarPref
 import { isFindTabChord } from './lib/sidebarRows'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
+import { AppMark } from './components/AppMark'
 import { tabSwitch } from './lib/tabSwitchPrefs'
 import {
   startWalk,
@@ -797,17 +798,35 @@ export default function App(): JSX.Element {
           itself paints nothing: under See-through a coat here doubled the
           sidebar, the bar and the terminal over it (owner, 2026-10-12: "not
           everything is see-through ... the title bar is not"). */}
+      {/* THE BAR ACROSS THE TOP, with vertical tabs (owner, 2026-10-12: the
+          app's name "part of the title bar instead of the sidebar", the
+          sidebar starting under it, pinned or slid out, so it never covers the
+          bar): the app's mark and name at its left, the window's buttons at
+          its right, the handle the window moves by. The sidebar's colour, so
+          the two read as one surface. */}
+      {beside && (
+        <div
+          data-title-bar="beside"
+          className="drag p-styled-font flex h-9 shrink-0 items-center gap-2.5 bg-[var(--p-secondary)] pl-4 pr-1.5 text-[13px]"
+        >
+          <div data-app-brand className="flex min-w-0 items-center gap-2.5">
+            <AppMark size={18} className="shrink-0 text-[var(--p-accent-solid)]" />
+            <span className="truncate text-[13.5px] font-semibold tracking-[0.01em] text-[var(--p-side-text)] select-none">
+              Prism Terminal
+            </span>
+          </div>
+          <span className="min-w-0 flex-1" />
+          <div data-window-buttons className="no-drag flex items-center gap-2.5">
+            <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
+          </div>
+        </div>
+      )}
       <div className="relative flex min-h-0 flex-1">
         {vertical && <TabSidebar {...tabProps} />}
         {/* ISOLATED: the page's own raised pieces (Settings' search sits at
             z-30) stay inside it, under a sidebar that slides out over it
             (owner, 2026-10-12: the search icon showed through). */}
         <div className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col">
-          {/* THE BAR BESIDE THE SIDEBAR, always down (owner, 2026-10-12): from the
-          sidebar's edge to the right, the window's buttons at its end, the
-          handle the window moves by. In the column, not over it, so the
-          terminal's top rows stay in sight; a sidebar that slides out from
-          collapsed lies over its left end. */}
           {/* The cut corner's outside, in the secondary colour: one coat
               where the terminal is clipped round, nothing anywhere else. Its
               curve is the exact inverse of the terminal's (CORNER_CUT), so
@@ -819,7 +838,7 @@ export default function App(): JSX.Element {
             <span
               data-term-corner
               aria-hidden
-              className="pointer-events-none absolute left-0 top-9 z-10 h-2.5 w-2.5"
+              className="pointer-events-none absolute left-0 top-0 z-10 h-2.5 w-2.5"
               style={{
                 background: `radial-gradient(circle at 100% 100%, transparent ${CORNER_IN}, var(--p-secondary) ${CORNER_OUT})`
               }}
@@ -828,16 +847,6 @@ export default function App(): JSX.Element {
           {/* The terminal's edge, one line (TermEdge), drawn once over it,
               never clipped by its corner cut. */}
           {beside && <TermEdge open={sidebarOpen} />}
-          {beside && (
-            <div
-              data-title-bar="beside"
-              className="drag p-styled-font flex h-9 shrink-0 items-center justify-end gap-2.5 bg-[var(--p-secondary)] pl-3 pr-1.5 text-[13px]"
-            >
-              <div data-window-buttons className="no-drag flex items-center gap-2.5">
-                <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
-              </div>
-            </div>
-          )}
           <div
             data-term-column
             className="relative flex min-h-0 min-w-0 flex-1 flex-col"

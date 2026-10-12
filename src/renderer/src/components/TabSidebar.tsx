@@ -12,7 +12,6 @@ import { dropSlot, type Lane } from '../lib/tabDrop'
 import { useHoverReveal } from '../lib/hoverReveal'
 import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
-import { AppMark } from './AppMark'
 import { findKeeps, folderLine } from '../lib/sidebarRows'
 import { onDevicePixels, useDevicePixelRatio } from '../lib/devicePixels'
 import {
@@ -22,7 +21,7 @@ import {
   useSidebarWidth
 } from '../lib/sidebarPrefs'
 
-/** The bar beside the sidebar (App's `data-title-bar="beside"`, h-9). */
+/** The bar across the window's top (App's `data-title-bar="beside"`, h-9). */
 const BAR_H = 36
 /** How far the pointer must travel before a press becomes a drag rather than
  *  a click on the tab: the strip's own slop. */
@@ -130,8 +129,8 @@ export function TabSidebar({
   // Measured to where it COMES TO REST, never the half-slid box ("closes before
   // my cursor is near the edge"): its stored width, not a rectangle.
   const shownNow = useRef(false)
-  // The sidebar runs from the window's top (no bar across it).
-  const top = 0
+  // The sidebar starts under the bar across the window's top.
+  const top = BAR_H
   const fromMain = useEdgeWants(collapsed, (p) => sideWants(p, shownNow.current, top, width))
   const shown = useHoverReveal(
     collapsed,
@@ -289,12 +288,12 @@ export function TabSidebar({
         // region is from the layout, and a transformed panel's grab strip was
         // reported where its slide started (measured, WM_NCHITTEST).
         // OPEN, it draws no edge: the terminal's own (TermEdge) runs down its
-        // side and round the corner into the bar's. Clipped to itself, and open
-        // to the right below the bar for its slid-out corner (below).
+        // side and round the corner into the bar's. Clipped to itself, open to
+        // the right for its slid-out corner (below).
         style={{
           width,
           left: collapsed && !visible ? -(width + 16) : 0,
-          clipPath: `polygon(0 0, 100% 0, 100% ${BAR_H}px, calc(100% + 60px) ${BAR_H}px, calc(100% + 60px) 100%, 0 100%)`
+          clipPath: 'inset(0 -60px 0 0)'
         }}
       >
         {/* SLID OUT, THE CORNER WHERE IT MEETS THE BAR: a quarter circle of
@@ -306,7 +305,7 @@ export function TabSidebar({
             aria-hidden
             className="pointer-events-none absolute left-full h-2.5 w-2.5"
             style={{
-              top: BAR_H,
+              top: 0,
               background:
                 'radial-gradient(circle at 100% 100%, transparent 9px, var(--p-divider) 9.5px, var(--p-divider) 10px, transparent 10.5px), radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary-solid) 10px)'
             }}
@@ -320,30 +319,12 @@ export function TabSidebar({
             data-sidebar-line
             aria-hidden
             className="pointer-events-none absolute bottom-0 right-0 w-px bg-[var(--p-divider)]"
-            style={{ top: BAR_H + 10 }}
+            style={{ top: 10 }}
           />
         )}
-        {/* THE APP'S NAME, at the top (owner, 2026-10-12: "a prism terminal
-            logo and text could look nice up there"): the app's own mark in
-            the accent (AppMark), beside its name.
-            With no title bar it is also what moves the window (owner,
-            2026-10-11: "so that you can grab that area"): Windows keeps the
-            top few pixels as its resize border (measured with WM_NCHITTEST, a
-            10 px strip answered HTTOP at its middle), so the band below that
-            moves it. */}
-        <div
-          data-sidebar-brand
-          data-sidebar-grab
-          className="drag flex h-11 shrink-0 items-center gap-2.5 px-4 pt-1"
-        >
-          <AppMark size={20} className="shrink-0 text-[var(--p-accent-solid)]" />
-          <span className="truncate text-[13.5px] font-semibold tracking-[0.01em] text-[var(--p-side-text)] select-none">
-            Prism Terminal
-          </span>
-        </div>
         <label
           data-sidebar-find
-          className="no-drag mx-2 mb-2 flex h-8 shrink-0 cursor-text items-center gap-2 rounded-md bg-[var(--p-hover)] px-2.5 text-[var(--p-dim)] focus-within:ring-1 focus-within:ring-[var(--p-accent-hi)]"
+          className="no-drag mx-2 mb-2 mt-2.5 flex h-8 shrink-0 cursor-text items-center gap-2 rounded-md bg-[var(--p-hover)] px-2.5 text-[var(--p-dim)] focus-within:ring-1 focus-within:ring-[var(--p-accent-hi)]"
         >
           <svg
             viewBox="0 0 24 24"
