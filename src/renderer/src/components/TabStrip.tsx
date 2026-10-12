@@ -44,8 +44,7 @@ export function TabStrip({
   onNew,
   onDropFolder,
   onReorder,
-  onOpenRecent,
-  inTitleRow = false
+  onOpenRecent
 }: {
   tabs: Tab[]
   activeId: string | null
@@ -80,9 +79,6 @@ export function TabStrip({
   onReorder: (id: string, toIndex: number) => void
   /** Open a folder from the + menu's list of places a tab has been opened. */
   onOpenRecent: (path: string) => void
-  /** The title bar is hidden (#91): the strip sits in the window's top row,
-   *  beside the title buttons, and that row draws the rule under it. */
-  inTitleRow?: boolean
 }): JSX.Element | null {
   // The tab style (#143): Classic, the flat strip, or Powerline's chevrons.
   const prompt = useTabStyle() === 'prompt'
@@ -271,7 +267,7 @@ export function TabStrip({
       // In the top row the ROW paints --p-tabs: a second coat here made the
       // strip 92% solid under See-through while the buttons beside it were
       // 73% (owner, 2026-10-11: "the tab bar" stays opaque).
-      className={`${dragInFlight ? 'no-drag' : 'drag'} p-styled-font relative flex ${inTitleRow ? 'min-w-0 flex-1' : 'h-8 shrink-0 border-b border-[var(--p-divider)] bg-[var(--p-tabs)]'} items-stretch gap-0 overflow-x-auto pr-1 text-[12px] transition-[background-color,border-color] duration-[550ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
+      className={`${dragInFlight ? 'no-drag' : 'drag'} p-styled-font relative flex min-w-0 flex-1 items-stretch gap-0 overflow-x-auto pr-1 text-[12px] transition-[background-color,border-color] duration-[550ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
         carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''
       }`}
     >

@@ -2,12 +2,6 @@
 export type { AgentKind, DetectedAgent, ShellDef } from '@core/shared/types'
 import type { AgentKind } from '@core/shared/types'
 
-/** The two agents whose sessions can be resumed, each by its own flag:
- *  `claude --resume <id>` and `codex resume --last`. */
-
-/** What the agent poll can find under a shell. 'other' (aider, gemini) still
- *  lights the tab, it just has nothing to come back to, so it is never saved. */
-
 /** A tab as tabs.json holds it: the folder its shell was in, and the agent it
  *  hosted at the last report, when that agent is one that can be resumed. */
 export interface SavedTab {

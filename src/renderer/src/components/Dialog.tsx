@@ -1,8 +1,8 @@
 import { useEffect, useRef, type JSX, type ReactNode } from 'react'
 
-// A small modal for the handful of questions Prism has to ask before touching a
-// file. Deliberately plain: a title, a line of explanation, and the choices as
-// buttons in the order you'd read them, with the safe one first.
+// A small modal for the questions the app asks before acting (closing with an
+// agent still working). Deliberately plain: a title, a line of explanation, and
+// the choices as buttons in the order you'd read them, with the safe one first.
 
 export interface Choice {
   label: string
@@ -60,8 +60,8 @@ export function Dialog({
   }, [])
 
   return (
-    // data-owns-escape: the app's capture-phase Escape handler registered
-    // first and would otherwise close the WINDOW while a dialog is up.
+    // data-owns-escape: the marker Prism's window Escape yields to; this app
+    // has no window Escape, so here it only names the dialog as the owner.
     <div data-owns-escape className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-6" role="presentation" onMouseDown={onCancel}>
       <div
         ref={box}

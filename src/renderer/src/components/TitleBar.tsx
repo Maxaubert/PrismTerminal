@@ -14,11 +14,7 @@ import type { JSX, ReactNode } from 'react'
 const BTN =
   'grid h-7 w-8 place-items-center rounded text-[var(--p-icon)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)]'
 
-/**
- * The title bar's right end: the update chip, command help, the cog and the
- * three window buttons. Its own component because with the title bar hidden
- * (#91) the same group sits at the end of the tab row instead.
- */
+/** The group itself: the end of the tab row, or of the bar across the top. */
 export function TitleButtons({
   onSettings,
   onHelp,
@@ -39,9 +35,8 @@ export function TitleButtons({
   )
 }
 
-/** Command help (while its setting is on) and the cog: with vertical tabs and
- *  no title bar they sit at the top of the sidebar instead (#162). */
-export function AppButtons({
+/** Command help (while its setting is on) and the cog. */
+function AppButtons({
   onSettings,
   onHelp
 }: {
@@ -101,9 +96,8 @@ export function AppButtons({
   )
 }
 
-/** Minimize, maximize and close. With vertical tabs and no title bar they are
- *  all that is left of it, floating at the window's top right (#162). */
-export function WindowButtons(): JSX.Element {
+/** Minimize, maximize and close. */
+function WindowButtons(): JSX.Element {
   const w = window.prism
   return (
     <>

@@ -222,9 +222,8 @@ export function ContextMenu({
   }
 
   return (
-    // data-owns-escape: the app's own (earlier, capture-phase) Escape handler
-    // yields to any element carrying it, so closing this menu can't close the
-    // window underneath.
+    // data-owns-escape: the marker Prism's window Escape yields to; this app
+    // has no window Escape, so here it only names the menu as the owner.
     // no-drag over the WHOLE window while the menu is up: the title bar and
     // the tab strip are window-drag regions, and Chromium hands those clicks
     // to the OS instead of the page - so a press there never reached the

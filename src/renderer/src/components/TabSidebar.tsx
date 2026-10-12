@@ -76,7 +76,6 @@ export function TabSidebar({
   onDropFolder: (path: string) => void
   onReorder: (id: string, toIndex: number) => void
   onOpenRecent: (path: string) => void
-  /** The title bar is hidden: the sidebar starts at the window's top. */
 }): JSX.Element | null {
   const prompt = useTabStyle() === 'prompt'
   const mode = useSidebarMode()
@@ -92,7 +91,6 @@ export function TabSidebar({
     prompt
   })
   const menu = useTabMenus({ onClose, onOpenRecent })
-  const nav = useRef<HTMLElement>(null)
   // FIND A TAB (owner, 2026-10-12, of the sidebar looks mockup): typing keeps
   // the rows whose name or folder has every word; Enter puts the first in
   // front, Escape lets go. Ctrl+Shift+K (App) comes here.
@@ -267,7 +265,6 @@ export function TabSidebar({
       style={{ width: collapsed ? 0 : width }}
     >
       <nav
-        ref={nav}
         role="tablist"
         aria-label="Open tabs"
         aria-orientation="vertical"

@@ -776,9 +776,6 @@ export default function App(): JSX.Element {
       setState((s) => ({ ...s, tabs: reorderTabs(s.tabs, id, to) })),
     onOpenRecent: openRecent
   }
-  const strip = (inTitleRow: boolean): JSX.Element => (
-    <TabStrip {...tabProps} inTitleRow={inTitleRow} />
-  )
   return (
     <div className="flex h-full w-full flex-col overflow-hidden text-[var(--p-text)]">
       {/* NO TITLE BAR (#91, owner's pick "tabs in the top row"): the tabs
@@ -791,7 +788,7 @@ export default function App(): JSX.Element {
           data-title-bar="tabs"
           className="drag p-styled-font flex h-9 shrink-0 items-stretch border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1.5 text-[13px]"
         >
-          {tabs.length > 0 ? strip(true) : <span className="min-w-0 flex-1" />}
+          {tabs.length > 0 ? <TabStrip {...tabProps} /> : <span className="min-w-0 flex-1" />}
           <div className="flex shrink-0 items-center gap-2.5 pl-2">
             <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
           </div>
