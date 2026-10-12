@@ -471,28 +471,35 @@ export default function App(): JSX.Element {
   // The shell ended: typed exit, or died. Its tab goes with it, unasked.
   useEffect(() => window.prism.onTermExit((id) => closeNow(id)), [closeNow])
 
+  // THE WINDOW'S QUESTION, built once for both ways the window goes (audit
+  // 2026-10-12: the close and the install each built it, one by the core's
+  // rule and one by hand): the agent working longest named, the others
+  // counted, or null when the core's `holdsWindowClose` says nothing holds it.
+  const windowAsk = useCallback((): Ask | null => {
+    const { state: st, workingIds: working } = live.current
+    const busy = shellTabs(st)
+      .filter((t) => working.has(t.id))
+      .map((t) => ({ t, forMs: workingFor(t.id) ?? 0 }))
+      .sort((a, b) => b.forMs - a.forMs)
+    if (!holdsWindowClose(busy.length)) return null
+    const first = busy[0]
+    return {
+      target: 'window',
+      label: tabLabels(st.tabs)[st.tabs.indexOf(first.t)],
+      agent: { kind: agentKinds.current.get(first.t.id) ?? 'other', forMs: first.forMs },
+      others: busy.length - 1
+    }
+  }, [agentKinds])
+
   // The window is closing while an agent works: main held the close and asks.
   useEffect(
     () =>
       window.prism.onCloseRequest(() => {
-        const { state: st, workingIds: working } = live.current
-        const busy = shellTabs(st)
-          .filter((t) => working.has(t.id))
-          .map((t) => ({ t, forMs: workingFor(t.id) ?? 0 }))
-          .sort((a, b) => b.forMs - a.forMs)
-        if (!busy.length) {
-          window.prism.confirmClose()
-          return
-        }
-        const first = busy[0]
-        setAsk({
-          target: 'window',
-          label: tabLabels(st.tabs)[st.tabs.indexOf(first.t)],
-          agent: { kind: agentKinds.current.get(first.t.id) ?? 'other', forMs: first.forMs },
-          others: busy.length - 1
-        })
+        const ask = windowAsk()
+        if (ask) setAsk(ask)
+        else window.prism.confirmClose()
       }),
-    [agentKinds]
+    [windowAsk]
   )
 
   /**
@@ -508,25 +515,11 @@ export default function App(): JSX.Element {
    */
   const installGuard = useCallback(
     (start: () => void) => {
-      const { state: st, workingIds: working } = live.current
-      const busy = shellTabs(st)
-        .filter((t) => working.has(t.id))
-        .map((t) => ({ t, forMs: workingFor(t.id) ?? 0 }))
-        .sort((a, b) => b.forMs - a.forMs)
-      if (!holdsWindowClose(busy.length)) {
-        start()
-        return
-      }
-      const first = busy[0]
-      setAsk({
-        target: 'window',
-        label: tabLabels(st.tabs)[st.tabs.indexOf(first.t)],
-        agent: { kind: agentKinds.current.get(first.t.id) ?? 'other', forMs: first.forMs },
-        others: busy.length - 1,
-        install: start
-      })
+      const ask = windowAsk()
+      if (ask) setAsk({ ...ask, install: start })
+      else start()
     },
-    [agentKinds]
+    [windowAsk]
   )
   // ONE QUESTION AT A TIME. The app's chords still work while the update window
   // is up (Ctrl+W, Alt+F4), and a close question raised from behind it mounted
