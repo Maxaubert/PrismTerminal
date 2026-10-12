@@ -326,7 +326,13 @@ describe('the switch knob token', () => {
     const { readFileSync } = await import('node:fs')
     const { join } = await import('node:path')
     const css = readFileSync(join(__dirname, '..', 'index.css'), 'utf8')
-    expect(css).toContain(`--p-switch-knob: ${chromeTokens(resolveTermTheme('prism')).vars['--p-switch-knob']};`)
+    // EVERY token, not one (audit 2026-10-12: five were missing, so their
+    // first frame fell back to nothing and no test said so).
+    const vars = chromeTokens(resolveTermTheme('prism')).vars
+    const missing = CHROME_COLOUR_TOKENS.filter((t) => !css.includes(`${t}: ${vars[t]};`)).map(
+      (t) => `${t}: ${vars[t]};`
+    )
+    expect(missing).toEqual([])
   })
 })
 

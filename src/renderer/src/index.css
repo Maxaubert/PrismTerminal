@@ -27,7 +27,7 @@ body,
    again whenever the theme, acrylic or its opacity changes. These ARE that
    derivation's output for the default 'prism' preset at full opacity, pasted
    rather than typed, so first paint and first render are the same colours.
-   Recompute them if the preset or chromeTokens changes. */
+   chromeTheme.test holds every token to it. */
 :root {
   --p-bg-solid: #0b0b0f;
   --p-bg: #0b0b0f;
@@ -55,6 +55,11 @@ body,
   --p-sel-bg: #4aa5f0;
   --p-tree-folder: #71b6f0;
   --p-switch-knob: #0b0b0f;
+  --p-secondary: #0b0b0f;
+  --p-pressed: #353539;
+  --p-pressed-ink: #e7e7ee;
+  --p-side-text: #e7e7ee;
+  --p-side-dim: #8f8f92;
 
   /* Shape and type. No theme changes these, so they live here and nowhere
      else. --p-radius-sm is SHARED, not styled: small controls keep one shape
