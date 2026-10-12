@@ -5317,7 +5317,6 @@ const scenarios = {
       const n = (c.match(/[\d.]+/g) ?? []).map(Number)
       return { rgb: n.slice(0, 3), a: n.length > 3 ? n[3] : 1 }
     }
-    const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.trim().slice(i, i + 2), 16))
     const lin = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
     const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
     const ratio = (x, y) => {
