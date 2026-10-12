@@ -122,12 +122,17 @@ const CORNER_CUT = {
 } as const
 
 /** Under a collapsed sidebar slid out over it, the page is cut away (owner,
- *  2026-10-12: the slid-out sidebar "acrylic like the rest"): the same shape,
- *  moved right by the sidebar's width (TabSidebar's --p-sidebar-cover) on the
- *  sidebar's own slide, so only the window's acrylic lies under its tint, and
- *  its corner piece fills the outside of the curve. */
+ *  2026-10-12: the slid-out sidebar "acrylic like the rest"): everything left
+ *  of the sidebar's width (TabSidebar's --p-sidebar-cover), on the sidebar's
+ *  own slide, so only the window's acrylic lies under its tint. SQUARE (owner,
+ *  2026-10-13: "we have that curved border when the sidebar is collapsed it
+ *  should be straight, only curved border when sidebar is open"): one opaque
+ *  block moved right, no corner, so collapsed and hidden the terminal meets
+ *  the bar square at the window's edge too. */
 const COVER_CUT = {
-  ...CORNER_CUT,
+  maskImage: 'linear-gradient(#000, #000)',
+  maskRepeat: 'no-repeat',
+  maskSize: '100% 100%',
   maskPosition: 'var(--p-sidebar-cover, 0px) 0',
   transition: `mask-position ${SIDEBAR_SLIDE}`
 } as const

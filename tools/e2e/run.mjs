@@ -2187,10 +2187,12 @@ const scenarios = {
         const nav = document.querySelector('[data-tab-sidebar]')
         const l = nav.querySelector('[data-sidebar-line]')?.getBoundingClientRect()
         const t = getComputedStyle(document.querySelector('[data-term-edge]'))
-        return { line: l ? { top: Math.round(l.top), right: Math.round(l.right), navRight: Math.round(nav.getBoundingClientRect().right) } : null, barLine: t.borderTopWidth, corner: [...nav.querySelector('[data-sidebar-corner]').children].map((c) => `${getComputedStyle(c).maskImage} ${getComputedStyle(c).backgroundImage}`).join(' '), shadow: getComputedStyle(nav).boxShadow }
+        return { line: l ? { top: Math.round(l.top), right: Math.round(l.right), navRight: Math.round(nav.getBoundingClientRect().right) } : null, barLine: t.borderTopWidth, corner: !!nav.querySelector('[data-sidebar-corner]'), cut: getComputedStyle(document.querySelector('[data-term-column]').parentElement).maskImage, shadow: getComputedStyle(nav).boxShadow }
       })
       ok(!!slidLine.line && slidLine.line.top >= 36 && slidLine.line.right === slidLine.line.navRight && parseFloat(slidLine.barLine) > 0 && slidLine.shadow === 'none', `slid out, a line from the bar down, the bar's own line along the top, no shadow (${JSON.stringify(slidLine)})`)
-      ok(/svg/.test(slidLine.corner) && /radial-gradient/.test(slidLine.corner), `and the corner, filled to the curve, carries the line round into the bar (${slidLine.corner.slice(0, 80)})`)
+      // SQUARE WHEN COLLAPSED (owner, 2026-10-13: "only curved border when
+      // sidebar is open, not anywhere else"): no corner piece, no curved cut.
+      ok(!slidLine.corner && !/svg/.test(slidLine.cut), `and it meets the bar square: no curved corner, no curved cut (${slidLine.cut.slice(0, 60)})`)
       await page.mouse.move(800, 400)
       await sleep(500)
       await page.keyboard.press('Control+Shift+B')
@@ -2460,17 +2462,15 @@ const scenarios = {
       const across = await top()
       ok(across.bar.left === 0 && across.bar.right === 0 && across.radius === 'square', `collapsed, the bar spans the window and the corner goes (${JSON.stringify(across.bar)}, ${across.radius})`)
       // SLID OUT, it still meets the bar as one surface (owner, 2026-10-12: "it
-      // doesn't seem like it connects with the title bar"): its curved corner
-      // under the bar's end, and its shadow below the bar only.
+      // doesn't seem like it connects with the title bar"), square since
+      // 2026-10-13, and its shadow below the bar only.
       await page.mouse.move(2, 400)
       await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
       await sleep(400)
       const slid = await page.evaluate(() => {
         const nav = document.querySelector('[data-tab-sidebar]').getBoundingClientRect()
-        const c = document.querySelector('[data-tab-sidebar] [data-sidebar-corner]')?.getBoundingClientRect()
-        return { navRight: Math.round(nav.right), navTop: Math.round(nav.top), corner: c ? { left: Math.round(c.left), top: Math.round(c.top) } : null }
+        return { navRight: Math.round(nav.right), navTop: Math.round(nav.top) }
       })
-      ok(!!slid.corner && Math.abs(slid.corner.left - slid.navRight) <= 1 && slid.corner.top === 36, `slid out, a curved corner joins it to the bar (${JSON.stringify(slid)})`)
       // Owner, 2026-10-12: the sidebar, unpinned, must not "overlay over it or
       // bring its own"; it starts under the bar.
       ok(slid.navTop === 36, `slid out, it starts under the bar, never over it (${slid.navTop}px)`)

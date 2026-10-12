@@ -13,7 +13,6 @@ import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
 import { findKeeps, folderLine } from '../lib/sidebarRows'
 import { onDevicePixels, useDevicePixelRatio } from '../lib/devicePixels'
-import { OUTSIDE_CORNER } from '../lib/cornerShapes'
 import {
   SIDEBAR_WIDTH,
   setSidebarWidth,
@@ -202,39 +201,15 @@ export function TabSidebar({
           clipPath: 'inset(0 -60px 0 0)'
         }}
       >
-        {/* SLID OUT, THE CORNER WHERE IT MEETS THE BAR: a quarter circle of
-            the shared colour under the bar's end, as the open sidebar's
-            terminal is cut round there, so the two read as one surface. */}
-        {collapsed && visible && (
-          <span
-            data-sidebar-corner
-            aria-hidden
-            className="pointer-events-none absolute left-full top-0 h-2.5 w-2.5"
-          >
-            {/* The fill, the sidebar's tint cut to the curve by a mask. */}
-            <span
-              className="absolute inset-0 bg-[var(--p-secondary)]"
-              style={{ maskImage: OUTSIDE_CORNER, maskSize: '100% 100%' }}
-            />
-            {/* The line, round the curve into the bar's. */}
-            <span
-              className="absolute inset-0"
-              style={{
-                background:
-                  'radial-gradient(circle at 100% 100%, transparent 9px, var(--p-divider) 9.5px, var(--p-divider) 10px, transparent 10.5px)'
-              }}
-            />
-          </span>
-        )}
         {/* Slid out, its line: from the bar down, meeting the bar's line
-            through the corner above (owner, 2026-10-12: it "has no border ...
-            it has that when it's in static mode"), as Panel edges draws it. */}
+            square (owner, 2026-10-12: it "has no border ... it has that when
+            it's in static mode"; 2026-10-13: straight, no curve, when
+            collapsed), as Panel edges draws it. */}
         {collapsed && visible && (
           <span
             data-sidebar-line
             aria-hidden
-            className="pointer-events-none absolute bottom-0 right-0 w-px bg-[var(--p-divider)]"
-            style={{ top: 10 }}
+            className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[var(--p-divider)]"
           />
         )}
         <label
