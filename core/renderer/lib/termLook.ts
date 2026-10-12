@@ -246,36 +246,48 @@ function writeChoice(key: string, hex: string | null | undefined): void {
  * What the theme gives when nothing is chosen is lib/agentColors' business;
  * this file only remembers whether the user has an opinion.
  */
-export function agentColorChoice(): string {
-  return agentHex(localStorage.getItem(AGENT_COLOR_KEY)) ?? hostDefaults().agentColor
+export type AgentColourState = 'working' | 'finished' | 'question'
+
+/**
+ * THE THREE MARK COLOURS, ONE TABLE (audit 2026-10-12: each had its own key,
+ * getter, setter, hook, reset line and settings row, written three times).
+ * Where it is stored, what is in force with no choice (the host's default, or
+ * '' for the theme's own), and its field in a saved Custom setup.
+ */
+export const AGENT_COLOUR_STATES: ReadonlyArray<{
+  state: AgentColourState
+  key: string
+  fallback: () => string
+  custom: 'indicatorColor' | 'doneColor' | 'questionColor'
+}> = [
+  { state: 'working', key: AGENT_COLOR_KEY, fallback: () => hostDefaults().agentColor, custom: 'indicatorColor' },
+  // An agent that stopped working on a BACKGROUND tab wears it until visited.
+  { state: 'finished', key: AGENT_DONE_KEY, fallback: () => hostDefaults().agentDoneColor, custom: 'doneColor' },
+  // '' = the default blue, moved to the ground's floor by lib/agentColors.
+  { state: 'question', key: AGENT_QUESTION_KEY, fallback: () => '', custom: 'questionColor' }
+]
+const colourRow = (state: AgentColourState): (typeof AGENT_COLOUR_STATES)[number] =>
+  AGENT_COLOUR_STATES.find((c) => c.state === state)!
+
+/** The colour chosen for a mark, or its default. */
+export function agentColourChoice(state: AgentColourState): string {
+  const c = colourRow(state)
+  return agentHex(localStorage.getItem(c.key)) ?? c.fallback()
 }
 
 /** A hex picks a colour; '' gives the choice back to the theme. */
-export function setAgentColor(hex: string): void {
-  writeChoice(AGENT_COLOR_KEY, hex)
+export function setAgentColour(state: AgentColourState, hex: string): void {
+  writeChoice(colourRow(state).key, hex)
   notify()
 }
 
-/** The question colour's choice ('' = the default blue, moved to the ground's
- *  floor by lib/agentColors), like the other two. */
-export function agentQuestionColorChoice(): string {
-  return agentHex(localStorage.getItem(AGENT_QUESTION_KEY)) ?? ''
-}
-export function setAgentQuestionColor(hex: string): void {
-  writeChoice(AGENT_QUESTION_KEY, hex)
-  notify()
-}
-
-/** The finished-while-away colour's choice: an agent that stopped working on
- *  a BACKGROUND tab wears it until the tab is visited. */
-export function agentDoneColorChoice(): string {
-  return agentHex(localStorage.getItem(AGENT_DONE_KEY)) ?? hostDefaults().agentDoneColor
-}
-
-export function setAgentDoneColor(hex: string): void {
-  writeChoice(AGENT_DONE_KEY, hex)
-  notify()
-}
+/** The named forms, kept for every caller in both apps. */
+export const agentColorChoice = (): string => agentColourChoice('working')
+export const setAgentColor = (hex: string): void => setAgentColour('working', hex)
+export const agentDoneColorChoice = (): string => agentColourChoice('finished')
+export const setAgentDoneColor = (hex: string): void => setAgentColour('finished', hex)
+export const agentQuestionColorChoice = (): string => agentColourChoice('question')
+export const setAgentQuestionColor = (hex: string): void => setAgentColour('question', hex)
 
 export const CUSTOM_KEY = 'prism.term.custom'
 
@@ -328,9 +340,7 @@ export function termExtraDefaults(): {
  *  the theme is the whole setup, not just the palette. */
 export function resetTermExtras(): void {
   localStorage.removeItem(AGENT_IND_KEY)
-  localStorage.removeItem(AGENT_COLOR_KEY)
-  localStorage.removeItem(AGENT_DONE_KEY)
-  localStorage.removeItem(AGENT_QUESTION_KEY)
+  for (const c of AGENT_COLOUR_STATES) localStorage.removeItem(c.key)
   localStorage.removeItem(ACRYLIC_KEY)
   notify()
 }
@@ -346,9 +356,7 @@ export function applyCustomExtras(t: CustomTermTheme | null): void {
   // A saved setup that followed the theme goes back to following it.
   // Validated as every other writer is: a colour that is not one follows the
   // theme rather than landing in storage unchecked (#112).
-  writeChoice(AGENT_COLOR_KEY, t.indicatorColor)
-  writeChoice(AGENT_DONE_KEY, t.doneColor)
-  writeChoice(AGENT_QUESTION_KEY, t.questionColor)
+  for (const c of AGENT_COLOUR_STATES) writeChoice(c.key, t[c.custom])
   if (t.acrylic !== undefined) localStorage.setItem(ACRYLIC_KEY, t.acrylic ? '1' : '0')
   // No opacity (#114): a saved see-through is the alpha of the saved `bg`.
   notify()
@@ -518,15 +526,12 @@ function subGround(cb: () => void): () => void {
 export function useAgentIndicator(): AgentIndicator {
   return useSyncExternalStore(sub, agentIndicator)
 }
-export function useAgentColorChoice(): string {
-  return useSyncExternalStore(sub, agentColorChoice)
+export function useAgentColourChoice(state: AgentColourState): string {
+  return useSyncExternalStore(sub, () => agentColourChoice(state))
 }
-export function useAgentDoneColorChoice(): string {
-  return useSyncExternalStore(sub, agentDoneColorChoice)
-}
-export function useAgentQuestionColorChoice(): string {
-  return useSyncExternalStore(sub, agentQuestionColorChoice)
-}
+export const useAgentColorChoice = (): string => useAgentColourChoice('working')
+export const useAgentDoneColorChoice = (): string => useAgentColourChoice('finished')
+export const useAgentQuestionColorChoice = (): string => useAgentColourChoice('question')
 export function useAgentDoneOn(): boolean {
   return useSyncExternalStore(sub, agentDoneOn)
 }
