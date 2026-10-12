@@ -1,5 +1,5 @@
 import { readFileSync } from 'fs'
-import { writeAtomic } from './atomicWrite'
+import { writeAtomic } from '@core/main/atomicWrite'
 import type { SavedTab, SavedTabs } from '@shared/types'
 import { isResumable } from '@core/shared/types'
 

@@ -1,6 +1,6 @@
 import { app, screen, type BrowserWindow } from 'electron'
 import { readFileSync } from 'fs'
-import { writeAtomic } from './atomicWrite'
+import { writeAtomic } from '@core/main/atomicWrite'
 import { join } from 'path'
 
 /**

@@ -1,9 +1,10 @@
 import { execFile } from 'child_process'
 import { createHash } from 'crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
-import { mkdir, open, readdir, rename, rm, stat, writeFile } from 'fs/promises'
+import { mkdir, open, readdir, rename, rm, stat } from 'fs/promises'
 import { dirname, join } from 'path'
 import { SYS } from './sysTools'
+import { writeAtomic } from './atomicWrite'
 import type {
   CatalogEntry,
   DictationStore,
@@ -344,7 +345,9 @@ export function createDictationStore(deps: DictationStoreDeps): DictationStore {
       try {
         await gone(final)
         // LAST: from here on, and not a moment before, the folder reads as installed.
-        await writeFile(join(dir, PACK_MARKER), JSON.stringify({ id: e.id, bytes: e.bytes, sha256: e.sha256 }))
+        // Whole or not at all (writeAtomic): a half-written marker would read
+        // as a pack that is not there, or one that is.
+        writeAtomic(join(dir, PACK_MARKER), JSON.stringify({ id: e.id, bytes: e.bytes, sha256: e.sha256 }))
       } catch (err) {
         await undo()
         return { ok: false, reason: 'disk', detail: message(err) }
