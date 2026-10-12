@@ -12,6 +12,7 @@ import { useHoverReveal } from '../lib/hoverReveal'
 import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
 import { findKeeps, folderLine } from '../lib/sidebarRows'
+import { CORNER_R, OUTSIDE_CORNER } from '../lib/cornerShapes'
 import { onDevicePixels, useDevicePixelRatio } from '../lib/devicePixels'
 import {
   SIDEBAR_WIDTH,
@@ -115,7 +116,9 @@ export function TabSidebar({
   const visible = !collapsed || shown
   // How much of the page beside it a slid-out sidebar covers: App cuts that
   // strip of the page away, so only the window's acrylic lies under it.
-  const cover = collapsed && visible && tabs.length > 0 ? width : 0
+  // Out: its width. Hidden: -CORNER_R, the cut's curve parked just off the
+  // window's edge, where the sidebar's own right edge waits too.
+  const cover = collapsed && tabs.length > 0 ? (visible ? width : -CORNER_R) : 0
   // Before paint, in the same frame as the slide's own start: set after it,
   // the cut started a frame late and ran behind the sidebar's edge.
   useLayoutEffect(() => {
@@ -124,7 +127,7 @@ export function TabSidebar({
   }, [cover])
   useEffect(
     () => () => {
-      document.documentElement.style.setProperty('--p-sidebar-cover', '0px')
+      document.documentElement.style.setProperty('--p-sidebar-cover', `-${CORNER_R}px`)
     },
     []
   )
@@ -198,26 +201,53 @@ export function TabSidebar({
         // the right for its slid-out corner (below).
         style={{
           width,
-          // Hidden exactly its own width off the edge, so its right edge and
-          // the page's cut (App's COVER_CUT, 0 to its width) travel the same
-          // way on the same curve: from -(width + 16) the sidebar ran 16 px
-          // behind the cut and a band of the window showed beside its line
+          // Hidden its width and the corner's off the edge, so its right edge
+          // and the page's cut (App's COVER_CUT, -CORNER_R to its width) travel
+          // the same way on the same curve: from -(width + 16) the sidebar ran
+          // 6 px behind the cut and a band of the window showed beside its line
           // all through the slide (owner, 2026-10-13: the edge "grows thicker
           // to like between 5 to 10 pixels"; measured 14 px, verticalTabs e2e).
-          left: collapsed && !visible ? -width : 0,
+          left: collapsed && !visible ? -(width + CORNER_R) : 0,
           transition: collapsed ? `left ${SIDEBAR_SLIDE}` : undefined,
           clipPath: 'inset(0 -60px 0 0)'
         }}
       >
+        {/* SLID OUT, THE CORNER WHERE IT MEETS THE BAR: a quarter circle of
+            the shared colour under the bar's end, as the open sidebar's
+            terminal is cut round there, so the two read as one surface. Drawn
+            whenever it is collapsed, so it travels with the slide both ways;
+            hidden, it waits off the window's edge with the sidebar. */}
+        {collapsed && (
+          <span
+            data-sidebar-corner
+            aria-hidden
+            className="pointer-events-none absolute left-full top-0"
+            style={{ width: CORNER_R, height: CORNER_R }}
+          >
+            {/* The fill, the sidebar's tint cut to the curve by a mask. */}
+            <span
+              className="absolute inset-0 bg-[var(--p-secondary)]"
+              style={{ maskImage: OUTSIDE_CORNER, maskSize: '100% 100%' }}
+            />
+            {/* The line, round the curve into the bar's. */}
+            <span
+              className="absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(circle at 100% 100%, transparent 9px, var(--p-divider) 9.5px, var(--p-divider) 10px, transparent 10.5px)'
+              }}
+            />
+          </span>
+        )}
         {/* Slid out, its line: from the bar down, meeting the bar's line
-            square (owner, 2026-10-12: it "has no border ... it has that when
-            it's in static mode"; 2026-10-13: straight, no curve, when
-            collapsed), as Panel edges draws it. */}
-        {collapsed && visible && (
+            through the corner above (owner, 2026-10-12: it "has no border ...
+            it has that when it's in static mode"), as Panel edges draws it. */}
+        {collapsed && (
           <span
             data-sidebar-line
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[var(--p-divider)]"
+            className="pointer-events-none absolute bottom-0 right-0 w-px bg-[var(--p-divider)]"
+            style={{ top: CORNER_R }}
           />
         )}
         <label

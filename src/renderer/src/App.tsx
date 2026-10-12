@@ -27,7 +27,7 @@ import { CHORDS, chordOf } from './lib/keymap'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
 import { AppMark } from './components/AppMark'
-import { INSIDE_CORNER, INSIDE_SIZE, OUTSIDE_CORNER } from './lib/cornerShapes'
+import { CORNER_R, INSIDE_CORNER, INSIDE_SIZE, OUTSIDE_CORNER } from './lib/cornerShapes'
 import { tabSwitch } from './lib/tabSwitchPrefs'
 import {
   startWalk,
@@ -122,18 +122,17 @@ const CORNER_CUT = {
 } as const
 
 /** Under a collapsed sidebar slid out over it, the page is cut away (owner,
- *  2026-10-12: the slid-out sidebar "acrylic like the rest"): everything left
- *  of the sidebar's width (TabSidebar's --p-sidebar-cover), on the sidebar's
- *  own slide, so only the window's acrylic lies under its tint. SQUARE (owner,
- *  2026-10-13: "we have that curved border when the sidebar is collapsed it
- *  should be straight, only curved border when sidebar is open"): one opaque
- *  block moved right, no corner, so collapsed and hidden the terminal meets
- *  the bar square at the window's edge too. */
+ *  2026-10-12: the slid-out sidebar "acrylic like the rest"): the open
+ *  sidebar's cut, moved right by the sidebar's width (TabSidebar's
+ *  --p-sidebar-cover) on the sidebar's own slide, so only the window's acrylic
+ *  lies under its tint and its corner piece fills the outside of the curve.
+ *  HIDDEN, the curve is parked just off the window's left edge (cover is
+ *  -CORNER_R), so the terminal meets the bar square there (owner, 2026-10-13:
+ *  curved while the sidebar is out, "when its collapsed that the curve
+ *  shouldnt be there"). */
 const COVER_CUT = {
-  maskImage: 'linear-gradient(#000, #000)',
-  maskRepeat: 'no-repeat',
-  maskSize: '100% 100%',
-  maskPosition: 'var(--p-sidebar-cover, 0px) 0',
+  ...CORNER_CUT,
+  maskPosition: `var(--p-sidebar-cover, -${CORNER_R}px) 0`,
   transition: `mask-position ${SIDEBAR_SLIDE}`
 } as const
 
