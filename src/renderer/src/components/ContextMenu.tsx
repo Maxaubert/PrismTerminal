@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react'
+import { LAYER } from '@core/renderer/components/layers'
 
 // The right-click menu (a tab, the +, the title bar's menu button). Just the
 // actions: you right-clicked the thing, so you know what it applies to. Small,
@@ -230,7 +231,7 @@ export function ContextMenu({
     // dismiss listener and the menu just sat there. Carving the region out
     // for the life of the menu makes every click dismiss it, wherever it
     // lands. (Dragging the window by its bar can wait until the menu is shut.)
-    <div data-owns-escape className="no-drag fixed inset-0 z-[45] pointer-events-none">
+    <div data-owns-escape className={`no-drag fixed inset-0 ${LAYER.menu} pointer-events-none`}>
       <div
         ref={box}
         role="menu"

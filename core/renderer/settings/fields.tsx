@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
+import { LAYER } from '../components/layers'
 
 // THE SETTINGS FIELDS, shared by both hosts (#15). The owner's rule: the two
 // apps' terminal settings are the same settings, "the setting names, types, how
@@ -157,7 +158,7 @@ export function Select({
         <div
           role="listbox"
           aria-labelledby={id}
-          className="absolute right-0 z-40 mt-1 max-h-[300px] min-w-full overflow-y-auto rounded-[2px] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] py-0.5 shadow-[0_10px_28px_rgba(0,0,0,.5)]"
+          className={`absolute right-0 ${LAYER.pop} mt-1 max-h-[300px] min-w-full overflow-y-auto rounded-[2px] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] py-0.5 shadow-[0_10px_28px_rgba(0,0,0,.5)]`}
         >
           {options.map((o) => {
             const on = o.id === value

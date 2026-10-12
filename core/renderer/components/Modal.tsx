@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type JSX, type ReactNode, type RefObject } from 'react'
+import { LAYER } from './layers'
 
 /**
  * EVERY POPUP DIALOG IN BOTH APPS (audit 2026-10-12: six dialogs each wrote
@@ -122,7 +123,7 @@ export function Modal({
       data-modal-scrim
       {...scrimAttrs}
       role="presentation"
-      className={`no-drag fixed inset-0 z-50 grid place-items-center p-6 ${scrim}`}
+      className={`no-drag fixed inset-0 ${LAYER.modal} grid place-items-center p-6 ${scrim}`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !live.current.locked) live.current.onCancel()
       }}

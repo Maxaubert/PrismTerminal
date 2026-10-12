@@ -27,6 +27,7 @@ import {
 } from '../lib/colour'
 import { cycleColourFormat, useColourFormat } from '../lib/colourFormat'
 import { ROW_BUTTON } from './fields'
+import { LAYER } from '../components/layers'
 
 // ONE COLOUR PICKER, WITH ALPHA, FOR EVERY COLOUR IN BOTH APPS (#112; owner,
 // 2026-10-03: "the colour pickers should be the same for both apps, i need an
@@ -401,7 +402,7 @@ export function ColourPopover({
       }}
       // Under the update window, Command help and a close question (z-50),
       // over a settings page; inside the theme editor, over its panel.
-      className={`fixed ${target === document.body ? 'z-[49]' : 'z-10'} w-[226px] rounded-md border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] p-3 shadow-[0_10px_28px_rgba(0,0,0,.5)]`}
+      className={`fixed ${target === document.body ? LAYER.picker : 'z-10'} w-[226px] rounded-md border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] p-3 shadow-[0_10px_28px_rgba(0,0,0,.5)]`}
       style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: 0 }}
     >
       <SvSquare hsv={hsv} onChange={set} />

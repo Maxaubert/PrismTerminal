@@ -23,6 +23,7 @@ import {
   useSidebarWidth
 } from '../lib/sidebarPrefs'
 import { BAR_H, SIDEBAR_SLIDE } from '../lib/chromeLayout'
+import { LAYER } from '@core/renderer/components/layers'
 
 /** One row's height: the row's own size and the tile a flowing edge repeats
  *  on, so the two cannot part (audit 2026-10-12: the tile was 34 on a 46 row). */
@@ -178,7 +179,7 @@ export function TabSidebar({
   return (
     <div
       data-sidebar-slot
-      className="relative z-30 flex min-h-0 shrink-0"
+      className={`relative ${LAYER.panel} flex min-h-0 shrink-0`}
       // Collapsed, the slot takes no room: the terminal keeps its full width.
       style={{ width: collapsed ? 0 : width }}
     >
@@ -199,7 +200,7 @@ export function TabSidebar({
         // never shows through. CSS backdrop blur does nothing in a see-through
         // window (measured in the e2e window, 2026-10-12). It lies ABOVE the
         // page beside it: Settings' search icon showed through (same day).
-        className={`p-styled-font absolute inset-y-0 left-0 z-30 flex flex-col bg-[var(--p-secondary)] text-[13px] ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
+        className={`p-styled-font absolute inset-y-0 left-0 ${LAYER.panel} flex flex-col bg-[var(--p-secondary)] text-[13px] ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         // Slid by its LEFT, never a transform: Windows is told where a drag
         // region is from the layout, and a transformed panel's grab strip was
         // reported where its slide started (measured, WM_NCHITTEST).
