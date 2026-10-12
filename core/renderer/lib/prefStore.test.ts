@@ -1,22 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { boolPref, enumPref } from './prefStore'
 
-// localStorage for the node environment, with a switch to make it throw.
-let blocked = false
-const mem = new Map<string, string>()
-vi.stubGlobal('localStorage', {
-  getItem: (k: string) => {
-    if (blocked) throw new Error('blocked')
-    return mem.get(k) ?? null
-  },
-  setItem: (k: string, v: string) => {
-    if (blocked) throw new Error('blocked')
-    mem.set(k, v)
-  }
-})
+// The suite's setup provides localStorage; a blocked one is a spy that throws.
+const mem = {
+  get: (k: string) => localStorage.getItem(k),
+  set: (k: string, v: string) => localStorage.setItem(k, v)
+}
 beforeEach(() => {
-  mem.clear()
-  blocked = false
+  vi.restoreAllMocks()
+  localStorage.clear()
 })
 
 describe('enumPref', () => {
@@ -52,7 +44,12 @@ describe('boolPref', () => {
   })
   it('a blocked store loses the choice, not the app', () => {
     const on = boolPref('t.on', true)
-    blocked = true
+    vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
     expect(on.get()).toBe(true)
     expect(() => on.set(false)).not.toThrow()
   })
