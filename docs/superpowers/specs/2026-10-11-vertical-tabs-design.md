@@ -211,7 +211,9 @@ looked at on the way).
   slid-out sidebar draws its line from the bar down and its corner curves it into the bar's. The
   shadows (the inset one gathered darker in the corner; a distance-drawn one fixed that) and
   `lib/sidebarLook.ts` are gone. The slid-out sidebar also lies above the page beside it (`z-30`):
-  Settings' search icon showed through it.
+  Settings' search icon showed through it. `z-30` alone tied with Settings' own raised search (also
+  `z-30`, later in the page), so the page's column is `isolate`d: nothing inside it rises above the
+  sidebar. The `verticalTabs` e2e slides the sidebar out over Settings and checks the icon is under it.
 
 ## 2. The indicators
 

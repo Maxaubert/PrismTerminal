@@ -799,7 +799,10 @@ export default function App(): JSX.Element {
           everything is see-through ... the title bar is not"). */}
       <div className="relative flex min-h-0 flex-1">
         {vertical && <TabSidebar {...tabProps} />}
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* ISOLATED: the page's own raised pieces (Settings' search sits at
+            z-30) stay inside it, under a sidebar that slides out over it
+            (owner, 2026-10-12: the search icon showed through). */}
+        <div className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col">
           {/* THE BAR BESIDE THE SIDEBAR, always down (owner, 2026-10-12): from the
           sidebar's edge to the right, the window's buttons at its end, the
           handle the window moves by. In the column, not over it, so the

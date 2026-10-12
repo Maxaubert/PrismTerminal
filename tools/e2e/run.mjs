@@ -2201,6 +2201,24 @@ const scenarios = {
       await page.keyboard.press('Control+Shift+B')
       await sleep(300)
 
+      // SETTINGS BESIDE THE SIDEBAR, NARROW (owner, 2026-10-12: the Find a
+      // setting magnifier showed over the sidebar's rows): every part of the
+      // page lies inside the page.
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 700))
+      await gotoPref(page, 'tab-layout')
+      await sleep(400)
+      const leak = await page.evaluate(() => {
+        const frame = document.querySelector('[data-settings-page]').getBoundingClientRect()
+        const nav = document.querySelector('[data-tab-sidebar]').getBoundingClientRect()
+        const glass = document.querySelector('[data-settings-find]')?.parentElement?.querySelector('span')?.getBoundingClientRect()
+        const find = document.querySelector('[data-settings-find]')?.getBoundingClientRect()
+        return { frameLeft: Math.round(frame.left), navRight: Math.round(nav.right), glass: glass ? Math.round(glass.left) : null, find: find ? Math.round(find.left) : null }
+      })
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-narrow-beside.png') }).catch(() => {})
+      ok(leak.glass !== null && leak.glass >= leak.frameLeft && leak.find >= leak.frameLeft && leak.frameLeft >= leak.navRight - 1, `narrow Settings beside the sidebar keeps its search inside the page (${JSON.stringify(leak)})`)
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1100, 700))
+      await backToFirst(page)
+
       // THE FOLDER LINE (owner, 2026-10-12: "Second line: Folder path").
       const folders = await page.evaluate(() => [...document.querySelectorAll('[data-tab-sidebar] [data-tab]')].map((r) => r.querySelector('[data-tab-folder]')?.textContent ?? null))
       ok(folders.length === 6 && folders.every((f) => !!f && f.length > 0), `every row says the folder it sits in (${folders.join(' | ')})`)
@@ -2532,6 +2550,30 @@ const scenarios = {
         return pts.filter(([x, y]) => !nav.contains(document.elementFromPoint(x, y))).length
       })
       ok(onTop === 0, `slid out, nothing of the page beside it lies above it (${onTop} points)`)
+      // And over Settings, whose search box and magnifier are raised (the
+      // owner's case): its narrow rail lies right under the sidebar.
+      await page.mouse.move(800, 400)
+      await sleep(500)
+      await page.locator('[data-title-settings]').click()
+      await page.locator('[data-settings-page]').waitFor({ timeout: 8000 })
+      await page.mouse.move(2, 400)
+      await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
+      await sleep(300)
+      const overSettings = await page.evaluate(() => {
+        const nav = document.querySelector('[data-tab-sidebar]')
+        const find = document.querySelector('[data-settings-find]')
+        const g = find?.parentElement?.querySelector('span')?.getBoundingClientRect()
+        const n = nav.getBoundingClientRect()
+        const at = g ? document.elementFromPoint(g.left + g.width / 2, g.top + g.height / 2) : null
+        return { under: !!g && g.left < n.right, onTop: at ? (nav.contains(at) ? 'sidebar' : at.tagName) : null }
+      })
+      ok(!overSettings.under || overSettings.onTop === 'sidebar', `slid out over Settings, the sidebar covers its search icon (${JSON.stringify(overSettings)})`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-over-settings.png') }).catch(() => {})
+      // Back to the shell while the sidebar is out, its rows in reach.
+      await backToFirst(page)
+      await page.mouse.move(2, 400)
+      await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
+      await sleep(300)
       ok(solid.sidebar === 1 && solid.bar === glassy.bar, `collapsed and slid out, the sidebar is solid; the bar stays see-through (${JSON.stringify(solid)})`)
       await page.mouse.move(800, 400)
       await sleep(500)
