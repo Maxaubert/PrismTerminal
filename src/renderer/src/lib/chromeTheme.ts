@@ -1,7 +1,14 @@
 import type { TermTheme } from '@core/renderer/lib/termTheme'
-import { contrastRatio, ensureContrast, luminance, mixHex, normalizeColor } from '@core/renderer/lib/termAnsi'
+import {
+  contrastRatio,
+  ensureContrast,
+  luminance,
+  mixHex,
+  normalizeColor
+} from '@core/renderer/lib/termAnsi'
 import { alphaHex, alphaOf, composite, selectionFor } from '@core/renderer/lib/colour'
 import { switchKnob } from '@core/renderer/lib/switchKnob'
+import { sidebarGround } from './sidebarGround'
 import { EDGE_ALPHA, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 
 // The window wears the terminal's theme. Every chrome colour is derived from
@@ -26,6 +33,8 @@ const FALLBACK_FG = '#e7e7ee'
 // on the same colour, and the active tab is told from the rest by its INK.
 const TEXT_FLOOR = 4.5
 const QUIET_FLOOR = 3
+/** The sidebar's tab names: AAA, for an owner who works zoomed in (#162). */
+const SIDE_TEXT_FLOOR = 7
 
 /** Every COLOUR token the components read. Radius, font and size tokens are
  *  index.css's, since no theme changes them. */
@@ -58,7 +67,9 @@ export const CHROME_COLOUR_TOKENS = [
   '--p-tree-folder',
   '--p-switch-knob',
   '--p-pressed',
-  '--p-pressed-ink'
+  '--p-pressed-ink',
+  '--p-side-text',
+  '--p-side-dim'
 ] as const
 
 export interface ChromeTokens {
@@ -124,20 +135,22 @@ export function chromeTokens(
   // fit with each theme"): the vertical tabs' sidebar and their title bar.
   // THE SIDEBAR'S GROUND, unpicked (owner, 2026-10-12: "black theme should
   // have black sidebar and all the others have the old style where its a bit
-  // darker than the bg + shadow"): a black theme keeps its own black; every
-  // other dark one a step darker than its ground; a light one a step toward
-  // its text, darker too. The sidebar draws a shadow as its edge, or a
-  // hairline where both grounds are black (TabSidebar). A pick is a surface the
-  // inks are held to as well.
-  const black = luminance(bg) < 0.0045
-  const ownSecondary = black ? bg : light ? mixHex(bg, ensureContrast(rawFg, bg, TEXT_FLOOR), 0.08) : mixHex(bg, '#000000', 0.22)
+  // darker than the bg + shadow", then "should follow a general scheme"): one
+  // even step darker on every theme (sidebarGround); a black theme keeps its
+  // black. The sidebar draws a shadow as its edge, or a hairline where both
+  // grounds are black (sidebarLook). A pick is a surface the inks are held to.
+  const ownSecondary = sidebarGround(bg)
   const secondary = chosenSecondary ? normalizeColor(chosenSecondary, ownSecondary) : ownSecondary
   // The form control's fill (below), a step off the ground: on a light theme
   // the quiet inks sit on it too, a segment's name or a field's hint.
   const controlFill = mixHex(bg, rawFg, light ? 0.09 : 0.035)
   const floorOn = (c: string, floor: number): string =>
     ensureContrast(
-      ensureContrast(ensureContrast(ensureContrast(c, flat, floor), secondary, floor), light ? controlFill : bg, floor),
+      ensureContrast(
+        ensureContrast(ensureContrast(c, flat, floor), secondary, floor),
+        light ? controlFill : bg,
+        floor
+      ),
       bg,
       floor
     )
@@ -185,7 +198,9 @@ export function chromeTokens(
     // What sits on the accent is white or near-black, whichever reads better:
     // the better of two, not a midpoint test, since both can be poor at a midpoint.
     onAccent =
-      contrastRatio('#ffffff', accent) >= contrastRatio(FALLBACK_BG, accent) ? '#ffffff' : FALLBACK_BG
+      contrastRatio('#ffffff', accent) >= contrastRatio(FALLBACK_BG, accent)
+        ? '#ffffff'
+        : FALLBACK_BG
     // A selected row carries TEXT, so its fill is the accent moved until that ink
     // clears the text floor on it (Prism's selectionBg): away from the ink.
     selBg = accent
@@ -209,7 +224,21 @@ export function chromeTokens(
   // better if they were darker grey or black"): the dim text and the icons are
   // held to the BODY floor there, and the icons a further step darker. A dark
   // theme keeps the quieter greys it was tuned with.
-  const dim = light ? floorOn(mixHex(fg, bg, 0.28), TEXT_FLOOR) : floorOn(mixHex(fg, bg, 0.38), QUIET_FLOOR)
+  // THE SIDEBAR'S INKS (owner, 2026-10-12, of the sidebar steps mockup: "very
+  // light themes have bad contrast ratios"; then "yes thats good" to the names
+  // held to 7:1 and the folder lines to 4.5:1): on the sidebar's ground AND on
+  // the accent pill of the tab in front, which TabSidebar lays at 18 percent.
+  const sideSolid = composite(secondary, bg)
+  const pill = mixHex(sideSolid, accentHi, 0.18)
+  const sideHeld = (c: string, floor: number): string =>
+    ensureContrast(ensureContrast(c, sideSolid, floor), pill, floor)
+  const sideInks = {
+    '--p-side-text': sideHeld(fg, SIDE_TEXT_FLOOR),
+    '--p-side-dim': sideHeld(mixHex(fg, sideSolid, light ? 0.42 : 0.55), TEXT_FLOOR)
+  }
+  const dim = light
+    ? floorOn(mixHex(fg, bg, 0.28), TEXT_FLOOR)
+    : floorOn(mixHex(fg, bg, 0.38), QUIET_FLOOR)
   const icon = light ? floorOn(mixHex(fg, bg, 0.18), TEXT_FLOOR) : dim
   // A raised stage rather than a sunken one: a true-black ground has nothing
   // darker to go to, so this always steps towards the text colour.
@@ -249,7 +278,9 @@ export function chromeTokens(
     '--p-dim': dim,
     // The quietest ink, a hint or a disabled button's word: on a light theme
     // held to the body floor too, so a disabled Save changes still reads.
-    '--p-dim2': light ? floorOn(mixHex(fg, bg, 0.42), TEXT_FLOOR) : floorOn(mixHex(fg, bg, 0.55), QUIET_FLOOR),
+    '--p-dim2': light
+      ? floorOn(mixHex(fg, bg, 0.42), TEXT_FLOOR)
+      : floorOn(mixHex(fg, bg, 0.55), QUIET_FLOOR),
     '--p-accent': accent,
     '--p-accent-solid': solid,
     '--p-accent-hi': accentHi,
@@ -283,7 +314,8 @@ export function chromeTokens(
     // ink on it, the clearest pair the theme has; on a dark one the quiet grey
     // it always was.
     '--p-pressed': light ? mixHex(fg, bg, 0.08) : mixHex(mixHex(bg, fg, 0.035), fg, 0.16),
-    '--p-pressed-ink': light ? bg : fg
+    '--p-pressed-ink': light ? bg : fg,
+    ...sideInks
   }
   return { mode, vars }
 }

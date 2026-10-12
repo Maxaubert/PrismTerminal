@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { luminance } from '@core/renderer/lib/termAnsi'
+import { BLACK_GROUND } from './sidebarGround'
 
 /**
  * THE SIDEBAR'S EDGE (#162; owner, 2026-10-12: "only show border on the sidebar
@@ -11,7 +12,7 @@ export type SidebarEdge = 'line' | 'shadow' | 'shadow-light'
 
 const black = (c: string): boolean => {
   const hex = c.trim().slice(0, 7)
-  return /^#[0-9a-f]{6}$/i.test(hex) && luminance(hex) < 0.0045
+  return /^#[0-9a-f]{6}$/i.test(hex) && luminance(hex) < BLACK_GROUND
 }
 
 export function sidebarEdge(bg: string, secondary: string, mode: string | undefined): SidebarEdge {

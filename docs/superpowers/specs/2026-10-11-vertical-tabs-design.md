@@ -145,10 +145,16 @@ looked at on the way).
 - **The base colour and the edge** (owner, 2026-10-12: "black theme should have black sidebar and
   all the others have the old style where its a bit darker than the bg + shadow", and "only show
   border on the sidebar if bg and secondary color is black, since then shadows dont work, otherwise
-  shadow works as a border"). Unpicked, the secondary colour is the ground on a black theme
-  (luminance under 0.0045), 22 percent toward black on other dark themes, 8 percent toward the text
-  on light ones. The open sidebar's edge is a hairline only when both grounds are black, else a
-  shadow (lighter on light themes), `lib/sidebarLook.ts`, following theme changes.
+  shadow works as a border"). The open sidebar's edge is a hairline only when both grounds are
+  black, else a shadow (lighter on light themes), `lib/sidebarLook.ts`, following theme changes.
+- **One even step** (owner, 2026-10-12, of `2026-10-12-sidebar-steps.html` in the research mockups:
+  a fixed mix toward black was "too heavy" on some themes and "too light" on others, it "should
+  follow a general scheme"; Medium step: "yes thats good"). Unpicked, the secondary colour is the
+  terminal's ground 0.045 darker in OKLab lightness, hue kept, chroma shrunk with the lightness
+  (`lib/sidebarGround.ts`); a black ground (luminance under 0.0045) keeps its black. The sidebar's
+  names are held to 7:1 and its folder lines to 4.5:1, on the sidebar AND on the accent pill
+  (`--p-side-text`, `--p-side-dim`): the pale themes' soft inks had fallen under that ("very light
+  themes have bad contrast ratios"). Every name wears the one ink; the pill marks the tab in front.
 
 ## 2. The indicators
 

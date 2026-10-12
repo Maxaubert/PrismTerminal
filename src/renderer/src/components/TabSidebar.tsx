@@ -381,10 +381,9 @@ export function TabSidebar({
             const { failed, state, mark } = looks[i]
             const filled = mark.place === 'fill' && state !== null
             const ink = filled ? palette.ink[state] : undefined
-            const nameInk =
-              on || indicator === 'full'
-                ? 'text-[var(--p-text)]'
-                : 'text-[var(--p-dim)] hover:text-[var(--p-text)]'
+            // Every name in the sidebar's own ink, held to 7:1 (chromeTheme):
+            // the accent pill, not a dimmer name, says which tab is in front.
+            const nameInk = 'text-[var(--p-side-text)]'
             // The flat marks lie along the row's foot, as along a strip tab's;
             // under Powerline they are the arrow's edge instead.
             const flatMark =
@@ -535,7 +534,7 @@ export function TabSidebar({
                   {t.kind !== 'settings' && (
                     <span
                       data-tab-folder
-                      className="truncate text-[11.5px] font-normal text-[var(--p-dim2)]"
+                      className="truncate text-[11.5px] font-normal text-[var(--p-side-dim)]"
                       style={ink ? { color: ink, opacity: 0.75 } : undefined}
                     >
                       {folderLine(t.cwd, home)}
