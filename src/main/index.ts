@@ -28,6 +28,7 @@ import { localAppData } from './appPaths'
 import { MIN_WINDOW, readWindowState, watchWindowState } from './windowState'
 import { APP_CH, E2E_CH } from '@shared/channels'
 import { isWebUrl } from '@core/shared/webUrl'
+import { createCloseFlow } from './closeFlow'
 
 // Prism Terminal's main process: the window, its lifecycle and the
 // IPC wiring. Everything with rules of its own lives in its own file (the pty,
@@ -209,15 +210,13 @@ const isDir = (p: unknown): Promise<boolean> =>
  * screen. While the app runs it is still single-instance: a second launch
  * hands its folder over and ends.
  * ------------------------------------------------------------------ */
-let quitting = false // app.quit() is under way
+/** The close question's state (closeFlow.ts, rule 7). */
+const closeFlow = createCloseFlow()
 /** The diagnostics log (#140). Started first thing in the instance that holds
  *  the lock, before any IPC is registered: the timing wraps ipcMain itself. */
 let diag: Diagnostics | null = null
 /** Kills dictation's children (the speech server, the media helper). Set by wireIpc. */
 let stopDictation: () => void = () => {}
-let quitWanted = false // a quit the close question interrupted; confirm resumes it
-let agentBusy = false // mirrored from the renderer: an agent is WORKING
-let closeAgreed = false // the renderer's "go ahead" for the close in flight
 /**
  * The renderer has no tab list worth saving: it has not restored yet (launch,
  * a reload). Two things follow.
@@ -346,22 +345,15 @@ function createWindow(): void {
   // of them until the user answers; the renderer asks (it knows which agent
   // and for how long) and answers `close:confirmed`, or says nothing.
   win.on('close', (e) => {
-    if (agentBusy && !closeAgreed) {
+    if (closeFlow.onClose() === 'ask') {
       e.preventDefault()
-      // The veto cancels an app.quit() too. Remember that this was one, so the
-      // go-ahead finishes the quit, and drop the flag, so that "Cancel" leaves
-      // an ordinary window behind.
-      quitWanted = quitting
-      quitting = false
       // A minimised or background window can't show its own dialog usefully.
       if (!E2E) raise(win)
       send(APP_CH.closeRequest)
       return
     }
-    closeAgreed = false
     tabs.flush()
     killAll()
-    agentBusy = false
     // Not prevented: the window closes, and window-all-closed ends the app.
   })
   // Windows is shutting down or logging off: no before-quit is coming, nor
@@ -631,9 +623,7 @@ function wireIpc(): void {
       // The close question is pre-answered at the QUIT, not now (#14): a
       // download takes minutes, and an agent that starts working meanwhile
       // must still be asked about before a close ends it.
-      return await installUpdate(offer.url, (pct) => send(APP_CH.updateProgress, pct), run.signal, () => {
-        closeAgreed = true
-      })
+      return await installUpdate(offer.url, (pct) => send(APP_CH.updateProgress, pct), run.signal, closeFlow.agree)
     } finally {
       updateRun = null
     }
@@ -677,19 +667,14 @@ function wireIpc(): void {
   )
   // The X: the same path as Alt+F4.
   ipcMain.on(APP_CH.windowClose, () => mainWindow?.close())
-  ipcMain.on(APP_CH.agentBusy, (_e, busy: boolean) => {
-    agentBusy = busy === true
-  })
+  ipcMain.on(APP_CH.agentBusy, (_e, busy: boolean) => closeFlow.setBusy(busy === true))
   ipcMain.on(APP_CH.closeConfirmed, () => {
-    closeAgreed = true
-    if (quitWanted) {
-      quitWanted = false
-      app.quit()
-    } else mainWindow?.close()
+    if (closeFlow.confirm() === 'quit') app.quit()
+    else mainWindow?.close()
   })
   // A quit asked for from the page (the e2e ends its runs with it).
   ipcMain.on(APP_CH.appQuit, () => {
-    quitting = true
+    closeFlow.quitStarted()
     app.quit()
   })
   // The OS's own fullscreen: a terminal has no film to flash around, so none of
@@ -815,9 +800,7 @@ if (!app.requestSingleInstanceLock()) {
     handFolders(folders)
   })
 
-  app.on('before-quit', () => {
-    quitting = true
-  })
+  app.on('before-quit', () => closeFlow.quitStarted())
   app.on('window-all-closed', () => app.quit())
   // Every shell dies with the app; a pty with no window is an orphan. And the
   // app waits for them to be GONE before it ends (#127): a shell still dying
