@@ -1,5 +1,6 @@
 import type { Restored, SavedTabs } from '@shared/types'
 import type { Tab, TabState } from './tabs'
+import { isResumable } from '@core/shared/types'
 
 /**
  * TABS FROM THE FIRST FRAME (#106; spec
@@ -25,7 +26,7 @@ export function peekState(saved: SavedTabs, newId: () => string): Boot {
     slots.push(id)
     // An agent tab wears the skeleton from its first frame; a plain one the
     // bare ground, its prompt being well under a second away.
-    return { id, cwd: t.cwd, pending: t.agent === 'claude' || t.agent === 'codex' ? 'agent' : 'shell' }
+    return { id, cwd: t.cwd, pending: isResumable(t.agent) ? 'agent' : 'shell' }
   })
   const front = slots[Math.min(Math.max(0, saved.active), slots.length - 1)] ?? null
   return { state: { tabs, activeId: front }, slots }

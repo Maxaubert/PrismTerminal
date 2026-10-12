@@ -104,6 +104,7 @@ import {
   useAgentFailedOn,
   useAgentQuestionOn
 } from '@core/renderer/lib/termLook'
+import { isResumable } from '@core/shared/types'
 
 const Settings = lazy(() => import('./components/settings/Settings'))
 // Loaded when it is first opened: the popup brings the whole catalogue with it,
@@ -585,8 +586,7 @@ export default function App(): JSX.Element {
     window.prism.tabsChanged({
       tabs: shells.map((t) => {
         const kind = agentIds.has(t.id) ? agentKinds.current.get(t.id) : undefined
-        const agent: AgentKind | undefined =
-          kind === 'claude' || kind === 'codex' ? kind : undefined
+        const agent: AgentKind | undefined = isResumable(kind) ? kind : undefined
         return agent ? { cwd: t.cwd, agent } : { cwd: t.cwd }
       }),
       active: Math.max(

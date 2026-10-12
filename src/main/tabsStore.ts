@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs'
 import { writeAtomic } from './atomicWrite'
 import type { SavedTab, SavedTabs } from '@shared/types'
+import { isResumable } from '@core/shared/types'
 
 // tabs.json: the strip as it was, so a relaunch brings every shell back in its
 // folder and every resumable agent back to its conversation. The renderer owns
@@ -27,7 +28,7 @@ export function parseTabs(raw: string): SavedTabs {
       // in that field is dropped and the tab comes back as a plain shell.
       .map(
         (t): SavedTab =>
-          t.agent === 'claude' || t.agent === 'codex' ? { cwd: t.cwd, agent: t.agent } : { cwd: t.cwd }
+          isResumable(t.agent) ? { cwd: t.cwd, agent: t.agent } : { cwd: t.cwd }
       )
     const active =
       typeof j.active === 'number' &&
