@@ -1,8 +1,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_GROUND } from './ground'
-import { TERM_PRESETS } from '../renderer/lib/termTheme'
+import { DEFAULT_GROUND } from '../../shared/ground'
+import { TERM_PRESETS } from './termTheme'
 
 // ONE DEFAULT GROUND AND ONE LIGHT/DARK LINE (audit 2026-10-12). Read as
 // source: a literal ground or a hand-typed 0.4 is a copy that can drift.
@@ -12,7 +12,7 @@ const walk = (dir: string): string[] =>
     if (statSync(p).isDirectory()) return f === 'node_modules' ? [] : walk(p)
     return /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f) ? [p] : []
   })
-const root = join(__dirname, '..', '..')
+const root = join(__dirname, '..', '..', '..')
 const files = [...walk(join(root, 'core')), ...walk(join(root, 'src'))].map((f) => ({
   f: relative(root, f).split('\\').join('/'),
   src: readFileSync(f, 'utf8')
