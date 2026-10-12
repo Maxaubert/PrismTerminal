@@ -1,5 +1,6 @@
 import { useEffect, useState, type JSX, type ReactNode } from 'react'
 import { pinnedRoots, plusMenuList, recentRoots } from '@core/renderer/lib/recentRoots'
+import { AppMark } from './AppMark'
 
 /**
  * The start screen: the window with no tab open (owner, 2026-09-18, with
@@ -37,12 +38,19 @@ const Glyph = ({ children }: { children: ReactNode }): JSX.Element => (
   </svg>
 )
 
-const baseName = (p: string): string => p.split(/[\\/]+/).filter(Boolean).at(-1) ?? p
+const baseName = (p: string): string =>
+  p
+    .split(/[\\/]+/)
+    .filter(Boolean)
+    .at(-1) ?? p
 /** Where a folder lives, from its NEAR end: the last two folders above it.
  *  A long path cut at its far end loses exactly the part that tells two
  *  "api" apart; the whole path is the row's tooltip. */
 function whereabouts(p: string): string {
-  const above = p.split(/[\\/]+/).filter(Boolean).slice(0, -1)
+  const above = p
+    .split(/[\\/]+/)
+    .filter(Boolean)
+    .slice(0, -1)
   const near = above.slice(-2).join('\\')
   return above.length > 2 ? `…\\${near}` : near
 }
@@ -67,23 +75,9 @@ export default function EmptyState({
   return (
     <div data-empty-state className="p-styled-font relative flex h-full w-full flex-col">
       <div className="p-start-in flex min-h-0 flex-1 flex-col items-center justify-center px-6">
-        {/* The mark: the title bar's prompt, at the size of a front door. The
-            app icon proper replaces both when there is one. */}
-        <svg
-          viewBox="0 0 24 24"
-          width={76}
-          height={76}
-          fill="none"
-          stroke="var(--p-accent-hi)"
-          strokeWidth="1.35"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <rect x="2.5" y="3.5" width="19" height="17" rx="3.5" />
-          <path d="M7 9.5l3.5 2.75L7 15" />
-          <path d="M13 15.5h4" />
-        </svg>
+        {/* The mark: the app's own, in the accent (owner, 2026-10-12: "use
+            also this on that startup page"). */}
+        <AppMark size={84} className="text-[var(--p-accent-solid)]" />
         <h1 className="mt-4 text-[22px] font-semibold tracking-[-0.01em] text-[var(--p-text)]">
           Prism Terminal
         </h1>
@@ -116,9 +110,7 @@ export default function EmptyState({
               <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--p-dim)]">
                 {whereabouts(p.path)}
               </span>
-              {p.pinned && (
-                <span className="shrink-0 text-[11px] text-[var(--p-dim)]">Pinned</span>
-              )}
+              {p.pinned && <span className="shrink-0 text-[11px] text-[var(--p-dim)]">Pinned</span>}
             </button>
           ))}
           <div className="my-2 border-t border-[color:var(--p-divider)]" role="presentation" />

@@ -660,7 +660,16 @@ function wireIpc(): void {
   // hidden title bar and the collapsed sidebar ask for it only while they exist.
   const edgeWatch = createEdgeWatch(
     () => mainWindow,
-    () => screen.getCursorScreenPoint(),
+    // Under --e2e the cursor is the suite's (`__e2eCursor`, a point in the
+    // content), never the owner's real one: the parked window is far away.
+    () => {
+      const fake = (globalThis as { __e2eCursor?: { x: number; y: number } }).__e2eCursor
+      if (E2E) {
+        const c = mainWindow?.getContentBounds()
+        return fake && c ? { x: c.x + fake.x, y: c.y + fake.y } : { x: -100000, y: -100000 }
+      }
+      return screen.getCursorScreenPoint()
+    },
     (near) => mainWindow?.webContents.send('window:edge-near', near)
   )
   ipcMain.on('window:edge-watch', (_e, on: unknown) => edgeWatch.set(on === true))

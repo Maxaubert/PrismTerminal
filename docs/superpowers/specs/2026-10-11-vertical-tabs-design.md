@@ -80,6 +80,166 @@ looked at on the way).
   - A 36 px strip above the tabs moves the window ("the tabs should start a bit further down on the
     sidebar so that you can grab that area").
 
+- **The bar and the sidebar stay under the hand** (owner: "my cursor can be on the titlebar and its
+  disappearing ... i should be able to have the cursor 2-3 px off the titlebar before it
+  disappears"; "if i have the cursor on the sidebar at the top of it it will disappear"). Cause: the
+  dropped bar and the sidebar's grab strip are drag regions, where a press is Windows', so the page
+  hears no pointer move and Windows tells it the pointer left. Main now streams the cursor while
+  either can show, and one rule (`lib/revealZones.ts`) decides from it or the page's pointer: in at
+  the edge zone, out only past the far edge plus 4 px. The e2e hands main a cursor (`__e2eCursor`,
+  under --e2e only) and fails on the old code.
+
+- **2026-10-12, from the surfaces mockup** (`sidebar-surfaces.html`; owner's pick: "A shade lighter",
+  "Thin strip", medium buttons, regular icon line, on Pitch):
+  - **A new setting, Secondary colour** (Appearance, under Background and Accent; "make that into a new
+    setting called secondary colour ... so the user can pick their own, but this is the gold standard.
+    make it fit with each theme"). Unpicked it is the theme's flat panel, the ground 4 percent toward
+    the text (a step darker on a light theme), the token `--p-secondary`. It paints the vertical tabs'
+    sidebar, their pop-out title bar and their title bar when shown; the horizontal strip is unchanged.
+    A theme pick resets it, as it does Background and Accent; inks are held to it.
+  - **No line under the pop-out bar** ("dont have a border on the titlebar on hidden").
+  - **New tab is the tab list's last row, a tab's size** ("make new tab a button attached to the end
+    of the tab list and the same size as a tab"). Superseded by the sidebar looks below.
+  - **A thin grab strip, 16 px**: a 10 px one was nearly all Windows' resize border (WM_NCHITTEST
+    answered HTTOP at its middle on a window that is not maximized).
+  - Under Ring, a tab with no mark keeps the 12 px slot, so every name starts at one x.
+
+- **No sidebar button; Ctrl+Shift+B** (owner, 2026-10-12: "dont show this collapse show button.
+  instead bind the sidebar to a hotkey like ctrl b or ctrl s. not sure whats available"). Ctrl+B is
+  Claude Code's (background a running task) and the shell's cursor-left; Ctrl+S is PowerShell's
+  forward history search and the terminal's pause. Ctrl+Shift+B is free, VS Code's sidebar key with
+  Shift, and is taken only while the tabs are vertical (`isSidebarChord`, termHost's `ownsKey`).
+
+- **Light themes get a darker sidebar** (owner, 2026-10-12: "make sure that light themes have a
+  darker sidebar, not white ... go through each"). Every preset was drawn beside its terminal; the
+  4 percent step is right on every dark and grey one and reads as white on every light one, where
+  10 percent is a clearly darker panel in the theme's own tint (all eleven). Inks are held to it, so
+  on light themes `--p-dim2` and a hard accent move a step darker.
+
+- **2026-10-12, later** (owner): the sidebar casts a shadow, a plane above the terminal; no app icon
+  in the title bar for now (the outline mark of #185 is in git history); Help and Settings stay in
+  the title bar, the dropped one included, so the sidebar has no foot ("that way it stays consistent
+  at all times"); Secondary sits above Accent; the window colours (Background, Secondary, Accent) are
+  changes to save: Save changes lights in the accent, Save keeps them with Custom, Custom brings them
+  back, and a theme switch asks before dropping them (core: `TerminalThemeSection` and `ThemeWall`
+  take `extraDirty` / `onSaved`, `onThemePicked` says which card).
+- **Light themes, readable controls** ("white themes having like a very light gray color for buttons"):
+  the dim text and icons are held to the body floor (icons a step darker), the hint ink too, the off
+  switch's track is a mid grey, and a pressed segment is a dark pill with the ground's ink
+  (`--p-pressed`, `--p-pressed-ink`; a host without them keeps the grey). Dark themes unchanged.
+
+- **The final look: "Same, with a line"** (owner, 2026-10-12, from `sidebar-treatments.html`, over a
+  fixed step, a neutral grey, an inset terminal and a tint; the lifted 4 percent panel read as a muddy
+  near-black on black themes). The secondary colour defaults to the terminal's own ground on every
+  theme (still a setting); the open sidebar draws a hairline and no shadow; the tab in front is a
+  pill in the accent's tint; the dropped title bar has no shadow. Slid out over the terminal, the
+  collapsed sidebar still casts its shadow. On light themes the quiet inks are held to the form
+  controls' fill too.
+
+- **The sidebar looks** (owner, 2026-10-12, from `sidebar-looks.html`): row icon none; a second line
+  with the folder the tab's folder sits in (`~` for the user's folder, `lib/sidebarRows.ts`); "Find a
+  tab" at the top, on Ctrl+Shift+K (the mockup's Ctrl+K is the shell's kill-line), keeping the rows
+  with every typed word in their name or folder, Enter putting the first in front, Escape letting go,
+  no reordering while it filters; New tab a full-width button at the sidebar's foot (right click: the
+  +'s places); the tab in front an accent pill; regular size; the title bar dropped down.
+- **The base colour and the edge** (owner, 2026-10-12: "black theme should have black sidebar and
+  all the others have the old style where its a bit darker than the bg + shadow", and "only show
+  border on the sidebar if bg and secondary color is black, since then shadows dont work, otherwise
+  shadow works as a border"). The open sidebar's edge is a hairline only when both grounds are
+  black, else a shadow (lighter on light themes), `lib/sidebarLook.ts`, following theme changes.
+- **One even step** (owner, 2026-10-12, of `2026-10-12-sidebar-steps.html` in the research mockups:
+  a fixed mix toward black was "too heavy" on some themes and "too light" on others, it "should
+  follow a general scheme"; Medium step: "yes thats good"). Unpicked, the secondary colour is the
+  terminal's ground 0.045 darker in OKLab lightness, hue kept, chroma shrunk with the lightness
+  (`lib/sidebarGround.ts`); a black ground (luminance under 0.0045) keeps its black. The sidebar's
+  names are held to 7:1 and its folder lines to 4.5:1, on the sidebar AND on the accent pill
+  (`--p-side-text`, `--p-side-dim`): the pale themes' soft inks had fallen under that ("very light
+  themes have bad contrast ratios"). Every name wears the one ink; the pill marks the tab in front.
+- **The app's name at the top** (owner, 2026-10-12: "a prism terminal logo and text could look nice up
+  there, keep it the default app icon, not a css version"): the icon PNG and "Prism Terminal" above
+  Find a tab; with no title bar it is the band that moves the window. `assets/app-icon.png` was still
+  the icon from before #136 (About showed it too); it is now the current badge.
+- **The mark in the accent** (owner, 2026-10-12: "use this for the sidebar logo. it has svgs white
+  black, use the best one, it should adapt to the accent color. use also this on that startup page"):
+  the one-colour shapes (`build/icon-mark.svg`, the owner's file) drawn by `components/AppMark.tsx`
+  in `--p-accent-solid`, at the sidebar's top and on the start screen.
+- **Saves wear the accent, white on a strong colour** (owner, 2026-10-12: Save "doesnt follow the
+  accent color"; "the text colour should shift to white"). A picked accent the ground cannot show is
+  lifted by OKLab lightness, keeping its hue (`lib/oklab.ts`): mixed with white, a picked #140707 had
+  turned a pink grey. Where white comes close on the accent, the accent goes a shade deeper until
+  white reads at 4.5:1, as far as the ground still shows it.
+- **Show title bar is gone** (owner, 2026-10-12: with vertical tabs "I want it to be exactly as it
+  is when the title bar is dropped down on the don't show title bar version ... dropped down all the
+  time", since a bar across the top "pushes the side bar content down"; with the tabs along the top
+  "exactly as it is with no title bar"). The bar beside the sidebar sits IN the column above the
+  terminal rather than over it, so the terminal's top rows stay in sight; collapsed, it spans the
+  window and the slid-out sidebar lies over its left end. The pop-out bar, its reveal zone and the
+  sidebar-edge store went with it; the app's name above Find a tab is the sidebar's drag band.
+- **Slid out, still one surface** (owner, 2026-10-12: "it doesn't seem like it connects with the
+  title bar"): the sidebar's shadow is clipped to below the bar (a polygon clip), and a curved corner
+  joins it to the bar's end, as the open sidebar's terminal is cut round.
+- **See-through, one coat everywhere** (owner, 2026-10-12: "not everything is see-through. Like the
+  title bar is not"): the body under the sidebar, the bar and the terminal painted the secondary
+  colour too, and the terminal's column a second ground, so each read nearly solid. Now each surface
+  paints once (the cut corner's outside is its own small piece). Collapsed, the sidebar is solid
+  (`--p-secondary-solid`): "that sidebar should not be see-through ... you can see the content
+  underneath"; pinned open it is see-through.
+- **Over glass, no edge and a clean corner** (owner, 2026-10-12: "the corner here on the transparent
+  looks pretty bad and there's also a border"). Under See-through the open sidebar draws neither
+  shadow nor line (`sidebarLook` 'none'): a shadow over a see-through terminal is a dark band. The
+  terminal's corner is cut by a mask that is the exact inverse of the corner piece (`CORNER_CUT`),
+  one full layer with the piece's shape excluded: a border-radius clip beside a gradient left a dark
+  arc, and tiled mask layers a hairline seam.
+- **The edge drawn once, on the terminal** (owner, 2026-10-12: "only black themes should have
+  borders on the sidebar, the rest will use shadows"; the corner looked darker because "two shadow
+  layers overlapping from the title bar and from the sidebar"; "the sidebar border should not go
+  all the way up. It should only go up to the title bar border so they can connect there"). App's
+  `data-term-edge` lies over the terminal from the bar down: on black (both grounds) a hairline
+  along its top and, beside the open sidebar, its left, rounded through the corner; elsewhere one
+  inset shadow the same way. The open sidebar draws no edge. Slid out on black, the collapsed
+  sidebar draws its line from the bar down and its corner carries the line into the bar's.
+  See-through follows the same rule (the earlier 'none' over glass is gone).
+- **The sidebar's width on whole screen pixels** (owner, 2026-10-12, under See-through: "the sidebar
+  border is still there"). A line ran the full height between the sidebar and the bar: at 225 % a
+  235 px sidebar ends at screen pixel 528.75, both see-through surfaces half-cover that pixel and the
+  desktop shows through. The painted body had hidden it. The width is rounded to whole screen pixels
+  (`lib/devicePixels.ts`); the `verticalTabs` e2e zooms to a scale that is not whole and checks it.
+- **One line on every theme, by Panel edges** (owner, 2026-10-12, reversing the shadows: "give all
+  themes that border that black themes use, i revert my thoughts on it, just make sure it follows
+  the setting for edges"). `components/TermEdge.tsx` draws the terminal's top and, beside the open
+  sidebar, its left and cut corner in `--p-divider`, so None hides it and Solid strengthens it; the
+  slid-out sidebar draws its line from the bar down and its corner curves it into the bar's. The
+  shadows (the inset one gathered darker in the corner; a distance-drawn one fixed that) and
+  `lib/sidebarLook.ts` are gone. The slid-out sidebar also lies above the page beside it (`z-30`):
+  Settings' search icon showed through it. `z-30` alone tied with Settings' own raised search (also
+  `z-30`, later in the page), so the page's column is `isolate`d: nothing inside it rises above the
+  sidebar. The `verticalTabs` e2e slides the sidebar out over Settings and checks the icon is under it.
+- **The app's name in the bar, the sidebar under it** (owner, 2026-10-12: "make this part of the
+  title bar instead of the sidebar, and make sure that when the sidebar in unpinned mode doesnt
+  overlay over it ... the sidebar should probably start under it ... the border should look the
+  same with it curving on the sidebar into the title bar"). The bar spans the window: the mark and
+  "Prism Terminal" at its left, the window's buttons at its right, the whole of it the drag handle.
+  The sidebar, pinned or slid out, starts below it; the terminal's line runs along the bar's foot,
+  round the corner and down the sidebar's edge, and the slid-out sidebar covers the line where it
+  lies over the terminal and curves into it at its corner.
+- **The slid-out sidebar is the window's acrylic** (owner, 2026-10-12: "on seethrough the unpinned
+  sidebar should be seethrough, make sure its acrylic like the rest not just see through"; before,
+  it went solid). It wears the window's tint, and the page under it is cut away (a mask on the
+  page's column moved right by `--p-sidebar-cover`, on the sidebar's own slide), so only the
+  window's own acrylic lies beneath. CSS `backdrop-filter` was tried and does NOTHING in a
+  see-through window (measured in the e2e window: a test box blurred the terminal with See-through
+  off and not at all with it on); the dialogs' backdrop blur is the same, so it only shows on a
+  solid window. `--p-secondary-solid` is gone. The cut also takes the shape of the sidebar's curved corner piece beyond
+  its edge (`exclude`, `--p-sidebar-corner`): under that piece the terminal was a second coat, a
+  darker square in the corner (owner: "we get the shadow issue again in that corner").
+- **One curve for both sides of the corner** (owner, 2026-10-12: "a weird border, its square darker
+  and not following the curve"). `lib/cornerShapes.ts`: the terminal's cut (pinned at its top-left,
+  slid-out moved right by the sidebar's width) and the corner piece filling the outside are masks
+  from the SAME SVG path, one the inverse of the other. A small radial mask layer over a full one
+  sampled half clear at its own edges and drew a square line round the corner; a border-radius
+  beside a gradient never quite matched. The e2e lays a light striped desktop behind the page for
+  its corner shots, since the parked window's black hides a second coat.
+
 ## 2. The indicators
 
 - **Vertical tabs have no new look for the indicators** (owner: "vertical tabs shouldnt have a new
@@ -99,5 +259,5 @@ looked at on the way).
 
 - The sidebar on the RIGHT side (#162 lists it as a choice). Not asked for in the 2026-10-11
   session; a follow-up if wanted.
-- A key to toggle the sidebar. Ctrl+B is Claude Code's own (background a task), so none is taken.
+- ~~A key to toggle the sidebar~~: added 2026-10-12, see below.
 - Ctrl+Tab, Most recent and Ctrl+1..9 are unchanged: they act on the tab list, whatever its shape.

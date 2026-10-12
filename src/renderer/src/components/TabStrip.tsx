@@ -14,7 +14,6 @@ import { motionClass } from '@core/renderer/components/markClasses'
 import { failedLabel } from '@core/renderer/lib/agentHookSignal'
 import { useTabLooks } from './tabLooks'
 import { useTabMenus } from './tabMenus'
-import { useTabWidth } from '../lib/tabWidthPrefs'
 import { useTabStyle } from '../lib/tabStylePrefs'
 import { OVERLAP, edgeBand, ruleClip, segmentClip } from '../lib/promptGeometry'
 import { dropSlot, type Lane } from '../lib/tabDrop'
@@ -85,7 +84,6 @@ export function TabStrip({
    *  beside the title buttons, and that row draws the rule under it. */
   inTitleRow?: boolean
 }): JSX.Element | null {
-  const width = useTabWidth()
   // The tab style (#143): Classic, the flat strip, or Powerline's chevrons.
   const prompt = useTabStyle() === 'prompt'
   // Every tab's state, mark and colours: the one reading the sidebar shares (#162).
@@ -287,7 +285,10 @@ export function TabStrip({
         // FULL: ONE NAME COLOUR (owner, 2026-10-10: "Every tab name in Full
         // uses the theme's own text colour, on every tab, idle ones included").
         // Elsewhere the tab in front is told by its brighter ink, as always.
-        const nameInk = on || indicator === 'full' ? 'text-[var(--p-text)]' : 'text-[var(--p-dim)] hover:text-[var(--p-text)]'
+        const nameInk =
+          on || indicator === 'full'
+            ? 'text-[var(--p-text)]'
+            : 'text-[var(--p-dim)] hover:text-[var(--p-text)]'
         // What a flat tab's own mark draws (run, line, fill); the ring sits by
         // the name, and a Powerline edge is drawn by the segment's band.
         const flatMark =
@@ -312,7 +313,9 @@ export function TabStrip({
               />
             )}
             {/* RING (#143): the spinner beside the name, only while working. */}
-            {mark.place === 'ring' && <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />}
+            {mark.place === 'ring' && (
+              <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
+            )}
             <button
               role="tab"
               aria-selected={on}
@@ -329,7 +332,7 @@ export function TabStrip({
               // zero-height semi-bold copy (`::after`, so never in the text)
               // holds every name at its semi-bold width.
               data-label={labels[i]}
-              className={`relative z-[1] min-w-[4ch] truncate py-1 text-center after:invisible after:block after:h-0 after:overflow-hidden after:font-semibold after:content-[attr(data-label)] ${width === 'fixed' ? 'flex-1' : 'max-w-[14rem]'} ${
+              className={`relative z-[1] min-w-[4ch] truncate py-1 text-center after:invisible after:block after:h-0 after:overflow-hidden after:font-semibold after:content-[attr(data-label)] flex-1 ${
                 filled || (prompt && on) ? 'font-semibold' : ''
               } ${prompt ? 'pl-1' : ''}`}
               style={ink ? { color: ink } : undefined}
@@ -367,7 +370,16 @@ export function TabStrip({
                 onClose(t.id)
               }}
             >
-              <svg viewBox="0 0 24 24" width={10} height={10} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+              <svg
+                viewBox="0 0 24 24"
+                width={10}
+                height={10}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                aria-hidden
+              >
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>
             </button>
@@ -379,11 +391,8 @@ export function TabStrip({
           'data-agent': state ? indicator : undefined,
           'data-agent-state': state ?? undefined,
           'data-agent-present': agentIds.has(t.id) ? '' : undefined,
-          // EVERY TAB IS ONE WIDTH (owner, 2026-09-21), AND IT IS A SETTING
-          // (#56): Dynamic, the default, each tab as wide as its name up to
-          // 14rem, or Fixed, all one width, shrinking equally when out of room.
-          'data-tab-fixed': width === 'fixed' || undefined,
-          'data-tab-dynamic': width === 'dynamic' || undefined,
+          // EVERY TAB IS ONE WIDTH (owner, 2026-09-21; 2026-10-12, removing
+          // Dynamic: "have it just be fixed"), shrinking equally when out of room.
           'data-tab-active': on || undefined,
           onClick: () => {
             // A press that travelled is a drag, not a pick.
@@ -411,7 +420,8 @@ export function TabStrip({
           // tab you picked up stays exactly where it was, solid, and the strip
           // only really rearranges when the drop lands. The neighbours sliding
           // open the gap are the preview.
-          transition: carry && carry.id !== t.id ? 'transform 170ms cubic-bezier(.23,1,.32,1)' : undefined
+          transition:
+            carry && carry.id !== t.id ? 'transform 170ms cubic-bezier(.23,1,.32,1)' : undefined
         }
         if (prompt) {
           // PROMPT (#143): a chevron segment whose arrow EDGE is the mark. The
@@ -429,15 +439,15 @@ export function TabStrip({
           // The edge this segment wears: Minimal's own. A Full working fill has
           // none (owner, 2026-10-10: the pulsing arrow is for the tab you are on).
           const edge =
-            mark.place === 'edge' && state ? { motion: mark.motion, background: paint(mark.colour, 'y') } : null
+            mark.place === 'edge' && state
+              ? { motion: mark.motion, background: paint(mark.colour, 'y') }
+              : null
           return (
             <div
               key={t.id}
               {...shared}
               data-prompt-segment
-              className={`no-drag group pointer-events-none relative flex ${
-                width === 'fixed' ? 'min-w-[72px] flex-[0_1_122px]' : 'min-w-min shrink'
-              }`}
+              className={`no-drag group pointer-events-none relative flex ${'min-w-[72px] flex-[0_1_122px]'}`}
               style={{ ...motion, marginRight: last ? 4 : -OVERLAP }}
             >
               {/* The plain border, the band with no mark (owner, 2026-10-11):
@@ -470,7 +480,12 @@ export function TabStrip({
                     className={`absolute inset-0 ${motionClass(edge.motion, 'y')}`}
                     style={{
                       background: edge.background,
-                      ...(edge.motion === 'flow' ? { backgroundSize: `100% ${stripH}px`, ['--tile-y' as string]: `${stripH}px` } : {})
+                      ...(edge.motion === 'flow'
+                        ? {
+                            backgroundSize: `100% ${stripH}px`,
+                            ['--tile-y' as string]: `${stripH}px`
+                          }
+                        : {})
                     }}
                   />
                 </span>
@@ -504,13 +519,7 @@ export function TabStrip({
           <div
             key={t.id}
             {...shared}
-            className={`no-drag group relative isolate flex items-center gap-1.5 px-2.5 transition-colors ${
-              // Dynamic has a floor too (owner, 2026-09-28: "so it's not too
-              // small when there's a tab with only one letter ... maybe like 4
-              // letters"): never narrower than its own content, whose label
-              // is at least four characters wide.
-              width === 'fixed' ? 'min-w-[64px] flex-[0_1_114px]' : 'min-w-min shrink'
-            } ${nameInk} ${
+            className={`no-drag group relative isolate flex items-center gap-1.5 px-2.5 transition-colors ${'min-w-[64px] flex-[0_1_114px]'} ${nameInk} ${
               on
                 ? // THE SECONDARY COLOUR (owner, 2026-09-03): the strip, the
                   // tabs at rest and this one are all --p-tabs, one surface
@@ -527,20 +536,24 @@ export function TabStrip({
           >
             {/* The active mark: an accent rule along the top. Full never fills
                 the tab in front (#143), so the rule is always there. */}
-            {on && <span className="absolute inset-x-0 top-0 z-[3] h-0.5 bg-[var(--p-accent-hi)]" aria-hidden />}
-            {body}
-            {/* A FAINT LINE BETWEEN TABS (owner, 2026-10-11: "no borders on
-                classic tabs ... just a faint border"; #143 had taken the full
-                hairline away). The strip's full height, top to bottom (owner:
-                they "should go down to the bottom" and "to the top"), in the
-                divider's ink, so it follows the Edges setting. */}
-            {!last && (
+            {on && (
               <span
-                data-tab-sep
+                className="absolute inset-x-0 top-0 z-[3] h-0.5 bg-[var(--p-accent-hi)]"
                 aria-hidden
-                className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[var(--p-divider)]"
               />
             )}
+            {body}
+            {/* A FAINT LINE AT EVERY TAB'S RIGHT (owner, 2026-10-11: "no
+                borders on classic tabs ... just a faint border"; 2026-10-12:
+                "if every tab just had a right border that would solve both
+                issues", the last tab having had none before the +). The
+                strip's full height, in the divider's ink, so it follows the
+                Edges setting. */}
+            <span
+              data-tab-sep
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[var(--p-divider)]"
+            />
           </div>
         )
       })}
@@ -553,7 +566,16 @@ export function TabStrip({
         // have been before" lives, so the instant verb stays instant.
         onContextMenu={menu.openPlusMenu}
       >
-        <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+        <svg
+          viewBox="0 0 24 24"
+          width={13}
+          height={13}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden
+        >
           <path d="M12 6v12m6-6H6" />
         </svg>
       </button>

@@ -56,3 +56,26 @@ export function onSidebarChange(cb: () => void): () => void {
 
 export const useSidebarMode = (): SidebarMode => useSyncExternalStore(onSidebarChange, sidebarMode)
 export const useSidebarWidth = (): number => useSyncExternalStore(onSidebarChange, sidebarWidth)
+
+/**
+ * THE SIDEBAR'S KEY, Ctrl+Shift+B (owner, 2026-10-12: "bind the sidebar to a
+ * hotkey like ctrl b or ctrl s. not sure whats available"): open, or collapsed
+ * to the left edge. Not Ctrl+B, which is Claude Code's (background a running
+ * task) and the shell's cursor-left; not Ctrl+S, PowerShell's forward history
+ * search and the terminal's pause. VS Code's sidebar key with Shift. Taken
+ * only while the tabs are vertical; otherwise it is the shell's, as before.
+ */
+export function isSidebarChord(e: {
+  key: string
+  ctrlKey: boolean
+  shiftKey: boolean
+  altKey: boolean
+  metaKey: boolean
+}): boolean {
+  return e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'b'
+}
+
+/** Open becomes collapsed, collapsed becomes open. */
+export function toggleSidebar(): void {
+  setSidebarMode(sidebarMode() === 'open' ? 'collapsed' : 'open')
+}

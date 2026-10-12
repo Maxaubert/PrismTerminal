@@ -49,3 +49,13 @@ const none = (): EdgeNear => NONE
 export function useEdgeNear(on: boolean): EdgeNear {
   return useSyncExternalStore(on ? subscribe : noop, on ? () => near : none)
 }
+
+/** Whether main's cursor is where `wants` says, re-rendering only when that
+ *  answer changes (the cursor itself moves twenty times a second). `wants`
+ *  gets null until main has said anything. */
+export function useEdgeWants(
+  on: boolean,
+  wants: (p: { x: number; y: number } | null) => boolean
+): boolean {
+  return useSyncExternalStore(on ? subscribe : noop, () => on && wants(near === NONE ? null : near))
+}

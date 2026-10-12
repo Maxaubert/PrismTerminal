@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CHROME_COLOUR_TOKENS, chromeTokens } from './chromeTheme'
 import { TERM_PRESETS, presetAccent, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
 import { SEE_THROUGH_ALPHA, seeThroughAlpha } from '@core/renderer/lib/seeThrough'
-import { contrastRatio } from '@core/renderer/lib/termAnsi'
+import { contrastRatio, luminance } from '@core/renderer/lib/termAnsi'
 import { composite } from '@core/renderer/lib/colour'
 import { groundMode } from '@core/renderer/lib/termReplies'
 import { WINDOW_EDGES } from '@shared/windowEdges'
@@ -327,5 +327,49 @@ describe('the switch knob token', () => {
     const { join } = await import('node:path')
     const css = readFileSync(join(__dirname, '..', 'index.css'), 'utf8')
     expect(css).toContain(`--p-switch-knob: ${chromeTokens(resolveTermTheme('prism')).vars['--p-switch-knob']};`)
+  })
+})
+
+// THE SECONDARY COLOUR (#162; owner, 2026-10-12: "this is the gold standard.
+// make it fit with each theme"): the mockup's "a shade lighter", per theme.
+describe('the secondary colour', () => {
+  // Owner, 2026-10-12: a black theme keeps a black sidebar; every other one a
+  // step darker than its ground (a light one too).
+  it.each(TERM_PRESETS.map((p) => p.id))('%s: unpicked, black stays, others go darker, readable', (id) => {
+    const { vars } = chromeTokens(resolveTermTheme(id), 1, presetAccent(id))
+    const bg = vars['--p-bg-solid']
+    if (luminance(bg) < 0.0045) expect(vars['--p-secondary']).toBe(bg)
+    else expect(luminance(vars['--p-secondary'])).toBeLessThan(luminance(bg))
+    expect(contrastRatio(vars['--p-text'], vars['--p-secondary'])).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(vars['--p-dim'], vars['--p-secondary'])).toBeGreaterThanOrEqual(3)
+  })
+
+  it('a pick is worn, and the inks are held to it', () => {
+    const theme = resolveTermTheme('pt-default')
+    const { vars } = chromeTokens(theme, 1, presetAccent('pt-default'), 'hairline', null, '#3a3a3a')
+    expect(vars['--p-secondary']).toBe('#3a3a3a')
+    expect(contrastRatio(vars['--p-text'], '#3a3a3a')).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(vars['--p-dim'], '#3a3a3a')).toBeGreaterThanOrEqual(3)
+  })
+
+  it("on glass it is see-through at the ground's alpha", () => {
+    const { vars } = chromeTokens(resolveTermTheme('pt-default'), 0.73)
+    expect(vars['--p-secondary']).toMatch(/^#[0-9a-f]{8}$/)
+    expect(vars['--p-secondary'].slice(7)).toBe(vars['--p-bg'].slice(7))
+  })
+})
+
+// LIGHT THEMES, READABLE CONTROLS (owner, 2026-10-12: "make sure to fix the
+// contrast on light themes, so that buttons and text are properly contrasted").
+describe('controls on light themes', () => {
+  const lights = TERM_PRESETS.map((p) => p.id).filter((id) => chromeTokens(resolveTermTheme(id)).mode === 'light')
+  it.each(lights)('%s: a pressed segment, the icons and the quiet text read at the body floor', (id) => {
+    const { vars } = chromeTokens(resolveTermTheme(id), 1, presetAccent(id))
+    expect(contrastRatio(vars['--p-pressed-ink'], vars['--p-pressed'])).toBeGreaterThanOrEqual(4.5)
+    for (const ground of [vars['--p-bg-solid'], vars['--p-secondary'], vars['--p-control']]) {
+      expect(contrastRatio(vars['--p-icon'], ground)).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(vars['--p-dim'], ground)).toBeGreaterThanOrEqual(4.5)
+    }
+    expect(contrastRatio(vars['--p-dim2'], vars['--p-bg-solid'])).toBeGreaterThanOrEqual(4.5)
   })
 })

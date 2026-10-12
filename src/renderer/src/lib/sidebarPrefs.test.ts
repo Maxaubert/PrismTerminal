@@ -5,6 +5,8 @@ import {
   setSidebarMode,
   setSidebarWidth,
   sidebarMode,
+  isSidebarChord,
+  toggleSidebar,
   sidebarWidth,
   validSidebarWidth
 } from './sidebarPrefs'
@@ -52,5 +54,36 @@ describe('sidebarPrefs (#162)', () => {
     off()
     setSidebarMode('open')
     expect(heard).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('the sidebar key (#162)', () => {
+  const k = (
+    key: string,
+    mods: Partial<{ ctrlKey: boolean; shiftKey: boolean; altKey: boolean; metaKey: boolean }> = {}
+  ) => ({
+    key,
+    ctrlKey: false,
+    shiftKey: false,
+    altKey: false,
+    metaKey: false,
+    ...mods
+  })
+  beforeEach(() => localStorage.clear())
+
+  it('is Ctrl+Shift+B, either case, and nothing else', () => {
+    expect(isSidebarChord(k('B', { ctrlKey: true, shiftKey: true }))).toBe(true)
+    expect(isSidebarChord(k('b', { ctrlKey: true, shiftKey: true }))).toBe(true)
+    // Claude Code's Ctrl+B and the shell's own chords stay theirs.
+    expect(isSidebarChord(k('b', { ctrlKey: true }))).toBe(false)
+    expect(isSidebarChord(k('s', { ctrlKey: true }))).toBe(false)
+    expect(isSidebarChord(k('B', { ctrlKey: true, shiftKey: true, altKey: true }))).toBe(false)
+  })
+
+  it('toggles open and collapsed', () => {
+    toggleSidebar()
+    expect(sidebarMode()).toBe('collapsed')
+    toggleSidebar()
+    expect(sidebarMode()).toBe('open')
   })
 })
