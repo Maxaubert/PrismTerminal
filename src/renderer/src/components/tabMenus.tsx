@@ -1,5 +1,5 @@
-import { keyLabel } from '../lib/keymap'
 import { useState, type JSX, type MouseEvent } from 'react'
+import { keyLabel } from '../lib/keymap'
 import type { Tab } from '../lib/tabs'
 import {
   pinnedRoots,
@@ -13,7 +13,7 @@ import { MenuIcon } from './MenuIcon'
 import { FolderGlyph, PinGlyph } from './menuGlyphs'
 
 /** What the + menu lists right now: pins first, then the newest recents. */
-const plusMenuRows = (): Array<{ path: string; pinned: boolean }> =>
+export const plusMenuRows = (): Array<{ path: string; pinned: boolean }> =>
   plusMenuList(pinnedRoots(), recentRoots())
 
 /**
