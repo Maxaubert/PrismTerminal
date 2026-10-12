@@ -184,6 +184,12 @@ looked at on the way).
   paints once (the cut corner's outside is its own small piece). Collapsed, the sidebar is solid
   (`--p-secondary-solid`): "that sidebar should not be see-through ... you can see the content
   underneath"; pinned open it is see-through.
+- **Over glass, no edge and a clean corner** (owner, 2026-10-12: "the corner here on the transparent
+  looks pretty bad and there's also a border"). Under See-through the open sidebar draws neither
+  shadow nor line (`sidebarLook` 'none'): a shadow over a see-through terminal is a dark band. The
+  terminal's corner is cut by a mask that is the exact inverse of the corner piece (`CORNER_CUT`),
+  one full layer with the piece's shape excluded: a border-radius clip beside a gradient left a dark
+  arc, and tiled mask layers a hairline seam.
 
 ## 2. The indicators
 
