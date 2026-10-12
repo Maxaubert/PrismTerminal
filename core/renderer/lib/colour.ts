@@ -353,7 +353,7 @@ export function fitAlpha(c: Rgba, { alpha = true, alphaMin = 0, alphaMax = 1 }: 
 const squash = (s: string): string => s.toLowerCase().replace(/\s+/g, '')
 
 /**
- * What a code field's blur or Enter commits (generalising `hexCommit`, #26
+ * What a code field's blur or Enter commits (generalising the old hex rule, #26
  * and #71): only a DRAFT the user typed that parses AND names another colour,
  * alpha included, in the stored form. "Another colour" is judged on
  * `toStored` of both, never the strings; and a draft that reads exactly as the

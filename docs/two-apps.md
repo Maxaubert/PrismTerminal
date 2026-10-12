@@ -40,8 +40,8 @@ so an update never silently changes what an existing user sees; the bridge to ma
   and the sections together, and each app's e2e (`options`) asserts its page shows the lists, its
   own rows and nothing else. A row outside both is a fork. Every row is in Find a setting's index
   (`settingsIndex.ts`), and the `settingsSearch` e2e opens each one by its label. The old
-  components (`TerminalAppearanceSettings` and friends) stay exported, unchanged, until Prism has
-  moved (spec 3.0); do not build on them.
+  components (`TerminalAppearanceSettings` and friends) were deleted on 2026-10-12 (Prism's pinned
+  core imported none of them).
 - <a id="tab-marks"></a>**THE TAB MARKS ARE THE CORE'S; WHICH ONES A HOST DRAWS IS DECLARED** (#143, 2026-10-10). The
   rules (`lib/tabMark.ts`, `markColours.ts`, `nameInk.ts`, `markPalette.ts`), the flat tab's marks
   (`components/TabMark.tsx`) and all their motion (`styles/marks.css`, which a host imports) are
@@ -323,7 +323,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
   settings pages in Prism and Prism Terminal should be the same in terms of order"). Every hint,
   sub and note is checked by `core/shared/settingsCopy.ts` (a test in the core and one per app).
   Since #134 a subtext is ONE line of at most eight words (`subTooLong`) and a label passes the
-  symbol rule (`labelProblem`), both held for the new files only (the legacy ones run longer).
+  symbol rule (`labelProblem`), both held for the lists, `layout/` and `sections/`.
   `TERMINAL_OPTIONS` is in display order WITHIN EACH SECTION, and the `options` e2e reads every core
   section (`[data-settings-section]`) against it; which page holds a section is each app's.
 - **WHAT NO THEME OWNS SITS ABOVE THE THEME WALL** (owner, 2026-09-28: font and font size "should
@@ -409,7 +409,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
   natural-language search finds it... optional in settings", and 2026-09-20: "a pop up with copy
   icons for easy copying"). Built ONCE in `core/` for both apps: the catalogue and its search in
   `shared/help/`, `renderer/lib/helpPrefs.ts`, `renderer/components/HelpPanel.tsx` (props only),
-  `renderer/settings/Help.tsx` + `helpOptions.ts`, and `writeClipboard` on the bridge. This app's
+  `renderer/settings/sections/HelpSection.tsx` + `helpOptions.ts`, and `writeClipboard` on the bridge. This app's
   part is the way in: `F1`, the ? in the title bar, "Command help" in the terminal's right-click
   menu, the row in Settings > Terminal. The rules that must not regress:
   - **IT NEVER INSERTS AND NEVER RUNS** (owner, 2026-09-19: "picking a command in the help panel

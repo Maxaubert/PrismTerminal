@@ -20,10 +20,8 @@ import ThemeSwitchAsk from '../../components/ThemeSwitchAsk'
 import { ANSI_KEYS, cardAnsi, paletteOf, pickPreset, presetLook } from './palette'
 import { saveAsCustom, useNoAcrylic, useTermSetup } from './useTermSetup'
 
-// THE THEME WALL, once for both layouts of the theme section (2026-10-05):
-// the cards, Show all, the switch question and the colour editor. Extracted
-// from TerminalAppearance.tsx unchanged; the legacy section and the grouped
-// cards one both draw this.
+// THE THEME WALL (2026-10-05): the cards, Show all, the switch question and
+// the colour editor, drawn by the theme section.
 
 /** A theme as a miniature terminal: prompt, coloured ls output, cursor. The
  *  point is the SYNTAX colours - a swatch row says nothing about how a real

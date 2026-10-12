@@ -10,8 +10,7 @@ import {
 import { resolveTermTheme } from '../../lib/termTheme'
 import { normalizeColor } from '../../lib/termAnsi'
 
-// What a theme card and the editor read off a theme, once for both layouts
-// of the theme wall (the legacy section and the grouped cards one).
+// What a theme card and the editor read off a theme.
 
 export const ANSI_KEYS = [
   'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
