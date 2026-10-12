@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { createTermApi } from '@core/preload/api'
+import { createTermApi, subscribe } from '@core/preload/api'
 import { createDictationApi } from '@core/preload/dictationApi'
 import { createDiagApi } from '@core/preload/diagApi'
 import type { BadgeImage, EdgeNear, Restored, SavedTabs, UpdateInfo } from '@shared/types'
@@ -10,12 +10,9 @@ import { APP_CH, E2E_CH } from '@shared/channels'
 // node, and the only electron modules used are ones a sandboxed preload is
 // given (contextBridge, ipcRenderer, webUtils).
 
-/** Subscribe to a main-to-renderer event; the function returned unsubscribes. */
-function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): () => void {
-  const listener = (_: unknown, ...args: unknown[]): void => cb(...(args as A))
-  ipcRenderer.on(channel, listener)
-  return () => ipcRenderer.removeListener(channel, listener)
-}
+/** Subscribe to a main-to-renderer event (the core's `subscribe`). */
+const on = <A extends unknown[]>(channel: string, cb: (...args: A) => void): (() => void) =>
+  subscribe(ipcRenderer, channel, cb)
 
 const api = {
   /* ----- the terminal ----- */

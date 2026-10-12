@@ -88,14 +88,23 @@ export interface TermPreloadApi {
   termOpenPath(cwd: string, text: string, mode: 'open' | 'reveal'): void
 }
 
-export function createTermApi(ipc: IpcRendererLike): TermPreloadApi {
-  const on = <A extends unknown[]>(channel: string, cb: (...args: A) => void): (() => void) => {
-    const listener = (_e: unknown, ...args: unknown[]): void => cb(...(args as A))
-    ipc.on(channel, listener)
-    return () => {
-      ipc.removeListener(channel, listener)
-    }
+/** Subscribe to a main-to-renderer event; the function returned unsubscribes.
+ *  The one helper every preload in both apps listens through. */
+export function subscribe<A extends unknown[]>(
+  ipc: IpcRendererLike,
+  channel: string,
+  cb: (...args: A) => void
+): () => void {
+  const listener = (_e: unknown, ...args: unknown[]): void => cb(...(args as A))
+  ipc.on(channel, listener)
+  return () => {
+    ipc.removeListener(channel, listener)
   }
+}
+
+export function createTermApi(ipc: IpcRendererLike): TermPreloadApi {
+  const on = <A extends unknown[]>(channel: string, cb: (...args: A) => void): (() => void) =>
+    subscribe(ipc, channel, cb)
   return {
     termShells: () => ipc.invoke(CH.shells) as Promise<ShellDef[]>,
     termSpawn: (id, cwd, shellId, resume, hooks) =>
