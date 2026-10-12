@@ -1,14 +1,10 @@
 import type { JSX, ReactNode } from 'react'
 
 /**
- * The frameless window's top strip: the app's icon in outline, a drag region, the
- * update chip when there is one, the command help button (#12, when that
- * setting is on), the settings cog, and the three window buttons. A cog and not a menu (owner, 2026-09-18): a menu of one row is
- * chrome.
- *
- * Prism's bar, by subtraction: no file name, no panel toggle, no Tools. What
- * it keeps is the shape - 36px, the title surface, glyph-only 32x28 buttons -
- * so the two apps read as one family.
+ * The window's buttons (#91, #162): the update chip, command help, the cog and
+ * the three window buttons. There is no title bar of its own any more (owner,
+ * 2026-10-12, removing Show title bar): they sit at the end of the tab row, or
+ * of the bar beside the vertical tabs' sidebar.
  *
  * The update chip is handed in (`chip`), not built here: it is the core's
  * component since #28, and its state lives in App beside the window it opens,
@@ -17,38 +13,6 @@ import type { JSX, ReactNode } from 'react'
 
 const BTN =
   'grid h-7 w-8 place-items-center rounded text-[var(--p-icon)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent-hi)]'
-
-export default function TitleBar({
-  onSettings,
-  onHelp,
-  chip,
-  secondary = false
-}: {
-  /** Beside the vertical tabs' sidebar, the bar wears the secondary colour,
-   *  as the sidebar does, with no line under it: the two are one surface the
-   *  terminal sits in (#162). */
-  secondary?: boolean
-  onSettings: () => void
-  /** Open the command help popup; absent when the setting is off, and the
-   *  button goes with it. */
-  onHelp?: () => void
-  /** The update chip, or nothing when there is no update. */
-  chip?: ReactNode
-}): JSX.Element {
-  return (
-    <div
-      data-title-bar
-      className={`drag p-styled-font flex h-9 shrink-0 items-center gap-2.5 ${secondary ? 'bg-[var(--p-secondary)]' : 'border-b border-[var(--p-divider)] bg-[var(--p-title)]'} pl-3 pr-1.5 text-[13px]`}
-    >
-      {/* NO ICON, FOR NOW (owner, 2026-10-12: "removed that app icon in the
-          title bar for now. It might get re-added later"). The outline mark of
-          #185 is in git history (TitleBar.tsx at 031f0c0). */}
-      {/* The rest of the bar is the handle the window is moved by. */}
-      <span className="min-w-0 flex-1" />
-      <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
-    </div>
-  )
-}
 
 /**
  * The title bar's right end: the update chip, command help, the cog and the

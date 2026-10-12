@@ -12,7 +12,6 @@ import { dropSlot, type Lane } from '../lib/tabDrop'
 import { useHoverReveal } from '../lib/hoverReveal'
 import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
-import { setSidebarEdge } from '../lib/sidebarEdge'
 import { AppMark } from './AppMark'
 import { findKeeps, folderLine } from '../lib/sidebarRows'
 import { useSidebarEdge } from '../lib/sidebarLook'
@@ -58,8 +57,7 @@ export function TabSidebar({
   onNew,
   onDropFolder,
   onReorder,
-  onOpenRecent,
-  titleRow
+  onOpenRecent
 }: {
   tabs: Tab[]
   activeId: string | null
@@ -77,7 +75,6 @@ export function TabSidebar({
   onReorder: (id: string, toIndex: number) => void
   onOpenRecent: (path: string) => void
   /** The title bar is hidden: the sidebar starts at the window's top. */
-  titleRow: boolean
 }): JSX.Element | null {
   const prompt = useTabStyle() === 'prompt'
   const mode = useSidebarMode()
@@ -130,7 +127,8 @@ export function TabSidebar({
   // Measured to where it COMES TO REST, never the half-slid box ("closes before
   // my cursor is near the edge"): its stored width, not a rectangle.
   const shownNow = useRef(false)
-  const top = titleRow ? 0 : 36 // under a title bar, h-9
+  // The sidebar runs from the window's top (no bar across it).
+  const top = 0
   const fromMain = useEdgeWants(collapsed, (p) => sideWants(p, shownNow.current, top, width))
   const shown = useHoverReveal(
     collapsed,
@@ -141,12 +139,6 @@ export function TabSidebar({
     shownNow.current = shown
   }, [shown])
   const visible = !collapsed || shown
-  // Where its edge is on screen, for the pop-out title bar to start at.
-  const onScreen = tabs.length > 0 && visible ? width : 0
-  useEffect(() => {
-    setSidebarEdge(onScreen)
-  }, [onScreen])
-  useEffect(() => () => setSidebarEdge(0), [])
 
   // ---- Reorder: the strip's pointer drag, along y ----
   const [dropAt, setDropAt] = useState<number | null>(null)
@@ -320,8 +312,8 @@ export function TabSidebar({
             moves it. */}
         <div
           data-sidebar-brand
-          data-sidebar-grab={titleRow || undefined}
-          className={`${titleRow ? 'drag' : ''} flex h-11 shrink-0 items-center gap-2.5 px-4 pt-1`}
+          data-sidebar-grab
+          className="drag flex h-11 shrink-0 items-center gap-2.5 px-4 pt-1"
         >
           <AppMark size={20} className="shrink-0 text-[var(--p-accent-solid)]" />
           <span className="truncate text-[13.5px] font-semibold tracking-[0.01em] text-[var(--p-side-text)] select-none">

@@ -1,4 +1,14 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type JSX } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type JSX
+} from 'react'
 import type { AgentKind, DetectedAgent } from '@shared/types'
 import TerminalPanel, {
   disposeTermSession,
@@ -15,12 +25,18 @@ import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
 import { isSidebarChord, toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
 import { isFindTabChord } from './lib/sidebarRows'
-import { useSidebarEdge } from './lib/sidebarEdge'
-import { HoverTitleBar } from './components/HoverTitleBar'
-import TitleBar, { TitleButtons } from './components/TitleBar'
-import { useTitleBarMode } from './lib/titleBarPrefs'
+import { TitleButtons } from './components/TitleBar'
 import { tabSwitch } from './lib/tabSwitchPrefs'
-import { startWalk, stepWalk, syncMru, touchMru, walkHolds, walkTarget, type Mru, type Walk } from './lib/tabMru'
+import {
+  startWalk,
+  stepWalk,
+  syncMru,
+  touchMru,
+  walkHolds,
+  walkTarget,
+  type Mru,
+  type Walk
+} from './lib/tabMru'
 import EmptyState from './components/EmptyState'
 import type { SettingsPage } from './components/settings/Settings'
 import { Dialog } from './components/Dialog'
@@ -78,7 +94,12 @@ import { onWindowAccentChange, windowAccent } from './lib/accentPrefs'
 import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPrefs'
 import { onWindowSecondaryChange, windowSecondary } from './lib/secondaryPrefs'
 import { attentionCount, drawBadge, useTaskbarBadgeOn } from './lib/taskbarBadge'
-import { agentHooksOn, useAgentDoneOn, useAgentFailedOn, useAgentQuestionOn } from '@core/renderer/lib/termLook'
+import {
+  agentHooksOn,
+  useAgentDoneOn,
+  useAgentFailedOn,
+  useAgentQuestionOn
+} from '@core/renderer/lib/termLook'
 
 const Settings = lazy(() => import('./components/settings/Settings'))
 // Loaded when it is first opened: the popup brings the whole catalogue with it,
@@ -163,16 +184,15 @@ export default function App(): JSX.Element {
   /** The chip it opens on, decided at the press that opens it. */
   const [helpFor, setHelpFor] = useState<HelpShellChoice>('powershell')
   const helpOn = useHelpEnabled()
-  const titleBar = useTitleBarMode()
   // THE TABS DOWN THE SIDE (#162): the strip, or a sidebar.
   const vertical = useTabLayout() === 'vertical'
-  // NO TITLE BAR AT ALL (#162; owner, 2026-10-11): with the tabs down the side
-  // and the title bar off, command help and Settings move into the sidebar and
-  // the window buttons float at the top right. With no tab open there is no
-  // sidebar, so the window keeps #91's top row to be moved by.
-  const bare = vertical && titleBar === 'hidden' && state.tabs.length > 0
-  // Where the sidebar's edge is on screen: the pop-out bar starts there.
-  const sidebarEdge = useSidebarEdge()
+  // ONE WINDOW SHAPE PER TAB LAYOUT (owner, 2026-10-12, removing Show title
+  // bar: with vertical tabs the look of the dropped-down bar, "but I want it to
+  // be dropped down all the time", never a bar across the top that "pushes the
+  // side bar content down"; with the tabs along the top, "exactly as it is with
+  // no title bar"). With no tab open there is no sidebar, so the window keeps
+  // the top row (#91) to be moved by.
+  const beside = vertical && state.tabs.length > 0
   const sidebarOpen = useSidebarMode() === 'open'
   /** Which shell each tab was SPAWNED with. The Shell setting only names what
    *  the next terminal launches, so a tab opened before it was changed still
@@ -212,7 +232,8 @@ export default function App(): JSX.Element {
   // nothing, and with the setting off it listens to nothing.
   useDictationArm(activeShell ? activeShell.id : null)
   const findOpen = !!activeShell && findFor === activeShell.id
-  const { agentIds, workingIds, doneIds, questionIds, failedIds, failedKinds, agentKinds } = indicator
+  const { agentIds, workingIds, doneIds, questionIds, failedIds, failedKinds, agentKinds } =
+    indicator
 
   // THE TIMELINE (#140): which tab is in front, and which Settings page, as
   // crumbs, so a stall in the log says what the user had just done.
@@ -230,7 +251,13 @@ export default function App(): JSX.Element {
   // Refs, not state: nothing is drawn from them, and the key listener is
   // registered once. Not persisted: at launch the list is the tab in front,
   // then the strip.
-  const mru = useRef<Mru>(syncMru([], boot.state.tabs.map((t) => t.id), boot.state.activeId))
+  const mru = useRef<Mru>(
+    syncMru(
+      [],
+      boot.state.tabs.map((t) => t.id),
+      boot.state.activeId
+    )
+  )
   const walk = useRef<Walk | null>(null)
   /** The hold ended (Ctrl released, the window left, another chord): only
    *  now does the tab landed on move to the front, so repeated presses walk
@@ -251,7 +278,15 @@ export default function App(): JSX.Element {
     // on another tab while Ctrl is still down, or a tab opened or closed under
     // it. Then the activation is a use at once, as it is outside a hold (a
     // click, Ctrl+1..9, a new tab, a close handing over).
-    if (walk.current && !walkHolds(walk.current, tabs.map((t) => t.id), activeId)) walk.current = null
+    if (
+      walk.current &&
+      !walkHolds(
+        walk.current,
+        tabs.map((t) => t.id),
+        activeId
+      )
+    )
+      walk.current = null
     if (!walk.current && activeId) mru.current = touchMru(mru.current, activeId)
   }, [tabs, activeId])
   useEffect(() => {
@@ -533,7 +568,8 @@ export default function App(): JSX.Element {
     window.prism.tabsChanged({
       tabs: shells.map((t) => {
         const kind = agentIds.has(t.id) ? agentKinds.current.get(t.id) : undefined
-        const agent: AgentKind | undefined = kind === 'claude' || kind === 'codex' ? kind : undefined
+        const agent: AgentKind | undefined =
+          kind === 'claude' || kind === 'codex' ? kind : undefined
         return agent ? { cwd: t.cwd, agent } : { cwd: t.cwd }
       }),
       active: Math.max(
@@ -553,7 +589,15 @@ export default function App(): JSX.Element {
   const doneOn = useAgentDoneOn()
   const questionOn = useAgentQuestionOn()
   const failedOn = useAgentFailedOn()
-  const need = attentionCount({ doneIds, questionIds, workingIds, doneOn, questionOn, failedIds, failedOn })
+  const need = attentionCount({
+    doneIds,
+    questionIds,
+    workingIds,
+    doneOn,
+    questionOn,
+    failedIds,
+    failedOn
+  })
   useEffect(() => {
     if (!badgeOn || need.count === 0) {
       window.prism.setTaskbarBadge(null, '')
@@ -567,7 +611,8 @@ export default function App(): JSX.Element {
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
   // keyboard back: clicking or dragging a tab is not "I left the shell".
   useEffect(() => {
-    if (activeShell && !ask && !findOpen && !update.state.open && !helpOpen) focusTermSession(activeShell.id)
+    if (activeShell && !ask && !findOpen && !update.state.open && !helpOpen)
+      focusTermSession(activeShell.id)
   }, [activeShell, ask, findOpen, update.state.open, helpOpen])
 
   useEffect(() => {
@@ -602,7 +647,8 @@ export default function App(): JSX.Element {
       // meant for the question went there. They do nothing until it is
       // answered; Ctrl+W keeps its own rule.
       if (live.current.blocked && k !== 'w') {
-        if (e.key === 'Tab' || /^[1-9]$/.test(e.key) || e.key === ',' || k === 't' || k === 'f') hit()
+        if (e.key === 'Tab' || /^[1-9]$/.test(e.key) || e.key === ',' || k === 't' || k === 'f')
+          hit()
         return
       }
       if (e.key === 'Tab') {
@@ -701,11 +747,15 @@ export default function App(): JSX.Element {
     onPick: (id: string) => setState((s) => pickTab(s, id)),
     onClose: requestClose,
     onNew: () => void newTab(),
-    onDropFolder: (path: string) => void window.prism.folderOf(path).then((dir) => dir && openTab(dir)),
-    onReorder: (id: string, to: number) => setState((s) => ({ ...s, tabs: reorderTabs(s.tabs, id, to) })),
+    onDropFolder: (path: string) =>
+      void window.prism.folderOf(path).then((dir) => dir && openTab(dir)),
+    onReorder: (id: string, to: number) =>
+      setState((s) => ({ ...s, tabs: reorderTabs(s.tabs, id, to) })),
     onOpenRecent: openRecent
   }
-  const strip = (inTitleRow: boolean): JSX.Element => <TabStrip {...tabProps} inTitleRow={inTitleRow} />
+  const strip = (inTitleRow: boolean): JSX.Element => (
+    <TabStrip {...tabProps} inTitleRow={inTitleRow} />
+  )
   return (
     <div className="flex h-full w-full flex-col overflow-hidden text-[var(--p-text)]">
       {/* NO TITLE BAR (#91, owner's pick "tabs in the top row"): the tabs
@@ -713,11 +763,7 @@ export default function App(): JSX.Element {
           The strip's own empty space is the handle the window moves by; with
           no tabs (the start screen) the row is only that handle and the
           buttons. */}
-      {bare ? null : vertical && titleBar === 'shown' ? (
-        // VERTICAL (#162): the title bar of its own, the tabs in the sidebar,
-        // both in the secondary colour.
-        <TitleBar onSettings={onSettings} onHelp={onHelp} chip={chip} secondary />
-      ) : titleBar === 'hidden' ? (
+      {beside ? null : (
         <div
           data-title-bar="tabs"
           className="drag p-styled-font flex h-9 shrink-0 items-stretch border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1.5 text-[13px]"
@@ -727,130 +773,126 @@ export default function App(): JSX.Element {
             <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
           </div>
         </div>
-      ) : (
-        <>
-          <TitleBar onSettings={onSettings} onHelp={onHelp} chip={chip} />
-          {tabs.length > 0 && strip(false)}
-        </>
       )}
       {/* ONE SURFACE, THE TERMINAL SET INTO IT (owner, 2026-10-12: "the
           corners of the sidebar and titlebar should connect like this where
           its rounded making it seem like they merge together"): with the tabs
-          down the side and a title bar showing, the body wears the secondary
-          colour and the terminal's column is cut round at its top left, where
-          the bar and the sidebar meet. */}
+          down the side the body wears the secondary colour, and the terminal
+          is cut round at its top left, where the bar and the open sidebar
+          meet. */}
       <div className={`relative flex min-h-0 flex-1 ${vertical ? 'bg-[var(--p-secondary)]' : ''}`}>
-      {vertical && (
-        <TabSidebar
-          {...tabProps}
-          titleRow={titleBar === 'hidden'}
-        />
-      )}
-      <div
-        data-term-column
-        className={`relative flex min-h-0 min-w-0 flex-1 flex-col ${
-          vertical && titleBar === 'shown' && sidebarOpen && tabs.length > 0 ? 'overflow-hidden rounded-tl-[10px] bg-[var(--p-bg)]' : ''
-        }`}
-      >
-      <div
-        className="relative min-h-0 min-w-0 flex-1"
-        data-term-host
-        // A FILE DROPPED ON THE TERMINAL TYPES ITS PATH (2026-09-19, #16): the
-        // other way a file, or a screenshot, gets into an agent's prompt.
-        // Quoted, at the cursor, as the paste rule quotes copied files, and
-        // never followed by Enter. In Prism this lived in the split dock, and
-        // went with it when the dock was stripped; the README went on
-        // claiming it for a day. Only over a shell: the start screen and
-        // Settings have nothing to type into.
-        onDragOver={(e) => {
-          if (!activeShell || !e.dataTransfer.types.includes('Files')) return
-          e.preventDefault()
-          e.dataTransfer.dropEffect = 'copy'
-        }}
-        onDrop={(e) => {
-          if (!activeShell) return
-          e.preventDefault()
-          e.stopPropagation()
-          const paths = [...e.dataTransfer.files]
-            .map((f) => window.prism.getDroppedPath(f))
-            .filter((path) => path.length > 0)
-          if (!paths.length) return
-          markTouched(activeShell.id) // input like any other: its echo is not the agent working
-          // Quoted for the shell the tab runs (#5): PowerShell expands inside "...".
-          window.prism.termInput(activeShell.id, quotePaths(paths, shellOfShellId(shellIds.current.get(activeShell.id))))
-          focusTermSession(activeShell.id)
-        }}
-        onContextMenu={(e) => {
-          if (!activeShell || !(e.target as HTMLElement).closest('[data-term-region]')) return
-          e.preventDefault()
-          setTermMenu({ id: activeShell.id, x: e.clientX, y: e.clientY, ...termContextAt(activeShell.id, e.clientX, e.clientY) })
-        }}
-      >
-        {/* A placeholder (#106): the skeleton for a tab coming back to an agent,
+        {vertical && <TabSidebar {...tabProps} />}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* THE BAR BESIDE THE SIDEBAR, always down (owner, 2026-10-12): from the
+          sidebar's edge to the right, the window's buttons at its end, the
+          handle the window moves by. In the column, not over it, so the
+          terminal's top rows stay in sight; a sidebar that slides out from
+          collapsed lies over its left end. */}
+          {beside && (
+            <div
+              data-title-bar="beside"
+              className="drag p-styled-font flex h-9 shrink-0 items-center justify-end gap-2.5 bg-[var(--p-secondary)] pl-3 pr-1.5 text-[13px]"
+            >
+              <div data-window-buttons className="no-drag flex items-center gap-2.5">
+                <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
+              </div>
+            </div>
+          )}
+          <div
+            data-term-column
+            className={`relative flex min-h-0 min-w-0 flex-1 flex-col ${
+              beside && sidebarOpen ? 'overflow-hidden rounded-tl-[10px] bg-[var(--p-bg)]' : ''
+            }`}
+          >
+            <div
+              className="relative min-h-0 min-w-0 flex-1"
+              data-term-host
+              // A FILE DROPPED ON THE TERMINAL TYPES ITS PATH (2026-09-19, #16): the
+              // other way a file, or a screenshot, gets into an agent's prompt.
+              // Quoted, at the cursor, as the paste rule quotes copied files, and
+              // never followed by Enter. In Prism this lived in the split dock, and
+              // went with it when the dock was stripped; the README went on
+              // claiming it for a day. Only over a shell: the start screen and
+              // Settings have nothing to type into.
+              onDragOver={(e) => {
+                if (!activeShell || !e.dataTransfer.types.includes('Files')) return
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'copy'
+              }}
+              onDrop={(e) => {
+                if (!activeShell) return
+                e.preventDefault()
+                e.stopPropagation()
+                const paths = [...e.dataTransfer.files]
+                  .map((f) => window.prism.getDroppedPath(f))
+                  .filter((path) => path.length > 0)
+                if (!paths.length) return
+                markTouched(activeShell.id) // input like any other: its echo is not the agent working
+                // Quoted for the shell the tab runs (#5): PowerShell expands inside "...".
+                window.prism.termInput(
+                  activeShell.id,
+                  quotePaths(paths, shellOfShellId(shellIds.current.get(activeShell.id)))
+                )
+                focusTermSession(activeShell.id)
+              }}
+              onContextMenu={(e) => {
+                if (!activeShell || !(e.target as HTMLElement).closest('[data-term-region]')) return
+                e.preventDefault()
+                setTermMenu({
+                  id: activeShell.id,
+                  x: e.clientX,
+                  y: e.clientY,
+                  ...termContextAt(activeShell.id, e.clientX, e.clientY)
+                })
+              }}
+            >
+              {/* A placeholder (#106): the skeleton for a tab coming back to an agent,
             the bare ground for a plain shell, until the restore settles it. */}
-        {active?.pending === 'agent' && (
-          <div className="relative h-full w-full bg-[var(--p-bg)]">
-            <ResumeSkeleton />
-          </div>
-        )}
-        {active?.pending === 'shell' && <div className="h-full w-full bg-[var(--p-bg)]" />}
-        {activeShell && (
-          <TerminalPanel
-            key={activeShell.id}
-            sessionId={activeShell.id}
-            root={activeShell.cwd}
-            shellId={savedShellId()}
-          />
-        )}
-        <DictationPill sessionId={activeShell ? activeShell.id : null} />
-        {/* "Copied", at the bottom centre, for every copy the app makes. */}
-        <CopiedBadge />
-        {activeShell && findOpen && (
-          <TermFind sessionId={activeShell.id} onClose={() => setFindFor(null)} />
-        )}
-        {/* The terminal paints its own ground (a second coat of a translucent
+              {active?.pending === 'agent' && (
+                <div className="relative h-full w-full bg-[var(--p-bg)]">
+                  <ResumeSkeleton />
+                </div>
+              )}
+              {active?.pending === 'shell' && <div className="h-full w-full bg-[var(--p-bg)]" />}
+              {activeShell && (
+                <TerminalPanel
+                  key={activeShell.id}
+                  sessionId={activeShell.id}
+                  root={activeShell.cwd}
+                  shellId={savedShellId()}
+                />
+              )}
+              <DictationPill sessionId={activeShell ? activeShell.id : null} />
+              {/* "Copied", at the bottom centre, for every copy the app makes. */}
+              <CopiedBadge />
+              {activeShell && findOpen && (
+                <TermFind sessionId={activeShell.id} onClose={() => setFindFor(null)} />
+              )}
+              {/* The terminal paints its own ground (a second coat of a translucent
             --p-bg behind it reads darker than the rest of the window); the
             pages that are not a terminal paint theirs here, except Settings:
             its frame paints its own, and a coat here too made the page 92%
             solid under See-through (owner, 2026-10-11). */}
-        {active?.kind === 'settings' && (
-          <div className="h-full min-h-0 w-full">
-            <Suspense fallback={null}>
-              <Settings page={settingsPage} onPage={setSettingsPage} />
-            </Suspense>
+              {active?.kind === 'settings' && (
+                <div className="h-full min-h-0 w-full">
+                  <Suspense fallback={null}>
+                    <Settings page={settingsPage} onPage={setSettingsPage} />
+                  </Suspense>
+                </div>
+              )}
+              {!active && restoreDone && (
+                <div className="h-full w-full bg-[var(--p-bg)]">
+                  <EmptyState
+                    onNew={() => void newTab()}
+                    onOpenFolder={openRecent}
+                    onSettings={() => setState(openSettings)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
-        )}
-        {!active && restoreDone && (
-          <div className="h-full w-full bg-[var(--p-bg)]">
-            <EmptyState
-              onNew={() => void newTab()}
-              onOpenFolder={openRecent}
-              onSettings={() => setState(openSettings)}
-            />
-          </div>
-        )}
+        </div>
       </div>
-      </div>
-      </div>
-      {/* THE TITLE BAR THAT POPS OUT (owner, 2026-10-11: "a pop out title bar
-          is best actually we just need to do it well ... like zen browser's
-          title bar ... when the sidebar is open the titlebar drops down but
-          only from the sidebar edge and all the way to the right"). With the
-          tabs down the side and the title bar off, the terminal has the whole
-          height ("the titlebar area is usable for content"); the bar drops
-          over it at the top edge with the window's buttons, and moves the
-          window while it is down. */}
-      {bare && (
-        <HoverTitleBar hold={!!update.state.notice} left={sidebarEdge}>
-          {/* The same buttons as the bar that is always there (owner,
-              2026-10-12: "settings and that command help can stay in the
-              title bar now that we do have a title bar. That way it stays
-              consistent at all times"). */}
-          <div data-window-buttons className="no-drag flex items-center gap-2.5">
-            <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
-          </div>
-        </HoverTitleBar>
-      )}
 
       {termMenu && activeShell && termMenu.id === activeShell.id && (
         <ContextMenu
@@ -873,27 +915,69 @@ export default function App(): JSX.Element {
                     icon: <MenuIcon name={termMenu.path.kind === 'dir' ? 'folder' : 'open'} />,
                     onPick: () => openTermPath(termMenu.id, termMenu.path!, 'open')
                   },
-                  { label: 'Show in Explorer', icon: <MenuIcon name="folder" />, onPick: () => openTermPath(termMenu.id, termMenu.path!, 'reveal') },
-                  { label: 'Copy path', icon: <MenuIcon name="copy" />, onPick: () => void copyText(termMenu.path!.abs) }
+                  {
+                    label: 'Show in Explorer',
+                    icon: <MenuIcon name="folder" />,
+                    onPick: () => openTermPath(termMenu.id, termMenu.path!, 'reveal')
+                  },
+                  {
+                    label: 'Copy path',
+                    icon: <MenuIcon name="copy" />,
+                    onPick: () => void copyText(termMenu.path!.abs)
+                  }
                 ]
               : []),
             ...(termMenu.link
               ? [
-                  { label: 'Copy link', icon: <MenuIcon name="link" />, onPick: () => void copyText(termMenu.link!) },
+                  {
+                    label: 'Copy link',
+                    icon: <MenuIcon name="link" />,
+                    onPick: () => void copyText(termMenu.link!)
+                  },
                   // A right-click never opens it (2026-09-28), so the menu does.
-                  { label: 'Open link', icon: <MenuIcon name="open" />, onPick: () => window.prism.openExternal(termMenu.link!) }
+                  {
+                    label: 'Open link',
+                    icon: <MenuIcon name="open" />,
+                    onPick: () => window.prism.openExternal(termMenu.link!)
+                  }
                 ]
               : []),
             ...(termMenu.selection
-              ? [{ label: 'Copy', icon: <MenuIcon name="copy" />, hint: 'Ctrl+C', onPick: () => void copyText(termMenu.selection) }]
+              ? [
+                  {
+                    label: 'Copy',
+                    icon: <MenuIcon name="copy" />,
+                    hint: 'Ctrl+C',
+                    onPick: () => void copyText(termMenu.selection)
+                  }
+                ]
               : []),
             // Paste through the terminal's own rule (an image forwards the
             // keystroke to the agent, files become quoted paths, text is a
             // bracketed paste).
-            { label: 'Paste', icon: <MenuIcon name="paste" />, hint: 'Ctrl+V', onPick: () => void pasteInto(activeShell.id) },
-            { label: 'Find in scrollback', icon: <MenuIcon name="find" />, hint: 'Ctrl+F', onPick: () => setFindFor(activeShell.id) },
+            {
+              label: 'Paste',
+              icon: <MenuIcon name="paste" />,
+              hint: 'Ctrl+V',
+              onPick: () => void pasteInto(activeShell.id)
+            },
+            {
+              label: 'Find in scrollback',
+              icon: <MenuIcon name="find" />,
+              hint: 'Ctrl+F',
+              onPick: () => setFindFor(activeShell.id)
+            },
             // Only while the setting is on: off means the app offers it nowhere.
-            ...(helpOn ? [{ label: 'Command help', icon: <MenuIcon name="help" />, hint: 'F1', onPick: toggleHelp }] : [])
+            ...(helpOn
+              ? [
+                  {
+                    label: 'Command help',
+                    icon: <MenuIcon name="help" />,
+                    hint: 'F1',
+                    onPick: toggleHelp
+                  }
+                ]
+              : [])
           ]}
         />
       )}

@@ -168,6 +168,13 @@ looked at on the way).
   lifted by OKLab lightness, keeping its hue (`lib/oklab.ts`): mixed with white, a picked #140707 had
   turned a pink grey. Where white comes close on the accent, the accent goes a shade deeper until
   white reads at 4.5:1, as far as the ground still shows it.
+- **Show title bar is gone** (owner, 2026-10-12: with vertical tabs "I want it to be exactly as it
+  is when the title bar is dropped down on the don't show title bar version ... dropped down all the
+  time", since a bar across the top "pushes the side bar content down"; with the tabs along the top
+  "exactly as it is with no title bar"). The bar beside the sidebar sits IN the column above the
+  terminal rather than over it, so the terminal's top rows stay in sight; collapsed, it spans the
+  window and the slid-out sidebar lies over its left end. The pop-out bar, its reveal zone and the
+  sidebar-edge store went with it; the app's name above Find a tab is the sidebar's drag band.
 
 ## 2. The indicators
 

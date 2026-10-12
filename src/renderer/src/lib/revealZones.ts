@@ -22,13 +22,6 @@ export interface Point {
   y: number
 }
 
-/** The pop-out title bar, starting at `left`, `height` tall. */
-export function barWants(p: Point | null, shown: boolean, left: number, height: number): boolean {
-  if (!p || p.x < left || p.y < -BORDER) return false
-  if (p.y <= REVEAL.top) return true
-  return shown && p.y <= height + KEEP
-}
-
 /** The collapsed sidebar, from `top` down, `width` wide. */
 export function sideWants(p: Point | null, shown: boolean, top: number, width: number): boolean {
   if (!p || p.y < top || p.x < -BORDER) return false

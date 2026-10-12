@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore, type JSX } from 'react'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
-import { RESET_LINK, Segmented, Switch } from '@core/renderer/settings/fields'
+import { RESET_LINK, Segmented } from '@core/renderer/settings/fields'
 import { ColourField } from '@core/renderer/settings/ColourPicker'
 import { SettingRow } from '@core/renderer/settings/layout/SettingRow'
 import { SettingsSection } from '@core/renderer/settings/layout/SettingsSection'
@@ -22,11 +22,19 @@ import { setWindowEdges, useWindowEdges } from '../../lib/edgesPrefs'
 import { setTabWidth, useTabWidth, type TabWidth } from '../../lib/tabWidthPrefs'
 import { setTabStyle, useTabStyle, type TabStyle } from '../../lib/tabStylePrefs'
 import { setTabSwitch, useTabSwitch, type TabSwitch } from '../../lib/tabSwitchPrefs'
-import { setTitleBarMode, useTitleBarMode } from '../../lib/titleBarPrefs'
 import { setTabLayout, useTabLayout, type TabLayout } from '../../lib/tabLayoutPrefs'
 import { setWindowAccent, useWindowAccent } from '../../lib/accentPrefs'
-import { onWindowBackgroundChange, setWindowBackground, useWindowBackground, windowBackground } from '../../lib/backgroundPrefs'
-import { onWindowSecondaryChange, setWindowSecondary, useWindowSecondary } from '../../lib/secondaryPrefs'
+import {
+  onWindowBackgroundChange,
+  setWindowBackground,
+  useWindowBackground,
+  windowBackground
+} from '../../lib/backgroundPrefs'
+import {
+  onWindowSecondaryChange,
+  setWindowSecondary,
+  useWindowSecondary
+} from '../../lib/secondaryPrefs'
 import {
   NO_COLOURS,
   coloursDiffer,
@@ -147,13 +155,23 @@ function WindowColour({
   return (
     <SettingRow id={id} icon={o.icon} label={o.label} sub={sub}>
       {chosen && (
-        <button data-follow-theme={id.replace('window-', '')} onClick={() => onPick(null)} className={RESET_LINK}>
+        <button
+          data-follow-theme={id.replace('window-', '')}
+          onClick={() => onPick(null)}
+          className={RESET_LINK}
+        >
           Reset
         </button>
       )}
       {/* Escape in the picker puts back what was chosen when it opened, a
           row that followed the theme included (#112). */}
-      <ColourField label={o.label} value={shown ?? fromTheme} onChange={onPick} onRevert={() => onPick(chosen)} {...range} />
+      <ColourField
+        label={o.label}
+        value={shown ?? fromTheme}
+        onChange={onPick}
+        onRevert={() => onPick(chosen)}
+        {...range}
+      />
     </SettingRow>
   )
 }
@@ -161,7 +179,10 @@ function WindowColour({
 function WindowColours(): JSX.Element {
   const accent = useWindowAccent()
   const background = useWindowBackground()
-  const [themeAccent, themeBg, themeSecondary] = useSyncExternalStore(onColoursChange, themeColours).split('|')
+  const [themeAccent, themeBg, themeSecondary] = useSyncExternalStore(
+    onColoursChange,
+    themeColours
+  ).split('|')
   const secondary = useWindowSecondary()
   const acrylicOn = useTermAcrylic()
   const groundAlpha = useTermGroundAlpha()
@@ -234,12 +255,10 @@ export function AppearancePage(): JSX.Element {
   const place = appOpt('tab-layout')
   const width = useTabWidth()
   const style = useTabStyle()
-  const titleBar = useTitleBarMode()
   const tab = appOpt('tab-width')
   const shape = appOpt('tab-style')
   const switching = useTabSwitch()
   const swap = appOpt('tab-switch')
-  const bar = appOpt('title-bar')
   const edge = appOpt('window-edges')
   return (
     <>
@@ -264,20 +283,13 @@ export function AppearancePage(): JSX.Element {
           id="tab-switch"
           icon={swap.icon}
           label={swap.label}
-          sub={switching === 'recent' ? 'Back to the tab you used last.' : 'The next tab along the strip.'}
+          sub={
+            switching === 'recent'
+              ? 'Back to the tab you used last.'
+              : 'The next tab along the strip.'
+          }
         >
           <Segmented value={switching} onChange={setTabSwitch} options={TAB_SWITCH_OPTIONS} />
-        </SettingRow>
-        {/* A switch over the same store the segmented control wrote: on is
-            `shown`, the default, the window as it always was (#91). */}
-        <SettingRow
-          id="title-bar"
-          icon={bar.icon}
-          label={bar.label}
-          sub={layout === 'vertical' ? 'When off, it shows at the top edge.' : bar.sub}
-          tap
-        >
-          <Switch on={titleBar === 'shown'} onChange={(on) => setTitleBarMode(on ? 'shown' : 'hidden')} label={bar.label} />
         </SettingRow>
         <SettingRow id="window-edges" icon={edge.icon} label={edge.label} sub={edge.sub}>
           <Segmented value={edges} onChange={setWindowEdges} options={EDGE_OPTIONS} />
@@ -302,7 +314,10 @@ export function AppearancePage(): JSX.Element {
         }}
         // The window colours in force are changes to save while they differ
         // from what the theme in front keeps; Save keeps them with Custom.
-        extraDirty={coloursDiffer({ background, accent, secondary }, themeId === 'custom' ? kept : NO_COLOURS)}
+        extraDirty={coloursDiffer(
+          { background, accent, secondary },
+          themeId === 'custom' ? kept : NO_COLOURS
+        )}
         onSaved={() => setCustomWindowColours({ background, accent, secondary })}
       />
     </>

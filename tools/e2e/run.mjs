@@ -166,7 +166,7 @@ const tabLabels = (page) =>
  * so a row moving between pages is one line here.
  */
 const PREF_PAGE = {
-  'tab-layout': 'appearance', 'tab-width': 'appearance', 'tab-style': 'appearance', 'tab-switch': 'appearance', 'title-bar': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
+  'tab-layout': 'appearance', 'tab-width': 'appearance', 'tab-style': 'appearance', 'tab-switch': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
   'window-background': 'appearance', 'window-accent': 'appearance', 'window-secondary': 'appearance', 'term-acrylic': 'appearance',
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
@@ -2307,31 +2307,24 @@ const scenarios = {
       await page.keyboard.press('Control+Shift+B')
       ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open' && (await geo()).host.left > 100, 'Ctrl+Shift+B keeps it open again')
 
-      // THE POP-OUT TITLE BAR (owner, 2026-10-11: "a pop out title bar is
-      // best actually we just need to do it well ... like zen browser's"):
-      // the terminal has the whole height; the bar drops at the top edge from
-      // the sidebar's edge to the right, with the window's buttons, and moves
-      // the window while it is down. The sidebar keeps a strip to grab above
-      // its tabs, and its buttons at its foot.
-      const bar = await gotoPref(page, 'title-bar')
-      await bar.locator('[role="switch"]').click()
+      // THE BAR BESIDE THE SIDEBAR, ALWAYS DOWN (owner, 2026-10-12, removing
+      // Show title bar: the look of the dropped-down bar, "but I want it to be
+      // dropped down all the time", never a bar that "pushes the side bar
+      // content down"). The sidebar runs from the window's top; the bar starts
+      // at its edge, with the window's buttons; the terminal sits below it.
       await backToFirst(page)
       await page.mouse.move(600, 400)
-      await sleep(700)
+      await sleep(400)
       const top = () =>
         page.evaluate(() => {
-          const f = document.querySelector('[data-title-bar="float"]')
+          const f = document.querySelector('[data-title-bar="beside"]')
           const r = f?.getBoundingClientRect()
-          const foot = document.querySelector('[data-sidebar-foot]')
           const btns = document.querySelector('[data-window-buttons]')
           return {
             rows: document.querySelectorAll('[data-title-bar]').length,
-            shown: f?.hasAttribute('data-title-shown') ?? false,
-            bar: r ? { left: Math.round(r.left), top: Math.round(r.top), bottom: Math.round(r.bottom), right: Math.round(innerWidth - r.right) } : null,
+            bar: r ? { left: Math.round(r.left), top: Math.round(r.top), height: Math.round(r.height), right: Math.round(innerWidth - r.right) } : null,
             buttons: !!btns && !!f?.contains(btns) && !!btns.querySelector('[data-window-close]'),
-            name: (f?.textContent ?? '').includes('Prism Terminal') || !!f?.querySelector('[data-app-mark]'),
             settings: !!f?.querySelector('[data-title-settings]'),
-            inFoot: !!foot,
             newBtn: (() => {
               const n = document.querySelector('[data-tab-sidebar] [data-sidebar-new]')
               const nav = document.querySelector('[data-tab-sidebar]')
@@ -2345,8 +2338,9 @@ const scenarios = {
               document.body.appendChild(probe)
               const sec = getComputedStyle(probe).color
               probe.remove()
-              return { secondary: sec, side: getComputedStyle(document.querySelector('[data-tab-sidebar]')).backgroundColor, bar: f ? getComputedStyle(f).backgroundColor : null, term: getComputedStyle(document.querySelector('[data-term-host] .xterm-scrollable-element') ?? document.querySelector('[data-term-host]')).backgroundColor }
+              return { secondary: sec, side: getComputedStyle(document.querySelector('[data-tab-sidebar]')).backgroundColor, bar: f ? getComputedStyle(f).backgroundColor : null }
             })(),
+            radius: getComputedStyle(document.querySelector('[data-term-column]')).borderTopLeftRadius,
             navTop: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().top ?? -1),
             navRight: Math.round(document.querySelector('[data-tab-sidebar]')?.getBoundingClientRect().right ?? -1),
             hostTop: Math.round(document.querySelector('[data-term-host]')?.getBoundingClientRect().top ?? -1),
@@ -2354,11 +2348,19 @@ const scenarios = {
           }
         })
       const up = await top()
-      ok(up.rows === 1 && !up.shown && up.bar.bottom <= 0, `the bar is up out of sight (${JSON.stringify(up.bar)})`)
-      ok(up.hostTop === 0, `and the terminal has the whole height ("usable for content") (${up.hostTop})`)
-      ok(up.navTop === 0 && up.firstRowTop >= 76 && up.firstRowTop <= 100, `the sidebar starts at the top, its tabs under the app's name and Find a tab (${up.firstRowTop}px)`)
+      ok(up.rows === 1 && !!up.bar && up.bar.top === 0 && up.bar.height === 36, `one bar, at the top, always there (${JSON.stringify(up.bar)})`)
+      ok(Math.abs(up.bar.left - up.navRight) <= 1 && up.bar.right === 0, `from the sidebar's edge to the right, not over it (${JSON.stringify(up.bar)}, sidebar ends ${up.navRight})`)
+      ok(up.buttons && up.settings, "with Settings, Help and the window's buttons")
+      ok(up.hostTop === 36, `the terminal sits below it, nothing covered (${up.hostTop})`)
+      ok(up.navTop === 0 && up.firstRowTop >= 76 && up.firstRowTop <= 100, `the sidebar starts at the top, not pushed down, its tabs under the app's name and Find a tab (${up.firstRowTop}px)`)
+      ok(up.radius === '10px', `the terminal is cut round where the bar and the sidebar meet (${up.radius})`)
+      // Owner, 2026-10-12, of the sidebar looks mockup: "New tab: Button at the
+      // bottom".
+      ok(!!up.newBtn && !up.newBtn.inRows && up.newBtn.gapBelow <= 12 && up.newBtn.w >= up.newBtn.navW - 20, `New tab is a button across the sidebar's foot (${JSON.stringify(up.newBtn)})`)
+      ok(up.colours.side === up.colours.secondary && up.colours.bar === up.colours.secondary, `the sidebar and the bar wear the secondary colour (${JSON.stringify(up.colours)})`)
       // Owner, 2026-10-12: "a prism terminal logo and text could look nice up
-      // there, keep it the default app icon, not a css version".
+      // there"; then "use this for the sidebar logo ... it should adapt to the
+      // accent color".
       const brand = await page.evaluate(() => {
         const b = document.querySelector('[data-tab-sidebar] [data-sidebar-brand]')
         const mark = b?.querySelector('[data-app-mark]')
@@ -2369,113 +2371,35 @@ const scenarios = {
         probe.remove()
         return { text: b?.textContent?.trim() ?? null, paths: mark?.querySelectorAll('path').length ?? 0, ink: mark ? getComputedStyle(mark).color : null, accent }
       })
-      // Then: "use this for the sidebar logo ... it should adapt to the accent color".
       ok(brand.text === 'Prism Terminal' && brand.paths === 2 && brand.ink === brand.accent, `the sidebar's top says Prism Terminal beside the app's mark, in the accent (${JSON.stringify(brand)})`)
-      // Owner, 2026-10-12: "settings and that command help can stay in the
-      // title bar now that we do have a title bar".
-      ok(!up.inFoot && up.settings, 'Settings is in the dropped bar, and the sidebar has no foot')
-      // Owner, 2026-10-12, of the sidebar looks mockup: "New tab: Button at the
-      // bottom".
-      ok(!!up.newBtn && !up.newBtn.inRows && up.newBtn.gapBelow <= 12 && up.newBtn.w >= up.newBtn.navW - 20, `New tab is a button across the sidebar's foot (${JSON.stringify(up.newBtn)})`)
-      // The secondary colour: the sidebar and the bar wear it, not the terminal's.
-      ok(up.colours.side === up.colours.secondary && up.colours.bar === up.colours.secondary, `the sidebar and the bar wear the secondary colour (${JSON.stringify(up.colours)})`)
-      // Within the top 16 px, not only at the very edge.
-      await page.mouse.move(600, 30)
-      await page.mouse.move(610, 12)
-      ok(!!(await until(async () => (await top()).shown, 3000, 50)), 'the pointer 12 px from the top brings the bar down')
-      await sleep(400)
-      const down = await top()
-      ok(down.bar.top === 0 && Math.abs(down.bar.left - down.navRight) <= 1 && down.bar.right === 0, `from the sidebar's edge to the right, not over it (${JSON.stringify(down.bar)}, sidebar ends ${down.navRight})`)
-      ok(down.buttons && down.settings && !down.name, "with Settings, Help and the window's buttons, no icon or name")
-      ok(await page.evaluate(() => !!document.querySelector('[data-title-bar="float"] [data-title-corner]')), 'with a curved corner where it meets the sidebar')
-      // No line where it meets the sidebar: the bar's shadow falls below it only.
-      const barClip = await page.evaluate(() => getComputedStyle(document.querySelector('[data-title-bar="float"]')).clipPath)
-      ok(barClip.startsWith('inset(0px 0px -48px'), `its shadow falls below it only, not across the sidebar (${barClip})`)
-      ok((await top()).hostTop === 0, 'over the terminal, which keeps its size')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-beside-bar.png') }).catch(() => {})
       // THE DRAG ITSELF, as Windows decides it: 2 (HTCAPTION) moves the window.
       const spots = await page.evaluate(() => {
-        const f = document.querySelector('[data-title-bar="float"]').getBoundingClientRect()
+        const f = document.querySelector('[data-title-bar="beside"]').getBoundingClientRect()
         const grab = document.querySelector('[data-sidebar-grab]').getBoundingClientRect()
         const row = document.querySelector('[data-tab-sidebar] [data-tab]').getBoundingClientRect()
         const nav = document.querySelector('[data-tab-sidebar]').getBoundingClientRect()
         return [
           { x: f.left + 120, y: f.top + f.height / 2 },
           // Below Windows' own resize border at the window's top.
-          { x: grab.left + 60, y: grab.bottom - 3 },
+          { x: grab.left + 160, y: grab.bottom - 6 },
           { x: row.left + 40, y: row.top + row.height / 2 },
           { x: nav.right + 200, y: 300 }
         ]
       })
       const hit = await hitTest(app, spots)
-      ok(hit[0] === 2, `the bar, while down, moves the window (${hit})`)
-      ok(hit[1] === 2, `the strip above the tabs moves the window (${hit})`)
+      ok(hit[0] === 2, `the bar moves the window (${hit})`)
+      ok(hit[1] === 2, `the app's name above the tabs moves the window (${hit})`)
       ok(hit[2] === 1 && hit[3] === 1, `a tab and the terminal do not (${hit})`)
-      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-titlebar-shown.png') }).catch(() => {})
-      await page.mouse.move(600, 400)
-      ok(!!(await until(async () => !(await top()).shown, 3000, 50)), 'it goes up again when the pointer leaves')
-      await sleep(400)
-      const gone = await hitTest(app, [spots[0]])
-      ok(gone[0] === 1, `and once up, that row is the terminal's again (${gone})`)
-      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-no-titlebar.png') }).catch(() => {})
-      // OVER THE BAR ITSELF the page hears nothing (it is a drag region, the
-      // press is Windows'): only main's reading of the cursor keeps it
-      // (owner, 2026-10-11: "my cursor can be on the titlebar and its
-      // disappearing"). The suite hands main a cursor and tells the page the
-      // pointer has gone, as Windows does.
-      const cursor = (p) => app.evaluate((_e, pt) => { globalThis.__e2eCursor = pt }, p)
-      const leave = () => page.evaluate(() => document.documentElement.dispatchEvent(new MouseEvent('mouseleave')))
-      const barUp = async () => !(await top()).shown
-      await cursor({ x: 600, y: 10 })
-      ok(!!(await until(async () => (await top()).shown, 3000, 30)), "main's cursor at the top brings the bar down")
-      await cursor({ x: 600, y: 30 })
-      await leave()
-      await sleep(900)
-      ok((await top()).shown, 'and it stays with the cursor on the bar, where the page hears nothing')
-      await cursor({ x: 600, y: 39 })
-      await sleep(900)
-      ok((await top()).shown, 'and 3 px below it ("2-3 px off the titlebar")')
-      await cursor({ x: 600, y: 60 })
-      ok(!!(await until(barUp, 3000, 30)), 'and goes once the cursor is clearly below it')
-      await cursor(null)
-      // A COLLAPSED SIDEBAR THAT HAS SLID OUT: the bar still starts at its
-      // edge, never over it (owner, 2026-10-11: "the titlebar should drop down
-      // from the sidebar edge and until the right edge. not overlay over the
-      // sidebar").
+      // COLLAPSED, the bar spans the window and the terminal is square; the
+      // sidebar slides out over the bar's left end.
       await page.keyboard.press('Control+Shift+B')
       await page.mouse.move(800, 400)
       await sleep(600)
-      await cursor({ x: 10, y: 300 })
-      await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
-      await sleep(300)
-      await cursor({ x: down.navRight + 20, y: 4 })
-      await until(async () => (await top()).shown, 3000, 20)
-      const both = await page.evaluate(() => ({
-        bar: Math.round(document.querySelector('[data-title-bar="float"]').getBoundingClientRect().left),
-        side: Math.round(document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right),
-        sideShown: document.querySelector('[data-tab-sidebar]').hasAttribute('data-sidebar-shown')
-      }))
-      ok(!both.sideShown || Math.abs(both.bar - both.side) <= 1, `with the slid-out sidebar showing, the bar starts at its edge (${JSON.stringify(both)})`)
-      await cursor({ x: 600, y: 300 })
-      await until(barUp, 3000, 30)
-      await until(async () => !(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
-      await cursor({ x: 600, y: 4 })
-      await until(async () => (await top()).shown, 3000, 20)
-      await sleep(300)
-      const alone = Math.round(await page.evaluate(() => document.querySelector('[data-title-bar="float"]').getBoundingClientRect().left))
-      ok(alone === 0, `with the sidebar away, the bar spans the window (${alone})`)
-      await cursor({ x: 600, y: 300 })
-      await until(barUp, 3000, 30)
-      await cursor({ x: 10, y: 300 })
-      await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
-      await sleep(300)
+      const across = await top()
+      ok(across.bar.left === 0 && across.bar.right === 0 && across.radius === '0px', `collapsed, the bar spans the window and the corner goes (${JSON.stringify(across.bar)}, ${across.radius})`)
       await page.keyboard.press('Control+Shift+B')
-      // Settings is in the bar now, so the bar comes down first.
-      await cursor({ x: 600, y: 4 })
-      await until(async () => (await top()).shown, 3000, 30)
       await sleep(300)
-      await (await gotoPref(page, 'title-bar')).locator('[role="switch"]').click()
-      await cursor(null)
-      ok(!!(await until(() => page.evaluate(() => document.querySelectorAll('[data-title-bar]').length === 1 && !document.querySelector('[data-title-bar="float"]')), 3000, 50)), 'Show title bar puts the full bar back')
       await setPref(page, 'tab-layout', 'horizontal')
       ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-tab-strip]') && !document.querySelector('[data-tab-sidebar]')), 3000, 50)), 'Horizontal puts the strip back')
       // With the strip, Ctrl+Shift+B is the shell's again.
@@ -2587,9 +2511,10 @@ const scenarios = {
     }
   },
 
-  // NO TITLE BAR (#91; owner, 2026-09-28, "tabs in the top row"): Hidden
-  // puts the tabs in the title bar's row with its buttons at the end, one row
-  // where there were two. Shown, the default, is the window as it was.
+  // NO TITLE BAR, ALWAYS (#91; owner, 2026-10-12, removing Show title bar:
+  // the tabs along the top are "exactly as it is with no title bar"). The tabs
+  // sit in the top row with the window's buttons at its end; there is no
+  // setting for it, and an old stored `hidden` or `shown` changes nothing.
   async titleBar(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
@@ -2601,9 +2526,8 @@ const scenarios = {
         const host = document.querySelector('[data-term-host]')
         const inBar = (sel) => !!bar?.querySelector(sel)
         return {
+          rows: document.querySelectorAll('[data-title-bar]').length,
           mode: bar?.getAttribute('data-title-bar') ?? null,
-          name: (bar?.textContent ?? '').includes('Prism Terminal'),
-          mark: !!bar?.querySelector('[data-app-mark]'),
           stripInBar: !!(bar && strip && bar.contains(strip)),
           buttons: inBar('[data-title-settings]') && inBar('[data-window-close]') && inBar('[aria-label="Minimize"]'),
           hostTop: Math.round(host?.getBoundingClientRect().top ?? -1),
@@ -2612,26 +2536,21 @@ const scenarios = {
           closeRight: Math.round(innerWidth - (document.querySelector('[data-window-close]')?.getBoundingClientRect().right ?? 0))
         }
       })
-    const shown = await layout()
-    ok(shown.mode !== 'tabs' && !shown.mark && !shown.name && !shown.stripInBar && shown.buttons, `by default the title bar is its own row, with no icon and no name for now (${JSON.stringify(shown)})`)
-    ok(shown.hostTop >= 64, `two rows above the terminal (${shown.hostTop}px)`)
+    const one = await layout()
+    ok(one.rows === 1 && one.mode === 'tabs' && one.stripInBar, `the tabs are in the top row (${JSON.stringify(one)})`)
+    ok(one.buttons && one.closeRight <= 12, `and the settings, minimise and close buttons sit at its right end (${one.closeRight}px from the edge)`)
+    ok(one.stripTop === 0 && one.hostTop > 20 && one.hostTop <= 40, `one row above the terminal (${one.hostTop}px)`)
+    ok(one.stripDrag === 'drag', `the strip's empty space moves the window (${one.stripDrag})`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/title-bar-hidden.png') }).catch(() => {})
     await page.locator('[data-title-settings]').click()
     await page.locator('[data-settings-tab="appearance"]').click()
-    const row = page.locator('[data-pref="title-bar"]')
-    await row.waitFor({ timeout: 8000 })
-    // A switch since the grouped cards (2026-10-05): on is Shown, the default.
-    const flip = row.locator('[role="switch"]')
-    ok((await flip.getAttribute('aria-checked')) === 'true', 'Show title bar is on by default')
-    await flip.click()
-    ok((await page.evaluate(() => localStorage.getItem('prism.window.titleBar'))) === 'hidden', 'switched off, Hidden is stored')
+    await page.locator('[data-pref="tab-layout"]').waitFor({ timeout: 8000 })
+    ok((await page.locator('[data-pref="title-bar"]').count()) === 0, 'there is no Show title bar setting')
+    // A window that had Show title bar on before keeps the one shape.
+    await page.evaluate(() => localStorage.setItem('prism.window.titleBar', 'shown'))
     await page.locator('[data-tab]').first().click()
     await sleep(300)
-    const hidden = await layout()
-    ok(hidden.mode === 'tabs' && hidden.stripInBar && !hidden.name, `hidden: the tabs are in the top row, no name (${JSON.stringify(hidden)})`)
-    ok(hidden.buttons && hidden.closeRight <= 12, `and the settings, minimise and close buttons sit at its right end (${hidden.closeRight}px from the edge)`)
-    ok(hidden.stripTop === 0 && hidden.hostTop > 20 && hidden.hostTop <= 40, `one row above the terminal (${hidden.hostTop}px, was ${shown.hostTop}px)`)
-    ok(hidden.stripDrag === 'drag', `the strip's empty space still moves the window (${hidden.stripDrag})`)
-    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/title-bar-hidden.png') }).catch(() => {})
+    ok((await layout()).mode === 'tabs', 'an old stored "shown" changes nothing')
     // The start screen: no tabs, and the buttons are still there to reach.
     for (let i = 0; i < 6 && (await tabLabels(page)).length; i += 1) {
       await page.keyboard.press('Control+w')
@@ -2640,12 +2559,6 @@ const scenarios = {
     ok(await until(async () => (await tabLabels(page)).length === 0), 'every tab closed')
     const empty = await layout()
     ok(empty.mode === 'tabs' && empty.buttons, 'with no tabs the top row still holds the buttons')
-    await page.locator('[data-title-settings]').click()
-    await page.locator('[data-settings-tab="appearance"]').click()
-    await flip.click()
-    await sleep(200)
-    const back = await layout()
-    ok(back.mode !== 'tabs' && back.buttons, 'Shown brings the title bar back')
     await closeApp(app)
   },
 
@@ -4940,7 +4853,7 @@ const scenarios = {
       // window's rows above the theme and what a theme sets under it.
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
       // The see-through row sits right under the wall since #156, as Prism's.
-      const want = ['tab-layout', 'tab-width', 'tab-style', 'tab-switch', 'title-bar', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-secondary', 'window-accent']
+      const want = ['tab-layout', 'tab-width', 'tab-style', 'tab-switch', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-secondary', 'window-accent']
       ok(JSON.stringify(rows) === JSON.stringify(want), `Appearance runs ${want.join(' > ')} (${rows.join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await gotoPref(page, 'term-font')
@@ -5139,7 +5052,9 @@ const scenarios = {
       await page.keyboard.press('KeyA')
       await sleep(200)
       ok((await capture.getAttribute('data-hotkey-capture')) === 'on' && (await get('prism.dictation.hotkey')) === before, 'a letter is not taken as the dictation key')
-      await page.mouse.click(40, 300)
+      // The page's own heading: a fixed point moved onto a Settings link when
+      // the title bar's row went (2026-10-12).
+      await page.locator('[data-settings-page] h1').first().click()
       ok(!!(await until(async () => (await capture.getAttribute('data-hotkey-capture')) === 'off', 2000, 50)), 'a press elsewhere ends the capture')
       await page.evaluate(() => localStorage.setItem('prism.dictation.enabled', '0'))
     } finally {
@@ -5694,13 +5609,9 @@ const scenarios = {
       ok((await sw.getAttribute('aria-label')) === 'See-through window', `it is called See-through window (${await sw.getAttribute('aria-label')})`)
       ok((await sub()) === 'The desktop shows behind every surface.', `with Prism's words (${await sub()})`)
 
-      // The tabs in the top row (the owner's layout): the row and the strip
-      // in it are two boxes over one pixel.
-      const tb = await gotoPref(page, 'title-bar')
-      await tb.locator('[role="switch"]').click()
-      ok(!!(await until(async () => (await page.locator('[data-title-bar="tabs"]').count()) === 1, 4000, 50)), 'the tabs moved into the top row')
-      await gotoPref(page, 'term-acrylic')
-      if ((await more.count()) === 1) await more.click()
+      // The tabs in the top row (the only layout since 2026-10-12): the row
+      // and the strip in it are two boxes over one pixel.
+      ok((await page.locator('[data-title-bar="tabs"]').count()) === 1, 'the tabs are in the top row')
 
       // A dark preset: the switch alone paints 0xb9.
       await pick('dracula')
@@ -5879,7 +5790,7 @@ const scenarios = {
         // The grouped cards (2026-10-05): a section's panel edge, and the
         // hairline between two of its rows, both the list's line.
         const panel = document.querySelector('[data-settings-section="window"] [data-settings-panel]')
-        const second = document.querySelector('[data-pref="title-bar"]')
+        const second = document.querySelector('[data-pref="tab-width"]')
         const css = (el, prop) => (el ? getComputedStyle(el)[prop] : null)
         const edges = {
           title: css(title, 'borderBottomColor'),

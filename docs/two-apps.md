@@ -189,14 +189,15 @@ so an update never silently changes what an existing user sees; the bridge to ma
   core takes over from the browser needs the same: returning false is not cancelling. The
   `paste` e2e counts what reached the shell for Ctrl+V, Ctrl+Shift+V and the right-click Paste
   (it failed with 2 copies before the fix).
-- **THE TITLE BAR CAN BE HIDDEN** (#91; owner, 2026-09-28: "add a no title bar option for pt in
-  appearance as well, not theme related", and of the shapes offered, "tabs in the top row").
-  Settings > Appearance > Show title bar (`title-bar`, `prism.window.titleBar`, `lib/titleBarPrefs.ts`),
-  above the theme wall, a SWITCH since #134 over the same stored values: on is **Shown** (the
-  DEFAULT, the window as it was), off is **Hidden**: one row, the
-  tab strip (`inTitleRow`) with `TitleButtons` (chip, help, cog, window buttons) at its end, the
-  strip's empty space the drag handle; with no tabs the row is the handle and the buttons. This
-  app's row. The `titleBar` e2e measures both and the start screen.
+- **NO TITLE BAR OF ITS OWN** (#91, then #162; owner, 2026-10-12, removing Show title bar: with
+  the tabs along the top "exactly as it is with no title bar"; with vertical tabs the dropped-down
+  bar "dropped down all the time", never a bar that "pushes the side bar content down"). Tabs along
+  the top: one row, the tab strip (`inTitleRow`) with `TitleButtons` (chip, help, cog, window
+  buttons) at its end, the strip's empty space the drag handle; with no tabs the row is the handle
+  and the buttons. Vertical tabs: the sidebar runs from the window's top, and a bar
+  (`data-title-bar="beside"`) from its edge to the right holds `TitleButtons`, the terminal below
+  it. There is no setting; a stored `prism.window.titleBar` is ignored. The `titleBar` and
+  `verticalTabs` e2e measure both and the start screen. This app's row.
 - **EVERY TAB IS ONE WIDTH** (owner, 2026-09-21: "make tabs in both apps have a fixed size, and not
   dynamically adjust based on the content"). A tab was as wide as its label, up to 14rem, so a
   folder with a long name shoved every tab after it sideways and the close button was never in
@@ -323,7 +324,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
 - **WHAT NO THEME OWNS SITS ABOVE THE THEME WALL** (owner, 2026-09-28: font and font size "should
   transcend" the theme's save, "so changing a theme should not reset the font and font size or if
   you use a minimal or full agent indicator, or edges. those options should be above the themes").
-  Since #134 Appearance runs: the Window section (Tab width, Show title bar, Panel edges), then the
+  Since #134 Appearance runs: the Window section (Tab position, Tab width, Tab style, Tab switching, Panel edges), then the
   Theme section (the theme row with Save changes, the wall, what a theme SETS: See-through window,
   Background, Accent; the see-through row right under the wall since #156, as in Prism). The font and its size are Terminal's Text section; the indicator and the agent colours
   are on Agents, where Mark colours carries the SAME Save changes (both save the whole setup and
