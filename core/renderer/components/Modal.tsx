@@ -26,6 +26,19 @@ import { LAYER } from './layers'
  *   updateGuard e2e, 2026-09-20, about one run in five).
  * - `data-owns-escape` is the marker Prism's window Escape yields to.
  */
+/** The focus goes back on close only when it went down with this dialog (to
+ *  the body). Another dialog that opened meanwhile keeps it: the update window
+ *  giving way to the close question handed the focus back behind the question
+ *  (the updateGuard e2e, two runs in three, 2026-10-12; Prism's terminal gate
+ *  on every core-v0.34 bump). */
+export function returnsFocus(
+  before: { isConnected: boolean } | null,
+  active: unknown,
+  body: unknown
+): boolean {
+  return !!before && before.isConnected === true && before !== body && (active === null || active === body)
+}
+
 export function Modal({
   onCancel,
   locked = false,
@@ -114,7 +127,7 @@ export function Modal({
     window.addEventListener('keydown', onKey, true)
     return () => {
       window.removeEventListener('keydown', onKey, true)
-      if (before && before.isConnected && before !== document.body) before.focus()
+      if (before && returnsFocus(before, document.activeElement, document.body)) before.focus()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
