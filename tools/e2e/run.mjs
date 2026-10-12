@@ -4843,9 +4843,9 @@ const scenarios = {
         const panelGround = panelEl ? over(parse(getComputedStyle(panelEl).backgroundColor), solid) : solid
         const row = document.querySelector('[data-setting-row]')
         const label = row?.querySelector('label')
-        const sub = row?.querySelector('[title]')
+        const sub = row?.querySelector('[data-subtext]')
         const tile = row?.firstElementChild?.firstElementChild
-        const warn = document.querySelector('[data-setting-row] [title] svg')?.closest('[title]')
+        const warn = document.querySelector('[data-setting-row] [data-subtext] svg')?.closest('[data-subtext]')
         const ink = (el) => (el ? over(parse(getComputedStyle(el).color), panelGround) : null)
         const chosen = document.querySelector('[data-settings-tab][aria-current="page"]')
         const accentFilled = [...document.querySelectorAll('button')].filter((b) => {
@@ -5864,7 +5864,7 @@ const scenarios = {
         }
       })
     const sw = page.locator('[data-pref="term-acrylic"] [role="switch"]')
-    const sub = () => page.locator('[data-pref="term-acrylic"] [title]').first().getAttribute('title')
+    const sub = () => page.locator('[data-pref="term-acrylic"] [data-subtext]').first().textContent()
     const bgRow = page.locator('[data-pref="window-background"]')
     const pop = page.locator('[data-colour-popover][role="dialog"]')
     /** The Background picker's Alpha, read and closed again. */
