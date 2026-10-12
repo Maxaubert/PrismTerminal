@@ -2480,6 +2480,28 @@ const scenarios = {
       ok(glassEdge.edge === 'shadow' && glassEdge.top === '0px' && /inset/.test(glassEdge.shadow), `see-through, PT Default: the one inset shadow, no line (${JSON.stringify(glassEdge)})`)
       const nr = await page.evaluate(() => Math.round(document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right))
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/glass-corner.png'), clip: { x: nr - 40, y: 0, width: 120, height: 100 } }).catch(() => {})
+      // AT 125 %, A 235 PX SIDEBAR (the owner's, 2026-10-12: "the sidebar
+      // border is still there"): its edge lands on a whole screen pixel, or
+      // the desktop shows through between it and the bar as a line.
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1.25))
+      await sleep(500)
+      const grip = await page.evaluate(() => {
+        const r = document.querySelector('[data-sidebar-grip]').getBoundingClientRect()
+        return { x: r.left + r.width / 2, y: r.top + 300 }
+      })
+      await page.mouse.move(grip.x, grip.y)
+      await page.mouse.down()
+      for (let d = 3; d <= 15; d += 3) await page.mouse.move(grip.x + d, grip.y)
+      await page.mouse.up()
+      await page.mouse.move(700, 500)
+      await sleep(400)
+      const px = await page.evaluate(() => ({ right: document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right, bar: document.querySelector('[data-title-bar="beside"]').getBoundingClientRect().left, ratio: devicePixelRatio, stored: localStorage.getItem('prism.window.sidebarWidth') }))
+      const dev = px.right * px.ratio
+      ok(px.ratio !== Math.round(px.ratio) && Math.abs(dev - Math.round(dev)) < 0.01 && Math.abs(px.bar - px.right) < 0.01, `at a scale that is not whole the sidebar meets the bar on a whole screen pixel (${JSON.stringify(px)}, ${dev.toFixed(2)} device px)`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/glass-edge-125.png'), clip: { x: Math.round(px.right * 1.25) - 30, y: 0, width: 60, height: 120 } }).catch(() => {})
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1))
+      await page.evaluate(() => localStorage.removeItem('prism.window.sidebarWidth'))
+      await sleep(300)
       await page.keyboard.press('Control+Shift+B')
       await page.mouse.move(800, 400)
       await sleep(500)

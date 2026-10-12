@@ -199,6 +199,11 @@ looked at on the way).
   inset shadow the same way. The open sidebar draws no edge. Slid out on black, the collapsed
   sidebar draws its line from the bar down and its corner carries the line into the bar's.
   See-through follows the same rule (the earlier 'none' over glass is gone).
+- **The sidebar's width on whole screen pixels** (owner, 2026-10-12, under See-through: "the sidebar
+  border is still there"). A line ran the full height between the sidebar and the bar: at 225 % a
+  235 px sidebar ends at screen pixel 528.75, both see-through surfaces half-cover that pixel and the
+  desktop shows through. The painted body had hidden it. The width is rounded to whole screen pixels
+  (`lib/devicePixels.ts`); the `verticalTabs` e2e zooms to a scale that is not whole and checks it.
 
 ## 2. The indicators
 

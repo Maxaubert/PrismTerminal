@@ -15,6 +15,7 @@ import { sideWants } from '../lib/revealZones'
 import { AppMark } from './AppMark'
 import { findKeeps, folderLine } from '../lib/sidebarRows'
 import { useSidebarEdge } from '../lib/sidebarLook'
+import { onDevicePixels, useDevicePixelRatio } from '../lib/devicePixels'
 import {
   SIDEBAR_WIDTH,
   setSidebarWidth,
@@ -118,7 +119,9 @@ export function TabSidebar({
   }, [])
   // A width being dragged lives here until the drag ends; only then is it stored.
   const [dragW, setDragW] = useState<number | null>(null)
-  const width = dragW ?? storedWidth
+  // On a whole screen pixel, where it meets the bar and the terminal (lib/devicePixels).
+  const ratio = useDevicePixelRatio()
+  const width = onDevicePixels(dragW ?? storedWidth, ratio)
   const collapsed = mode === 'collapsed'
   // COLLAPSED: shown while the pointer is at the window's left edge or on the
   // sidebar itself, and held while one of its menus is open. One rule for the
