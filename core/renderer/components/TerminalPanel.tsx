@@ -74,6 +74,7 @@ import {
   suppressActivity,
   takeResume
 } from '../lib/termActivity'
+import { termKeyAction } from '../lib/termKeys'
 import '@xterm/xterm/css/xterm.css'
 
 // The terminal surface. This module is a lazy chunk (xterm is ~350KB the
@@ -1032,90 +1033,62 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     // disposeTermSession, so nothing is subscribed here.
   ]
 
-  // Ctrl+C and Ctrl+V are matched by the PHYSICAL key as well as the letter
-  // (code review 2026-09-24, #6): on a Russian or Greek layout the C key's
-  // `key` is not 'c', xterm still maps it to ^C, and a copy over a selection
-  // interrupted the agent instead. Windows Terminal matches the key the same way.
-  const isKey = (e: KeyboardEvent, letter: 'c' | 'v'): boolean =>
-    e.key.toLowerCase() === letter || e.code === `Key${letter.toUpperCase()}`
+  // WHAT A KEY DOES is termKeys' (its rules in order, with their tests);
+  // here it is acted on. Returning false keeps xterm from the key.
   term.attachCustomKeyEventHandler((e) => {
-    if (e.type !== 'keydown') return true
-    // Ctrl+C over a SELECTION copies it, the way Windows Terminal does; with
-    // nothing selected it stays the interrupt every shell expects.
-    if (
-      isKey(e, 'c') &&
-      e.ctrlKey &&
-      !e.shiftKey &&
-      !e.altKey &&
-      term.hasSelection()
-    ) {
-      void copyText(term.getSelection()) // and the "Copied" badge, once it landed
-      term.clearSelection()
-      return false
-    }
-    // Backspace or Delete over a selection on the line being edited deletes
-    // it (owner, 2026-09-23); anywhere else the key is the shell's as ever.
-    if (
-      (e.key === 'Backspace' || e.key === 'Delete') &&
-      !e.ctrlKey &&
-      !e.shiftKey &&
-      !e.altKey &&
-      !e.metaKey &&
-      term.hasSelection() &&
-      deleteSelection(term, id)
-    ) {
-      e.preventDefault()
-      return false
-    }
-    // THE HOST'S CHORDS (core/renderer/host). Which keys belong to the app
-    // even over a focused shell is the one thing the two apps disagree about
-    // (Prism closes a tab on Ctrl+W and toggles the panel on Ctrl+`; Prism
-    // Terminal leaves Ctrl+W to the shell as delete-word), so the host says.
-    // Returning false keeps xterm from ALSO feeding the bytes to the pty: left
-    // to xterm, Ctrl+` became a NUL, which counted as the user typing.
-    if (termHost().ownsKey(e)) return false
-    if (e.key === 'Enter' && e.shiftKey && arm.here) {
-      // Newline-without-submit, in the bytes the agent reads as one
-      // (`newlineKey`, measured #175: Ctrl+J for Claude, `\` + Enter
-      // otherwise). This is what /terminal-setup exists to configure; here it
-      // simply works. ONLY where an agent runs (code review 2026-09-24, #21):
-      // at a plain prompt `\` then Enter RAN the line with a backslash on its
-      // end, a command nobody wrote. There Shift+Enter is Enter, as xterm sends it.
-      markTouched(id) // input like any other: its repaint is echo, not work
-      termApi().termInput(id, newlineKey(arm.kind))
-      // Returning false only stops xterm's keydown; the browser still fires a
-      // keypress for Enter and xterm sent a CR on it, so Claude got Ctrl+J
-      // THEN Enter and submitted (MEASURED, e2e imagePaste 2026-10-11:
-      // "IN C 0a" then "IN C 0d"). preventDefault cancels that keypress.
-      e.preventDefault()
-      return false
-    }
-    // ONE CTRL+V IS ONE PASTE (owner, 2026-09-22: "when I copy text and paste
-    // it pastes twice"). Returning false only tells XTERM to leave the key
-    // alone; it does not cancel the BROWSER's own action for Ctrl+V, which is
-    // a native paste event into xterm's textarea - and xterm pastes on that
-    // event too. So every paste arrived twice, once from here and once from
-    // there. preventDefault cancels the native one; this handler is the paste,
-    // since it is the one that knows about images (Claude Code reads those
-    // itself when it gets its image-paste keystroke) and bracketed framing.
-    if (isKey(e, 'v') && e.ctrlKey && !e.shiftKey && !e.altKey) {
-      e.preventDefault()
-      pasteHere()
-      return false
-    }
-    if (isKey(e, 'v') && e.ctrlKey && e.shiftKey && !e.altKey) {
-      e.preventDefault()
-      // The escape hatch: plain text paste even when an image rides along.
-      const clip = termApi().readClipboard()
-      // Sanitised like every paste (#1): no ESC can end the bracketed paste.
-      const text = sanitizePaste(clip.text)
-      if (text) {
-        markTouched(id)
-        term.paste(text)
+    const action = termKeyAction(e, {
+      hasSelection: term.hasSelection(),
+      deleteSelection: () => deleteSelection(term, id),
+      hostOwns: (k) => termHost().ownsKey(k as KeyboardEvent),
+      agentHere: arm.here
+    })
+    switch (action) {
+      case 'xterm':
+        return true
+      case 'copy':
+        void copyText(term.getSelection()) // and the "Copied" badge, once it landed
+        term.clearSelection()
+        return false
+      case 'deleted':
+        e.preventDefault()
+        return false
+      case 'host':
+        return false
+      case 'newline':
+        // Newline-without-submit, in the bytes the agent reads as one
+        // (`newlineKey`, measured #175: Ctrl+J for Claude, `\` + Enter
+        // otherwise). This is what /terminal-setup exists to configure; here
+        // it simply works.
+        markTouched(id) // input like any other: its repaint is echo, not work
+        termApi().termInput(id, newlineKey(arm.kind))
+        // Returning false only stops xterm's keydown; the browser still fires a
+        // keypress for Enter and xterm sent a CR on it, so Claude got Ctrl+J
+        // THEN Enter and submitted (MEASURED, e2e imagePaste 2026-10-11:
+        // "IN C 0a" then "IN C 0d"). preventDefault cancels that keypress.
+        e.preventDefault()
+        return false
+      case 'paste':
+        // ONE CTRL+V IS ONE PASTE (owner, 2026-09-22: "when I copy text and
+        // paste it pastes twice"). Returning false only tells XTERM to leave
+        // the key alone; it does not cancel the BROWSER's own action for
+        // Ctrl+V, a native paste event into xterm's textarea, which xterm
+        // pastes on too. preventDefault cancels the native one; this is the
+        // paste, since it is the one that knows about images (Claude Code
+        // reads those itself on its image-paste keystroke) and bracketed framing.
+        e.preventDefault()
+        pasteHere()
+        return false
+      case 'paste-plain': {
+        e.preventDefault()
+        // Sanitised like every paste (#1): no ESC can end the bracketed paste.
+        const text = sanitizePaste(termApi().readClipboard().text)
+        if (text) {
+          markTouched(id)
+          term.paste(text)
+        }
+        return false
       }
-      return false
     }
-    return true
   })
 
   const oscLink = (line: number, x: number): string | null => {
