@@ -48,3 +48,24 @@ doing later" list. "Looked at and left alone" stays alone.
     listener.
 
 Then: version bump (app and core), the full e2e, package and install for the owner, PR.
+
+## Outcome (2026-10-12)
+
+All seventeen steps are done, one commit each (or a few), every one with the test that holds it.
+Where the work differed from the plan:
+
+- **Step 4:** `shell:show-folder` had no caller at all, so the channel was removed rather than
+  rerouted; the e2e-only channels now register only under `--e2e` (`src/main/e2eOnly.test.ts`).
+- **Steps 6 and 15** were done together: the close question moved straight onto the core `Modal`.
+  The scrims are now one tint (`bg-black/50`, a 2 px blur) except command help, which keeps its
+  lighter, blurrier one; popups the owner's rule covers keep no shadow.
+- **`ON_DARK_INK`** replaced `#0b0b0b` and the chrome's on-accent near-black; `inkOn`'s opaque rule
+  keeps pure black, which it is measured against.
+- **termLinkPaint** keeps its own row walk: it is measured for speed (#167). Everything else that
+  reads cells into text goes through `termCells`.
+- **The big splits:** App.tsx 1,125 to 958 lines (`termMenuItems`, `usePaintedChrome`,
+  `useTaskbarBadge`), main `index.ts` 894 to 847 (`closeFlow`, `updateGate`, both tested),
+  TerminalPanel 1,382 to 1,243 (`attachReplies`, `termKeyAction`, one listener per channel).
+  The rest of `createSession` (links, the caret hold, the reveal) stays where it is.
+- Core 0.33.1 to 0.34.0; the deleted core exports were checked against Prism's pinned
+  `core-v0.33.1` first (none imported).

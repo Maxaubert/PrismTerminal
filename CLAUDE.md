@@ -86,7 +86,7 @@ read the full entry before changing anything it names.
 
 `core/` (the terminal, shared with Prism: see above). `src/main` (index.ts is wiring only;
 planRestore, tabsStore, windowState, material, windowEdge, dwmHelper, verbSwitch, shellVerb,
-update, argv),
+update, updateGate, closeFlow, argv),
 `src/preload`, `src/shared` (types, windowEdges), `src/renderer/src` (App.tsx owns the tab list and the
 keys; components/; lib/ is pure and tested). One responsibility per file; aliases `@shared`,
 `@renderer`. No new runtime dependency without a reason; today there are eight.
