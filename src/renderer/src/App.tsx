@@ -857,6 +857,9 @@ export default function App(): JSX.Element {
           x={termMenu.x}
           y={termMenu.y}
           onClose={() => setTermMenu(null)}
+          // The rows' actions run on a pick, never while rendering: the
+          // compiler's ref rule cannot see that through termMenuItems.
+          // eslint-disable-next-line react-hooks/refs
           items={termMenuItems(termMenu, {
             openPath: (path, how) => openTermPath(termMenu.id, path, how),
             copy: (text) => void copyText(text),
