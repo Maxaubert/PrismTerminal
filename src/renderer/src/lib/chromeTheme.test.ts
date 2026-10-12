@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CHROME_COLOUR_TOKENS, chromeTokens } from './chromeTheme'
 import { TERM_PRESETS, presetAccent, resolveTermTheme, type TermTheme } from '@core/renderer/lib/termTheme'
 import { SEE_THROUGH_ALPHA, seeThroughAlpha } from '@core/renderer/lib/seeThrough'
-import { contrastRatio } from '@core/renderer/lib/termAnsi'
+import { contrastRatio, luminance } from '@core/renderer/lib/termAnsi'
 import { composite } from '@core/renderer/lib/colour'
 import { groundMode } from '@core/renderer/lib/termReplies'
 import { WINDOW_EDGES } from '@shared/windowEdges'
@@ -333,10 +333,13 @@ describe('the switch knob token', () => {
 // THE SECONDARY COLOUR (#162; owner, 2026-10-12: "this is the gold standard.
 // make it fit with each theme"): the mockup's "a shade lighter", per theme.
 describe('the secondary colour', () => {
-  // Owner, 2026-10-12, of the treatments mockup: "Same, with a line".
-  it.each(TERM_PRESETS.map((p) => p.id))("%s: unpicked, the terminal's own ground, readable", (id) => {
+  // Owner, 2026-10-12: a black theme keeps a black sidebar; every other one a
+  // step darker than its ground (a light one too).
+  it.each(TERM_PRESETS.map((p) => p.id))('%s: unpicked, black stays, others go darker, readable', (id) => {
     const { vars } = chromeTokens(resolveTermTheme(id), 1, presetAccent(id))
-    expect(vars['--p-secondary']).toBe(vars['--p-bg-solid'])
+    const bg = vars['--p-bg-solid']
+    if (luminance(bg) < 0.0045) expect(vars['--p-secondary']).toBe(bg)
+    else expect(luminance(vars['--p-secondary'])).toBeLessThan(luminance(bg))
     expect(contrastRatio(vars['--p-text'], vars['--p-secondary'])).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(vars['--p-dim'], vars['--p-secondary'])).toBeGreaterThanOrEqual(3)
   })

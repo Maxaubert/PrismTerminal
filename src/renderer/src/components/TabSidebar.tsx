@@ -13,6 +13,8 @@ import { useHoverReveal } from '../lib/hoverReveal'
 import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
 import { setSidebarEdge } from '../lib/sidebarEdge'
+import { findKeeps, folderLine } from '../lib/sidebarRows'
+import { useSidebarEdge } from '../lib/sidebarLook'
 import {
   SIDEBAR_WIDTH,
   setSidebarWidth,
@@ -90,7 +92,30 @@ export function TabSidebar({
     prompt
   })
   const menu = useTabMenus({ onClose, onOpenRecent })
+  const edge = useSidebarEdge()
   const nav = useRef<HTMLElement>(null)
+  // FIND A TAB (owner, 2026-10-12, of the sidebar looks mockup): typing keeps
+  // the rows whose name or folder has every word; Enter puts the first in
+  // front, Escape lets go. Ctrl+Shift+K (App) comes here.
+  const [query, setQuery] = useState('')
+  const [finding, setFinding] = useState(false)
+  const find = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const go = (): void => find.current?.focus()
+    window.addEventListener('prism:find-tab', go)
+    return () => window.removeEventListener('prism:find-tab', go)
+  }, [])
+  // The user's own folder, for the folder line's `~`. Asked once.
+  const [home, setHome] = useState('')
+  useEffect(() => {
+    let live = true
+    void window.prism.homeDir().then((h) => {
+      if (live) setHome(h)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
   // A width being dragged lives here until the drag ends; only then is it stored.
   const [dragW, setDragW] = useState<number | null>(null)
   const width = dragW ?? storedWidth
@@ -109,7 +134,7 @@ export function TabSidebar({
   const shown = useHoverReveal(
     collapsed,
     (e) => sideWants({ x: e.clientX, y: e.clientY }, shownNow.current, top, width),
-    menu.open || dragW !== null || fromMain
+    menu.open || dragW !== null || finding || fromMain
   )
   useEffect(() => {
     shownNow.current = shown
@@ -145,7 +170,7 @@ export function TabSidebar({
     if (el && document.contains(el)) requestAnimationFrame(() => el.focus())
   }
   const onRowDown = (e: PointerEvent<HTMLDivElement>, id: string, i: number): void => {
-    if (e.button !== 0) return
+    if (e.button !== 0 || query) return
     if ((e.target as HTMLElement).closest('[data-tab-close]')) return
     heldFocus.current = document.activeElement as HTMLElement | null
     // The lanes run down the column: `left` and `width` are a row's top and height.
@@ -215,6 +240,10 @@ export function TabSidebar({
 
   if (!tabs.length) return null
   const labels = tabLabels(tabs)
+  const kept = query
+    ? tabs.map((t, i) => findKeeps(query, labels[i], t.kind === 'settings' ? '' : t.cwd))
+    : null
+  const firstKept = kept ? tabs.find((_, i) => kept[i]) : undefined
   const auxClose = (e: MouseEvent, id: string): void => {
     if (e.button === 1) {
       e.preventDefault()
@@ -237,6 +266,7 @@ export function TabSidebar({
         data-tab-style={prompt ? 'prompt' : 'classic'}
         data-sidebar-mode={mode}
         data-sidebar-shown={visible || undefined}
+        data-sidebar-edge={edge}
         inert={!visible}
         onDragOver={(e) => {
           e.preventDefault()
@@ -255,13 +285,16 @@ export function TabSidebar({
             ? 'transition-[left,box-shadow] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
             : ''
         } ${
-          // OPEN, A HAIRLINE at its edge and no shadow: the terminal's own
-          // colour, split off by a line (owner, 2026-10-12: "Same, with a line",
-          // Warp's way). SLID OUT over the terminal it floats, so it casts a
-          // shadow there and the line goes.
+          // SLID OUT over the terminal it floats: the deep shadow. Open: a
+          // shadow as its edge, or on black, where a shadow cannot show, a
+          // hairline.
           collapsed && visible
             ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]'
-            : 'border-r border-[var(--p-divider)]'
+            : edge === 'line'
+              ? 'border-r border-[var(--p-divider)]'
+              : edge === 'shadow-light'
+                ? 'shadow-[4px_0_16px_-6px_rgba(0,0,0,.22)]'
+                : 'shadow-[6px_0_22px_-6px_rgba(0,0,0,.55)]'
         } ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         // Slid by its LEFT, never a transform: Windows is told where a drag
         // region is from the layout, and a transformed panel's grab strip was
@@ -284,6 +317,55 @@ export function TabSidebar({
             with WM_NCHITTEST, a 10 px strip answered HTTOP at its middle), so
             the band below that is what moves the window. */}
         {titleRow && <div data-sidebar-grab aria-hidden className="drag h-4 shrink-0" />}
+        <label
+          data-sidebar-find
+          className={`no-drag mx-2 mb-2 flex h-8 shrink-0 cursor-text items-center gap-2 rounded-md bg-[var(--p-hover)] px-2.5 text-[var(--p-dim)] ${
+            titleRow ? '' : 'mt-2.5'
+          } focus-within:ring-1 focus-within:ring-[var(--p-accent-hi)]`}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width={14}
+            height={14}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            className="shrink-0"
+            aria-hidden
+          >
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="M16 16l4 4" />
+          </svg>
+          <input
+            ref={find}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setFinding(true)}
+            onBlur={() => setFinding(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setQuery('')
+                find.current?.blur()
+              } else if (e.key === 'Enter' && firstKept) {
+                e.preventDefault()
+                setQuery('')
+                find.current?.blur()
+                onPick(firstKept.id)
+              }
+            }}
+            placeholder="Find a tab"
+            aria-label="Find a tab"
+            spellCheck={false}
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-[var(--p-text)] outline-none placeholder:text-[var(--p-dim)]"
+          />
+          {!query && (
+            <kbd className="shrink-0 font-[inherit] text-[11.5px] text-[var(--p-dim2)]">
+              Ctrl+Shift+K
+            </kbd>
+          )}
+        </label>
         <div
           ref={rows}
           data-sidebar-rows
@@ -292,7 +374,7 @@ export function TabSidebar({
           // top"). With no title bar, the list's empty space below the tabs
           // is what moves the window ("i cant drag the window"); each row is
           // no-drag, so a tab still clicks and drags as a tab.
-          className={`p-scroll flex min-h-0 flex-1 flex-col gap-px overflow-y-auto pb-2 ${titleRow ? 'pt-0.5' : 'pt-1.5'}`}
+          className="p-scroll flex min-h-0 flex-1 flex-col gap-px overflow-y-auto pb-2"
         >
           {tabs.map((t, i) => {
             const on = t.id === activeId
@@ -344,7 +426,8 @@ export function TabSidebar({
                 onPointerMove={onRowMove}
                 onPointerUp={onRowUp}
                 onPointerCancel={() => carry && endDrag()}
-                className={`no-drag group relative isolate flex h-[34px] shrink-0 items-center gap-2 overflow-hidden transition-colors ${nameInk} ${
+                hidden={kept ? !kept[i] : undefined}
+                className={`no-drag group relative isolate flex h-[46px] shrink-0 items-center gap-2 overflow-hidden transition-colors ${nameInk} ${
                   prompt ? 'mr-1 pl-3 pr-6' : 'mx-1.5 rounded-[4px] pl-3 pr-1.5'
                 } ${
                   // The tab in front is a clear filled pill in the accent's tint
@@ -426,7 +509,7 @@ export function TabSidebar({
                   role="tab"
                   aria-selected={on}
                   tabIndex={on ? 0 : -1}
-                  className={`relative z-[1] min-w-0 flex-1 truncate py-1 text-left ${filled || on ? 'font-semibold' : ''}`}
+                  className="relative z-[1] flex min-w-0 flex-1 flex-col py-1 text-left"
                   style={ink ? { color: ink } : undefined}
                   title={
                     t.kind === 'settings'
@@ -444,7 +527,20 @@ export function TabSidebar({
                     onPick(t.id)
                   }}
                 >
-                  {labels[i]}
+                  <span className={`truncate ${filled || on ? 'font-semibold' : ''}`}>
+                    {labels[i]}
+                  </span>
+                  {/* The folder it sits in (owner, 2026-10-12: "Second line:
+                      Folder path"), dim, so two tabs with one name differ. */}
+                  {t.kind !== 'settings' && (
+                    <span
+                      data-tab-folder
+                      className="truncate text-[11.5px] font-normal text-[var(--p-dim2)]"
+                      style={ink ? { color: ink, opacity: 0.75 } : undefined}
+                    >
+                      {folderLine(t.cwd, home)}
+                    </span>
+                  )}
                 </button>
                 <button
                   className={`relative z-[1] grid h-[18px] w-[18px] shrink-0 place-items-center rounded-sm text-[var(--p-icon)] transition-opacity hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] ${
@@ -475,31 +571,31 @@ export function TabSidebar({
               </div>
             )
           })}
-          {/* NEW TAB, the list's last row and a tab's own size (owner,
-              2026-10-12: "make new tab a button attached to the end of the tab
-              list and the same size as a tab"). Its right click is the +'s
-              list of places, as on the strip. */}
+        </div>
+        {/* NEW TAB, A BUTTON AT THE FOOT (owner, 2026-10-12, of the sidebar
+            looks mockup: "New tab: Button at the bottom"). Its right click is
+            the +'s list of places, as on the strip. */}
+        <div className="shrink-0 border-t border-[var(--p-divider)] p-2">
           <button
             data-sidebar-new
             title="New tab (Ctrl+T). Right-click for recent folders"
             onClick={onNew}
             onContextMenu={menu.openPlusMenu}
-            className="no-drag mx-1.5 flex h-[34px] shrink-0 items-center gap-2 rounded-[4px] pl-3 pr-1.5 text-left text-[var(--p-dim)] transition-colors hover:bg-[var(--p-hover)] hover:text-[var(--p-text)]"
+            className="no-drag flex h-[34px] w-full items-center justify-center gap-2 rounded-md border border-[var(--p-divider)] bg-[var(--p-hover)] text-[13px] text-[var(--p-text)] transition-colors hover:bg-[var(--p-hover-hi)]"
           >
             <svg
               viewBox="0 0 24 24"
-              width={12}
-              height={12}
+              width={13}
+              height={13}
               fill="none"
               stroke="currentColor"
               strokeWidth="2.2"
               strokeLinecap="round"
-              className="shrink-0"
               aria-hidden
             >
               <path d="M12 5v14m7-7H5" />
             </svg>
-            <span className="min-w-0 flex-1 truncate">New tab</span>
+            New tab
           </button>
         </div>
         {/* The resize grip, on the sidebar's right edge, while it is open. */}

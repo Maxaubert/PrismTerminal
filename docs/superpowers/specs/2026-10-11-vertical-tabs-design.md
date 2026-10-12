@@ -99,7 +99,7 @@ looked at on the way).
     A theme pick resets it, as it does Background and Accent; inks are held to it.
   - **No line under the pop-out bar** ("dont have a border on the titlebar on hidden").
   - **New tab is the tab list's last row, a tab's size** ("make new tab a button attached to the end
-    of the tab list and the same size as a tab"); the foot keeps Help, Settings and the sidebar button.
+    of the tab list and the same size as a tab"). Superseded by the sidebar looks below.
   - **A thin grab strip, 16 px**: a 10 px one was nearly all Windows' resize border (WM_NCHITTEST
     answered HTTOP at its middle on a window that is not maximized).
   - Under Ring, a tab with no mark keeps the 12 px slot, so every name starts at one x.
@@ -135,6 +135,20 @@ looked at on the way).
   pill in the accent's tint; the dropped title bar has no shadow. Slid out over the terminal, the
   collapsed sidebar still casts its shadow. On light themes the quiet inks are held to the form
   controls' fill too.
+
+- **The sidebar looks** (owner, 2026-10-12, from `sidebar-looks.html`): row icon none; a second line
+  with the folder the tab's folder sits in (`~` for the user's folder, `lib/sidebarRows.ts`); "Find a
+  tab" at the top, on Ctrl+Shift+K (the mockup's Ctrl+K is the shell's kill-line), keeping the rows
+  with every typed word in their name or folder, Enter putting the first in front, Escape letting go,
+  no reordering while it filters; New tab a full-width button at the sidebar's foot (right click: the
+  +'s places); the tab in front an accent pill; regular size; the title bar dropped down.
+- **The base colour and the edge** (owner, 2026-10-12: "black theme should have black sidebar and
+  all the others have the old style where its a bit darker than the bg + shadow", and "only show
+  border on the sidebar if bg and secondary color is black, since then shadows dont work, otherwise
+  shadow works as a border"). Unpicked, the secondary colour is the ground on a black theme
+  (luminance under 0.0045), 22 percent toward black on other dark themes, 8 percent toward the text
+  on light ones. The open sidebar's edge is a hairline only when both grounds are black, else a
+  shadow (lighter on light themes), `lib/sidebarLook.ts`, following theme changes.
 
 ## 2. The indicators
 

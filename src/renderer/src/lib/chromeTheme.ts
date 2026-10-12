@@ -122,13 +122,15 @@ export function chromeTokens(
   // should be this, but make that into a new setting called secondary colour
   // ... so the user can pick their own, but this is the gold standard. make it
   // fit with each theme"): the vertical tabs' sidebar and their title bar.
-  // Unpicked it is THE TERMINAL'S OWN GROUND, the sidebar told apart by a
-  // hairline and its tab in front by a filled pill (owner, 2026-10-12, of the
-  // sidebar treatments mockup: "Same, with a line", Warp's way, picked over a
-  // lifted panel, a neutral grey, an inset terminal and a tint, which on black
-  // themes read as a muddy near-black). A pick is a surface the inks are held
-  // to as well.
-  const ownSecondary = bg
+  // THE SIDEBAR'S GROUND, unpicked (owner, 2026-10-12: "black theme should
+  // have black sidebar and all the others have the old style where its a bit
+  // darker than the bg + shadow"): a black theme keeps its own black; every
+  // other dark one a step darker than its ground; a light one a step toward
+  // its text, darker too. The sidebar draws a shadow as its edge, or a
+  // hairline where both grounds are black (TabSidebar). A pick is a surface the
+  // inks are held to as well.
+  const black = luminance(bg) < 0.0045
+  const ownSecondary = black ? bg : light ? mixHex(bg, ensureContrast(rawFg, bg, TEXT_FLOOR), 0.08) : mixHex(bg, '#000000', 0.22)
   const secondary = chosenSecondary ? normalizeColor(chosenSecondary, ownSecondary) : ownSecondary
   // The form control's fill (below), a step off the ground: on a light theme
   // the quiet inks sit on it too, a segment's name or a field's hint.

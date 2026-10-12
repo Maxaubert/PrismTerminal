@@ -1,4 +1,5 @@
 import { isSidebarChord } from './lib/sidebarPrefs'
+import { isFindTabChord } from './lib/sidebarRows'
 import { tabLayout } from './lib/tabLayoutPrefs'
 import { focusedTermFullScreen } from '@core/renderer/components/TerminalPanel'
 import { configureTermCore } from '@core/renderer/host'
@@ -68,7 +69,7 @@ configureTermCore({
     if (e.key === 'F1' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) return helpEnabled()
     if (!e.ctrlKey || e.altKey) return false
     // THE SIDEBAR'S KEY (#162), while the tabs are vertical only.
-    if (isSidebarChord(e)) return tabLayout() === 'vertical'
+    if (isSidebarChord(e) || isFindTabChord(e)) return tabLayout() === 'vertical'
     const k = e.key.toLowerCase()
     // Next / previous tab, jump to a tab, Settings.
     if (e.key === 'Tab' || /^[1-9]$/.test(e.key) || e.key === ',') return true

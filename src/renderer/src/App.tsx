@@ -14,6 +14,7 @@ import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
 import { isSidebarChord, toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
+import { isFindTabChord } from './lib/sidebarRows'
 import { useSidebarEdge } from './lib/sidebarEdge'
 import { HoverTitleBar } from './components/HoverTitleBar'
 import TitleBar, { TitleButtons } from './components/TitleBar'
@@ -632,6 +633,10 @@ export default function App(): JSX.Element {
       } else if (!e.shiftKey && e.key === ',') {
         hit()
         setState(openSettings)
+      } else if (isFindTabChord(e) && tabLayout() === 'vertical') {
+        // FIND A TAB (#162): the sidebar's find box.
+        hit()
+        window.dispatchEvent(new Event('prism:find-tab'))
       } else if (isSidebarChord(e) && tabLayout() === 'vertical') {
         // THE SIDEBAR (#162): open, or collapsed to the left edge.
         hit()

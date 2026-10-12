@@ -2127,9 +2127,62 @@ const scenarios = {
       const seam = await page.evaluate(() => getComputedStyle(document.querySelector('[data-tab-sidebar]')).clipPath)
       ok(seam.startsWith('inset(0px -60px 0px 0px)'), `the sidebar's shadow falls on the terminal's side only (${seam})`)
       ok(corner.radius === '10px' && corner.barLine === '0px', `the terminal is cut round where the bar and the sidebar meet, and the bar draws no line (${JSON.stringify(corner)})`)
-      // Owner, 2026-10-12, of the treatments mockup: "Same, with a line": open,
-      // a hairline at its edge and no shadow.
-      ok(parseFloat(open.line) > 0 && !/rgba\(0, 0, 0, 0\.[1-9]/.test(open.shadow ?? ''), `the open sidebar draws a hairline and casts no shadow (${open.line}, ${open.shadow})`)
+      // THE EDGE (owner, 2026-10-12: "only show border on the sidebar if bg and
+      // secondary color is black, since then shadows dont work, otherwise
+      // shadow works as a border"). PT Default is not black: a shadow, no line.
+      const edge = () =>
+        page.evaluate(() => {
+          const nav = document.querySelector('[data-tab-sidebar]')
+          return { edge: nav.getAttribute('data-sidebar-edge'), line: getComputedStyle(nav).borderRightWidth, shadow: getComputedStyle(nav).boxShadow }
+        })
+      const grey = await edge()
+      ok(grey.edge === 'shadow' && grey.line === '0px' && /rgba\(0, 0, 0, 0\.5/.test(grey.shadow), `PT Default: the sidebar's edge is a shadow, no line (${JSON.stringify(grey)})`)
+      const tones = await page.evaluate(() => {
+        const css = getComputedStyle(document.documentElement)
+        return { bg: css.getPropertyValue('--p-bg-solid').trim(), side: css.getPropertyValue('--p-secondary').trim() }
+      })
+      ok(tones.side.slice(0, 7) !== tones.bg.slice(0, 7), `and the sidebar a step darker than the terminal (${JSON.stringify(tones)})`)
+      await pickTheme(page, 'campbell')
+      const blackEdge = await edge()
+      ok(blackEdge.edge === 'line' && parseFloat(blackEdge.line) > 0 && !/rgba\(0, 0, 0, 0\.[1-9]/.test(blackEdge.shadow), `Campbell, black on black: a hairline and no shadow (${JSON.stringify(blackEdge)})`)
+      await pickTheme(page, 'pt-default')
+      await backToFirst(page)
+      ok((await edge()).edge === 'shadow', 'and back on PT Default, the shadow again')
+
+      // THE FOLDER LINE (owner, 2026-10-12: "Second line: Folder path").
+      const folders = await page.evaluate(() => [...document.querySelectorAll('[data-tab-sidebar] [data-tab]')].map((r) => r.querySelector('[data-tab-folder]')?.textContent ?? null))
+      ok(folders.length === 6 && folders.every((f) => !!f && f.length > 0), `every row says the folder it sits in (${folders.join(' | ')})`)
+      // FIND A TAB (owner: "Top: Find a tab"), on Ctrl+Shift+K.
+      const findState = () =>
+        page.evaluate(() => {
+          const input = document.querySelector('[data-sidebar-find] input')
+          const rows = [...document.querySelectorAll('[data-tab-sidebar] [data-tab]')]
+          return {
+            focused: document.activeElement === input,
+            value: input?.value ?? null,
+            seen: rows.filter((r) => !r.hidden).length,
+            active: rows.find((r) => r.hasAttribute('data-tab-active'))?.querySelector('[data-tab-folder]')?.previousElementSibling?.textContent ?? null
+          }
+        })
+      await page.locator('[data-tab-sidebar] [data-tab]').nth(0).click()
+      // A row's click hands the keyboard back to the terminal a frame later.
+      await sleep(150)
+      await page.keyboard.press('Control+Shift+K')
+      ok((await findState()).focused, 'Ctrl+Shift+K puts the cursor in Find a tab')
+      await page.keyboard.type('zz-no-such-tab')
+      ok((await findState()).seen === 0, 'a word no tab has leaves no rows')
+      await page.keyboard.press('Escape')
+      const cleared = await findState()
+      ok(!cleared.focused && cleared.value === '' && cleared.seen === 6, `Escape clears it and lets go (${JSON.stringify(cleared)})`)
+      const target = await page.evaluate(() => document.querySelectorAll('[data-tab-sidebar] [data-tab]')[3].querySelector('[data-tab-folder]').previousElementSibling.textContent.trim())
+      await page.keyboard.press('Control+Shift+K')
+      await page.keyboard.type(target)
+      const narrowed = await findState()
+      ok(narrowed.seen >= 1 && narrowed.seen < 6, `typing a tab's name keeps the rows that have it (${narrowed.seen} for "${target}")`)
+      await page.keyboard.press('Enter')
+      const picked = await findState()
+      ok(!picked.focused && picked.value === '' && picked.seen === 6 && (picked.active ?? '').toLowerCase().includes(target.toLowerCase()), `Enter puts the first match in front and lets go (${JSON.stringify(picked)})`)
+      await page.locator('[data-tab-sidebar] [data-tab]').nth(0).click()
 
       // THE SAME MARKS AS THE STRIP, in both tab styles.
       const marks = () =>
@@ -2267,13 +2320,12 @@ const scenarios = {
             name: (f?.textContent ?? '').includes('Prism Terminal') || !!f?.querySelector('[data-app-mark]'),
             settings: !!f?.querySelector('[data-title-settings]'),
             inFoot: !!foot,
-            newRow: (() => {
-              const n = document.querySelector('[data-sidebar-rows] [data-sidebar-new]')
-              const rows = [...document.querySelectorAll('[data-tab-sidebar] [data-tab]')]
-              const last = rows[rows.length - 1]
-              if (!n || !last) return null
-              const a = n.getBoundingClientRect(), b = last.getBoundingClientRect()
-              return { last: n.previousElementSibling === last, h: Math.round(a.height), tabH: Math.round(b.height), w: Math.round(a.width), tabW: Math.round(b.width) }
+            newBtn: (() => {
+              const n = document.querySelector('[data-tab-sidebar] [data-sidebar-new]')
+              const nav = document.querySelector('[data-tab-sidebar]')
+              if (!n || !nav) return null
+              const a = n.getBoundingClientRect(), b = nav.getBoundingClientRect()
+              return { inRows: !!n.closest('[data-sidebar-rows]'), gapBelow: Math.round(b.bottom - a.bottom), w: Math.round(a.width), navW: Math.round(b.width) }
             })(),
             colours: (() => {
               const probe = document.createElement('span')
@@ -2292,13 +2344,13 @@ const scenarios = {
       const up = await top()
       ok(up.rows === 1 && !up.shown && up.bar.bottom <= 0, `the bar is up out of sight (${JSON.stringify(up.bar)})`)
       ok(up.hostTop === 0, `and the terminal has the whole height ("usable for content") (${up.hostTop})`)
-      ok(up.navTop === 0 && up.firstRowTop >= 10 && up.firstRowTop <= 24, `the sidebar starts at the top, its tabs a thin strip lower (${up.firstRowTop}px)`)
+      ok(up.navTop === 0 && up.firstRowTop >= 44 && up.firstRowTop <= 72, `the sidebar starts at the top, its tabs under a thin strip and Find a tab (${up.firstRowTop}px)`)
       // Owner, 2026-10-12: "settings and that command help can stay in the
       // title bar now that we do have a title bar".
       ok(!up.inFoot && up.settings, 'Settings is in the dropped bar, and the sidebar has no foot')
-      // Owner, 2026-10-12: "make new tab a button attached to the end of the tab
-      // list and the same size as a tab".
-      ok(!!up.newRow && up.newRow.last && up.newRow.h === up.newRow.tabH && up.newRow.w === up.newRow.tabW, `New tab is the list's last row, a tab's size (${JSON.stringify(up.newRow)})`)
+      // Owner, 2026-10-12, of the sidebar looks mockup: "New tab: Button at the
+      // bottom".
+      ok(!!up.newBtn && !up.newBtn.inRows && up.newBtn.gapBelow <= 12 && up.newBtn.w >= up.newBtn.navW - 20, `New tab is a button across the sidebar's foot (${JSON.stringify(up.newBtn)})`)
       // The secondary colour: the sidebar and the bar wear it, not the terminal's.
       ok(up.colours.side === up.colours.secondary && up.colours.bar === up.colours.secondary, `the sidebar and the bar wear the secondary colour (${JSON.stringify(up.colours)})`)
       // Within the top 16 px, not only at the very edge.
