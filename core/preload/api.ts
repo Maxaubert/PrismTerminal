@@ -1,5 +1,6 @@
 import type { DetectedAgent, ShellDef } from '../shared/types'
 import { CH } from '../shared/channels'
+import { isWebUrl } from '../shared/webUrl'
 
 /**
  * The preload half of the terminal's bridge, for both hosts.
@@ -114,7 +115,7 @@ export function createTermApi(ipc: IpcRendererLike): TermPreloadApi {
     writeClipboardFromTerm: (text) => ipc.invoke(CH.clipboardTerm, text) as Promise<boolean>,
     termBell: (id) => ipc.send(CH.bell, id),
     openExternal: (url) => {
-      if (/^https?:/i.test(url)) ipc.send(CH.openExternal, url)
+      if (isWebUrl(url)) ipc.send(CH.openExternal, url)
     },
     termPathKinds: (cwd, texts) =>
       ipc.invoke(CH.pathKinds, cwd, texts) as Promise<Array<{ kind: 'file' | 'dir'; abs: string } | null>>,

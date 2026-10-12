@@ -5,6 +5,7 @@ import { pollAgentAgain, pollAgentsNow, pollAgentsSoon, startAgentPoll } from '.
 import { detectShells } from './shells'
 import { cdTerm, killTerm, prewarmShell, resizeTerm, spawnTerm, writeTerm, type ClaudePluginEnv } from './terminal'
 import { openTermPath, pathKinds, PATHS_MAX, type PathOpeners } from './termPathOpen'
+import { isWebUrl } from '../shared/webUrl'
 
 /**
  * The main half of the terminal's bridge, for both hosts.
@@ -202,7 +203,7 @@ export function registerTermIpc(deps: TermIpcDeps): () => void {
 
   // A link clicked in the terminal. The page is never trusted with a scheme.
   ipcMain.on(CH.openExternal, (_e: unknown, url: unknown) => {
-    if (typeof url === 'string' && /^https?:\/\//i.test(url)) deps.openExternal(url)
+    if (isWebUrl(url)) deps.openExternal(url)
   })
 
   // PATHS (#99). The page asks which texts on screen name a file or a folder;

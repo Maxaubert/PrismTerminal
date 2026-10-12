@@ -27,6 +27,7 @@ import { bellFlash } from './bellFlash'
 import { localAppData } from './appPaths'
 import { MIN_WINDOW, readWindowState, watchWindowState } from './windowState'
 import { APP_CH, E2E_CH } from '@shared/channels'
+import { isWebUrl } from '@core/shared/webUrl'
 
 // Prism Terminal's main process: the window, its lifecycle and the
 // IPC wiring. Everything with rules of its own lives in its own file (the pty,
@@ -390,7 +391,7 @@ function createWindow(): void {
    * Same test as the `shell:open-external` handler, and for the same reason.
    */
   win.webContents.setWindowOpenHandler((d) => {
-    if (/^https?:\/\//i.test(d.url)) openLink(d.url)
+    if (isWebUrl(d.url)) openLink(d.url)
     return { action: 'deny' }
   })
   // A page cannot navigate the window away from the app either: the renderer
@@ -400,7 +401,7 @@ function createWindow(): void {
     if (dev && url.startsWith(dev)) return
     if (url.startsWith('file://')) return
     e.preventDefault()
-    if (/^https?:\/\//i.test(url)) openLink(url)
+    if (isWebUrl(url)) openLink(url)
   })
   // A RELOAD (dev, or a renderer that crashed and came back) is a page with no
   // tab list over shells it has never heard of: they are orphans, and the page

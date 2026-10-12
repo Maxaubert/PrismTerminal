@@ -1,5 +1,6 @@
 import type { IBufferLine } from '@xterm/xterm'
 import { cellText, type CellInfo } from './termCells'
+import { isWebUrl } from '../../shared/webUrl'
 
 /**
  * OSC 8 HYPERLINKS (#169): a program prints a label and says, in-band, which
@@ -28,7 +29,7 @@ export function parseOsc8(data: string): { uri: string } | null {
 }
 
 /** The only links the app opens (main and the preload check again). */
-export const isWebLink = (uri: string): boolean => /^https?:\/\//i.test(uri)
+export const isWebLink = (uri: string): boolean => isWebUrl(uri)
 
 const hostOf = (url: string): string | null => {
   try {
