@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLAWD_PIXELS, iconKind } from './AgentIcon'
+import { CLAWD_PIXELS, iconKind } from './agentIcon'
 
 describe('the mark a tab wears (owner, 2026-10-12)', () => {
   it('is the agent in its shell, the prompt for any other, the cog for Settings', () => {

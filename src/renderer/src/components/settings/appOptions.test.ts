@@ -33,7 +33,6 @@ describe("this app's own settings rows", () => {
     expect(APP_OPTIONS.map((o) => `${o.id}=${Array.isArray(o.store) ? o.store.join('+') : String(o.store)}`)).toMatchInlineSnapshot(`
       [
         "tab-layout=prism.window.tabLayout+prism.window.sidebar+prism.window.sidebarWidth",
-        "tab-style=prism.window.tabStyle",
         "tab-switch=prism.window.tabSwitch",
         "window-edges=prism.window.edges",
         "window-background=prism.window.background",
@@ -74,25 +73,22 @@ describe('Find a setting', () => {
     expect(at['term-shell']).toBe('terminal/Shell')
     expect(at['taskbar-badge']).toBe('agents/Tab marks')
     expect(at['agent-rainbow']).toBe('agents/Tab marks')
-    expect(at['tab-style']).toBe('appearance/Window')
     expect(at['agent-hooks']).toBe('agents/Claude Code')
     expect(at['dictation-enabled']).toBe('dictation/')
     expect(at['app-version']).toBe('about/')
     expect(at['diag-verbose']).toBe('diagnostics/')
   })
 
-  it('finds the tab style by its shape and puts it right after Tab position (#143)', () => {
+  it('has no Tab style row: one style per orientation (owner, 2026-10-12)', () => {
     const ids = settingsIndex(true).map((e) => e.id)
-    expect(ids.indexOf('tab-style')).toBe(ids.indexOf('tab-layout') + 1)
+    expect(ids).not.toContain('tab-style')
     expect(ids.indexOf('agent-rainbow')).toBe(ids.indexOf('agent-done-on') + 1)
-    const style = settingsIndex(true).find((e) => e.id === 'tab-style')
-    expect(style?.keywords).toContain('chevron')
   })
 
-  it('finds Tab switching by what it does, right after Tab style, in the Window section (#158)', () => {
+  it('finds Tab switching by what it does, right after Tab position, in the Window section (#158)', () => {
     const index = settingsIndex(true)
     const ids = index.map((e) => e.id)
-    expect(ids.indexOf('tab-switch')).toBe(ids.indexOf('tab-style') + 1)
+    expect(ids.indexOf('tab-switch')).toBe(ids.indexOf('tab-layout') + 1)
     const row = index.find((e) => e.id === 'tab-switch')
     expect(`${row?.page}/${row?.section}`).toBe('appearance/Window')
     for (const word of ['recent', 'ctrl', 'mru', 'order']) expect(row?.keywords).toContain(word)

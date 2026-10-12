@@ -154,14 +154,19 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   explicit 256px frame was shrunk twice and came out soft (MEASURED, side by side at 48px).
   Tab names are centred in both widths, and a Dynamic tab is never under four characters wide.
   The `attention` e2e holds all of it.
-- <a id="indicator-minimal"></a>**The indicator is MINIMAL by default and wears the THEME** (owner, 2026-09-18, #4; it was Full
-  and a fixed orange in Prism and the first build). `termLook` stores the two colours as CHOICES,
+- <a id="indicator-minimal"></a>**The indicator is RING or BAR, Ring by default, and wears the THEME** (owner, 2026-10-12:
+  "from now on agent indicator is only ring or bar, no full"; Bar is the old Minimal, stored as
+  `minimal`; Off and Full are no longer offered here, a stored one reads as Ring. Minimal was the
+  default from 2026-09-18, #4; it was Full and a fixed orange in Prism and the first build). The ring
+  sits at the tab's END, in the close button's place, and gives way to the close on hover
+  (`tabParts` `TabEnd`); every tab wears its agent's icon (core `AgentIcon`: Clawd, OpenAI, the
+  prompt). Spec: `docs/superpowers/specs/2026-10-12-tab-icons-design.md`; the `tabLooks` e2e holds
+  it. `termLook` stores the two colours as CHOICES,
   `''` meaning "follow the theme"; `lib/agentColors.ts` resolves what is in force: working = the
   chrome's own `--p-accent`, finished = the theme's green moved to the contrast floor (the fallback
   green when a palette's green IS its accent, since two states in one colour is no indicator).
   Picking a theme gives both back to the theme; a pick of your own shows a "Follow theme" button.
-  Settings calls them "Agent working indicator" and "Agent finished indicator". The finished mark
-  is Full's alone, so the e2e turns the volume up before it looks for one.
+  Settings calls them "Agent working indicator" and "Agent finished indicator".
 - <a id="process-poll"></a>**The process poll** (`agentPoll.ts`) asks only after a pty printed something and backs off 2.5s to
   20s. It reports CHANGES, so its first verdict on a shell is said once; the e2e waits for it.
   A title that claims an agent the poll has not reported asks for a look NOW (`termAgentLook`,

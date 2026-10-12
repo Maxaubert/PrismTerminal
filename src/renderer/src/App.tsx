@@ -669,6 +669,7 @@ export default function App(): JSX.Element {
     failedIds,
     failedKinds,
     agentIds,
+    agentKinds,
     loadingIds,
     onPick: (id: string) => setState((s) => pickTab(s, id)),
     onClose: requestClose,
