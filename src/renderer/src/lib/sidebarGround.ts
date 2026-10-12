@@ -15,7 +15,7 @@ export { okLightness } from './oklab'
 export const SIDEBAR_STEP = 0.045
 
 /** Below this luminance a ground is black: a step down would not show, so the
- *  sidebar keeps it and draws a hairline (sidebarLook). */
+ *  sidebar keeps it. */
 export const BLACK_GROUND = 0.0045
 
 /** The sidebar's own ground for a terminal ground (a 6-digit hex). */

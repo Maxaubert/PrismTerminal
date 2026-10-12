@@ -141,8 +141,8 @@ export function chromeTokens(
   // have black sidebar and all the others have the old style where its a bit
   // darker than the bg + shadow", then "should follow a general scheme"): one
   // even step darker on every theme (sidebarGround); a black theme keeps its
-  // black. The sidebar draws a shadow as its edge, or a hairline where both
-  // grounds are black (sidebarLook). A pick is a surface the inks are held to.
+  // black. The edge between it and the terminal is one line (TermEdge). A pick
+  // is a surface the inks are held to.
   const ownSecondary = sidebarGround(bg)
   const secondary = chosenSecondary ? normalizeColor(chosenSecondary, ownSecondary) : ownSecondary
   // The form control's fill (below), a step off the ground: on a light theme

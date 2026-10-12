@@ -204,6 +204,14 @@ looked at on the way).
   235 px sidebar ends at screen pixel 528.75, both see-through surfaces half-cover that pixel and the
   desktop shows through. The painted body had hidden it. The width is rounded to whole screen pixels
   (`lib/devicePixels.ts`); the `verticalTabs` e2e zooms to a scale that is not whole and checks it.
+- **One line on every theme, by Panel edges** (owner, 2026-10-12, reversing the shadows: "give all
+  themes that border that black themes use, i revert my thoughts on it, just make sure it follows
+  the setting for edges"). `components/TermEdge.tsx` draws the terminal's top and, beside the open
+  sidebar, its left and cut corner in `--p-divider`, so None hides it and Solid strengthens it; the
+  slid-out sidebar draws its line from the bar down and its corner curves it into the bar's. The
+  shadows (the inset one gathered darker in the corner; a distance-drawn one fixed that) and
+  `lib/sidebarLook.ts` are gone. The slid-out sidebar also lies above the page beside it (`z-30`):
+  Settings' search icon showed through it.
 
 ## 2. The indicators
 

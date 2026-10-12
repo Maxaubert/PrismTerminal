@@ -14,7 +14,6 @@ import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
 import { AppMark } from './AppMark'
 import { findKeeps, folderLine } from '../lib/sidebarRows'
-import { useSidebarEdge } from '../lib/sidebarLook'
 import { onDevicePixels, useDevicePixelRatio } from '../lib/devicePixels'
 import {
   SIDEBAR_WIDTH,
@@ -93,7 +92,6 @@ export function TabSidebar({
     prompt
   })
   const menu = useTabMenus({ onClose, onOpenRecent })
-  const edge = useSidebarEdge()
   const nav = useRef<HTMLElement>(null)
   // FIND A TAB (owner, 2026-10-12, of the sidebar looks mockup): typing keeps
   // the rows whose name or folder has every word; Enter puts the first in
@@ -264,7 +262,6 @@ export function TabSidebar({
         data-tab-style={prompt ? 'prompt' : 'classic'}
         data-sidebar-mode={mode}
         data-sidebar-shown={visible || undefined}
-        data-sidebar-edge={edge}
         inert={!visible}
         onDragOver={(e) => {
           e.preventDefault()
@@ -280,26 +277,20 @@ export function TabSidebar({
         }}
         // COLLAPSED, it is never see-through (owner, 2026-10-12: "when you
         // have the compact sidebar, that sidebar should not be see-through ...
-        // you can see the content underneath"); pinned open, it is.
-        className={`p-styled-font absolute inset-y-0 left-0 flex flex-col ${collapsed ? 'bg-[var(--p-secondary-solid)]' : 'bg-[var(--p-secondary)]'} text-[13px] ${
+        // you can see the content underneath"); pinned open, it is. And it lies
+        // ABOVE the page beside it: Settings' own raised pieces (its search
+        // icon) showed through the slid-out sidebar (owner, same day).
+        className={`p-styled-font absolute inset-y-0 left-0 z-30 flex flex-col ${collapsed ? 'bg-[var(--p-secondary-solid)]' : 'bg-[var(--p-secondary)]'} text-[13px] ${
           collapsed
-            ? 'transition-[left,box-shadow] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
+            ? 'transition-[left] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
             : ''
-        } ${
-          // OPEN, it draws no edge: the terminal's own (App's data-term-edge)
-          // runs down its side and round the corner into the bar's. SLID OUT
-          // over the terminal it floats: the deep shadow, or on black, where a
-          // shadow cannot show, its line from the bar down (below).
-          collapsed && visible && edge !== 'line' ? 'shadow-[14px_0_40px_-8px_rgba(0,0,0,.8)]' : ''
         } ${carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''}`}
         // Slid by its LEFT, never a transform: Windows is told where a drag
         // region is from the layout, and a transformed panel's grab strip was
         // reported where its slide started (measured, WM_NCHITTEST).
-        // The shadow falls on the terminal's side only, BELOW the bar beside
-        // it: blurred, it reached up into the bar and drew a seam between the
-        // two (owner, 2026-10-12: "I can see a border between them"; then, of
-        // the slid-out sidebar, "it doesn't seem like it connects with the
-        // title bar"). Clipped above and below, open to the right under the bar.
+        // OPEN, it draws no edge: the terminal's own (TermEdge) runs down its
+        // side and round the corner into the bar's. Clipped to itself, and open
+        // to the right below the bar for its slid-out corner (below).
         style={{
           width,
           left: collapsed && !visible ? -(width + 16) : 0,
@@ -316,18 +307,15 @@ export function TabSidebar({
             className="pointer-events-none absolute left-full h-2.5 w-2.5"
             style={{
               top: BAR_H,
-              background: `${
-                edge === 'line'
-                  ? 'radial-gradient(circle at 100% 100%, transparent 9px, var(--p-divider) 9.5px, var(--p-divider) 10px, transparent 10.5px), '
-                  : ''
-              }radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary-solid) 10px)`
+              background:
+                'radial-gradient(circle at 100% 100%, transparent 9px, var(--p-divider) 9.5px, var(--p-divider) 10px, transparent 10.5px), radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary-solid) 10px)'
             }}
           />
         )}
-        {/* Slid out on black, its line: from the bar down, meeting the bar's
-            line through the corner above (owner, 2026-10-12: it "has no border
-            on black. It should have, it has that when it's in static mode"). */}
-        {collapsed && visible && edge === 'line' && (
+        {/* Slid out, its line: from the bar down, meeting the bar's line
+            through the corner above (owner, 2026-10-12: it "has no border ...
+            it has that when it's in static mode"), as Panel edges draws it. */}
+        {collapsed && visible && (
           <span
             data-sidebar-line
             aria-hidden
