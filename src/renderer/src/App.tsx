@@ -23,8 +23,8 @@ import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
-import { isSidebarChord, toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
-import { isFindTabChord } from './lib/sidebarRows'
+import { toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
+import { CHORDS, chordOf, keyLabel } from './lib/keymap'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
 import { AppMark } from './components/AppMark'
@@ -634,94 +634,100 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'F11') {
-        e.preventDefault()
-        window.prism.windowToggleFullscreen()
-        return
-      }
-      // F1 is command help, bare, and only while the setting is on: off, the
-      // key is the shell's (termHost's ownsKey makes the same test, so xterm
-      // yields it exactly when this takes it).
-      if (e.key === 'F1' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey && helpEnabled()) {
-        e.preventDefault()
-        e.stopPropagation()
-        toggleHelp()
-        return
-      }
-      if (!e.ctrlKey || e.altKey) return
-      const k = e.key.toLowerCase()
+      // Any other Ctrl chord ends a Most recent walk first (#158), then acts:
+      // the tab the walk landed on counts as used. Control and Shift are the
+      // hold itself (Shift walks the other way), and Control repeats while held.
+      if (e.ctrlKey && !e.altKey && e.key !== 'Tab' && e.key !== 'Control' && e.key !== 'Shift')
+        commitWalk()
+      // THE APP'S KEYS ARE ONE TABLE (lib/keymap), the one termHost's ownsKey
+      // reads too, so xterm yields exactly the chords acted on here.
+      const id = chordOf(e, {
+        help: helpEnabled(),
+        vertical: tabLayout() === 'vertical',
+        fullScreen: focusedTermFullScreen()
+      })
+      if (!id) return
       const hit = (): void => {
         e.preventDefault()
         e.stopPropagation()
       }
-      // Any other Ctrl chord ends a Most recent walk first (#158), then acts:
-      // the tab the walk landed on counts as used. Control and Shift are the
-      // hold itself (Shift walks the other way), and Control repeats while held.
-      if (e.key !== 'Tab' && e.key !== 'Control' && e.key !== 'Shift') commitWalk()
-      // ONE QUESTION AT A TIME, for the tab chords too (code review
-      // 2026-09-24, #10): under a close question or the update window, Ctrl+Tab
-      // or Ctrl+T moved the keyboard into a shell behind it, and the Enter
-      // meant for the question went there. They do nothing until it is
-      // answered; Ctrl+W keeps its own rule.
-      if (live.current.blocked && k !== 'w') {
-        if (e.key === 'Tab' || /^[1-9]$/.test(e.key) || e.key === ',' || k === 't' || k === 'f')
-          hit()
+      // ONE QUESTION AT A TIME, for the tab chords too: under a close question
+      // or the update window they do nothing until it is answered (keymap's
+      // `underModal`).
+      if (live.current.blocked && CHORDS[id].underModal === 'swallow') {
+        hit()
         return
       }
-      if (e.key === 'Tab') {
-        hit()
-        const dir = e.shiftKey ? -1 : 1
-        if (tabSwitch() === 'recent') {
-          // The walk is a snapshot taken at the hold's first press, of the
-          // list as it stands with the tab in front first (tabMru).
-          const { state: st } = live.current
-          if (!walk.current) {
-            const ids = st.tabs.map((t) => t.id)
-            const now = syncMru(mru.current, ids, st.activeId)
-            walk.current = startWalk(st.activeId ? touchMru(now, st.activeId) : now)
-          }
-          if (!walk.current) return
-          walk.current = stepWalk(walk.current, dir)
-          const id = walkTarget(walk.current)
-          setState((s) => pickTab(s, id))
-        } else {
-          setState((s) => stepTab(s, dir))
-        }
-      } else if (!e.shiftKey && /^[1-9]$/.test(e.key)) {
-        const t = live.current.state.tabs[Number(e.key) - 1]
-        if (t) {
+      switch (id) {
+        case 'fullscreen':
+          e.preventDefault()
+          window.prism.windowToggleFullscreen()
+          return
+        case 'help':
           hit()
-          setState((s) => pickTab(s, t.id))
+          toggleHelp()
+          return
+        case 'next-tab': {
+          hit()
+          const dir = e.shiftKey ? -1 : 1
+          if (tabSwitch() === 'recent') {
+            // The walk is a snapshot taken at the hold's first press, of the
+            // list as it stands with the tab in front first (tabMru).
+            const { state: st } = live.current
+            if (!walk.current) {
+              const ids = st.tabs.map((t) => t.id)
+              const now = syncMru(mru.current, ids, st.activeId)
+              walk.current = startWalk(st.activeId ? touchMru(now, st.activeId) : now)
+            }
+            if (!walk.current) return
+            walk.current = stepWalk(walk.current, dir)
+            const to = walkTarget(walk.current)
+            setState((s) => pickTab(s, to))
+          } else {
+            setState((s) => stepTab(s, dir))
+          }
+          return
         }
-      } else if (!e.shiftKey && e.key === ',') {
-        hit()
-        setState(openSettings)
-      } else if (isFindTabChord(e) && tabLayout() === 'vertical') {
-        // FIND A TAB (#162): the sidebar's find box.
-        hit()
-        window.dispatchEvent(new Event('prism:find-tab'))
-      } else if (isSidebarChord(e) && tabLayout() === 'vertical') {
-        // THE SIDEBAR (#162): open, or collapsed to the left edge.
-        hit()
-        toggleSidebar()
-      } else if (k === 't') {
-        // With or without shift: Ctrl+T is the chord, Ctrl+Shift+T the habit
-        // Windows Terminal leaves in the hand.
-        hit()
-        void newTab()
-      } else if (k === 'w') {
-        // Ctrl+W closes a tab in BOTH apps (owner, 2026-09-19), with or without
-        // shift. Known cost, accepted: the shell loses delete-word on that
-        // chord; Ctrl+Backspace does the same job.
-        hit()
-        const id = live.current.state.activeId
-        if (id) requestClose(id)
-      } else if (k === 'f' && (e.shiftKey || !focusedTermFullScreen())) {
-        // Ctrl+F finds (owner, 2026-09-23), except over a full-screen program,
-        // whose page down it is; Ctrl+Shift+F finds everywhere (termHost).
-        hit()
-        const id = live.current.state.activeId
-        setFindFor((was) => (was === id ? null : id))
+        case 'jump-tab': {
+          const t = live.current.state.tabs[Number(e.key) - 1]
+          if (t) {
+            hit()
+            setState((s) => pickTab(s, t.id))
+          }
+          return
+        }
+        case 'settings':
+          hit()
+          setState(openSettings)
+          return
+        case 'find-tab':
+          // FIND A TAB (#162): the sidebar's find box.
+          hit()
+          window.dispatchEvent(new Event('prism:find-tab'))
+          return
+        case 'sidebar':
+          // THE SIDEBAR (#162): open, or collapsed to the left edge.
+          hit()
+          toggleSidebar()
+          return
+        case 'new-tab':
+          hit()
+          void newTab()
+          return
+        case 'close-tab': {
+          // Known cost, accepted: the shell loses delete-word on Ctrl+W;
+          // Ctrl+Backspace does the same job.
+          hit()
+          const tab = live.current.state.activeId
+          if (tab) requestClose(tab)
+          return
+        }
+        case 'find': {
+          hit()
+          const tab = live.current.state.activeId
+          setFindFor((was) => (was === tab ? null : tab))
+          return
+        }
       }
     }
     window.addEventListener('keydown', onKey, true)
@@ -1013,7 +1019,7 @@ export default function App(): JSX.Element {
             {
               label: 'Find in scrollback',
               icon: <MenuIcon name="find" />,
-              hint: 'Ctrl+F',
+              hint: keyLabel('find'),
               onPick: () => setFindFor(activeShell.id)
             },
             // Only while the setting is on: off means the app offers it nowhere.
@@ -1022,7 +1028,7 @@ export default function App(): JSX.Element {
                   {
                     label: 'Command help',
                     icon: <MenuIcon name="help" />,
-                    hint: 'F1',
+                    hint: keyLabel('help'),
                     onPick: toggleHelp
                   }
                 ]

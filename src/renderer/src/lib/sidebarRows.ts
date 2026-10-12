@@ -30,18 +30,3 @@ export function findKeeps(query: string, name: string, cwd: string): boolean {
   const hay = `${name}\n${cwd}`.toLowerCase()
   return words.every((w) => hay.includes(w))
 }
-
-/**
- * THE FIND KEY, Ctrl+Shift+K (the mockup said Ctrl+K; that is the shell's
- * kill-to-end-of-line, in readline and PSReadLine alike, so the Shift chord):
- * taken only while the tabs are vertical.
- */
-export function isFindTabChord(e: {
-  key: string
-  ctrlKey: boolean
-  shiftKey: boolean
-  altKey: boolean
-  metaKey: boolean
-}): boolean {
-  return e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'k'
-}

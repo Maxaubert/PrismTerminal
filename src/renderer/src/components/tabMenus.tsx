@@ -1,3 +1,4 @@
+import { keyLabel } from '../lib/keymap'
 import { useState, type JSX, type MouseEvent } from 'react'
 import type { Tab } from '../lib/tabs'
 import {
@@ -66,7 +67,7 @@ export function useTabMenus({
             {
               label: 'Close tab',
               icon: <MenuIcon name="close" />,
-              hint: 'Ctrl+Shift+W',
+              hint: keyLabel('close-tab'),
               onPick: () => onClose(tabMenu.id)
             },
             // Settings is a tab with no folder. Offering this there wrote an

@@ -1,3 +1,4 @@
+import { keyLabel } from '../lib/keymap'
 import type { JSX, ReactNode } from 'react'
 
 /**
@@ -49,7 +50,7 @@ function AppButtons({
         <button
           className={BTN}
           onClick={onHelp}
-          title="Command help (F1)"
+          title={`Command help (${keyLabel('help')})`}
           aria-label="Command help"
           data-title-help
         >
@@ -73,7 +74,7 @@ function AppButtons({
       <button
         className={BTN}
         onClick={onSettings}
-        title="Settings (Ctrl+,)"
+        title={`Settings (${keyLabel('settings')})`}
         aria-label="Settings"
         data-title-settings
       >

@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState, type JSX, type MouseEvent, type PointerEvent } from 'react'
-import { tabLabels, type Tab } from '../lib/tabs'
+import { useEffect, useRef, useState, type JSX, type PointerEvent } from 'react'
+import { tabLabels } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
 import { TabMark } from '@core/renderer/components/TabMark'
-import { motionClass } from '@core/renderer/components/markClasses'
-import { failedLabel } from '@core/renderer/lib/agentHookSignal'
 import { useTabLooks } from './tabLooks'
 import { useTabMenus } from './tabMenus'
+import { useTabReorder } from './useTabReorder'
+import { PromptEdge, TabClose, TabLoading } from './tabParts'
+import { auxClose, folderDrop, tabTitle, type TabListProps } from './tabList'
 import { useTabStyle } from '../lib/tabStylePrefs'
+import { keyLabel } from '../lib/keymap'
 import { sideEdgeClip, sideSegmentClip } from '../lib/promptGeometry'
-import { dropSlot, type Lane } from '../lib/tabDrop'
 import { useHoverReveal } from '../lib/hoverReveal'
 import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
@@ -21,8 +22,11 @@ import {
   useSidebarMode,
   useSidebarWidth
 } from '../lib/sidebarPrefs'
-import { BAR_H, CARRY_SLIDE, DRAG_SLOP, SIDEBAR_SLIDE } from '../lib/chromeLayout'
+import { BAR_H, SIDEBAR_SLIDE } from '../lib/chromeLayout'
 
+/** One row's height: the row's own size and the tile a flowing edge repeats
+ *  on, so the two cannot part (audit 2026-10-12: the tile was 34 on a 46 row). */
+const ROW_H = 46
 
 /**
  * THE TABS AS A SIDEBAR (#162; owner, 2026-10-11): the strip's tabs, one row
@@ -56,23 +60,7 @@ export function TabSidebar({
   onDropFolder,
   onReorder,
   onOpenRecent
-}: {
-  tabs: Tab[]
-  activeId: string | null
-  workingIds: ReadonlySet<string>
-  doneIds: ReadonlySet<string>
-  questionIds: ReadonlySet<string>
-  failedIds?: ReadonlySet<string>
-  failedKinds?: { readonly current: ReadonlyMap<string, string> }
-  agentIds: ReadonlySet<string>
-  loadingIds?: ReadonlySet<string>
-  onPick: (id: string) => void
-  onClose: (id: string) => void
-  onNew: () => void
-  onDropFolder: (path: string) => void
-  onReorder: (id: string, toIndex: number) => void
-  onOpenRecent: (path: string) => void
-}): JSX.Element | null {
+}: TabListProps): JSX.Element | null {
   const prompt = useTabStyle() === 'prompt'
   const mode = useSidebarMode()
   const storedWidth = useSidebarWidth()
@@ -150,71 +138,11 @@ export function TabSidebar({
     []
   )
 
-  // ---- Reorder: the strip's pointer drag, along y ----
-  const [dropAt, setDropAt] = useState<number | null>(null)
-  const [carry, setCarry] = useState<{
-    id: string
-    from: number
-    height: number
-    dy: number
-    live: boolean
-  } | null>(null)
-  const lanes = useRef<Lane[]>([])
+  // ---- Reorder: the strip's carry, down the column (useTabReorder) ----
   const rows = useRef<HTMLDivElement>(null)
-  const startY = useRef(0)
-  const dragging = useRef(false)
-  const heldFocus = useRef<HTMLElement | null>(null)
-  const endDrag = (): void => {
-    setDropAt(null)
-    setCarry(null)
-    lanes.current = []
-    const el = heldFocus.current
-    heldFocus.current = null
-    if (el && document.contains(el)) requestAnimationFrame(() => el.focus())
-  }
-  const onRowDown = (e: PointerEvent<HTMLDivElement>, id: string, i: number): void => {
-    if (e.button !== 0 || query) return
-    if ((e.target as HTMLElement).closest('[data-tab-close]')) return
-    heldFocus.current = document.activeElement as HTMLElement | null
-    // The lanes run down the column: `left` and `width` are a row's top and height.
-    const boxes = [...(rows.current?.querySelectorAll('[data-tab]') ?? [])].map((el) =>
-      el.getBoundingClientRect()
-    )
-    lanes.current = boxes.map((b) => ({ left: b.top, width: b.height, mid: b.top + b.height / 2 }))
-    startY.current = e.clientY
-    dragging.current = false
-    setCarry({ id, from: i, height: boxes[i]?.height ?? 0, dy: 0, live: false })
-    setDropAt(i)
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }
-  const onRowMove = (e: PointerEvent<HTMLDivElement>): void => {
-    if (!carry) return
-    const raw = e.clientY - startY.current
-    if (!dragging.current && Math.abs(raw) < DRAG_SLOP) return
-    dragging.current = true
-    const lane = lanes.current[carry.from]
-    const box = rows.current?.getBoundingClientRect()
-    const dy =
-      lane && box
-        ? Math.max(box.top - lane.left, Math.min(raw, box.bottom - (lane.left + lane.width)))
-        : raw
-    setCarry((c) => (c ? { ...c, dy, live: true } : c))
-    setDropAt(dropSlot(lanes.current, carry.from, dy))
-  }
-  const onRowUp = (e: PointerEvent<HTMLDivElement>): void => {
-    if (!carry) return
-    e.currentTarget.releasePointerCapture(e.pointerId)
-    const landed = dragging.current ? dropAt : null
-    const id = carry.id
-    endDrag()
-    if (landed !== null) onReorder(id, landed)
-  }
-  const slide = (i: number): number => {
-    if (!carry || dropAt === null || i === carry.from) return 0
-    if (dropAt > carry.from && i > carry.from && i < dropAt) return -carry.height
-    if (dropAt <= carry.from && i >= dropAt && i < carry.from) return carry.height
-    return 0
-  }
+  // Not while Find a tab filters: the hidden rows would be lanes.
+  const reorder = useTabReorder({ axis: 'y', container: rows, onReorder, refuse: !!query })
+  const { carry } = reorder
 
   // ---- Resize: the right edge, while open ----
   const resize = (e: PointerEvent<HTMLDivElement>): void => {
@@ -247,12 +175,6 @@ export function TabSidebar({
     ? tabs.map((t, i) => findKeeps(query, labels[i], t.kind === 'settings' ? '' : t.cwd))
     : null
   const firstKept = kept ? tabs.find((_, i) => kept[i]) : undefined
-  const auxClose = (e: MouseEvent, id: string): void => {
-    if (e.button === 1) {
-      e.preventDefault()
-      onClose(id)
-    }
-  }
   return (
     <div
       data-sidebar-slot
@@ -269,18 +191,7 @@ export function TabSidebar({
         data-sidebar-mode={mode}
         data-sidebar-shown={visible || undefined}
         inert={!visible}
-        onDragOver={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-        }}
-        onDrop={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          for (const f of e.dataTransfer.files ?? []) {
-            const path = window.prism.getDroppedPath(f)
-            if (path) onDropFolder(path)
-          }
-        }}
+        {...folderDrop(onDropFolder)}
         // SLID OUT UNDER SEE-THROUGH, ACRYLIC LIKE THE REST (owner,
         // 2026-10-12: "make sure its acrylic like the rest not just see
         // through"): the window's tint over the window's own acrylic, the page
@@ -380,7 +291,7 @@ export function TabSidebar({
           />
           {!query && (
             <kbd className="shrink-0 font-[inherit] text-[11.5px] text-[var(--p-dim2)]">
-              Ctrl+Shift+K
+              {keyLabel('find-tab')}
             </kbd>
           )}
         </label>
@@ -419,9 +330,7 @@ export function TabSidebar({
                 <TabMark mark={mark} state={state} background={palette.fill[state]} ink={ink} />
               ) : null
             const edge =
-              prompt && mark.place === 'edge' && state
-                ? { motion: mark.motion, background: paint(mark.colour, 'y') }
-                : null
+              prompt && mark.place === 'edge' && state ? { background: paint(mark.colour, 'y') } : null
             return (
               <div
                 key={t.id}
@@ -431,20 +340,13 @@ export function TabSidebar({
                 data-agent-state={state ?? undefined}
                 data-agent-present={agentIds.has(t.id) ? '' : undefined}
                 onClick={() => {
-                  if (dragging.current) {
-                    dragging.current = false
-                    return
-                  }
-                  onPick(t.id)
+                  if (reorder.isPick()) onPick(t.id)
                 }}
-                onAuxClick={(e) => auxClose(e, t.id)}
+                onAuxClick={(e) => auxClose(e, () => onClose(t.id))}
                 onContextMenu={(e) => menu.openTabMenu(e, t)}
-                onPointerDown={(e) => onRowDown(e, t.id, i)}
-                onPointerMove={onRowMove}
-                onPointerUp={onRowUp}
-                onPointerCancel={() => carry && endDrag()}
+                {...reorder.handlers(t.id, i)}
                 hidden={kept ? !kept[i] : undefined}
-                className={`no-drag group relative isolate flex h-[46px] shrink-0 items-center gap-2 overflow-hidden transition-colors ${nameInk} ${
+                className={`no-drag group relative isolate flex shrink-0 items-center gap-2 overflow-hidden transition-colors ${nameInk} ${
                   prompt ? 'mr-1 pl-3 pr-6' : 'mx-1.5 rounded-[4px] pl-3 pr-1.5'
                 } ${
                   // The tab in front is a clear filled pill in the accent's tint
@@ -454,10 +356,8 @@ export function TabSidebar({
                     : 'hover:bg-[var(--p-hover)]'
                 }`}
                 style={{
-                  transform: `translateY(${carry?.id === t.id ? carry.dy : slide(i)}px)`,
-                  zIndex: carry?.id === t.id ? 5 : undefined,
-                  transition:
-                    carry && carry.id !== t.id ? `transform ${CARRY_SLIDE}` : undefined,
+                  height: ROW_H,
+                  ...reorder.motion(t.id, i),
                   ...(prompt ? { clipPath: sideSegmentClip() } : {})
                 }}
               >
@@ -473,25 +373,14 @@ export function TabSidebar({
                   />
                 )}
                 {edge && state && (
-                  <span
-                    data-mark="edge"
-                    data-prompt-edge={state}
-                    data-mark-motion={edge.motion ?? undefined}
-                    data-attention={state !== 'working' ? state : undefined}
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 z-[1]"
+                  <PromptEdge
+                    mark={mark}
+                    state={state}
+                    background={edge.background}
+                    tile={ROW_H}
+                    className="inset-0 z-[1]"
                     style={{ clipPath: sideEdgeClip() }}
-                  >
-                    <i
-                      className={`absolute inset-0 ${motionClass(edge.motion, 'y')}`}
-                      style={{
-                        background: edge.background,
-                        ...(edge.motion === 'flow'
-                          ? { backgroundSize: '100% 34px', ['--tile-y' as string]: '34px' }
-                          : {})
-                      }}
-                    />
-                  </span>
+                  />
                 )}
                 {/* The tab in front: the accent rule. Classic on the terminal's
                     side; Powerline down the row's left, the arrow being its right. */}
@@ -505,13 +394,7 @@ export function TabSidebar({
                   />
                 )}
                 {t.kind !== 'settings' && <DictationTabMark sessionId={t.id} />}
-                {loadingIds?.has(t.id) && (
-                  <span
-                    data-tab-loading
-                    aria-hidden
-                    className="pointer-events-none relative z-[1] inline-block h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--p-text)_22%,transparent)] border-t-[var(--p-accent-solid)] motion-safe:animate-spin"
-                  />
-                )}
+                {loadingIds?.has(t.id) && <TabLoading />}
                 {mark.place === 'ring' ? (
                   <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
                 ) : (
@@ -526,20 +409,10 @@ export function TabSidebar({
                   tabIndex={on ? 0 : -1}
                   className="relative z-[1] flex min-w-0 flex-1 flex-col py-1 text-left"
                   style={ink ? { color: ink } : undefined}
-                  title={
-                    t.kind === 'settings'
-                      ? undefined
-                      : failed
-                        ? `${t.cwd}\n${failedLabel(failedKinds?.current.get(t.id))}`
-                        : t.cwd
-                  }
+                  title={tabTitle(t, failed, failedKinds)}
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (dragging.current) {
-                      dragging.current = false
-                      return
-                    }
-                    onPick(t.id)
+                    if (reorder.isPick()) onPick(t.id)
                   }}
                 >
                   <span className={`truncate ${filled || on ? 'font-semibold' : ''}`}>
@@ -557,32 +430,7 @@ export function TabSidebar({
                     </span>
                   )}
                 </button>
-                <button
-                  className={`relative z-[1] grid h-[18px] w-[18px] shrink-0 place-items-center rounded-sm text-[var(--p-icon)] transition-opacity hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] ${
-                    on ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                  }`}
-                  style={ink ? { color: ink } : undefined}
-                  data-tab-close
-                  title={`Close ${labels[i]} (Ctrl+Shift+W)`}
-                  aria-label={`Close ${labels[i]}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onClose(t.id)
-                  }}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width={10}
-                    height={10}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.4"
-                    strokeLinecap="round"
-                    aria-hidden
-                  >
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
-                </button>
+                <TabClose label={labels[i]} on={on} ink={ink} size={18} onClose={() => onClose(t.id)} />
               </div>
             )
           })}
@@ -593,7 +441,7 @@ export function TabSidebar({
         <div className="shrink-0 border-t border-[var(--p-divider)] p-2">
           <button
             data-sidebar-new
-            title="New tab (Ctrl+T). Right-click for recent folders"
+            title={`New tab (${keyLabel('new-tab')}). Right-click for recent folders`}
             onClick={onNew}
             onContextMenu={menu.openPlusMenu}
             className="no-drag flex h-[34px] w-full items-center justify-center gap-2 rounded-md border border-[var(--p-divider)] bg-[var(--p-hover)] text-[13px] text-[var(--p-text)] transition-colors hover:bg-[var(--p-hover-hi)]"
