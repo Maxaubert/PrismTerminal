@@ -22,7 +22,8 @@ import {
   toStored,
   type AlphaRange,
   type Hsva,
-  type Rgba
+  type Rgba,
+  clamp
 } from '../lib/colour'
 import { cycleColourFormat, useColourFormat } from '../lib/colourFormat'
 import { ROW_BUTTON } from './fields'
@@ -86,7 +87,6 @@ const BLACK: Rgba = { r: 0, g: 0, b: 0, a: 1 }
 
 const css = (c: Rgba): string => toStored(c)
 const solid = (c: Rgba): string => toStored({ ...c, a: 1 })
-const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n))
 
 /** A swatch: the colour over the checkerboard, the left half solid and the
  *  right half at its alpha, so a see-through colour is seen at a glance. */

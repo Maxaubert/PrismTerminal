@@ -9,7 +9,7 @@ import {
   type AgentIndicator
 } from '../host'
 import { liveThemeId } from './termThemeRetired'
-import { alphaOf, opaque, parseColour, toStored, withAlpha } from './colour'
+import { alphaOf, canonicalStored, opaque, parseColour, toStored, withAlpha } from './colour'
 import { seeThroughAlpha } from './seeThrough'
 // A CYCLE, and a safe one: termTheme imports this module too, and neither reads
 // the other at module load (only inside functions, at call time), so either may
@@ -245,12 +245,9 @@ export function setAgentHooksOn(on: boolean): void {
   localStorage.setItem(HOOKS_KEY, on ? '1' : '0')
   notify()
 }
-/** Six digits, or eight with an alpha (#112): every reader takes both. */
-const HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i
-
-/** A stored agent colour: the canonical form of a 6 or 8 digit hex, or null. */
-const agentHex = (v: string | null | undefined): string | null =>
-  v && HEX.test(v) ? toStored(parseColour(v)!) : null
+/** A stored agent colour: six digits, or eight with an alpha (#112), in its
+ *  canonical form, or null. */
+const agentHex = canonicalStored
 
 /** Write a choice, or forget it: anything but a 6 or 8 digit hex gives the
  *  choice back to the theme. */

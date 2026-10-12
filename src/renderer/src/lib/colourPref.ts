@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { parseColour, toStored } from '@core/renderer/lib/colour'
+import { canonicalStored } from '@core/renderer/lib/colour'
 
 // A WINDOW COLOUR the user may pick over the theme's own: the accent and the
 // background (owner, 2026-09-22). One shape for both: unset means "follow the
@@ -7,11 +7,8 @@ import { parseColour, toStored } from '@core/renderer/lib/colour'
 // This app's own settings, like the edges: in Prism the window's colours
 // belong to its app style, so none of this is the core's.
 
-const HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i
-
 /** The stored form of a 6 or 8 digit hex, or null. */
-const canonical = (v: string | null | undefined): string | null =>
-  v && HEX.test(v) ? toStored(parseColour(v)!) : null
+const canonical = canonicalStored
 
 export interface ColourPref {
   /** The chosen colour in its stored form, or null to follow the theme. */

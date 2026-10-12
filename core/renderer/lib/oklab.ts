@@ -1,4 +1,4 @@
-import { contrastRatio, luminance } from '@core/renderer/lib/termAnsi'
+import { contrastRatio, luminance } from './termAnsi'
 
 /** OKLab, where equal steps in lightness look equal: the sidebar's step and
  *  the accent's lift are measured in it. */

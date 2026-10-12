@@ -34,7 +34,7 @@ export interface Hsla {
 }
 export type ColourFormat = 'hex' | 'rgba' | 'hsla'
 
-const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n))
+export const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n))
 const byte = (n: number): string => Math.round(clamp(n, 0, 255)).toString(16).padStart(2, '0')
 
 /* ---------- parse ---------- */
@@ -121,6 +121,13 @@ export function parseColour(text: string): Rgba | null {
 export function toStored(c: Rgba): string {
   const a = Math.round(clamp(c.a, 0, 1) * 255)
   return `#${byte(c.r)}${byte(c.g)}${byte(c.b)}${a === 255 ? '' : byte(a)}`
+}
+
+/** A STORED colour read back: the stored form of a 6 or 8 digit hex, or null
+ *  for anything else (the choice goes back to the theme). The one reader both
+ *  apps' colour settings use (audit 2026-10-12: two identical copies). */
+export function canonicalStored(v: string | null | undefined): string | null {
+  return v && /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(v) ? toStored(parseColour(v)!) : null
 }
 
 /** Alpha as text, at most two decimals, no trailing zeros. */

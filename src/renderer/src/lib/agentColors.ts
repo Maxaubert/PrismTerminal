@@ -4,6 +4,7 @@ import { windowAccent } from './accentPrefs'
 import { windowBackground } from './backgroundPrefs'
 import { contrastRatio, ensureContrast, normalizeColor } from '@core/renderer/lib/termAnsi'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
+import { parseColour, rgbToHsl } from '@core/renderer/lib/colour'
 
 /**
  * What the agent indicators wear when the user has not picked a colour: the
@@ -63,17 +64,13 @@ const FALLBACK_FAIL_ALT = '#d946ef'
 
 const rgbOf = (h: string): number[] => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
 
-/** Hue in degrees, and saturation (HSL), of a `#rrggbb`. */
+/** Hue in degrees, and saturation (HSL, 0..1), of a `#rrggbb`: the core's
+ *  rgbToHsl, not a copy of it. */
 function hueSat(h: string): { hue: number; sat: number } {
-  const [r, g, b] = rgbOf(h)
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  const d = max - min
-  const l = (max + min) / 2
-  const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
-  if (d === 0) return { hue: 0, sat }
-  const hue = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
-  return { hue: (hue * 60 + 360) % 360, sat }
+  const c = parseColour(h)
+  if (!c) return { hue: 0, sat: 0 }
+  const { h: hue, s } = rgbToHsl(c)
+  return { hue, sat: s / 100 }
 }
 
 /** Two marks that read as two: hues 20 degrees apart (both coloured), or an

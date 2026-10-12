@@ -9,7 +9,7 @@ import {
 import { alphaHex, alphaOf, composite, selectionFor } from '@core/renderer/lib/colour'
 import { switchKnob } from '@core/renderer/lib/switchKnob'
 import { sidebarGround } from './sidebarGround'
-import { atLightness, liftToFloor, okLightness } from './oklab'
+import { atLightness, liftToFloor, okLightness } from '@core/renderer/lib/oklab'
 import { EDGE_ALPHA, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 import { DEFAULT_GROUND, LIGHT_GROUND } from '@core/shared/ground'
 
