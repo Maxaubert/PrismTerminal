@@ -35,26 +35,8 @@ import { parseAgentSignal } from '../lib/agentHookSignal'
 import { resolveTermTheme, watchTermTheme } from '../lib/termTheme'
 import { onGround } from '../lib/termGround'
 import { xtermTheme, type XtermTheme } from '../lib/termXterm'
-import {
-  THEME_REPORTS_OFF,
-  bellGate,
-  colourQueryReplies,
-  decrqmReply,
-  dsrThemeReply,
-  groundMode,
-  modeParams,
-  nudgeWidths,
-  NUDGE_AFTER_MS,
-  NUDGE_HOLD_MS,
-  noteThemeMode,
-  themePush,
-  themeReports,
-  xtversionAsked,
-  xtversionReply,
-  type GroundMode
-} from '../lib/termReplies'
-import { TERM_CORE_VERSION, XTERM_VERSION } from '../../shared/termVersion'
-import { OSC52_MAX, parseOsc52 } from '../lib/termOsc52'
+import { bellGate, groundMode, type GroundMode } from '../lib/termReplies'
+import { attachReplies } from './termReplyHandlers'
 import { followsHostStyle, paintsGround, termApi, termHost } from '../host'
 import { findLinks, linkColor } from '../lib/termLinks'
 import { announceCopied, copyText } from '../lib/copyNotice'
@@ -626,6 +608,33 @@ export function onTermFindResults(
   return () => d.dispose()
 }
 
+/**
+ * ONE LISTENER PER CHANNEL, ROUTED BY SESSION (audit 2026-10-12). Each session
+ * added its own listener to data, agent and exit, every one of them filtering
+ * every message, so ten tabs meant ten callbacks for each chunk of output.
+ * Subscribed on the first session and kept: the bridge outlives every tab.
+ */
+interface SessionRoute {
+  data: (data: string) => void
+  agent: (present: boolean, kind: Parameters<Parameters<ReturnType<typeof termApi>['onTermAgent']>[0]>[2]) => void
+  exit: () => void
+}
+const routes = new Map<string, SessionRoute>()
+let routed = false
+function routeSession(id: string, r: SessionRoute): () => void {
+  if (!routed) {
+    routed = true
+    const api = termApi()
+    api.onTermData((forId, data) => routes.get(forId)?.data(data))
+    api.onTermAgent((forId, present, kind) => routes.get(forId)?.agent(present, kind))
+    api.onTermExit((forId) => routes.get(forId)?.exit())
+  }
+  routes.set(id, r)
+  return () => {
+    if (routes.get(id) === r) routes.delete(id)
+  }
+}
+
 function createSession(id: string, root: string, shellId: string | undefined): Session {
   // The quoting a pasted path gets (#5): the shell this session runs.
   const pathShell: PathShell = shellOfShellId(shellId)
@@ -802,12 +811,10 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // first moment (set where the resume is taken, below); the title, the poll
   // and the prompt move it (`agentArm`).
   let arm = armAtStart(null)
-  // Whether the program in front asked for theme reports (?2031h, below).
-  let reports = THEME_REPORTS_OFF
   const moveArm = (s: ArmStep): void => {
     arm = s.arm
     // The agent that asked for theme reports has gone with them.
-    if (s.gone) reports = THEME_REPORTS_OFF
+    if (s.gone) replies.forget()
     if (s.recheck) termApi().termAgentAgain?.(id)
   }
   term.parser.registerOscHandler(9, (data) => {
@@ -904,114 +911,26 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     osc8Drop()
     osc8.clear()
   })
-  // THE PROGRAM IS TOLD THE GROUND IT REALLY SITS ON (#168, #172; rule
-  // replies-only-when-asked). MEASURED (Claude Code 2.1.296): xterm answered
-  // `ESC]11;?` as rgb:0000/0000/0000, read off the clear canvas the panel
-  // paints behind (rule 14), so Claude's "auto" theme was dark on Fawn too.
-  // Claude writes ?2031h without a DECRQM probe, and on a pushed ?997;2n asks
-  // OSC 11 again and turns light. Every reply goes through term.input(.., false):
-  // onData, in stream order with xterm's own replies (a DA1 right after stays
-  // after), and starting with ESC so `looksTyped` never counts it as typing.
-  // Anything these do not answer returns false and stays xterm's.
-  const reply =(r: string): void => term.input(r, false)
-  const modeNow = (): GroundMode => groundMode(groundedTheme().background)
-  const colourQuery = (ident: 10 | 11) => (data: string): boolean => {
-    const theme = groundedTheme()
-    const replies = colourQueryReplies(ident, data, { fg: theme.foreground, bg: theme.background })
-    if (!replies) return false
-    replies.forEach(reply)
-    // An answered ground tells the program the mode: no push for it later.
-    if (ident === 11 || replies.length > 1) reports = noteThemeMode(reports, groundMode(theme.background))
-    return true
-  }
-  term.parser.registerOscHandler(10, colourQuery(10))
-  term.parser.registerOscHandler(11, colourQuery(11))
-  // ?2031h / ?2031l, followed from the stream. False: xterm still applies
-  // whatever other modes ride the same sequence.
-  const trackReports = (on: boolean) => (params: (number | number[])[]): boolean => {
-    if (modeParams(params).includes(2031)) reports = themeReports(reports, on, modeNow())
-    return false
-  }
-  term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, trackReports(true))
-  term.parser.registerCsiHandler({ prefix: '?', final: 'l' }, trackReports(false))
-  // RIS (ESC c) resets every mode, this one too. False: xterm still resets.
-  term.parser.registerEscHandler({ final: 'c' }, () => {
-    reports = THEME_REPORTS_OFF
-    return false
+  // WHAT A PROGRAM ASKS THE TERMINAL ABOUT ITSELF (#168, #171, #172, #176):
+  // its colours, light or dark, its version, a clipboard write. One piece
+  // (termReplyHandlers, rule replies-only-when-asked).
+  const replies = attachReplies(term, {
+    ground: groundedTheme,
+    el,
+    nudge: (cols) => {
+      const s = sessions.get(id)
+      if (!s) return null
+      suppressActivity(id)
+      term.resize(cols, term.rows)
+      termApi().termResize(id, cols, term.rows)
+      return () => {
+        if (sessions.get(id) === s) refitSession(id, s)
+      }
+    },
+    copy: (text) => termApi().writeClipboardFromTerm?.(text),
+    copied: announceCopied
   })
-  // CSI ? 996 n: "which are you now?" xterm keeps every other DSR.
-  term.parser.registerCsiHandler({ prefix: '?', final: 'n' }, (params) => {
-    const p = modeParams(params)
-    if (p.length !== 1 || p[0] !== 996) return false
-    const mode = modeNow()
-    reply(dsrThemeReply(mode))
-    reports = noteThemeMode(reports, mode)
-    return true
-  })
-  // DECRQM for 2031, which xterm 6.0 does not know (it would say 0, "not
-  // recognised"); every other mode stays xterm's to report.
-  term.parser.registerCsiHandler({ prefix: '?', intermediates: '$', final: 'p' }, (params) => {
-    const p = modeParams(params)
-    if (p.length !== 1 || p[0] !== 2031) return false
-    reply(decrqmReply(2031, reports.on))
-    return true
-  })
-  // The redraw nudge after a push (termReplies.ts says why): one column less,
-  // then a refit back, through the panel's own resize path so xterm and the pty
-  // agree. Several switches in a row give one nudge. The theme is switched in
-  // Settings, so the program's tab is usually HIDDEN then (no size): the nudge
-  // waits until the tab is shown again, since showing it refits to the same
-  // size, which tells the program nothing.
-  let nudge: number | undefined
-  const nudgeWhenShown = (): void => {
-    const s = sessions.get(id)
-    if (!s) return
-    if (!el.clientWidth || !el.clientHeight) {
-      nudge = window.setTimeout(nudgeWhenShown, NUDGE_AFTER_MS)
-      return
-    }
-    const w = nudgeWidths(term.cols)
-    if (!w) return
-    suppressActivity(id)
-    term.resize(w[0], term.rows)
-    termApi().termResize(id, w[0], term.rows)
-    nudge = window.setTimeout(() => {
-      if (sessions.get(id) === s) refitSession(id, s)
-    }, NUDGE_HOLD_MS)
-  }
-  const tellTheme = (mode: GroundMode): void => {
-    const r = themePush(reports, mode)
-    reports = r.state
-    if (!r.send) return
-    reply(r.send)
-    window.clearTimeout(nudge)
-    nudge = window.setTimeout(nudgeWhenShown, NUDGE_AFTER_MS)
-  }
-  // XTVERSION, `CSI > q` / `CSI > 0 q` (#171; termReplies.ts has the
-  // measurement): xterm 6.0.0 has no handler, and without a reply Claude never
-  // turns on synchronized output. Any other parameter stays xterm's.
-  term.parser.registerCsiHandler({ prefix: '>', final: 'q' }, (params) => {
-    if (!xtversionAsked(modeParams(params))) return false
-    reply(xtversionReply(TERM_CORE_VERSION, XTERM_VERSION))
-    return true
-  })
-  // OSC 52, WRITE-ONLY (#176; termOsc52.ts says why). Every OSC 52 is handled
-  // (true), written or refused, so none is drawn as stray text; a READ is
-  // swallowed and NEVER answered. A copy goes through main (a background tab
-  // or an unfocused window still copies) and raises the Copied badge only when
-  // it landed, so a program's copy is never silent.
-  term.parser.registerOscHandler(52, (data) => {
-    const p = parseOsc52(data, OSC52_MAX)
-    if (p?.kind === 'write') {
-      void termApi()
-        .writeClipboardFromTerm?.(p.text)
-        .then((ok) => {
-          if (ok) announceCopied()
-        })
-        .catch(() => undefined)
-    }
-    return true
-  })
+  const tellTheme = replies.tellTheme
   // THE BELL (#177): at most one a second per tab reaches the host (a `cat` of
   // a binary rings hundreds of times), which flashes the taskbar while the
   // window is unfocused (spec decision 1). Never a sound.
@@ -1097,16 +1016,13 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     // A path this session asked about turned out to exist: paint the lines
     // that asked (#167; it used to be every line of every tab).
     onPathsFound(id, () => links.revisit()),
-    termApi().onTermAgent((forId, present, kind) => {
-      if (forId === id) moveArm(armOnPoll(arm, present, kind))
+    routeSession(id, {
+      agent: (present, kind) => moveArm(armOnPoll(arm, present, kind)),
+      data: writeOutput,
+      // The shell ended: whatever it said must be seen.
+      exit: finishReveal
     }),
-    termApi().onTermData((forId, data) => {
-      if (forId === id) writeOutput(data)
-    }),
-    // The shell ended: whatever it said must be seen.
-    termApi().onTermExit((forId) => {
-      if (forId === id) finishReveal()
-    }),
+    replies.dispose,
     finishReveal,
     // A menu reaches this session's paste through lib/termBus while it is
     // alive; dropping the entry is part of disposing the session.
