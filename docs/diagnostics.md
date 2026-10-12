@@ -182,3 +182,13 @@ second passes `{ often: true }`.
   stack never comes (MEASURED: "Website owner has not opted in").
 - Preload: `...createDiagApi(ipcRenderer)`. Page: `startDiag(bridge)` before the first render.
 - Settings: `<DiagnosticsPage api={bridge} />` and `coreSettingsIndex({ diagnostics: true })`.
+
+## Claude Code shows a text caret and ignores clicks (#182, 2026-10-12)
+
+Not the terminal (the `mouseReport` e2e proves a program that asks for the mouse gets it, under Node
+and Bun). Claude Code asks for the mouse only in its fullscreen TUI, and switches that off by itself
+after repeated failed starts: `~/.claude.json` then holds `fullscreenAutoDisabled` (`version`, `at`,
+`strikes`). A "failed start" is a Claude Code that dies before it is healthy, which is what killing
+Prism Terminal does to its restored Claude tabs while they are still booting. Check that key first;
+`/tui fullscreen` in Claude Code turns fullscreen back on (the record is also per Claude Code
+version). Installs and test launches: let a launch settle before closing it.

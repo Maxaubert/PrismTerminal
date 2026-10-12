@@ -1175,6 +1175,66 @@ const scenarios = {
     }
   },
 
+  // A PROGRAM THAT ASKS FOR THE MOUSE GETS IT (#182; owner, 2026-10-12: "in
+  // claude code it shows a caret cursor but it should show the normal cursor
+  // ... i cant use the cursor to interact with the ui like with askusertool").
+  // A raw-mode program turns mouse reporting on, as Claude Code does, and prints
+  // every byte it is sent; run under Node and under Bun (Claude Code's own
+  // runtime). Measured: xterm takes the mode (its arrow cursor), and a click
+  // comes back to the program as an SGR press and release.
+  async mouseReport(ok) {
+    const w = world()
+    const probe = join(w.alpha, 'mouse-probe.cjs')
+    writeFileSync(
+      probe,
+      [
+        'process.stdin.setRawMode(true)',
+        'process.stdin.resume()',
+        "process.stdout.write('\\x1b[?1049h\\x1b[?1000h\\x1b[?1002h\\x1b[?1006hPROBE-READY\\r\\n')",
+        "process.stdin.on('data', (b) => process.stdout.write('GOT' + JSON.stringify(b.toString().split(String.fromCharCode(27)).join('ESC')) + '\\r\\n'))",
+        "setTimeout(() => { process.stdout.write('\\x1b[?1000l\\x1b[?1002l\\x1b[?1006l\\x1b[?1049l'); process.exit(0) }, 15000)"
+      ].join('\n')
+    )
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    try {
+      const look = () =>
+        page.evaluate(() => {
+          const x = document.querySelector('[data-term-host] .xterm')
+          return { on: !!x?.classList.contains('enable-mouse-events'), cursor: x ? getComputedStyle(x.querySelector('.xterm-screen') ?? x).cursor : '' }
+        })
+      for (const [runtime, exe] of [
+        ['node', process.execPath],
+        ['bun', join(process.env.USERPROFILE ?? '', '.bun', 'bin', 'bun.exe')]
+      ]) {
+        if (runtime === 'bun' && !existsSync(exe)) {
+          ok(true, 'bun is not installed here: skipped')
+          continue
+        }
+        await page.waitForFunction(() => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()), null, { timeout: 45000 })
+        await page.locator('[data-term-host] .xterm').first().click()
+        await page.keyboard.type(`cls; & '${exe}' '${probe}'`)
+        await page.keyboard.press('Enter')
+        ok(!!(await until(async () => (await termText(page)).includes('PROBE-READY'), 15000)), `${runtime}: the program is up and has asked for the mouse`)
+        await sleep(300)
+        const l = await look()
+        ok(l.on, `${runtime}: xterm took the mouse mode (${JSON.stringify(l)})`)
+        ok(l.cursor !== 'text', `${runtime}: so the pointer is not the text caret (${l.cursor})`)
+        await page.keyboard.type('k')
+        ok(!!(await until(async () => (await termText(page)).includes('GOT"k"'), 8000)), `${runtime}: a key reaches it`)
+        const box = await page.locator('[data-term-host] .xterm-screen').first().boundingBox()
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+        const got = await until(async () => {
+          const t = await termText(page)
+          return /ESC\[<0;\d+;\d+M/.test(t) && /ESC\[<0;\d+;\d+m/.test(t) ? t : null
+        }, 5000)
+        ok(!!got, `${runtime}: the click reaches it, press and release (${((got || (await termText(page))).match(/GOT"[^"]*"/g) || []).slice(-3).join(' ')})`)
+        await until(async () => /PS [^>]*>\s*$/.test((await termText(page)).trimEnd()), 20000, 200)
+      }
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async clickCaret(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
