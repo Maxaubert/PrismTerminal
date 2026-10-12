@@ -13,6 +13,7 @@ import { useHoverReveal } from '../lib/hoverReveal'
 import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
 import { setSidebarEdge } from '../lib/sidebarEdge'
+import appIcon from '../assets/app-icon.png'
 import { findKeeps, folderLine } from '../lib/sidebarRows'
 import { useSidebarEdge } from '../lib/sidebarLook'
 import {
@@ -309,19 +310,34 @@ export function TabSidebar({
           clipPath: 'inset(0 -60px 0 0)'
         }}
       >
-        {/* A THIN STRIP TO GRAB, above the tabs, when there is no title bar
-            (owner, 2026-10-11: "the tabs should start a bit further down on
-            the sidebar so that you can grab that area"; 2026-10-12, of the
-            mockups: "thin strip"). 16 px: on a window that is not maximized
-            Windows keeps the top few pixels as its resize border (measured
-            with WM_NCHITTEST, a 10 px strip answered HTTOP at its middle), so
-            the band below that is what moves the window. */}
-        {titleRow && <div data-sidebar-grab aria-hidden className="drag h-4 shrink-0" />}
+        {/* THE APP'S NAME, at the top (owner, 2026-10-12: "a prism terminal
+            logo and text could look nice up there, keep it the default app
+            icon, not a css version"): the icon itself, as About shows it.
+            With no title bar it is also what moves the window (owner,
+            2026-10-11: "so that you can grab that area"): Windows keeps the
+            top few pixels as its resize border (measured with WM_NCHITTEST, a
+            10 px strip answered HTTOP at its middle), so the band below that
+            moves it. */}
+        <div
+          data-sidebar-brand
+          data-sidebar-grab={titleRow || undefined}
+          className={`${titleRow ? 'drag' : ''} flex h-11 shrink-0 items-center gap-2.5 px-4 pt-1`}
+        >
+          <img
+            src={appIcon}
+            alt=""
+            width={20}
+            height={20}
+            draggable={false}
+            className="shrink-0 select-none"
+          />
+          <span className="truncate text-[13.5px] font-semibold tracking-[0.01em] text-[var(--p-side-text)] select-none">
+            Prism Terminal
+          </span>
+        </div>
         <label
           data-sidebar-find
-          className={`no-drag mx-2 mb-2 flex h-8 shrink-0 cursor-text items-center gap-2 rounded-md bg-[var(--p-hover)] px-2.5 text-[var(--p-dim)] ${
-            titleRow ? '' : 'mt-2.5'
-          } focus-within:ring-1 focus-within:ring-[var(--p-accent-hi)]`}
+          className="no-drag mx-2 mb-2 flex h-8 shrink-0 cursor-text items-center gap-2 rounded-md bg-[var(--p-hover)] px-2.5 text-[var(--p-dim)] focus-within:ring-1 focus-within:ring-[var(--p-accent-hi)]"
         >
           <svg
             viewBox="0 0 24 24"

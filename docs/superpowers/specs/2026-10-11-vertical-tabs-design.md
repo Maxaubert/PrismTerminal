@@ -155,6 +155,10 @@ looked at on the way).
   names are held to 7:1 and its folder lines to 4.5:1, on the sidebar AND on the accent pill
   (`--p-side-text`, `--p-side-dim`): the pale themes' soft inks had fallen under that ("very light
   themes have bad contrast ratios"). Every name wears the one ink; the pill marks the tab in front.
+- **The app's name at the top** (owner, 2026-10-12: "a prism terminal logo and text could look nice up
+  there, keep it the default app icon, not a css version"): the icon PNG and "Prism Terminal" above
+  Find a tab; with no title bar it is the band that moves the window. `assets/app-icon.png` was still
+  the icon from before #136 (About showed it too); it is now the current badge.
 
 ## 2. The indicators
 

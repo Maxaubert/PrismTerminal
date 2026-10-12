@@ -2344,7 +2344,15 @@ const scenarios = {
       const up = await top()
       ok(up.rows === 1 && !up.shown && up.bar.bottom <= 0, `the bar is up out of sight (${JSON.stringify(up.bar)})`)
       ok(up.hostTop === 0, `and the terminal has the whole height ("usable for content") (${up.hostTop})`)
-      ok(up.navTop === 0 && up.firstRowTop >= 44 && up.firstRowTop <= 72, `the sidebar starts at the top, its tabs under a thin strip and Find a tab (${up.firstRowTop}px)`)
+      ok(up.navTop === 0 && up.firstRowTop >= 76 && up.firstRowTop <= 100, `the sidebar starts at the top, its tabs under the app's name and Find a tab (${up.firstRowTop}px)`)
+      // Owner, 2026-10-12: "a prism terminal logo and text could look nice up
+      // there, keep it the default app icon, not a css version".
+      const brand = await page.evaluate(() => {
+        const b = document.querySelector('[data-tab-sidebar] [data-sidebar-brand]')
+        const img = b?.querySelector('img')
+        return { text: b?.textContent?.trim() ?? null, icon: !!img && img.naturalWidth > 0, svg: !!b?.querySelector('svg') }
+      })
+      ok(brand.text === 'Prism Terminal' && brand.icon && !brand.svg, `the sidebar's top says Prism Terminal beside the app's own icon (${JSON.stringify(brand)})`)
       // Owner, 2026-10-12: "settings and that command help can stay in the
       // title bar now that we do have a title bar".
       ok(!up.inFoot && up.settings, 'Settings is in the dropped bar, and the sidebar has no foot')
