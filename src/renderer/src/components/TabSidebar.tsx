@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type JSX, type PointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type JSX, type PointerEvent } from 'react'
 import { tabLabels } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
 import { TabMark } from '@core/renderer/components/TabMark'
@@ -116,7 +116,9 @@ export function TabSidebar({
   // How much of the page beside it a slid-out sidebar covers: App cuts that
   // strip of the page away, so only the window's acrylic lies under it.
   const cover = collapsed && visible && tabs.length > 0 ? width : 0
-  useEffect(() => {
+  // Before paint, in the same frame as the slide's own start: set after it,
+  // the cut started a frame late and ran behind the sidebar's edge.
+  useLayoutEffect(() => {
     const root = document.documentElement.style
     root.setProperty('--p-sidebar-cover', `${cover}px`)
   }, [cover])
@@ -196,7 +198,13 @@ export function TabSidebar({
         // the right for its slid-out corner (below).
         style={{
           width,
-          left: collapsed && !visible ? -(width + 16) : 0,
+          // Hidden exactly its own width off the edge, so its right edge and
+          // the page's cut (App's COVER_CUT, 0 to its width) travel the same
+          // way on the same curve: from -(width + 16) the sidebar ran 16 px
+          // behind the cut and a band of the window showed beside its line
+          // all through the slide (owner, 2026-10-13: the edge "grows thicker
+          // to like between 5 to 10 pixels"; measured 14 px, verticalTabs e2e).
+          left: collapsed && !visible ? -width : 0,
           transition: collapsed ? `left ${SIDEBAR_SLIDE}` : undefined,
           clipPath: 'inset(0 -60px 0 0)'
         }}

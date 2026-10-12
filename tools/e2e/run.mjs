@@ -2174,12 +2174,40 @@ const scenarios = {
       await (await gotoPref(page, 'window-edges')).locator('[data-seg="hairline"]').click()
       ok(none === 0 && hair > 0 && solidLine > hair, `the line follows Panel edges: None ${none}, Hairline ${hair}, Solid ${solidLine}`)
       await pickTheme(page, 'pt-default')
-      // SLID OUT, its line from the bar down, curving into the bar's (owner,
-      // 2026-10-12: it "has no border ... it has that when it's in static mode").
+      // SLID OUT, its line from the bar down (owner, 2026-10-12: it "has no
+      // border ... it has that when it's in static mode").
       await backToFirst(page)
       await page.keyboard.press('Control+Shift+B')
       await page.mouse.move(800, 400)
       await sleep(500)
+      // THE EDGE STAYS ONE LINE ALL THE WAY (owner, 2026-10-13: while it opens
+      // and closes the edge "grows thicker to like between 5 to 10 pixels"):
+      // every frame of the slide, the page's cut ends where the sidebar does.
+      const slideGap = () =>
+        page.evaluate(
+          () =>
+            new Promise((done) => {
+              const nav = document.querySelector('[data-tab-sidebar]')
+              const page = document.querySelector('[data-term-column]').parentElement
+              let worst = 0
+              const t0 = performance.now()
+              const frame = () => {
+                const cut = parseFloat(getComputedStyle(page).maskPositionX || getComputedStyle(page).maskPosition) || 0
+                const right = Math.max(0, nav.getBoundingClientRect().right)
+                worst = Math.max(worst, Math.abs(cut - right))
+                if (performance.now() - t0 < 420) requestAnimationFrame(frame)
+                else done(Math.round(worst * 10) / 10)
+              }
+              requestAnimationFrame(frame)
+            })
+        )
+      const opening = slideGap()
+      await page.mouse.move(2, 400)
+      const openGap = await opening
+      ok(openGap <= 1, `sliding out, the page's cut keeps to the sidebar's edge, no band beside the line (worst ${openGap}px)`)
+      await page.mouse.move(800, 400)
+      const closeGap = await slideGap()
+      ok(closeGap <= 1, `and sliding away (worst ${closeGap}px)`)
       await page.mouse.move(2, 400)
       await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
       await sleep(300)
