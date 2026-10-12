@@ -529,13 +529,6 @@ function wireIpc(): void {
       return (info.gpuDevice ?? []).some((d) => d.vendorId === 0x10de)
     }
   })
-  // A tab's "Show in File Explorer": a folder that exists, and nothing else.
-  ipcMain.on('shell:show-folder', (_e, p: string) => {
-    void isDir(p).then((ok) => {
-      // Never under --e2e (#64): a test run opens no Explorer window.
-      if (ok && !E2E) void shell.openPath(p)
-    })
-  })
   // Something dropped on the window: a folder is itself, a file means the
   // folder it is in, anything else is nothing. The renderer cannot stat.
   ipcMain.handle('path:folder-of', async (_e, p: string): Promise<string | null> => {
@@ -571,7 +564,7 @@ function wireIpc(): void {
   ipcMain.handle('shell:verb-status', () => verb.status())
   ipcMain.handle('shell:verb-set', (_e, on: boolean) => verb.set(on))
   // The e2e's verbGuard reads this after pressing the switch: it must stay 0.
-  ipcMain.handle('e2e:reg-writes', () => verb.writes())
+  if (E2E) ipcMain.handle('e2e:reg-writes', () => verb.writes())
   void verb.reconcile()
 
   /* ----- the update check ----- */

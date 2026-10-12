@@ -32,8 +32,6 @@ const api = {
   /** A dropped path as the folder a tab would open in: a folder is itself, a
    *  file is the folder holding it, anything that does not exist is null. */
   folderOf: (path: string): Promise<string | null> => ipcRenderer.invoke('path:folder-of', path),
-  /** Open a folder in File Explorer. Main ignores anything that is not one. */
-  showInExplorer: (path: string): void => ipcRenderer.send('shell:show-folder', path),
 
   /* ----- tabs ----- */
 
