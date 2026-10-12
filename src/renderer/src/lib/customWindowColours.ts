@@ -1,4 +1,7 @@
 import { useSyncExternalStore } from 'react'
+import { onWindowAccentChange, setWindowAccent, windowAccent } from './accentPrefs'
+import { onWindowBackgroundChange, setWindowBackground, windowBackground } from './backgroundPrefs'
+import { onWindowSecondaryChange, setWindowSecondary, windowSecondary } from './secondaryPrefs'
 
 // THE WINDOW COLOURS CUSTOM KEEPS (owner, 2026-10-12: Save changes "never grey
 // when there are changes to save"). Background, Accent and Secondary are this
@@ -15,6 +18,38 @@ export interface WindowColours {
 
 export const NO_COLOURS: WindowColours = { background: null, accent: null, secondary: null }
 
+/**
+ * THE WINDOW COLOURS, ONE REGISTRY (audit 2026-10-12: the three were listed by
+ * hand wherever all of them were read, set or watched). Each is its own
+ * setting (accentPrefs, backgroundPrefs, secondaryPrefs); this names them
+ * together, so a fourth is added in one place.
+ */
+export const WINDOW_COLOURS: Record<
+  keyof WindowColours,
+  { get: () => string | null; set: (hex: string | null) => void; onChange: (cb: () => void) => () => void }
+> = {
+  background: { get: windowBackground, set: setWindowBackground, onChange: onWindowBackgroundChange },
+  accent: { get: windowAccent, set: setWindowAccent, onChange: onWindowAccentChange },
+  secondary: { get: windowSecondary, set: setWindowSecondary, onChange: onWindowSecondaryChange }
+}
+const NAMES = Object.keys(WINDOW_COLOURS) as Array<keyof WindowColours>
+
+/** The window colours picked right now. */
+export function readWindowColours(): WindowColours {
+  return { background: windowBackground(), accent: windowAccent(), secondary: windowSecondary() }
+}
+
+/** Wear these picks (null: the theme's own). */
+export function setWindowColours(c: WindowColours): void {
+  for (const n of NAMES) WINDOW_COLOURS[n].set(c[n])
+}
+
+/** Any of the window colours changed. */
+export function onAnyWindowColourChange(cb: () => void): () => void {
+  const offs = NAMES.map((n) => WINDOW_COLOURS[n].onChange(cb))
+  return () => offs.forEach((off) => off())
+}
+
 const KEY = 'prism.window.customColours'
 const HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i
 
@@ -26,7 +61,7 @@ const one = (v: unknown): string | null => (typeof v === 'string' && HEX.test(v)
 export function validColours(v: unknown): WindowColours {
   if (!v || typeof v !== 'object') return NO_COLOURS
   const o = v as Record<string, unknown>
-  return { background: one(o.background), accent: one(o.accent), secondary: one(o.secondary) }
+  return Object.fromEntries(NAMES.map((n) => [n, one(o[n])])) as unknown as WindowColours
 }
 
 /** What Custom keeps. One object per stored string, so a hook can compare it. */
@@ -63,5 +98,5 @@ export const useCustomWindowColours = (): WindowColours =>
 /** Whether the picks in force differ from what the theme in front keeps. */
 export function coloursDiffer(now: WindowColours, kept: WindowColours): boolean {
   const n = validColours(now)
-  return n.background !== kept.background || n.accent !== kept.accent || n.secondary !== kept.secondary
+  return NAMES.some((k) => n[k] !== kept[k])
 }

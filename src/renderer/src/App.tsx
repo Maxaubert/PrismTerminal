@@ -93,9 +93,10 @@ import {
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { applyChrome, chromeTokens } from './lib/chromeTheme'
 import { onWindowEdgesChange, windowEdges } from './lib/edgesPrefs'
-import { onWindowAccentChange, windowAccent } from './lib/accentPrefs'
-import { onWindowBackgroundChange, windowBackground } from './lib/backgroundPrefs'
-import { onWindowSecondaryChange, windowSecondary } from './lib/secondaryPrefs'
+import { windowAccent } from './lib/accentPrefs'
+import { windowBackground } from './lib/backgroundPrefs'
+import { windowSecondary } from './lib/secondaryPrefs'
+import { onAnyWindowColourChange } from './lib/customWindowColours'
 import { attentionCount, drawBadge, useTaskbarBadgeOn } from './lib/taskbarBadge'
 import { BAR_H, SIDEBAR_SLIDE } from './lib/chromeLayout'
 import {
@@ -334,15 +335,11 @@ export default function App(): JSX.Element {
     paintChrome()
     const offLook = onTermLookChange(paintChrome)
     const offEdges = onWindowEdgesChange(paintChrome)
-    const offAccent = onWindowAccentChange(paintChrome)
-    const offBackground = onWindowBackgroundChange(paintChrome)
-    const offSecondary = onWindowSecondaryChange(paintChrome)
+    const offColours = onAnyWindowColourChange(paintChrome)
     return () => {
-      offSecondary()
-      offBackground()
+      offColours()
       offLook()
       offEdges()
-      offAccent()
     }
   }, [])
 
