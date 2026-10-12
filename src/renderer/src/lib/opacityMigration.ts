@@ -1,4 +1,4 @@
-import { LEGACY_OPACITY_KEY, customTermTheme, legacyTermOpacity, opacityPct, termAcrylic, termThemeId } from '@core/renderer/lib/termLook'
+import { CUSTOM_KEY, customTermTheme, LEGACY_OPACITY_KEY, legacyTermOpacity, opacityPct, termAcrylic, termThemeId } from '@core/renderer/lib/termLook'
 import { resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { alphaOf, opaque, parseColour, withAlpha } from '@core/renderer/lib/colour'
 import { setWindowBackground, windowBackground } from './backgroundPrefs'
@@ -17,8 +17,6 @@ import { DEFAULT_GROUND } from '@core/shared/ground'
 //
 // A saved N becomes the alpha byte round(N / 100 * 255), which is exactly what
 // the window painted for Opacity N, so the window is byte for byte the same.
-
-const CUSTOM_KEY = 'prism.term.custom'
 
 /** The alpha a saved Opacity N painted at. */
 const alphaFor = (n: number): number => n / 100

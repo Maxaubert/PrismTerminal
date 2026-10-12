@@ -295,7 +295,7 @@ export function setAgentDoneColor(hex: string): void {
   notify()
 }
 
-const CUSTOM_KEY = 'prism.term.custom'
+export const CUSTOM_KEY = 'prism.term.custom'
 
 export interface CustomTermTheme {
   /** Every colour is the stored form: `#rrggbb`, or `#rrggbbaa` with an
