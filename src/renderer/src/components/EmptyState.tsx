@@ -2,6 +2,7 @@ import { keyLabel } from '../lib/keymap'
 import { useEffect, useState, type JSX, type ReactNode } from 'react'
 import { pinnedRoots, plusMenuList, recentRoots } from '@core/renderer/lib/recentRoots'
 import { AppMark } from './AppMark'
+import { baseName } from '@core/shared/folderNames'
 
 /**
  * The start screen: the window with no tab open (owner, 2026-09-18, with
@@ -39,11 +40,6 @@ const Glyph = ({ children }: { children: ReactNode }): JSX.Element => (
   </svg>
 )
 
-const baseName = (p: string): string =>
-  p
-    .split(/[\\/]+/)
-    .filter(Boolean)
-    .at(-1) ?? p
 /** Where a folder lives, from its NEAR end: the last two folders above it.
  *  A long path cut at its far end loses exactly the part that tells two
  *  "api" apart; the whole path is the row's tooltip. */
