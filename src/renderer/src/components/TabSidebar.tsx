@@ -141,6 +141,13 @@ export function TabSidebar({
     shownNow.current = shown
   }, [shown])
   const visible = !collapsed || shown
+  // How much of the page beside it a slid-out sidebar covers: App cuts that
+  // strip of the page away, so only the window's acrylic lies under it.
+  const cover = collapsed && visible && tabs.length > 0 ? width : 0
+  useEffect(() => {
+    document.documentElement.style.setProperty('--p-sidebar-cover', `${cover}px`)
+  }, [cover])
+  useEffect(() => () => document.documentElement.style.setProperty('--p-sidebar-cover', '0px'), [])
 
   // ---- Reorder: the strip's pointer drag, along y ----
   const [dropAt, setDropAt] = useState<number | null>(null)
@@ -274,12 +281,14 @@ export function TabSidebar({
             if (path) onDropFolder(path)
           }
         }}
-        // COLLAPSED, it is never see-through (owner, 2026-10-12: "when you
-        // have the compact sidebar, that sidebar should not be see-through ...
-        // you can see the content underneath"); pinned open, it is. And it lies
-        // ABOVE the page beside it: Settings' own raised pieces (its search
-        // icon) showed through the slid-out sidebar (owner, same day).
-        className={`p-styled-font absolute inset-y-0 left-0 z-30 flex flex-col ${collapsed ? 'bg-[var(--p-secondary-solid)]' : 'bg-[var(--p-secondary)]'} text-[13px] ${
+        // SLID OUT UNDER SEE-THROUGH, ACRYLIC LIKE THE REST (owner,
+        // 2026-10-12: "make sure its acrylic like the rest not just see
+        // through"): the window's tint over the window's own acrylic, the page
+        // under it cut away (App, --p-sidebar-cover) so the terminal's text
+        // never shows through. CSS backdrop blur does nothing in a see-through
+        // window (measured in the e2e window, 2026-10-12). It lies ABOVE the
+        // page beside it: Settings' search icon showed through (same day).
+        className={`p-styled-font absolute inset-y-0 left-0 z-30 flex flex-col bg-[var(--p-secondary)] text-[13px] ${
           collapsed
             ? 'transition-[left] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
             : ''
@@ -303,13 +312,24 @@ export function TabSidebar({
           <span
             data-sidebar-corner
             aria-hidden
-            className="pointer-events-none absolute left-full h-2.5 w-2.5"
-            style={{
-              top: 0,
-              background:
-                'radial-gradient(circle at 100% 100%, transparent 9px, var(--p-divider) 9.5px, var(--p-divider) 10px, transparent 10.5px), radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary-solid) 10px)'
-            }}
-          />
+            className="pointer-events-none absolute left-full top-0 h-2.5 w-2.5"
+          >
+            {/* The fill, the sidebar's tint cut to the curve by a mask. */}
+            <span
+              className="absolute inset-0 bg-[var(--p-secondary)]"
+              style={{
+                maskImage: 'radial-gradient(circle at 100% 100%, transparent 9.5px, #000 10px)'
+              }}
+            />
+            {/* The line, round the curve into the bar's. */}
+            <span
+              className="absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(circle at 100% 100%, transparent 9px, var(--p-divider) 9.5px, var(--p-divider) 10px, transparent 10.5px)'
+              }}
+            />
+          </span>
         )}
         {/* Slid out, its line: from the bar down, meeting the bar's line
             through the corner above (owner, 2026-10-12: it "has no border ...

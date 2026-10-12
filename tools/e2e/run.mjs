@@ -2192,7 +2192,7 @@ const scenarios = {
         const nav = document.querySelector('[data-tab-sidebar]')
         const l = nav.querySelector('[data-sidebar-line]')?.getBoundingClientRect()
         const t = getComputedStyle(document.querySelector('[data-term-edge]'))
-        return { line: l ? { top: Math.round(l.top), right: Math.round(l.right), navRight: Math.round(nav.getBoundingClientRect().right) } : null, barLine: t.borderTopWidth, corner: getComputedStyle(nav.querySelector('[data-sidebar-corner]')).backgroundImage, shadow: getComputedStyle(nav).boxShadow }
+        return { line: l ? { top: Math.round(l.top), right: Math.round(l.right), navRight: Math.round(nav.getBoundingClientRect().right) } : null, barLine: t.borderTopWidth, corner: [...nav.querySelector('[data-sidebar-corner]').children].map((c) => `${getComputedStyle(c).maskImage} ${getComputedStyle(c).backgroundImage}`).join(' '), shadow: getComputedStyle(nav).boxShadow }
       })
       ok(!!slidLine.line && slidLine.line.top >= 36 && slidLine.line.right === slidLine.line.navRight && parseFloat(slidLine.barLine) > 0 && slidLine.shadow === 'none', `slid out, a line from the bar down, the bar's own line along the top, no shadow (${JSON.stringify(slidLine)})`)
       ok((slidLine.corner.match(/radial-gradient/g) ?? []).length === 2, 'and the corner carries the line round into the bar')
@@ -2578,7 +2578,16 @@ const scenarios = {
       await page.mouse.move(2, 400)
       await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
       await sleep(300)
-      ok(solid.sidebar === 1 && solid.bar === glassy.bar, `collapsed and slid out, the sidebar is solid; the bar stays see-through (${JSON.stringify(solid)})`)
+      // ACRYLIC, not solid and not merely see-through (owner, 2026-10-12: "make
+      // sure its acrylic like the rest not just see through"): the window's
+      // tint, one coat, over the window's own acrylic, the page under it cut
+      // away (CSS backdrop blur does nothing in a see-through window).
+      const cut = await page.evaluate(() => ({
+        width: Math.round(document.querySelector('[data-tab-sidebar]').getBoundingClientRect().width),
+        mask: getComputedStyle(document.querySelector('[data-term-column]').parentElement).maskPosition
+      }))
+      ok(solid.sidebar === glassy.sidebar && solid.bar === glassy.bar && cut.mask.startsWith(`${cut.width}px`), `collapsed and slid out, the sidebar is the window's acrylic: the same tint, the page under it cut away (${JSON.stringify(solid)}, ${JSON.stringify(cut)})`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-slid-acrylic.png') }).catch(() => {})
       await page.mouse.move(800, 400)
       await sleep(500)
       await page.keyboard.press('Control+Shift+B')

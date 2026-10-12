@@ -222,6 +222,14 @@ looked at on the way).
   The sidebar, pinned or slid out, starts below it; the terminal's line runs along the bar's foot,
   round the corner and down the sidebar's edge, and the slid-out sidebar covers the line where it
   lies over the terminal and curves into it at its corner.
+- **The slid-out sidebar is the window's acrylic** (owner, 2026-10-12: "on seethrough the unpinned
+  sidebar should be seethrough, make sure its acrylic like the rest not just see through"; before,
+  it went solid). It wears the window's tint, and the page under it is cut away (a mask on the
+  page's column moved right by `--p-sidebar-cover`, on the sidebar's own slide), so only the
+  window's own acrylic lies beneath. CSS `backdrop-filter` was tried and does NOTHING in a
+  see-through window (measured in the e2e window: a test box blurred the terminal with See-through
+  off and not at all with it on); the dialogs' backdrop blur is the same, so it only shows on a
+  solid window. `--p-secondary-solid` is gone.
 
 ## 2. The indicators
 

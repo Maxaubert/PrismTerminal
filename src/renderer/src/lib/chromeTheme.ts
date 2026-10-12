@@ -47,7 +47,6 @@ export const CHROME_COLOUR_TOKENS = [
   '--p-side',
   '--p-side-flat',
   '--p-secondary',
-  '--p-secondary-solid',
   '--p-title',
   '--p-tabs',
   '--p-tab-active',
@@ -290,9 +289,6 @@ export function chromeTokens(
     '--p-side-flat': flat,
     // On glass it is see-through at the ground's own alpha, as the sheet is.
     '--p-secondary': glass ? secondary + alphaHex(groundAlpha) : secondary,
-    // Never see-through: the collapsed sidebar slid out over the terminal,
-    // where text behind it made it "very hard to use" (owner, 2026-10-12).
-    '--p-secondary-solid': secondary,
     '--p-title': sheet,
     '--p-tabs': sheet,
     // The active tab is told by its ink, not a fill. On glass it must paint

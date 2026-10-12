@@ -156,6 +156,18 @@ function paintChrome(): void {
   void window.prism.setAcrylic(acrylic)
 }
 
+/** Under a collapsed sidebar slid out over it, the page is cut away (owner,
+ *  2026-10-12: the slid-out sidebar "acrylic like the rest"): one mask layer
+ *  moved right by the sidebar's width (TabSidebar's --p-sidebar-cover), on the
+ *  sidebar's own slide, so only the window's acrylic lies under its tint. */
+const COVER_CUT = {
+  maskImage: 'linear-gradient(#000, #000)',
+  maskRepeat: 'no-repeat',
+  maskSize: '100% 100%',
+  maskPosition: 'var(--p-sidebar-cover, 0px) 0',
+  transition: 'mask-position 240ms cubic-bezier(.16,1,.3,1)'
+} as const
+
 /** The terminal's cut top-left corner, beside the open sidebar: a mask, not a
  *  border-radius, so its edge is the exact inverse of the corner piece's. One
  *  full layer with the piece's shape taken out (`exclude`): tiled layers left a
@@ -826,7 +838,10 @@ export default function App(): JSX.Element {
         {/* ISOLATED: the page's own raised pieces (Settings' search sits at
             z-30) stay inside it, under a sidebar that slides out over it
             (owner, 2026-10-12: the search icon showed through). */}
-        <div className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col">
+        <div
+          className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col"
+          style={vertical && !sidebarOpen ? COVER_CUT : undefined}
+        >
           {/* The cut corner's outside, in the secondary colour: one coat
               where the terminal is clipped round, nothing anywhere else. Its
               curve is the exact inverse of the terminal's (CORNER_CUT), so
