@@ -159,6 +159,15 @@ looked at on the way).
   there, keep it the default app icon, not a css version"): the icon PNG and "Prism Terminal" above
   Find a tab; with no title bar it is the band that moves the window. `assets/app-icon.png` was still
   the icon from before #136 (About showed it too); it is now the current badge.
+- **The mark in the accent** (owner, 2026-10-12: "use this for the sidebar logo. it has svgs white
+  black, use the best one, it should adapt to the accent color. use also this on that startup page"):
+  the one-colour shapes (`build/icon-mark.svg`, the owner's file) drawn by `components/AppMark.tsx`
+  in `--p-accent-solid`, at the sidebar's top and on the start screen.
+- **Saves wear the accent, white on a strong colour** (owner, 2026-10-12: Save "doesnt follow the
+  accent color"; "the text colour should shift to white"). A picked accent the ground cannot show is
+  lifted by OKLab lightness, keeping its hue (`lib/oklab.ts`): mixed with white, a picked #140707 had
+  turned a pink grey. Where white comes close on the accent, the accent goes a shade deeper until
+  white reads at 4.5:1, as far as the ground still shows it.
 
 ## 2. The indicators
 

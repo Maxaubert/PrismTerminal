@@ -427,6 +427,18 @@ const scenarios = {
     const { app, page } = await launch(w, { pick: w.alpha })
     const home = await page.evaluate(() => window.prism.homeDir())
     ok((await page.locator('[data-empty-state]').count()) === 1, 'an empty launch lands on the start screen')
+    // Owner, 2026-10-12: the app's mark, in the accent, "on that startup page".
+    const startMark = await page.evaluate(() => {
+      const m = document.querySelector('[data-empty-state] [data-app-mark]')
+      const probe = document.createElement('span')
+      probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-accent-solid')
+      document.body.appendChild(probe)
+      const accent = getComputedStyle(probe).color
+      probe.remove()
+      return { paths: m?.querySelectorAll('path').length ?? 0, ink: m ? getComputedStyle(m).color : null, accent }
+    })
+    ok(startMark.paths === 2 && startMark.ink === startMark.accent, `the start screen shows the app's mark in the accent (${JSON.stringify(startMark)})`)
+    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/start-screen.png') }).catch(() => {})
     await page.locator('[data-start-new]').click()
     ok(await until(async () => (await tabLabels(page)).length === 1), 'New terminal opens a tab with nothing asked')
     ok((await tabTitles(page))[0].toLowerCase() === home.toLowerCase(), 'in the user\'s own folder, and the tooltip is the full path')
@@ -2349,10 +2361,16 @@ const scenarios = {
       // there, keep it the default app icon, not a css version".
       const brand = await page.evaluate(() => {
         const b = document.querySelector('[data-tab-sidebar] [data-sidebar-brand]')
-        const img = b?.querySelector('img')
-        return { text: b?.textContent?.trim() ?? null, icon: !!img && img.naturalWidth > 0, svg: !!b?.querySelector('svg') }
+        const mark = b?.querySelector('[data-app-mark]')
+        const probe = document.createElement('span')
+        probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-accent-solid')
+        document.body.appendChild(probe)
+        const accent = getComputedStyle(probe).color
+        probe.remove()
+        return { text: b?.textContent?.trim() ?? null, paths: mark?.querySelectorAll('path').length ?? 0, ink: mark ? getComputedStyle(mark).color : null, accent }
       })
-      ok(brand.text === 'Prism Terminal' && brand.icon && !brand.svg, `the sidebar's top says Prism Terminal beside the app's own icon (${JSON.stringify(brand)})`)
+      // Then: "use this for the sidebar logo ... it should adapt to the accent color".
+      ok(brand.text === 'Prism Terminal' && brand.paths === 2 && brand.ink === brand.accent, `the sidebar's top says Prism Terminal beside the app's mark, in the accent (${JSON.stringify(brand)})`)
       // Owner, 2026-10-12: "settings and that command help can stay in the
       // title bar now that we do have a title bar".
       ok(!up.inFoot && up.settings, 'Settings is in the dropped bar, and the sidebar has no foot')
@@ -2508,6 +2526,62 @@ const scenarios = {
       await page.locator('[data-term-card="custom"]').first().click()
       ok(!!(await until(async () => (await page.evaluate(() => localStorage.getItem('prism.window.secondary'))) === '#2a2a2a', 4000, 50)), 'and Custom brings it back')
       ok(await save.isDisabled(), 'with nothing to save')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * THE ACCENT ON EVERY SAVE (owner, 2026-10-12, of a red accent: the theme
+   * switch's "Save as Custom" "doesnt follow the accent color", and "the text
+   * colour should shift to white"). Save changes and the question a theme pick
+   * asks both wear the accent, with white text on a red.
+   */
+  async accentAsk(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 1), 'one tab')
+      const row = await gotoPref(page, 'window-accent')
+      const field = row.locator('input:not([type])')
+      await field.fill('#ff0000')
+      await field.press('Enter')
+      const save = page.locator('[data-save-term]').first()
+      ok(!!(await until(async () => !(await save.isDisabled()), 4000, 50)), 'a red accent lights Save changes')
+      await sleep(500) // the button's colour transition
+      const paint = (el) =>
+        el.evaluate((b) => {
+          const probe = document.createElement('span')
+          probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-accent')
+          document.body.appendChild(probe)
+          const a = getComputedStyle(probe).color
+          probe.remove()
+          return { bg: getComputedStyle(b).backgroundColor, ink: getComputedStyle(b).color, accent: a }
+        })
+      const lit = await paint(save)
+      ok(lit.bg === lit.accent && lit.ink === 'rgb(255, 255, 255)', `Save changes is red with white text (${JSON.stringify(lit)})`)
+      await page.locator('[data-term-card="graphite"]').first().click()
+      const ask = page.locator('[data-ask-save]')
+      ok(!!(await until(async () => (await ask.count()) === 1, 4000, 50)), 'picking another theme asks first')
+      await sleep(300)
+      const asked = await paint(ask)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-ask.png') }).catch(() => {})
+      ok(asked.bg === asked.accent && asked.ink === 'rgb(255, 255, 255)', `its Save as Custom wears the accent, white text (${JSON.stringify(asked)})`)
+      await page.locator('[data-ask-cancel]').click()
+      // A RED TOO DARK TO SEE (the owner's own pick, #140707) is lifted to a red
+      // that reads, never mixed with white to a pink grey.
+      await field.fill('#140707')
+      await field.press('Enter')
+      await sleep(500)
+      const dark = await paint(save)
+      const [r, g, b] = dark.bg.match(/\d+/g).map(Number)
+      ok(r > 110 && r - g > 50 && r - b > 50, `a near-black red is lifted to a red, not a grey (${dark.bg})`)
+      await page.locator('[data-term-card="graphite"]').first().click()
+      await until(async () => (await ask.count()) === 1, 4000, 50)
+      await sleep(300)
+      const askedDark = await paint(ask)
+      ok(askedDark.bg === dark.bg, `and the theme switch's Save as Custom is that same red (${askedDark.bg})`)
+      await page.locator('[data-ask-discard]').click()
     } finally {
       await closeApp(app)
     }

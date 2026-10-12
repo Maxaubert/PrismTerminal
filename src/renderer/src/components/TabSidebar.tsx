@@ -13,7 +13,7 @@ import { useHoverReveal } from '../lib/hoverReveal'
 import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
 import { setSidebarEdge } from '../lib/sidebarEdge'
-import appIcon from '../assets/app-icon.png'
+import { AppMark } from './AppMark'
 import { findKeeps, folderLine } from '../lib/sidebarRows'
 import { useSidebarEdge } from '../lib/sidebarLook'
 import {
@@ -311,8 +311,8 @@ export function TabSidebar({
         }}
       >
         {/* THE APP'S NAME, at the top (owner, 2026-10-12: "a prism terminal
-            logo and text could look nice up there, keep it the default app
-            icon, not a css version"): the icon itself, as About shows it.
+            logo and text could look nice up there"): the app's own mark in
+            the accent (AppMark), beside its name.
             With no title bar it is also what moves the window (owner,
             2026-10-11: "so that you can grab that area"): Windows keeps the
             top few pixels as its resize border (measured with WM_NCHITTEST, a
@@ -323,14 +323,7 @@ export function TabSidebar({
           data-sidebar-grab={titleRow || undefined}
           className={`${titleRow ? 'drag' : ''} flex h-11 shrink-0 items-center gap-2.5 px-4 pt-1`}
         >
-          <img
-            src={appIcon}
-            alt=""
-            width={20}
-            height={20}
-            draggable={false}
-            className="shrink-0 select-none"
-          />
+          <AppMark size={20} className="shrink-0 text-[var(--p-accent-solid)]" />
           <span className="truncate text-[13.5px] font-semibold tracking-[0.01em] text-[var(--p-side-text)] select-none">
             Prism Terminal
           </span>

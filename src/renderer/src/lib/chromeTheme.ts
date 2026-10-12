@@ -9,6 +9,7 @@ import {
 import { alphaHex, alphaOf, composite, selectionFor } from '@core/renderer/lib/colour'
 import { switchKnob } from '@core/renderer/lib/switchKnob'
 import { sidebarGround } from './sidebarGround'
+import { atLightness, liftToFloor, okLightness } from './oklab'
 import { EDGE_ALPHA, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 
 // The window wears the terminal's theme. Every chrome colour is derived from
@@ -33,6 +34,8 @@ const FALLBACK_FG = '#e7e7ee'
 // on the same colour, and the active tab is told from the rest by its INK.
 const TEXT_FLOOR = 4.5
 const QUIET_FLOOR = 3
+/** White text on the accent is tried from this ratio up (see onAccent). */
+const WHITE_ON_ACCENT = 3
 /** The sidebar's tab names: AAA, for an owner who works zoomed in (#162). */
 const SIDE_TEXT_FLOOR = 7
 
@@ -172,10 +175,10 @@ export function chromeTokens(
   const chosen = chosenAccent ? normalizeColor(chosenAccent, INDIGO) : null
   // The accent as a LINE: rings, rules, progress, the spinner. Never
   // see-through (#114); a picked alpha belongs to the fills below.
-  const solid = chosen
+  let solid = chosen
     ? visible(chosen)
       ? chosen
-      : floorOn(chosen, QUIET_FLOOR)
+      : floorOn(liftToFloor(chosen, [bg, flat], QUIET_FLOOR) ?? chosen, QUIET_FLOOR)
     : (candidates.find(visible) ?? floorOn(candidates[0], QUIET_FLOOR))
   const glass = groundAlpha < 1
   let accent = solid
@@ -197,10 +200,29 @@ export function chromeTokens(
   } else {
     // What sits on the accent is white or near-black, whichever reads better:
     // the better of two, not a midpoint test, since both can be poor at a midpoint.
-    onAccent =
-      contrastRatio('#ffffff', accent) >= contrastRatio(FALLBACK_BG, accent)
-        ? '#ffffff'
-        : FALLBACK_BG
+    const onWhite = contrastRatio('#ffffff', accent)
+    const onDark = contrastRatio(FALLBACK_BG, accent)
+    onAccent = onWhite >= onDark ? '#ffffff' : FALLBACK_BG
+    // WHITE ON A STRONG MID COLOUR (owner, 2026-10-12, of near-black on a red
+    // Save changes: "the text colour should shift to white"). A red or a blue
+    // measures a little better in black by the WCAG sum but reads better in
+    // white, so when white is close (3:1 up, black not half as good again) the
+    // accent is taken a shade deeper, by lightness alone so it stays its hue,
+    // until white clears the body floor: only as far as the ground still shows
+    // it at the accent floor. Where that runs out first, the ink stays dark. A
+    // pale accent (the PT orange, a yellow) never gets here.
+    if (onAccent !== '#ffffff' && onWhite >= WHITE_ON_ACCENT && onWhite * 1.5 >= onDark) {
+      let deeper = accent
+      for (let i = 0; i < 40 && contrastRatio('#ffffff', deeper) < TEXT_FLOOR; i += 1) {
+        const next = atLightness(deeper, okLightness(deeper) - 0.005)
+        if (!visible(next)) break
+        deeper = next
+      }
+      if (contrastRatio('#ffffff', deeper) >= TEXT_FLOOR) {
+        accent = solid = deeper
+        onAccent = '#ffffff'
+      }
+    }
     // A selected row carries TEXT, so its fill is the accent moved until that ink
     // clears the text floor on it (Prism's selectionBg): away from the ink.
     selBg = accent
