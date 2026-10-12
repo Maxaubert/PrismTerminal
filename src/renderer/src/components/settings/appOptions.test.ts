@@ -33,7 +33,6 @@ describe("this app's own settings rows", () => {
     expect(APP_OPTIONS.map((o) => `${o.id}=${Array.isArray(o.store) ? o.store.join('+') : String(o.store)}`)).toMatchInlineSnapshot(`
       [
         "tab-layout=prism.window.tabLayout+prism.window.sidebar+prism.window.sidebarWidth",
-        "tab-width=prism.window.tabWidth",
         "tab-style=prism.window.tabStyle",
         "tab-switch=prism.window.tabSwitch",
         "window-edges=prism.window.edges",
@@ -82,9 +81,9 @@ describe('Find a setting', () => {
     expect(at['diag-verbose']).toBe('diagnostics/')
   })
 
-  it('finds the tab style by its shape and puts it right after Tab width (#143)', () => {
+  it('finds the tab style by its shape and puts it right after Tab position (#143)', () => {
     const ids = settingsIndex(true).map((e) => e.id)
-    expect(ids.indexOf('tab-style')).toBe(ids.indexOf('tab-width') + 1)
+    expect(ids.indexOf('tab-style')).toBe(ids.indexOf('tab-layout') + 1)
     expect(ids.indexOf('agent-rainbow')).toBe(ids.indexOf('agent-done-on') + 1)
     const style = settingsIndex(true).find((e) => e.id === 'tab-style')
     expect(style?.keywords).toContain('chevron')

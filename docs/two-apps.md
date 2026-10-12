@@ -214,6 +214,11 @@ so an update never silently changes what an existing user sees; the bridge to ma
   label sizes the tab, capped at 14rem, shrinking only when out of room) or **Fixed** (the above).
   This app's row, in the `options` e2e's own list; `tabWidth` measures both and that the row is
   first. Prism has the same row at the top of its Style page.
+  **THE SETTING IS GONE AGAIN, FIXED ONLY** (owner, 2026-10-12: "remove the dynamic and fixed tab
+  option and have it just be fixed and that dynamic scrapped from the code"): no row, no
+  `lib/tabWidthPrefs.ts`, a stored `prism.window.tabWidth` ignored; `tabWidth` measures one width.
+  The same day every Classic tab got the faint line at its right, the last one too ("if every tab
+  just had a right border that would solve both issues"); `tabStyle` counts one per tab.
 - **PITCH AND CINDER ARE THE APP ICON'S COLOURS** (owner, same day: "two themes that match the app
   icon colour scheme, one with orange and black, and one with orange and dark grey"; "change a
   couple is better"). Orange `#ec9448` for the cursor AND the chrome accent, on black (Pitch) and

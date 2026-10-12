@@ -776,18 +776,33 @@ export default function App(): JSX.Element {
       )}
       {/* ONE SURFACE, THE TERMINAL SET INTO IT (owner, 2026-10-12: "the
           corners of the sidebar and titlebar should connect like this where
-          its rounded making it seem like they merge together"): with the tabs
-          down the side the body wears the secondary colour, and the terminal
-          is cut round at its top left, where the bar and the open sidebar
-          meet. */}
-      <div className={`relative flex min-h-0 flex-1 ${vertical ? 'bg-[var(--p-secondary)]' : ''}`}>
+          its rounded making it seem like they merge together"): the sidebar
+          and the bar wear the secondary colour, and the terminal is cut round
+          at its top left, where the bar and the open sidebar meet. The body
+          itself paints nothing: under See-through a coat here doubled the
+          sidebar, the bar and the terminal over it (owner, 2026-10-12: "not
+          everything is see-through ... the title bar is not"). */}
+      <div className="relative flex min-h-0 flex-1">
         {vertical && <TabSidebar {...tabProps} />}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {/* THE BAR BESIDE THE SIDEBAR, always down (owner, 2026-10-12): from the
           sidebar's edge to the right, the window's buttons at its end, the
           handle the window moves by. In the column, not over it, so the
           terminal's top rows stay in sight; a sidebar that slides out from
           collapsed lies over its left end. */}
+          {/* The cut corner's outside, in the secondary colour: one coat
+              where the terminal is clipped round, nothing anywhere else. */}
+          {beside && sidebarOpen && (
+            <span
+              data-term-corner
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-9 z-10 h-2.5 w-2.5"
+              style={{
+                background:
+                  'radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary) 10px)'
+              }}
+            />
+          )}
           {beside && (
             <div
               data-title-bar="beside"
@@ -801,7 +816,7 @@ export default function App(): JSX.Element {
           <div
             data-term-column
             className={`relative flex min-h-0 min-w-0 flex-1 flex-col ${
-              beside && sidebarOpen ? 'overflow-hidden rounded-tl-[10px] bg-[var(--p-bg)]' : ''
+              beside && sidebarOpen ? 'overflow-hidden rounded-tl-[10px]' : ''
             }`}
           >
             <div

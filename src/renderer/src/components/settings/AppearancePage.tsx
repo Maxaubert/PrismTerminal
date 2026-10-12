@@ -19,7 +19,6 @@ import {
 import { SEE_THROUGH_MAX } from '@core/renderer/lib/seeThrough'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { setWindowEdges, useWindowEdges } from '../../lib/edgesPrefs'
-import { setTabWidth, useTabWidth, type TabWidth } from '../../lib/tabWidthPrefs'
 import { setTabStyle, useTabStyle, type TabStyle } from '../../lib/tabStylePrefs'
 import { setTabSwitch, useTabSwitch, type TabSwitch } from '../../lib/tabSwitchPrefs'
 import { setTabLayout, useTabLayout, type TabLayout } from '../../lib/tabLayoutPrefs'
@@ -71,13 +70,6 @@ const EDGE_OPTIONS: Array<{ id: WindowEdges; name: string }> = WINDOW_EDGES.map(
   id,
   name: EDGE_NAMES[id]
 }))
-
-// Dynamic first: it is the default (owner, 2026-09-23: "call it dynamic ...
-// have dynamic be the default").
-const TAB_WIDTH_OPTIONS: Array<{ id: TabWidth; name: string }> = [
-  { id: 'dynamic', name: 'Dynamic' },
-  { id: 'fixed', name: 'Fixed' }
-]
 
 // Horizontal first: it is the default, the strip as it always was (#162).
 const TAB_LAYOUT_OPTIONS: Array<{ id: TabLayout; name: string }> = [
@@ -253,9 +245,7 @@ export function AppearancePage(): JSX.Element {
   const edges = useWindowEdges()
   const layout = useTabLayout()
   const place = appOpt('tab-layout')
-  const width = useTabWidth()
   const style = useTabStyle()
-  const tab = appOpt('tab-width')
   const shape = appOpt('tab-style')
   const switching = useTabSwitch()
   const swap = appOpt('tab-switch')
@@ -268,9 +258,6 @@ export function AppearancePage(): JSX.Element {
             button's, not a row here. */}
         <SettingRow id="tab-layout" icon={place.icon} label={place.label} sub={place.sub}>
           <Segmented value={layout} onChange={setTabLayout} options={TAB_LAYOUT_OPTIONS} />
-        </SettingRow>
-        <SettingRow id="tab-width" icon={tab.icon} label={tab.label} sub={tab.sub}>
-          <Segmented value={width} onChange={setTabWidth} options={TAB_WIDTH_OPTIONS} />
         </SettingRow>
         {/* The tab style (#143): the flat strip, or Powerline's chevrons. */}
         <SettingRow id="tab-style" icon={shape.icon} label={shape.label} sub={shape.sub}>

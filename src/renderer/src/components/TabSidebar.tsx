@@ -22,6 +22,8 @@ import {
   useSidebarWidth
 } from '../lib/sidebarPrefs'
 
+/** The bar beside the sidebar (App's `data-title-bar="beside"`, h-9). */
+const BAR_H = 36
 /** How far the pointer must travel before a press becomes a drag rather than
  *  a click on the tab: the strip's own slop. */
 const DRAG_SLOP = 4
@@ -273,7 +275,10 @@ export function TabSidebar({
             if (path) onDropFolder(path)
           }
         }}
-        className={`p-styled-font absolute inset-y-0 left-0 flex flex-col bg-[var(--p-secondary)] text-[13px] ${
+        // COLLAPSED, it is never see-through (owner, 2026-10-12: "when you
+        // have the compact sidebar, that sidebar should not be see-through ...
+        // you can see the content underneath"); pinned open, it is.
+        className={`p-styled-font absolute inset-y-0 left-0 flex flex-col ${collapsed ? 'bg-[var(--p-secondary-solid)]' : 'bg-[var(--p-secondary)]'} text-[13px] ${
           collapsed
             ? 'transition-[left,box-shadow] duration-[240ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]'
             : ''
@@ -292,16 +297,32 @@ export function TabSidebar({
         // Slid by its LEFT, never a transform: Windows is told where a drag
         // region is from the layout, and a transformed panel's grab strip was
         // reported where its slide started (measured, WM_NCHITTEST).
-        // The shadow falls on the terminal's side only: blurred, it reached up
-        // into the title bar too and drew a seam between the two (owner,
-        // 2026-10-12: "I can see a border between them"). Clipped above and
-        // below, open to the right.
+        // The shadow falls on the terminal's side only, BELOW the bar beside
+        // it: blurred, it reached up into the bar and drew a seam between the
+        // two (owner, 2026-10-12: "I can see a border between them"; then, of
+        // the slid-out sidebar, "it doesn't seem like it connects with the
+        // title bar"). Clipped above and below, open to the right under the bar.
         style={{
           width,
           left: collapsed && !visible ? -(width + 16) : 0,
-          clipPath: 'inset(0 -60px 0 0)'
+          clipPath: `polygon(0 0, 100% 0, 100% ${BAR_H}px, calc(100% + 60px) ${BAR_H}px, calc(100% + 60px) 100%, 0 100%)`
         }}
       >
+        {/* SLID OUT, THE CORNER WHERE IT MEETS THE BAR: a quarter circle of
+            the shared colour under the bar's end, as the open sidebar's
+            terminal is cut round there, so the two read as one surface. */}
+        {collapsed && visible && (
+          <span
+            data-sidebar-corner
+            aria-hidden
+            className="pointer-events-none absolute left-full h-2.5 w-2.5"
+            style={{
+              top: BAR_H,
+              background:
+                'radial-gradient(circle at 100% 100%, transparent 9.5px, var(--p-secondary-solid) 10px)'
+            }}
+          />
+        )}
         {/* THE APP'S NAME, at the top (owner, 2026-10-12: "a prism terminal
             logo and text could look nice up there"): the app's own mark in
             the accent (AppMark), beside its name.

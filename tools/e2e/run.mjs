@@ -166,7 +166,7 @@ const tabLabels = (page) =>
  * so a row moving between pages is one line here.
  */
 const PREF_PAGE = {
-  'tab-layout': 'appearance', 'tab-width': 'appearance', 'tab-style': 'appearance', 'tab-switch': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
+  'tab-layout': 'appearance', 'tab-style': 'appearance', 'tab-switch': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
   'window-background': 'appearance', 'window-accent': 'appearance', 'window-secondary': 'appearance', 'term-acrylic': 'appearance',
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
@@ -1599,16 +1599,18 @@ const scenarios = {
   },
 
   /**
-   * TAB WIDTH (owner, 2026-09-21, then a setting on 2026-09-23). Was: EVERY TAB IS ONE WIDTH ("make tabs in both apps have a
-   * fixed size, and not dynamically adjust based on the content"). Three
+   * EVERY TAB IS ONE WIDTH (owner, 2026-09-21: "make tabs in both apps have a
+   * fixed size, and not dynamically adjust based on the content"; a setting
+   * from 2026-09-23 until 2026-10-12, "have it just be fixed"). Three
    * folders with names of very different lengths open side by side; what is
    * measured is each tab's box, not the class that sets it, because a class
    * that loses to a longer label is exactly what this replaced.
    */
   // A TAB REACHES FIRST PLACE (#125; owner, 2026-10-04: "i cant drag that
-  // github tab to the left of the prism tab to make it first"). The second
-  // tab is the WIDER one (Dynamic, a longer name), which is what could never
-  // get there: its centre was clamped short of the first tab's centre.
+  // github tab to the left of the prism tab to make it first"). Under the
+  // old Dynamic width the wider tab could never get there: its centre was
+  // clamped short of the first tab's centre. Every tab is one width now
+  // (2026-10-12); the drag to first place is still held.
   async tabDragFirst(ok) {
     const w = world()
     const wide = join(w.alpha, '..', 'a-much-longer-folder-name')
@@ -1616,7 +1618,6 @@ const scenarios = {
     const { app, page } = await launch(w, { args: [w.alpha, wide] })
     ok(await until(async () => (await tabLabels(page)).length === 2), 'two tabs open')
     const boxes = await page.locator('[data-tab]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()))
-    ok(boxes[1].width > boxes[0].width, `the second tab is the wider (${Math.round(boxes[1].width)} > ${Math.round(boxes[0].width)})`)
     const y = boxes[1].top + boxes[1].height / 2
     await page.mouse.move(boxes[1].left + boxes[1].width / 2, y)
     await page.mouse.down()
@@ -1652,30 +1653,17 @@ const scenarios = {
           return { w: Math.round(el.getBoundingClientRect().width * 10) / 10, cut: label ? label.scrollWidth > label.clientWidth : false }
         })
       )
-    // DYNAMIC IS THE DEFAULT (owner, 2026-09-23: "call it dynamic ... have
-    // dynamic be the default"): each tab as wide as its name, the long one
-    // capped and truncated.
-    const dyn = (await boxes()).slice(0, 3)
-    ok(dyn[1].w > dyn[0].w + 40, `by default a long name makes a wider tab than a short one (${dyn.map((b) => b.w).join(' / ')})`)
-    ok(dyn[1].w <= 14 * 16 + 80 && dyn[1].cut, `and the long one stops at the cap, truncated (${dyn[1].w}px)`)
-    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tabs-dynamic.png') }).catch(() => {})
-    // FIXED, picked on the Settings page at the TOP of Appearance ("put the
-    // option closer to the top of appearance"): every tab one width.
+    // EVERY TAB ONE WIDTH, THE ONLY WAY (owner, 2026-10-12, removing Dynamic:
+    // "have it just be fixed"): no Tab width row in Settings.
     await page.locator('[data-title-settings]').click()
     await page.locator('[data-settings-tab="appearance"]').click()
-    const row = page.locator('[data-pref="tab-width"]')
-    await row.waitFor({ timeout: 8000 })
-    // Second since #162: Tab position, where the tabs sit, comes first.
-    const firstRows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].slice(0, 2).map((e) => e.getAttribute('data-pref')))
-    ok(firstRows.join() === 'tab-layout,tab-width', `Tab width is at the top of Appearance, after Tab position (${firstRows})`)
-    await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-tab-width.png') }).catch(() => {})
-    await row.locator('[data-seg="fixed"]').click()
-    ok((await page.evaluate(() => localStorage.getItem('prism.window.tabWidth'))) === 'fixed', 'Fixed is stored')
+    await page.locator('[data-pref="tab-layout"]').waitFor({ timeout: 8000 })
+    ok((await page.locator('[data-pref="tab-width"]').count()) === 0, 'there is no Tab width setting')
     await page.locator('[data-tab]').first().click()
     await sleep(300)
     const three = (await boxes()).slice(0, 3)
     const widths = [...new Set(three.map((b) => b.w))]
-    ok(widths.length === 1, `with Fixed every tab is the same width, whatever its name (${three.map((b) => b.w).join(' / ')})`)
+    ok(widths.length === 1, `every tab is the same width, whatever its name (${three.map((b) => b.w).join(' / ')})`)
     ok(widths[0] >= 104 && widths[0] <= 124, `a fixed width, not a content one (${widths[0]}px)`)
     ok(three[1].cut && !three[0].cut, 'the long name is truncated inside the tab, the short one is whole')
     // Selecting a tab must not move anything either: the active one used to be
@@ -1693,8 +1681,8 @@ const scenarios = {
    * states: in front and working, idle, working, finished, question, failed.
    * Measured: Classic has a faint line between tabs and Powerline none; Powerline's segments are
    * clipped and overlap by 9.5 px; a working background tab's edge band sits
-   * flush in the gap and grows; the tab in front wears its rule; Fixed and
-   * Dynamic both hold. Screenshots against the mockups.
+   * flush in the gap and grows; the tab in front wears its rule; every
+   * segment is one width. Screenshots against the mockups.
    */
   async tabStyle(ok) {
     const w = world()
@@ -1710,18 +1698,18 @@ const scenarios = {
           )
         )
       ok((await borders()) === 0, 'Classic: no full border on a tab')
-      // A faint line between tabs again (owner, 2026-10-11): one short divider-ink
-      // line after every tab but the last.
+      // A faint line at every tab's right (owner, 2026-10-11; 2026-10-12: "if
+      // every tab just had a right border", the last one too).
       const seps = await page.evaluate(() => ({
         n: document.querySelectorAll('[data-tab] [data-tab-sep]').length,
         tabs: document.querySelectorAll('[data-tab]').length
       }))
-      ok(seps.n === seps.tabs - 1, `Classic: a faint line between tabs (${seps.n} for ${seps.tabs} tabs)`)
+      ok(seps.n === seps.tabs, `Classic: a faint line at every tab's right, the last one too (${seps.n} for ${seps.tabs} tabs)`)
       await shotStrip(page, 'tabs-classic')
-      // The row: right after Tab width, Classic by default.
+      // The row: right after Tab position, Classic by default.
       const row = await gotoPref(page, 'tab-style')
       const order = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
-      ok(order.indexOf('tab-style') === order.indexOf('tab-width') + 1, `Tab style is right after Tab width (${order.slice(0, 3).join(' > ')})`)
+      ok(order.indexOf('tab-style') === order.indexOf('tab-layout') + 1, `Tab style is right after Tab position (${order.slice(0, 3).join(' > ')})`)
       ok((await row.locator('[aria-pressed="true"]').getAttribute('data-seg')) === 'classic', 'Classic is the default')
       ok((await row.locator('[data-seg]').allTextContents()).join('|') === 'Classic|Powerline', 'the choices are Classic and Powerline')
       await row.locator('[data-seg="prompt"]').click()
@@ -1764,24 +1752,19 @@ const scenarios = {
       await sleep(330)
       ok(s1 !== (await scale()), 'the working edge is moving')
       await shotStrip(page, 'tabs-prompt')
-      // Fixed and Dynamic both hold.
+      // Every segment one width (2026-10-12: Dynamic removed).
       const widths = () => page.evaluate(() => [...document.querySelectorAll('[data-tab]')].map((t) => Math.round(t.getBoundingClientRect().width)))
-      const dyn = await widths()
       // A CLICK MOVES NOTHING (#164; owner, 2026-10-10: "when you click tabs
-      // the ui shifts"). The tab in front is semi-bold here, and under Dynamic
-      // a heavier name was a wider tab that pushed the rest along.
+      // the ui shifts"). The tab in front is semi-bold here.
       const edgesX = () => page.evaluate(() => [...document.querySelectorAll('[data-tab]')].map((t) => { const r = t.getBoundingClientRect(); return [r.left, r.right].map((v) => Math.round(v * 2) / 2) }))
       const before = await edgesX()
       await page.locator('[data-tab]').nth(3).locator('[role="tab"]').click()
       await sleep(200)
       const after = await edgesX()
-      ok(JSON.stringify(before) === JSON.stringify(after), `Powerline, Dynamic: clicking a tab moves no tab (${JSON.stringify(before)} vs ${JSON.stringify(after)})`)
-      await backToFirst(page)
-      await (await gotoPref(page, 'tab-width')).locator('[data-seg="fixed"]').click()
+      ok(JSON.stringify(before) === JSON.stringify(after), `Powerline: clicking a tab moves no tab (${JSON.stringify(before)} vs ${JSON.stringify(after)})`)
       await backToFirst(page)
       const fixed = await widths()
-      ok(new Set(fixed).size === 1 && fixed[0] >= 112 && fixed[0] <= 124, `Powerline, Fixed: every segment one width (${fixed.join(' / ')})`)
-      ok(new Set(dyn).size > 1, `Powerline, Dynamic: sized to the name (${dyn.join(' / ')})`)
+      ok(new Set(fixed).size === 1 && fixed[0] >= 112 && fixed[0] <= 124, `Powerline: every segment one width (${fixed.join(' / ')})`)
       await shotStrip(page, 'tabs-prompt-fixed')
       // A light theme.
       await pickTheme(page, 'paper')
@@ -2137,7 +2120,7 @@ const scenarios = {
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-merged.png') }).catch(() => {})
       // No seam: the bar's colour right above the sidebar is the sidebar's own.
       const seam = await page.evaluate(() => getComputedStyle(document.querySelector('[data-tab-sidebar]')).clipPath)
-      ok(seam.startsWith('inset(0px -60px 0px 0px)'), `the sidebar's shadow falls on the terminal's side only (${seam})`)
+      ok(seam.startsWith('polygon(0px 0px, 100% 0px, 100% 36px, calc(100% + 60px) 36px'), `the sidebar's shadow falls on the terminal's side only, below the bar (${seam})`)
       ok(corner.radius === '10px' && corner.barLine === '0px', `the terminal is cut round where the bar and the sidebar meet, and the bar draws no line (${JSON.stringify(corner)})`)
       // THE EDGE (owner, 2026-10-12: "only show border on the sidebar if bg and
       // secondary color is black, since then shadows dont work, otherwise
@@ -2398,8 +2381,68 @@ const scenarios = {
       await sleep(600)
       const across = await top()
       ok(across.bar.left === 0 && across.bar.right === 0 && across.radius === '0px', `collapsed, the bar spans the window and the corner goes (${JSON.stringify(across.bar)}, ${across.radius})`)
+      // SLID OUT, it still meets the bar as one surface (owner, 2026-10-12: "it
+      // doesn't seem like it connects with the title bar"): its curved corner
+      // under the bar's end, and its shadow below the bar only.
+      await page.mouse.move(2, 400)
+      await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
+      await sleep(400)
+      const slid = await page.evaluate(() => {
+        const nav = document.querySelector('[data-tab-sidebar]').getBoundingClientRect()
+        const c = document.querySelector('[data-tab-sidebar] [data-sidebar-corner]')?.getBoundingClientRect()
+        return { navRight: Math.round(nav.right), corner: c ? { left: Math.round(c.left), top: Math.round(c.top) } : null, clip: getComputedStyle(document.querySelector('[data-tab-sidebar]')).clipPath }
+      })
+      ok(!!slid.corner && Math.abs(slid.corner.left - slid.navRight) <= 1 && slid.corner.top === 36, `slid out, a curved corner joins it to the bar (${JSON.stringify(slid)})`)
+      ok(slid.clip.includes('100% 36px'), `and its shadow stays off the bar (${slid.clip})`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-slid-out.png') }).catch(() => {})
+      await page.mouse.move(800, 400)
+      await sleep(500)
       await page.keyboard.press('Control+Shift+B')
       await sleep(300)
+      // SEE-THROUGH, ONE COAT EVERYWHERE (owner, 2026-10-12: "not everything
+      // is see-through. Like the title bar is not"): the sidebar, the bar and
+      // the terminal each show the desktop through one coat; the body under
+      // them paints nothing. Collapsed and slid out, the sidebar is solid
+      // ("that sidebar should not be see-through").
+      await (await gotoPref(page, 'term-acrylic')).locator('[role="switch"]').click()
+      await backToFirst(page)
+      await sleep(600)
+      const coat = () =>
+        page.evaluate(() => {
+          const alpha = (c) => {
+            const m = /rgba?\(([^)]+)\)/.exec(c)
+            if (!m) return 0
+            const p = m[1].split(/[\s,/]+/).filter(Boolean)
+            return p.length > 3 ? parseFloat(p[3]) : 1
+          }
+          const seen = (el) => {
+            if (!el) return -1
+            let keep = 1
+            for (let n = el; n; n = n.parentElement) keep *= 1 - alpha(getComputedStyle(n).backgroundColor)
+            return Math.round((1 - keep) * 1000) / 1000
+          }
+          return {
+            sidebar: seen(document.querySelector('[data-tab-sidebar]')),
+            bar: seen(document.querySelector('[data-title-bar="beside"]')),
+            terminal: seen(document.querySelector('[data-term-region]'))
+          }
+        })
+      const glassy = await coat()
+      const once = Object.values(glassy)
+      ok(once.every((a) => a > 0.5 && a < 0.9) && new Set(once).size === 1, `see-through: the sidebar, the bar and the terminal each one coat (${JSON.stringify(glassy)})`)
+      await page.keyboard.press('Control+Shift+B')
+      await page.mouse.move(800, 400)
+      await sleep(500)
+      await page.mouse.move(2, 400)
+      await until(async () => !!(await page.evaluate(() => document.querySelector('[data-tab-sidebar]')?.hasAttribute('data-sidebar-shown'))), 3000, 30)
+      await sleep(300)
+      const solid = await coat()
+      ok(solid.sidebar === 1 && solid.bar === glassy.bar, `collapsed and slid out, the sidebar is solid; the bar stays see-through (${JSON.stringify(solid)})`)
+      await page.mouse.move(800, 400)
+      await sleep(500)
+      await page.keyboard.press('Control+Shift+B')
+      await (await gotoPref(page, 'term-acrylic')).locator('[role="switch"]').click()
+      await backToFirst(page)
       await setPref(page, 'tab-layout', 'horizontal')
       ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-tab-strip]') && !document.querySelector('[data-tab-sidebar]')), 3000, 50)), 'Horizontal puts the strip back')
       // With the strip, Ctrl+Shift+B is the shell's again.
@@ -4691,8 +4734,8 @@ const scenarios = {
       await find.fill('')
       // Every row's control is a group named by the row's label, so a
       // segmented control's options say which setting they set.
-      await gotoPref(page, 'tab-width')
-      ok((await page.locator('[data-pref="tab-width"] [role="group"]').getAttribute('aria-label')) === labelOf['tab-width'], 'a row names its controls by its label')
+      await gotoPref(page, 'tab-style')
+      ok((await page.locator('[data-pref="tab-style"] [role="group"]').getAttribute('aria-label')) === labelOf['tab-style'], 'a row names its controls by its label')
       // EVERY ROW, BY ITS OWN LABEL (spec 1.6: the index can drift from the
       // page, and opening every entry is what catches it).
       const misses = []
@@ -4853,7 +4896,7 @@ const scenarios = {
       // window's rows above the theme and what a theme sets under it.
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
       // The see-through row sits right under the wall since #156, as Prism's.
-      const want = ['tab-layout', 'tab-width', 'tab-style', 'tab-switch', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-secondary', 'window-accent']
+      const want = ['tab-layout', 'tab-style', 'tab-switch', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-secondary', 'window-accent']
       ok(JSON.stringify(rows) === JSON.stringify(want), `Appearance runs ${want.join(' > ')} (${rows.join(' > ')})`)
       // Font size is 50% to 200% in tens.
       await gotoPref(page, 'term-font')
@@ -5790,7 +5833,7 @@ const scenarios = {
         // The grouped cards (2026-10-05): a section's panel edge, and the
         // hairline between two of its rows, both the list's line.
         const panel = document.querySelector('[data-settings-section="window"] [data-settings-panel]')
-        const second = document.querySelector('[data-pref="tab-width"]')
+        const second = document.querySelector('[data-pref="tab-style"]')
         const css = (el, prop) => (el ? getComputedStyle(el)[prop] : null)
         const edges = {
           title: css(title, 'borderBottomColor'),

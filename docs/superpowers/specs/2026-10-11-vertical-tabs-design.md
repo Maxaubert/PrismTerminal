@@ -175,6 +175,15 @@ looked at on the way).
   terminal rather than over it, so the terminal's top rows stay in sight; collapsed, it spans the
   window and the slid-out sidebar lies over its left end. The pop-out bar, its reveal zone and the
   sidebar-edge store went with it; the app's name above Find a tab is the sidebar's drag band.
+- **Slid out, still one surface** (owner, 2026-10-12: "it doesn't seem like it connects with the
+  title bar"): the sidebar's shadow is clipped to below the bar (a polygon clip), and a curved corner
+  joins it to the bar's end, as the open sidebar's terminal is cut round.
+- **See-through, one coat everywhere** (owner, 2026-10-12: "not everything is see-through. Like the
+  title bar is not"): the body under the sidebar, the bar and the terminal painted the secondary
+  colour too, and the terminal's column a second ground, so each read nearly solid. Now each surface
+  paints once (the cut corner's outside is its own small piece). Collapsed, the sidebar is solid
+  (`--p-secondary-solid`): "that sidebar should not be see-through ... you can see the content
+  underneath"; pinned open it is see-through.
 
 ## 2. The indicators
 
