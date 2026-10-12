@@ -11,7 +11,7 @@ import { switchKnob } from '@core/renderer/lib/switchKnob'
 import { sidebarGround } from './sidebarGround'
 import { atLightness, liftToFloor, okLightness } from '@core/renderer/lib/oklab'
 import { EDGE_ALPHA, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
-import { DEFAULT_GROUND, LIGHT_GROUND } from '@core/shared/ground'
+import { DEFAULT_GROUND, LIGHT_GROUND, ON_DARK_INK } from '@core/shared/ground'
 
 // The window wears the terminal's theme. Every chrome colour is derived from
 // the theme's background, foreground and blue, and whatever falls short of a
@@ -202,8 +202,8 @@ export function chromeTokens(
     // What sits on the accent is white or near-black, whichever reads better:
     // the better of two, not a midpoint test, since both can be poor at a midpoint.
     const onWhite = contrastRatio('#ffffff', accent)
-    const onDark = contrastRatio(FALLBACK_BG, accent)
-    onAccent = onWhite >= onDark ? '#ffffff' : FALLBACK_BG
+    const onDark = contrastRatio(ON_DARK_INK, accent)
+    onAccent = onWhite >= onDark ? '#ffffff' : ON_DARK_INK
     // WHITE ON A STRONG MID COLOUR (owner, 2026-10-12, of near-black on a red
     // Save changes: "the text colour should shift to white"). A red or a blue
     // measures a little better in black by the WCAG sum but reads better in

@@ -1,6 +1,6 @@
 import { ICON_RAINBOW } from './markColours'
 import { contrastRatio, luminance, mixHex } from './termAnsi'
-import { LIGHT_GROUND } from '../../shared/ground'
+import { LIGHT_GROUND, ON_DARK_INK } from '../../shared/ground'
 
 /** Under this, the theme's text on a fill is gone and the name flips. */
 export const NAME_FLIP = 2
@@ -20,7 +20,7 @@ export const groundIsDark = (ground: string): boolean => luminance(ground) <= LI
  */
 export function nameInk(fill: string, text: string, darkGround: boolean): string {
   if (contrastRatio(text, fill) >= NAME_FLIP) return text
-  return darkGround ? '#0b0b0b' : '#ffffff'
+  return darkGround ? ON_DARK_INK : '#ffffff'
 }
 
 /** Every colour that can sit under a name on the flowing rainbow: the seven
@@ -40,6 +40,6 @@ const worstOnRainbow = (ink: string): number => Math.min(...RAINBOW_SAMPLES.map(
 export function rainbowInk(text: string, darkGround: boolean): string {
   const keep = worstOnRainbow(text)
   if (keep >= NAME_FLIP) return text
-  const opposite = darkGround ? '#0b0b0b' : '#ffffff'
+  const opposite = darkGround ? ON_DARK_INK : '#ffffff'
   return worstOnRainbow(opposite) > keep ? opposite : text
 }
