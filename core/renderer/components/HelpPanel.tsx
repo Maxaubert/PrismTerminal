@@ -490,6 +490,7 @@ export default function HelpPanel({
 
   return (
     <Modal
+      shadow={false}
       onCancel={onClose}
       label="Command help"
       focus="input"

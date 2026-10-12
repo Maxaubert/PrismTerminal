@@ -35,6 +35,7 @@ export function Modal({
   focus = '[data-primary="true"]',
   focusKey,
   scrim = 'bg-black/50 backdrop-blur-[2px]',
+  shadow = true,
   scrimAttrs,
   boxAttrs,
   boxClassName = '',
@@ -56,6 +57,9 @@ export function Modal({
   focusKey?: unknown
   /** The scrim's tint and blur. */
   scrim?: string
+  /** The box's drop shadow. Off where the owner's popup rule holds (a popup
+   *  blurs what is behind it and casts no shadow, 2026-09-22). */
+  shadow?: boolean
   scrimAttrs?: Record<string, string | boolean | undefined>
   boxAttrs?: Record<string, string | boolean | undefined>
   /** The box's size, padding and layout; its surface is the frame's own. */
@@ -134,7 +138,7 @@ export function Modal({
         aria-describedby={describedBy}
         tabIndex={-1}
         style={boxStyle}
-        className={`rounded-[var(--p-radius)] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] shadow-[0_24px_70px_rgba(0,0,0,.6)] focus:outline-none ${boxClassName}`}
+        className={`rounded-[var(--p-radius)] border border-[color:var(--p-divider)] bg-[var(--p-side-flat)] ${shadow ? 'shadow-[0_24px_70px_rgba(0,0,0,.6)]' : ''} focus:outline-none ${boxClassName}`}
       >
         {children}
       </div>

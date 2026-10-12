@@ -22,6 +22,7 @@ export default function ModelDownloadAsk({
 }): JSX.Element {
   return (
     <Modal
+      shadow={false}
       onCancel={onCancel}
       role="alertdialog"
       describedBy="model-download-ask-text"

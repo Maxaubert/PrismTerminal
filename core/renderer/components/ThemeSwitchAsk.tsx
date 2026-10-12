@@ -26,6 +26,7 @@ export default function ThemeSwitchAsk({
 }): JSX.Element {
   return (
     <Modal
+      shadow={false}
       onCancel={onCancel}
       role="alertdialog"
       labelledBy="theme-switch-ask-title"
