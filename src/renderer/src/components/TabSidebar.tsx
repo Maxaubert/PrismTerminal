@@ -124,7 +124,9 @@ export function TabSidebar({
   useLayoutEffect(() => {
     const root = document.documentElement.style
     root.setProperty('--p-sidebar-cover', `${cover}px`)
-  }, [cover])
+    // A width being dragged moves the cut at once, never on the slide's curve.
+    root.setProperty('--p-sidebar-cover-t', dragW !== null ? '0s' : '')
+  }, [cover, dragW])
   useEffect(
     () => () => {
       document.documentElement.style.setProperty('--p-sidebar-cover', `-${CORNER_R}px`)
@@ -414,8 +416,10 @@ export function TabSidebar({
             New tab
           </button>
         </div>
-        {/* The resize grip, on the sidebar's right edge, while it is open. */}
-        {!collapsed && (
+        {/* The resize grip, on the sidebar's right edge: pinned, and slid out
+            too (owner, 2026-10-13: "i cant adjust the sidebar width anymore",
+            using the sidebar unpinned, which had none). */}
+        {visible && (
           // A 6 px target, and what it shows is one hairline over the
           // sidebar's own edge (owner, 2026-10-11: the 6 px accent bar was
           // too much, "make it more minimalist").

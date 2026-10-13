@@ -133,7 +133,9 @@ const CORNER_CUT = {
 const COVER_CUT = {
   ...CORNER_CUT,
   maskPosition: `var(--p-sidebar-cover, -${CORNER_R}px) 0`,
-  transition: `mask-position ${SIDEBAR_SLIDE}`
+  // At once while its width is dragged (TabSidebar sets the var to 0s), so the
+  // cut keeps to the grip rather than easing after it.
+  transition: `mask-position var(--p-sidebar-cover-t, ${SIDEBAR_SLIDE})`
 } as const
 
 export default function App(): JSX.Element {

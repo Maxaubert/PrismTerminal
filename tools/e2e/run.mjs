@@ -2219,6 +2219,31 @@ const scenarios = {
       })
       ok(!!slidLine.line && slidLine.line.top >= 36 && slidLine.line.right === slidLine.line.navRight && parseFloat(slidLine.barLine) > 0 && slidLine.shadow === 'none', `slid out, a line from the bar down, the bar's own line along the top, no shadow (${JSON.stringify(slidLine)})`)
       ok(/svg/.test(slidLine.corner) && /radial-gradient/.test(slidLine.corner), `and the corner, filled to the curve, carries the line round into the bar (${slidLine.corner.slice(0, 80)})`)
+      // SLID OUT, IT RESIZES TOO (owner, 2026-10-13: "i cant adjust the
+      // sidebar width anymore"): its grip, and the page's cut keeps to it.
+      {
+        const g = await page.evaluate(() => {
+          const r = document.querySelector('[data-tab-sidebar] [data-sidebar-grip]')?.getBoundingClientRect()
+          return r ? { x: r.left + r.width / 2, y: r.top + 300, w: Math.round(document.querySelector('[data-tab-sidebar]').getBoundingClientRect().width) } : null
+        })
+        ok(!!g, 'slid out, the sidebar has its resize grip')
+        if (g) {
+          await page.mouse.move(g.x, g.y)
+          await page.mouse.down()
+          for (let d = 5; d <= 40; d += 5) await page.mouse.move(g.x + d, g.y)
+          await page.mouse.up()
+          await sleep(300)
+          const after = await page.evaluate(() => ({
+            w: Math.round(document.querySelector('[data-tab-sidebar]').getBoundingClientRect().width),
+            shown: document.querySelector('[data-tab-sidebar]').hasAttribute('data-sidebar-shown'),
+            cut: parseFloat(getComputedStyle(document.querySelector('[data-term-column]').parentElement).maskPosition),
+            right: document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right
+          }))
+          ok(after.w >= g.w + 35 && after.shown, `dragging it widens the slid-out sidebar, which stays out (${g.w} to ${after.w})`)
+          ok(Math.abs(after.cut - after.right) <= 1, `and the page's cut keeps to its new edge (${after.cut} vs ${after.right})`)
+          await page.evaluate(() => localStorage.removeItem('prism.window.sidebarWidth'))
+        }
+      }
       await page.mouse.move(800, 400)
       await sleep(500)
       await page.keyboard.press('Control+Shift+B')
@@ -2563,8 +2588,14 @@ const scenarios = {
       await sleep(500)
       const grip = await page.evaluate(() => {
         const r = document.querySelector('[data-sidebar-grip]').getBoundingClientRect()
-        return { x: r.left + r.width / 2, y: r.top + 300 }
+        const x = r.left + r.width / 2
+        const y = r.top + 300
+        const hit = document.elementFromPoint(x, y)
+        return { x, y, hit: hit?.closest('[data-sidebar-grip]') ? 'grip' : `${hit?.tagName}.${(hit?.getAttribute('class') ?? '').slice(0, 60)}`, w: document.querySelector('[data-tab-sidebar]').getBoundingClientRect().width }
       })
+      // THE GRIP IS WHAT A PRESS THERE LANDS ON (owner, 2026-10-13: "i cant
+      // adjust the sidebar width anymore").
+      ok(grip.hit === 'grip', `the resize grip is on top at the sidebar's edge (${grip.hit})`)
       await page.mouse.move(grip.x, grip.y)
       await page.mouse.down()
       for (let d = 3; d <= 15; d += 3) await page.mouse.move(grip.x + d, grip.y)
@@ -2572,6 +2603,7 @@ const scenarios = {
       await page.mouse.move(700, 500)
       await sleep(400)
       const px = await page.evaluate(() => ({ right: document.querySelector('[data-tab-sidebar]').getBoundingClientRect().right, bar: document.querySelector('[data-term-column]').getBoundingClientRect().left, ratio: devicePixelRatio, stored: localStorage.getItem('prism.window.sidebarWidth') }))
+      ok(px.stored !== null, `dragging the grip resizes the sidebar and stores it (${px.stored}, was ${grip.w} wide)`)
       const dev = px.right * px.ratio
       ok(px.ratio !== Math.round(px.ratio) && Math.abs(dev - Math.round(dev)) < 0.01 && Math.abs(px.bar - px.right) < 0.01, `at a scale that is not whole the sidebar meets the terminal on a whole screen pixel (${JSON.stringify(px)}, ${dev.toFixed(2)} device px)`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/glass-edge-125.png'), clip: { x: Math.round(px.right * 1.25) - 30, y: 0, width: 60, height: 120 } }).catch(() => {})
