@@ -2747,6 +2747,47 @@ const scenarios = {
    * colour should shift to white"). Save changes and the question a theme pick
    * asks both wear the accent, with white text on a red.
    */
+  /**
+   * A TOOLTIP SITS BY ITS ITEM (owner, 2026-10-13: "when i hover over settings
+   * or command help they dont appear under it centered, they appear from
+   * bottom right of that item"). The app draws every title itself: centred
+   * under a title bar button, inside the window at its edge, and Windows has
+   * no title to draw meanwhile; the title is back when the pointer leaves.
+   */
+  async tooltips(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const tip = page.locator('[data-tip]')
+    const hoverAndMeasure = async (sel) => {
+      const b = await page.locator(sel).boundingBox()
+      await page.mouse.move(b.x + b.width - 3, b.y + b.height - 3) // off-centre, as a hand lands
+      await until(async () => (await tip.count()) === 1, 3000, 50)
+      await sleep(200) // its entrance
+      const t = await tip.boundingBox()
+      return { item: b, tip: t, text: await tip.textContent(), title: await page.locator(sel).getAttribute('title') }
+    }
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      const help = await hoverAndMeasure('[data-title-help]')
+      ok(!!help.tip, `hovering the ? shows the app's own tip ("${help.text}")`)
+      if (help.tip) {
+        const dx = Math.abs(help.tip.x + help.tip.width / 2 - (help.item.x + help.item.width / 2))
+        ok(dx <= 1.5, `centred under it (off by ${dx.toFixed(1)}px)`)
+        ok(Math.abs(help.tip.y - (help.item.y + help.item.height + 6)) <= 1.5, `just below it (${Math.round(help.tip.y)} vs ${Math.round(help.item.y + help.item.height)})`)
+      }
+      ok(help.title === null, 'and Windows has no title to draw meanwhile')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tooltip-help.png'), clip: { x: help.item.x - 160, y: 0, width: 320, height: 90 } }).catch(() => {})
+      await page.mouse.move(400, 400)
+      ok(await until(async () => (await tip.count()) === 0, 2000, 50), 'leaving takes it away')
+      ok(!!(await page.locator('[data-title-help]').getAttribute('title')), 'and gives the title back')
+      const cog = await hoverAndMeasure('[data-title-settings]')
+      const vw = await page.evaluate(() => innerWidth)
+      ok(!!cog.tip && cog.tip.x + cog.tip.width <= vw - 5, `near the window's edge it stays inside (${Math.round(cog.tip?.x ?? 0)}+${Math.round(cog.tip?.width ?? 0)} of ${vw})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async accentAsk(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
@@ -3373,7 +3414,7 @@ const scenarios = {
     // one text and the escaped replies are counted in it.
     const heard = async () => (await termText(page)).replace(/\u00a0/g, ' ')
     const count = (text, s) => text.split(s).length - 1
-    const PT_GROUND = '\\e]11;rgb:1212/1212/1212\\e\\'
+    const PT_GROUND = '\\e]11;rgb:1717/1717/1717\\e\\'
     const FAWN_GROUND = '\\e]11;rgb:e6e6/d8d8/c0c0\\e\\'
     const DARK = '\\e[?997;1n'
     const LIGHT = '\\e[?997;2n'
@@ -3390,7 +3431,7 @@ const scenarios = {
       ok(first.includes(PT_GROUND), `OSC 11 answers PT Default's ground, not black (${first.match(/\\e\]11;[^\\]*/)?.[0]})`)
       ok(!first.includes('rgb:0000/0000/0000'), 'and nothing answers transparent black')
       const ink = first.match(/\\e\]10;(rgb:[0-9a-f/]+)/)?.[1]
-      ok(!!ink && ink !== 'rgb:1212/1212/1212', `OSC 10 answers the theme's text (${ink})`)
+      ok(!!ink && ink !== 'rgb:1717/1717/1717', `OSC 10 answers the theme's text (${ink})`)
       ok(first.includes(DARK), 'CSI ? 996 n answers dark on PT Default')
       ok(first.includes('\\e[?2031;1$y'), 'DECRQM says 2031 is set once the program set it')
       ok(first.lastIndexOf('\\e[?1;2c') > first.lastIndexOf('\\e[?2031;1$y'), 'and the DA1 answer comes LAST: the replies keep stream order')
