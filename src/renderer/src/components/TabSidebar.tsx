@@ -17,7 +17,8 @@ import { onDevicePixels, useDevicePixelRatio } from '../lib/devicePixels'
 import {
   SIDEBAR_WIDTH,
   setSidebarWidth,
-  useSidebarMode,
+  useSidebarArriving,
+  useSidebarLayout,
   useSidebarWidth
 } from '../lib/sidebarPrefs'
 import { BAR_H, SIDEBAR_SLIDE } from '../lib/chromeLayout'
@@ -62,7 +63,9 @@ export function TabSidebar({
   onReorder,
   onOpenRecent
 }: TabListProps): JSX.Element | null {
-  const mode = useSidebarMode()
+  // Laid out collapsed while a just-pinned sidebar slides in (sidebarPrefs).
+  const mode = useSidebarLayout()
+  const arriving = useSidebarArriving()
   const storedWidth = useSidebarWidth()
   const { indicator, paint, looks } = useTabLooks({
     tabs,
@@ -113,7 +116,7 @@ export function TabSidebar({
   useEffect(() => {
     shownNow.current = shown
   }, [shown])
-  const visible = !collapsed || shown
+  const visible = !collapsed || shown || arriving
   // How much of the page beside it a slid-out sidebar covers: App cuts that
   // strip of the page away, so only the window's acrylic lies under it.
   // Out: its width. Hidden: -CORNER_R, the cut's curve parked just off the

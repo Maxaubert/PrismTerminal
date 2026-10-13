@@ -2423,9 +2423,15 @@ const scenarios = {
         ok(!!(await until(async () => !(await geo()).shown, 3000, 30)), 'and goes once the cursor is clearly off it')
         await cursor(null)
       }
-      // Back to open, through the same key.
+      // Back to open, through the same key. PINNED FROM HIDDEN IT SLIDES IN
+      // FIRST (owner, 2026-10-14: "theres no animmation, make sure it then has
+      // the animationo that unpninned has when it opens"): over the terminal,
+      // still at full width, part of the way out, and only then beside it.
       await page.keyboard.press('Control+Shift+B')
-      ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open' && (await geo()).host.left > 100, 'Ctrl+Shift+B keeps it open again')
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open', 'Ctrl+Shift+B pins it again, and Open is stored')
+      const mid = await geo()
+      ok(mid.host.left === 0 && mid.nav.left < 0 && mid.shown, `pinned, it slides in over the terminal first (${JSON.stringify(mid.nav)}, terminal at ${mid.host.left})`)
+      ok(!!(await until(async () => (await geo()).host.left > 100, 3000, 30)), 'then takes its room beside the terminal')
 
       // THE BAR BESIDE THE SIDEBAR, ALWAYS DOWN (owner, 2026-10-12, removing
       // Show title bar: the look of the dropped-down bar, "but I want it to be
@@ -3373,7 +3379,7 @@ const scenarios = {
     // one text and the escaped replies are counted in it.
     const heard = async () => (await termText(page)).replace(/\u00a0/g, ' ')
     const count = (text, s) => text.split(s).length - 1
-    const PT_GROUND = '\\e]11;rgb:1212/1212/1212\\e\\'
+    const PT_GROUND = '\\e]11;rgb:1717/1717/1717\\e\\'
     const FAWN_GROUND = '\\e]11;rgb:e6e6/d8d8/c0c0\\e\\'
     const DARK = '\\e[?997;1n'
     const LIGHT = '\\e[?997;2n'
@@ -3390,7 +3396,7 @@ const scenarios = {
       ok(first.includes(PT_GROUND), `OSC 11 answers PT Default's ground, not black (${first.match(/\\e\]11;[^\\]*/)?.[0]})`)
       ok(!first.includes('rgb:0000/0000/0000'), 'and nothing answers transparent black')
       const ink = first.match(/\\e\]10;(rgb:[0-9a-f/]+)/)?.[1]
-      ok(!!ink && ink !== 'rgb:1212/1212/1212', `OSC 10 answers the theme's text (${ink})`)
+      ok(!!ink && ink !== 'rgb:1717/1717/1717', `OSC 10 answers the theme's text (${ink})`)
       ok(first.includes(DARK), 'CSI ? 996 n answers dark on PT Default')
       ok(first.includes('\\e[?2031;1$y'), 'DECRQM says 2031 is set once the program set it')
       ok(first.lastIndexOf('\\e[?1;2c') > first.lastIndexOf('\\e[?2031;1$y'), 'and the DA1 answer comes LAST: the replies keep stream order')

@@ -22,7 +22,7 @@ import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
-import { toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
+import { toggleSidebar, useSidebarLayout } from './lib/sidebarPrefs'
 import { CHORDS, chordOf } from './lib/keymap'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
@@ -165,7 +165,8 @@ export default function App(): JSX.Element {
   // no title bar"). With no tab open there is no sidebar, so the window keeps
   // the top row (#91) to be moved by.
   const beside = vertical && state.tabs.length > 0
-  const sidebarOpen = useSidebarMode() === 'open'
+  // As LAID OUT: still collapsed while a just-pinned sidebar slides in.
+  const sidebarOpen = useSidebarLayout() === 'open'
   /** Which shell each tab was SPAWNED with. The Shell setting only names what
    *  the next terminal launches, so a tab opened before it was changed still
    *  speaks its old language, and the popup preselects by what is running. */
