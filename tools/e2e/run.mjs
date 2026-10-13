@@ -184,7 +184,15 @@ const PREF_PAGE = {
  *  wait for the row. Returns its locator. */
 async function gotoPref(page, id) {
   if (!PREF_PAGE[id]) throw new Error(`gotoPref: no page known for ${id}`)
-  if ((await page.locator('[data-settings-page]').count()) === 0) await page.locator('[data-title-settings]').click()
+  // The cog TOGGLES since 2026-10-13: a page opened a moment ago (it loads
+  // lazily) must be waited for, not clicked again, which would close it.
+  const up = async () => (await page.locator('[data-settings-page]').count()) === 1
+  const inFront = () =>
+    page.evaluate(() => (document.querySelector('[data-tab-active]')?.textContent ?? '').trim() === 'Settings')
+  if (!(await up())) {
+    if (!(await inFront())) await page.locator('[data-title-settings]').click()
+    await until(up, 10000, 50)
+  }
   await page.locator(`[data-settings-tab="${PREF_PAGE[id]}"]`).click()
   const row = page.locator(`[data-pref="${id}"]`).first()
   await row.waitFor({ timeout: 10000 })
@@ -2747,6 +2755,36 @@ const scenarios = {
    * colour should shift to white"). Save changes and the question a theme pick
    * asks both wear the accent, with white text on a red.
    */
+  /**
+   * THE COG IS A TOGGLE (owner, 2026-10-13: "let me click the settings icon
+   * again to exit settings"): the cog opens Settings, and with Settings in
+   * front the cog closes it and goes back to the tab used before. Its key,
+   * Ctrl+comma, does the same.
+   */
+  async cogToggle(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const cog = page.locator('[data-title-settings]')
+    const settingsUp = async () => (await page.locator('[data-settings-page]').count()) === 1
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 1), 'one tab')
+      const shell = (await tabLabels(page))[0]
+      await cog.click()
+      ok(!!(await until(settingsUp, 4000, 50)), 'the cog opens Settings')
+      ok((await tabLabels(page)).length === 2, 'as a tab of its own')
+      await cog.click()
+      ok(!!(await until(async () => !(await settingsUp()), 4000, 50)), 'the cog again closes it')
+      ok(JSON.stringify(await tabLabels(page)) === JSON.stringify([shell]), `and its tab with it (${(await tabLabels(page)).join(', ')})`)
+      ok(!!(await until(async () => (await page.locator('[data-tab-active]').count()) === 1, 3000, 50)), 'the shell is in front again')
+      await page.keyboard.press('Control+Comma')
+      ok(!!(await until(settingsUp, 4000, 50)), 'Ctrl+comma opens it')
+      await page.keyboard.press('Control+Comma')
+      ok(!!(await until(async () => !(await settingsUp()), 4000, 50)), 'and closes it')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async accentAsk(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
@@ -3373,7 +3411,7 @@ const scenarios = {
     // one text and the escaped replies are counted in it.
     const heard = async () => (await termText(page)).replace(/\u00a0/g, ' ')
     const count = (text, s) => text.split(s).length - 1
-    const PT_GROUND = '\\e]11;rgb:1212/1212/1212\\e\\'
+    const PT_GROUND = '\\e]11;rgb:1717/1717/1717\\e\\'
     const FAWN_GROUND = '\\e]11;rgb:e6e6/d8d8/c0c0\\e\\'
     const DARK = '\\e[?997;1n'
     const LIGHT = '\\e[?997;2n'
@@ -3390,7 +3428,7 @@ const scenarios = {
       ok(first.includes(PT_GROUND), `OSC 11 answers PT Default's ground, not black (${first.match(/\\e\]11;[^\\]*/)?.[0]})`)
       ok(!first.includes('rgb:0000/0000/0000'), 'and nothing answers transparent black')
       const ink = first.match(/\\e\]10;(rgb:[0-9a-f/]+)/)?.[1]
-      ok(!!ink && ink !== 'rgb:1212/1212/1212', `OSC 10 answers the theme's text (${ink})`)
+      ok(!!ink && ink !== 'rgb:1717/1717/1717', `OSC 10 answers the theme's text (${ink})`)
       ok(first.includes(DARK), 'CSI ? 996 n answers dark on PT Default')
       ok(first.includes('\\e[?2031;1$y'), 'DECRQM says 2031 is set once the program set it')
       ok(first.lastIndexOf('\\e[?1;2c') > first.lastIndexOf('\\e[?2031;1$y'), 'and the DA1 answer comes LAST: the replies keep stream order')

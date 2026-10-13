@@ -73,6 +73,19 @@ export function openSettings(s: TabState): TabState {
   }
 }
 
+/**
+ * THE COG IS A TOGGLE (owner, 2026-10-13: "let me click the settings icon
+ * again to exit settings"). With Settings in front, the cog (and its key)
+ * closes it and goes back to `back`, the tab used before it (Most recent's
+ * list), else the neighbour a close hands over to. Otherwise it opens or
+ * fronts Settings, as before.
+ */
+export function toggleSettings(s: TabState, back?: string | null): TabState {
+  if (s.activeId !== SETTINGS_ID) return openSettings(s)
+  const closed = closeTab(s, SETTINGS_ID)
+  return back && back !== SETTINGS_ID ? pickTab(closed, back) : closed
+}
+
 /** The tabs that own a shell, which is every tab but Settings. */
 export function shellTabs(s: TabState): Tab[] {
   return s.tabs.filter((t) => t.kind !== 'settings')
