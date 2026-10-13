@@ -167,7 +167,7 @@ const tabLabels = (page) =>
  */
 const PREF_PAGE = {
   'tab-layout': 'appearance', 'tab-switch': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
-  'window-background': 'appearance', 'window-accent': 'appearance', 'window-secondary': 'appearance', 'term-acrylic': 'appearance',
+  'agent-keys': 'appearance', 'window-background': 'appearance', 'window-accent': 'appearance', 'window-secondary': 'appearance', 'term-acrylic': 'appearance',
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
   'agent-indicator': 'agents', 'agent-done-on': 'agents', 'agent-rainbow': 'agents', 'agent-question-on': 'agents', 'agent-failed-on': 'agents',
@@ -2747,6 +2747,71 @@ const scenarios = {
    * colour should shift to white"). Save changes and the question a theme pick
    * asks both wear the accent, with white text on a red.
    */
+  /**
+   * AGENT HOTKEYS (#198; owner, 2026-10-13: "a toggle for better key
+   * bindings", Ctrl+S "the sidebar toggle", "a setting thats by default on").
+   * Over a focused shell: Ctrl+PageUp / Ctrl+PageDown switch tabs and, with
+   * the tabs down the side, Ctrl+S shows and hides the sidebar. Switched off
+   * in Settings, Ctrl+S is the shell's again and the sidebar stays put.
+   */
+  async agentKeys(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    // Shell tabs only: Settings rides the strip as a tab of its own.
+    const shells = () => page.locator('[data-tab]').filter({ hasNotText: /^Settings$/ })
+    const front = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll('[data-tab]')]
+          .filter((t) => (t.textContent ?? '').trim() !== 'Settings')
+          .findIndex((t) => t.hasAttribute('data-tab-active'))
+      )
+    const sidebar = () => page.evaluate(() => localStorage.getItem('prism.window.sidebar'))
+    const toShell = async (i = 0) => {
+      await shells().nth(i).click()
+      await page.locator('.xterm').first().click({ force: true })
+    }
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 1), 'one tab')
+      const sw = (await gotoPref(page, 'agent-keys')).locator('[role="switch"]')
+      ok((await sw.getAttribute('aria-checked')) === 'true', 'Agent hotkeys is on by default')
+      // Settings closed (Ctrl+W on its tab), so the tabs are the two shells.
+      await page.keyboard.press('Control+w')
+      await until(async () => (await page.locator('[data-tab]').count()) === 1, 4000, 50)
+      await toShell(0)
+      await page.keyboard.press('Control+t')
+      ok(await until(async () => (await shells().count()) === 2), 'a second tab')
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.press('Control+PageUp')
+      ok(!!(await until(async () => (await front()) === 0, 3000, 50)), `Ctrl+PageUp goes to the tab before (${await front()})`)
+      await page.keyboard.press('Control+PageDown')
+      ok(!!(await until(async () => (await front()) === 1, 3000, 50)), `Ctrl+PageDown to the tab after (${await front()})`)
+
+      await setPref(page, 'tab-layout', 'vertical')
+      await page.locator('[data-title-settings]').click()
+      await until(async () => (await page.locator('[data-settings-page]').count()) === 0, 4000, 50)
+      await toShell(0)
+      const was = (await sidebar()) ?? 'open'
+      await page.keyboard.press('Control+s')
+      ok(!!(await until(async () => (await sidebar()) !== was, 3000, 50)), `Ctrl+S over a shell toggles the sidebar (${was} to ${await sidebar()})`)
+      await page.keyboard.press('Control+s')
+      ok(!!(await until(async () => ((await sidebar()) ?? 'open') === was, 3000, 50)), `and back (${await sidebar()})`)
+
+      // Off: the shell's key again.
+      await (await gotoPref(page, 'agent-keys')).locator('[role="switch"]').click()
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.agentKeys'))) === '0', 'switched off, it is stored')
+      await page.locator('[data-title-settings]').click()
+      await until(async () => (await page.locator('[data-settings-page]').count()) === 0, 4000, 50)
+      await toShell(0)
+      await page.keyboard.press('Control+s')
+      await sleep(400)
+      ok(((await sidebar()) ?? 'open') === was, `off, Ctrl+S leaves the sidebar alone (${await sidebar()})`)
+      await page.keyboard.press('Control+Shift+B')
+      ok(!!(await until(async () => ((await sidebar()) ?? 'open') !== was, 3000, 50)), 'and Ctrl+Shift+B still works')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async accentAsk(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })

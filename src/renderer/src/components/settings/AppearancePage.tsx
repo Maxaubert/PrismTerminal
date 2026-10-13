@@ -1,6 +1,6 @@
 import { useSyncExternalStore, type JSX } from 'react'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
-import { RESET_LINK, Segmented } from '@core/renderer/settings/fields'
+import { RESET_LINK, Segmented, Switch } from '@core/renderer/settings/fields'
 import { ColourField } from '@core/renderer/settings/ColourPicker'
 import { SettingRow } from '@core/renderer/settings/layout/SettingRow'
 import { SettingsSection } from '@core/renderer/settings/layout/SettingsSection'
@@ -10,6 +10,8 @@ import { onTermLookChange, termThemeId, useTermThemeId } from '@core/renderer/li
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { setWindowEdges, useWindowEdges } from '../../lib/edgesPrefs'
 import { setTabSwitch, useTabSwitch, type TabSwitch } from '../../lib/tabSwitchPrefs'
+import { setAgentKeys, useAgentKeys } from '../../lib/agentKeysPrefs'
+import { AGENT_CHORDS, CHORDS } from '../../lib/keymap'
 import { setTabLayout, useTabLayout, type TabLayout } from '../../lib/tabLayoutPrefs'
 import { setWindowAccent, useWindowAccent } from '../../lib/accentPrefs'
 import {
@@ -199,6 +201,8 @@ export function AppearancePage(): JSX.Element {
   const place = appOpt('tab-layout')
   const switching = useTabSwitch()
   const swap = appOpt('tab-switch')
+  const agentRow = appOpt('agent-keys')
+  const agentOn = useAgentKeys()
   const edge = appOpt('window-edges')
   return (
     <>
@@ -224,6 +228,14 @@ export function AppearancePage(): JSX.Element {
         >
           <Segmented value={switching} onChange={setTabSwitch} options={TAB_SWITCH_OPTIONS} />
         </SettingRow>
+        {/* AGENT HOTKEYS (#198), on by default: keys a shell rarely needs do
+            app things. The sub names no key (settingsCopy); the row's
+            tooltip lists them, from the keymap, so it cannot drift. */}
+        <span title={AGENT_CHORDS.map((id) => CHORDS[id].agent!.label).join(', ')} className="contents">
+          <SettingRow id="agent-keys" icon={agentRow.icon} label={agentRow.label} sub={agentRow.sub} tap>
+            <Switch on={agentOn} onChange={setAgentKeys} label={agentRow.label} />
+          </SettingRow>
+        </span>
         <SettingRow id="window-edges" icon={edge.icon} label={edge.label} sub={edge.sub}>
           <Segmented value={edges} onChange={setWindowEdges} options={EDGE_OPTIONS} />
         </SettingRow>
