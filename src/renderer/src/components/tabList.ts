@@ -1,6 +1,7 @@
 import type { MouseEvent } from 'react'
 import { failedLabel } from '@core/renderer/lib/agentHookSignal'
 import type { Tab } from '../lib/tabs'
+import type { DetectedAgent } from '@core/shared/types'
 
 /** What both tab layouts are handed: the strip and the sidebar take the same
  *  props, so App builds them once (audit 2026-10-12: two copies of this type). */
@@ -21,6 +22,8 @@ export interface TabListProps {
   failedKinds?: { readonly current: ReadonlyMap<string, string> }
   /** Sessions whose shell currently hosts an AI CLI (Claude Code, codex). */
   agentIds: ReadonlySet<string>
+  /** Which agent each of those runs, for its tab's icon (2026-10-12). */
+  agentKinds?: { readonly current: ReadonlyMap<string, DetectedAgent> }
   /** Tabs still coming back to an agent (#106): a ring before the name,
    *  until the agent has drawn itself. */
   loadingIds?: ReadonlySet<string>

@@ -1,21 +1,19 @@
-import { useEffect, useRef, useState, type JSX, type PointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type JSX, type PointerEvent } from 'react'
 import { tabLabels } from '../lib/tabs'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
 import { TabMark } from '@core/renderer/components/TabMark'
 import { useTabLooks } from './tabLooks'
 import { useTabMenus } from './tabMenus'
 import { useTabReorder } from './useTabReorder'
-import { PromptEdge, TabClose, TabLoading } from './tabParts'
+import { TabEnd, TabIcon, TabLoading } from './tabParts'
 import { auxClose, folderDrop, tabTitle, type TabListProps } from './tabList'
-import { useTabStyle } from '../lib/tabStylePrefs'
 import { keyLabel } from '../lib/keymap'
-import { sideEdgeClip, sideSegmentClip } from '../lib/promptGeometry'
 import { useHoverReveal } from '../lib/hoverReveal'
 import { useEdgeWants } from '../lib/edgeNear'
 import { sideWants } from '../lib/revealZones'
 import { findKeeps, folderLine } from '../lib/sidebarRows'
+import { CORNER_R, OUTSIDE_CORNER } from '../lib/cornerShapes'
 import { onDevicePixels, useDevicePixelRatio } from '../lib/devicePixels'
-import { OUTSIDE_CORNER } from '../lib/cornerShapes'
 import {
   SIDEBAR_WIDTH,
   setSidebarWidth,
@@ -26,8 +24,7 @@ import { BAR_H, SIDEBAR_SLIDE } from '../lib/chromeLayout'
 import { LAYER } from '@core/renderer/components/layers'
 import { useHomeDir } from '../lib/appFacts'
 
-/** One row's height: the row's own size and the tile a flowing edge repeats
- *  on, so the two cannot part (audit 2026-10-12: the tile was 34 on a 46 row). */
+/** One card's height, and so its icon band's: the band is square. */
 const ROW_H = 46
 
 /**
@@ -36,9 +33,10 @@ const ROW_H = 46
  * the same marks from the same rule (`useTabLooks`), the same menus, the same
  * close, middle-click, reorder and folder drop. What is new is only the shape:
  *
- * - Classic: a row with a soft fill on the tab in front and the accent rule on
- *   the terminal's side. Powerline: each row an arrow pointing at the
- *   terminal, its edge the mark, as the chevrons are on the strip.
+ * - THE ICON BAND (owner, 2026-10-12, style 10 of the sidebar looks mockup):
+ *   each tab a faint card, its agent's icon in a square band at its left, the
+ *   name and folder beside it, the ring at its end in the close's place. The
+ *   card in front is tinted with the accent. One style: Powerline went.
  * - Open, the default, it sits beside the terminal and its right edge drags to
  *   resize it. Collapsed, it takes no room: it slides over the terminal while
  *   the pointer is at the window's left edge, and the terminal never resizes,
@@ -55,6 +53,7 @@ export function TabSidebar({
   failedIds,
   failedKinds,
   agentIds,
+  agentKinds,
   loadingIds,
   onPick,
   onClose,
@@ -63,18 +62,16 @@ export function TabSidebar({
   onReorder,
   onOpenRecent
 }: TabListProps): JSX.Element | null {
-  const prompt = useTabStyle() === 'prompt'
   const mode = useSidebarMode()
   const storedWidth = useSidebarWidth()
-  const { indicator, palette, paint, looks } = useTabLooks({
+  const { indicator, paint, looks } = useTabLooks({
     tabs,
     activeId,
     workingIds,
     doneIds,
     questionIds,
     failedIds,
-    agentIds,
-    prompt
+    agentIds
   })
   const menu = useTabMenus({ onClose, onOpenRecent })
   // FIND A TAB (owner, 2026-10-12, of the sidebar looks mockup): typing keeps
@@ -119,14 +116,20 @@ export function TabSidebar({
   const visible = !collapsed || shown
   // How much of the page beside it a slid-out sidebar covers: App cuts that
   // strip of the page away, so only the window's acrylic lies under it.
-  const cover = collapsed && visible && tabs.length > 0 ? width : 0
-  useEffect(() => {
+  // Out: its width. Hidden: -CORNER_R, the cut's curve parked just off the
+  // window's edge, where the sidebar's own right edge waits too.
+  const cover = collapsed && tabs.length > 0 ? (visible ? width : -CORNER_R) : 0
+  // Before paint, in the same frame as the slide's own start: set after it,
+  // the cut started a frame late and ran behind the sidebar's edge.
+  useLayoutEffect(() => {
     const root = document.documentElement.style
     root.setProperty('--p-sidebar-cover', `${cover}px`)
-  }, [cover])
+    // A width being dragged moves the cut at once, never on the slide's curve.
+    root.setProperty('--p-sidebar-cover-t', dragW !== null ? '0s' : '')
+  }, [cover, dragW])
   useEffect(
     () => () => {
-      document.documentElement.style.setProperty('--p-sidebar-cover', '0px')
+      document.documentElement.style.setProperty('--p-sidebar-cover', `-${CORNER_R}px`)
     },
     []
   )
@@ -180,7 +183,6 @@ export function TabSidebar({
         aria-label="Open tabs"
         aria-orientation="vertical"
         data-tab-sidebar
-        data-tab-style={prompt ? 'prompt' : 'classic'}
         data-sidebar-mode={mode}
         data-sidebar-shown={visible || undefined}
         inert={!visible}
@@ -201,19 +203,28 @@ export function TabSidebar({
         // the right for its slid-out corner (below).
         style={{
           width,
-          left: collapsed && !visible ? -(width + 16) : 0,
+          // Hidden its width and the corner's off the edge, so its right edge
+          // and the page's cut (App's COVER_CUT, -CORNER_R to its width) travel
+          // the same way on the same curve: from -(width + 16) the sidebar ran
+          // 6 px behind the cut and a band of the window showed beside its line
+          // all through the slide (owner, 2026-10-13: the edge "grows thicker
+          // to like between 5 to 10 pixels"; measured 14 px, verticalTabs e2e).
+          left: collapsed && !visible ? -(width + CORNER_R) : 0,
           transition: collapsed ? `left ${SIDEBAR_SLIDE}` : undefined,
           clipPath: 'inset(0 -60px 0 0)'
         }}
       >
         {/* SLID OUT, THE CORNER WHERE IT MEETS THE BAR: a quarter circle of
             the shared colour under the bar's end, as the open sidebar's
-            terminal is cut round there, so the two read as one surface. */}
-        {collapsed && visible && (
+            terminal is cut round there, so the two read as one surface. Drawn
+            whenever it is collapsed, so it travels with the slide both ways;
+            hidden, it waits off the window's edge with the sidebar. */}
+        {collapsed && (
           <span
             data-sidebar-corner
             aria-hidden
-            className="pointer-events-none absolute left-full top-0 h-2.5 w-2.5"
+            className="pointer-events-none absolute left-full top-0"
+            style={{ width: CORNER_R, height: CORNER_R }}
           >
             {/* The fill, the sidebar's tint cut to the curve by a mask. */}
             <span
@@ -233,12 +244,12 @@ export function TabSidebar({
         {/* Slid out, its line: from the bar down, meeting the bar's line
             through the corner above (owner, 2026-10-12: it "has no border ...
             it has that when it's in static mode"), as Panel edges draws it. */}
-        {collapsed && visible && (
+        {collapsed && (
           <span
             data-sidebar-line
             aria-hidden
             className="pointer-events-none absolute bottom-0 right-0 w-px bg-[var(--p-divider)]"
-            style={{ top: 10 }}
+            style={{ top: CORNER_R }}
           />
         )}
         <label
@@ -296,34 +307,24 @@ export function TabSidebar({
           // top"). With no title bar, the list's empty space below the tabs
           // is what moves the window ("i cant drag the window"); each row is
           // no-drag, so a tab still clicks and drags as a tab.
-          className="p-scroll flex min-h-0 flex-1 flex-col gap-px overflow-y-auto pb-2"
+          className="p-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pb-2"
         >
           {tabs.map((t, i) => {
             const on = t.id === activeId
             const { failed, state, mark } = looks[i]
-            const filled = mark.place === 'fill' && state !== null
-            const ink = filled ? palette.ink[state] : undefined
-            // Every name in the sidebar's own ink, held to 7:1 (chromeTheme):
-            // the accent pill, not a dimmer name, says which tab is in front.
-            const nameInk = 'text-[var(--p-side-text)]'
-            // The flat marks lie along the row's foot, as along a strip tab's;
-            // under Powerline they are the arrow's edge instead.
-            const flatMark =
-              !prompt &&
-              state &&
-              (mark.place === 'run' || mark.place === 'line' || mark.place === 'fill') ? (
-                <TabMark
-                  mark={mark}
-                  state={state}
-                  background={filled ? palette.fill[state] : paint(mark.colour, 'x')}
-                  overlay={mark.overlay === 'run' ? palette.overlay.run : undefined}
-                  ink={ink}
-                />
-              ) : prompt && state && mark.place === 'fill' ? (
-                <TabMark mark={mark} state={state} background={palette.fill[state]} ink={ink} />
+            // BAR: the line along the card's foot (`run` while working).
+            const bar =
+              state && (mark.place === 'run' || mark.place === 'line') ? (
+                <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
               ) : null
-            const edge =
-              prompt && mark.place === 'edge' && state ? { background: paint(mark.colour, 'y') } : null
+            // RING: at the card's end, in the close button's place (TabEnd),
+            // the loading ring of a tab coming back (#106) included (owner,
+            // 2026-10-13).
+            const ring = loadingIds?.has(t.id) ? (
+              <TabLoading />
+            ) : mark.place === 'ring' ? (
+              <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
+            ) : null
             return (
               <div
                 key={t.id}
@@ -339,76 +340,38 @@ export function TabSidebar({
                 onContextMenu={(e) => menu.openTabMenu(e, t)}
                 {...reorder.handlers(t.id, i)}
                 hidden={kept ? !kept[i] : undefined}
-                className={`no-drag group relative isolate flex shrink-0 items-center gap-2 overflow-hidden transition-colors ${nameInk} ${
-                  prompt ? 'mr-1 pl-3 pr-6' : 'mx-1.5 rounded-[4px] pl-3 pr-1.5'
-                } ${
-                  // The tab in front is a clear filled pill in the accent's tint
-                  // (Warp's way, 2026-10-12); the rest light only on hover.
+                // Every name in the sidebar's own ink, held to 7:1 (chromeTheme):
+                // the tint, not a dimmer name, says which tab is in front.
+                className={`no-drag group relative isolate mx-2 flex shrink-0 items-center gap-2.5 overflow-hidden rounded-[8px] pr-2 text-[var(--p-side-text)] transition-colors ${
                   on
-                    ? 'bg-[color-mix(in_srgb,var(--p-accent-hi)_18%,transparent)]'
-                    : 'hover:bg-[var(--p-hover)]'
+                    ? 'bg-[color-mix(in_srgb,var(--p-accent-hi)_14%,transparent)]'
+                    : 'bg-[color-mix(in_srgb,var(--p-text)_3%,transparent)] hover:bg-[color-mix(in_srgb,var(--p-text)_6%,transparent)]'
                 }`}
-                style={{
-                  height: ROW_H,
-                  ...reorder.motion(t.id, i),
-                  ...(prompt ? { clipPath: sideSegmentClip() } : {})
-                }}
+                style={{ height: ROW_H, ...reorder.motion(t.id, i) }}
               >
-                {flatMark}
-                {/* POWERLINE: the arrow's edge, the divider's ink when plain, the
-                    mark's colour and motion when there is one. */}
-                {prompt && (
-                  <span
-                    data-prompt-border
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 z-0 bg-[var(--p-divider)]"
-                    style={{ clipPath: sideEdgeClip() }}
-                  />
-                )}
-                {edge && state && (
-                  <PromptEdge
-                    mark={mark}
-                    state={state}
-                    background={edge.background}
-                    tile={ROW_H}
-                    className="inset-0 z-[1]"
-                    style={{ clipPath: sideEdgeClip() }}
-                  />
-                )}
-                {/* The tab in front: the accent rule. Classic on the terminal's
-                    side; Powerline down the row's left, the arrow being its right. */}
-                {on && (
-                  <span
-                    data-side-rule
-                    aria-hidden
-                    className={`pointer-events-none absolute z-[3] w-0.5 bg-[var(--p-accent-hi)] ${
-                      prompt ? 'inset-y-0 left-0' : 'inset-y-[7px] right-0 rounded-full'
-                    }`}
-                  />
-                )}
+                {bar}
+                {/* THE ICON BAND: a square the card's height, a shade darker
+                    than the card, the agent's icon in it. */}
+                <span
+                  data-icon-band
+                  className="relative z-[1] grid shrink-0 place-items-center self-stretch bg-[color-mix(in_srgb,var(--p-text)_5%,transparent)]"
+                  style={{ width: ROW_H }}
+                >
+                  <TabIcon agent={agentIds.has(t.id) ? agentKinds?.current.get(t.id) : null} settings={t.kind === 'settings'} />
+                </span>
                 {t.kind !== 'settings' && <DictationTabMark sessionId={t.id} />}
-                {loadingIds?.has(t.id) && <TabLoading />}
-                {mark.place === 'ring' ? (
-                  <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
-                ) : (
-                  // Under Ring every name starts at one x: a tab with no mark
-                  // keeps the mark's 12 px slot, as the New tab row's + does.
-                  indicator === 'ring' &&
-                  !loadingIds?.has(t.id) && <span aria-hidden className="-mr-0.5 w-3 shrink-0" />
-                )}
                 <button
                   role="tab"
                   aria-selected={on}
                   tabIndex={on ? 0 : -1}
                   className="relative z-[1] flex min-w-0 flex-1 flex-col py-1 text-left"
-                  style={ink ? { color: ink } : undefined}
                   title={tabTitle(t, failed, failedKinds)}
                   onClick={(e) => {
                     e.stopPropagation()
                     if (reorder.isPick()) onPick(t.id)
                   }}
                 >
-                  <span className={`truncate ${filled || on ? 'font-semibold' : ''}`}>
+                  <span className={`truncate ${on ? 'font-semibold' : ''}`}>
                     {labels[i]}
                   </span>
                   {/* The folder it sits in (owner, 2026-10-12: "Second line:
@@ -417,13 +380,12 @@ export function TabSidebar({
                     <span
                       data-tab-folder
                       className="truncate text-[11.5px] font-normal text-[var(--p-side-dim)]"
-                      style={ink ? { color: ink, opacity: 0.75 } : undefined}
                     >
                       {folderLine(t.cwd, home)}
                     </span>
                   )}
                 </button>
-                <TabClose label={labels[i]} on={on} ink={ink} size={18} onClose={() => onClose(t.id)} />
+                <TabEnd ring={ring} label={labels[i]} on={on} size={18} onClose={() => onClose(t.id)} />
               </div>
             )
           })}
@@ -454,8 +416,10 @@ export function TabSidebar({
             New tab
           </button>
         </div>
-        {/* The resize grip, on the sidebar's right edge, while it is open. */}
-        {!collapsed && (
+        {/* The resize grip, on the sidebar's right edge: pinned, and slid out
+            too (owner, 2026-10-13: "i cant adjust the sidebar width anymore",
+            using the sidebar unpinned, which had none). */}
+        {visible && (
           // A 6 px target, and what it shows is one hairline over the
           // sidebar's own edge (owner, 2026-10-11: the 6 px accent bar was
           // too much, "make it more minimalist").

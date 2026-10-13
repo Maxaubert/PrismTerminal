@@ -284,15 +284,6 @@ describe('the Prompt segments', () => {
     expect((CHROME_COLOUR_TOKENS as readonly string[]).filter((n) => n.startsWith('--p-seg'))).toEqual([])
     expect(readFileSync(join(__dirname, '..', 'index.css'), 'utf8')).not.toMatch(/--p-seg/)
   })
-
-  it('wear --p-tab-active in front and nothing at rest, in the strip source', async () => {
-    const { readFileSync } = await import('node:fs')
-    const { join } = await import('node:path')
-    const src = readFileSync(join(__dirname, '..', 'components', 'TabStrip.tsx'), 'utf8')
-    expect(src).not.toMatch(/--p-seg/)
-    const shape = src.slice(src.indexOf('data-prompt-shape'), src.indexOf('style={{ clipPath: segmentClip'))
-    expect(shape).toMatch(/on \? 'bg-\[var\(--p-tab-active\)\]' : 'group-hover:bg-\[var\(--p-hover\)\]'/)
-  })
 })
 
 // THE ON SWITCH'S KNOB (owner, 2026-10-10: "keep that to being black on dark

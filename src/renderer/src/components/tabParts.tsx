@@ -1,21 +1,26 @@
-import type { CSSProperties, JSX } from 'react'
-import { motionClass } from '@core/renderer/components/markClasses'
-import type { MarkState, TabMark } from '@core/renderer/lib/tabMark'
+import type { JSX, ReactNode } from 'react'
+import { AgentIcon } from '@core/renderer/components/AgentIcon'
+import { iconKind } from '@core/renderer/lib/agentIcon'
+import type { DetectedAgent } from '@core/shared/types'
 import { keyLabel } from '../lib/keymap'
 
 /**
  * THE PIECES EVERY TAB IS MADE OF, once for the strip and the sidebar (audit
- * 2026-10-12: each layout pasted its own close button, loading ring and
- * Powerline edge, and the copies had drifted: the sidebar's edge lacked
- * `data-rainbow`, and its flow tile was 34 px on a 46 px row).
+ * 2026-10-12: each layout pasted its own close button and loading ring, and
+ * the copies had drifted).
  */
 
-/** The X: shown on the tab in front and on hover. */
+/** Both layouts' icon size (owner, 2026-10-12: 18 px on the tabs and in the
+ *  sidebar). */
+export const TAB_ICON = 18
+
+/** The X: shown on the tab in front and on hover; behind a ring, on hover only. */
 export function TabClose({
   label,
   on,
   ink,
   size,
+  behindRing = false,
   onClose
 }: {
   label: string
@@ -23,13 +28,15 @@ export function TabClose({
   ink?: string
   /** 16 on the strip, 18 in the sidebar's taller rows. */
   size: 16 | 18
+  /** A ring holds the slot: the X shows only while the tab is hovered. */
+  behindRing?: boolean
   onClose: () => void
 }): JSX.Element {
   return (
     <button
-      className={`relative z-[1] grid shrink-0 place-items-center rounded-sm text-[var(--p-icon)] transition-opacity hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] ${
-        on ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-      }`}
+      className={`z-[1] grid shrink-0 place-items-center rounded-sm text-[var(--p-icon)] transition-opacity hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] ${
+        behindRing ? 'absolute inset-0' : 'relative'
+      } ${on && !behindRing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
       style={{ width: size, height: size, ...(ink ? { color: ink } : {}) }}
       data-tab-close
       title={`Close ${label} (${keyLabel('close-tab')})`}
@@ -55,6 +62,52 @@ export function TabClose({
   )
 }
 
+/**
+ * THE END OF A TAB (owner, 2026-10-12: "the ring goes on the right where you
+ * close the tab"). A ring holds the close button's place and gives way to it
+ * while the tab is hovered; with no ring the close is as it always was.
+ */
+export function TabEnd({
+  ring,
+  label,
+  on,
+  size,
+  onClose
+}: {
+  /** The ring mark, or null when the tab has none. */
+  ring: ReactNode | null
+  label: string
+  on: boolean
+  size: 16 | 18
+  onClose: () => void
+}): JSX.Element {
+  if (!ring) return <TabClose label={label} on={on} size={size} onClose={onClose} />
+  return (
+    <span data-tab-end className="relative grid shrink-0 place-items-center" style={{ width: size, height: size }}>
+      <span data-tab-end-ring className="grid place-items-center transition-opacity group-hover:opacity-0">
+        {ring}
+      </span>
+      <TabClose label={label} on={on} size={size} behindRing onClose={onClose} />
+    </span>
+  )
+}
+
+/** The agent's mark on its tab (core `AgentIcon`): Clawd, OpenAI, the prompt,
+ *  the cog for Settings. */
+export function TabIcon({
+  agent,
+  settings
+}: {
+  agent: DetectedAgent | null | undefined
+  settings: boolean
+}): JSX.Element {
+  return (
+    <span data-tab-icon className="relative z-[1] grid shrink-0 place-items-center">
+      <AgentIcon kind={iconKind(agent, settings)} size={TAB_ICON} />
+    </span>
+  )
+}
+
 /** A tab still coming back to its agent (#106): a ring before the name, until
  *  the agent has drawn itself. */
 export function TabLoading({ className = '' }: { className?: string }): JSX.Element {
@@ -64,46 +117,5 @@ export function TabLoading({ className = '' }: { className?: string }): JSX.Elem
       aria-hidden
       className={`pointer-events-none relative z-[1] inline-block h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--p-text)_22%,transparent)] border-t-[var(--p-accent-solid)] motion-safe:animate-spin ${className}`}
     />
-  )
-}
-
-/** A Powerline segment's edge wearing its mark: the colour and the motion. */
-export function PromptEdge({
-  mark,
-  state,
-  background,
-  tile,
-  className,
-  style
-}: {
-  mark: TabMark
-  state: MarkState
-  background: string
-  /** How tall one tile of a flowing colour is: the height the edge spans. */
-  tile: number
-  className: string
-  style: CSSProperties
-}): JSX.Element {
-  return (
-    <span
-      data-mark="edge"
-      data-prompt-edge={state}
-      data-mark-motion={mark.motion ?? undefined}
-      data-attention={state !== 'working' ? state : undefined}
-      data-rainbow={mark.colour === 'rainbow' ? '' : undefined}
-      aria-hidden
-      className={`pointer-events-none absolute ${className}`}
-      style={style}
-    >
-      <i
-        className={`absolute inset-0 ${motionClass(mark.motion, 'y')}`}
-        style={{
-          background,
-          ...(mark.motion === 'flow'
-            ? { backgroundSize: `100% ${tile}px`, ['--tile-y' as string]: `${tile}px` }
-            : {})
-        }}
-      />
-    </span>
   )
 }

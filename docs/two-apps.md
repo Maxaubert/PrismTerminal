@@ -46,7 +46,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
   rules (`lib/tabMark.ts`, `markColours.ts`, `nameInk.ts`, `markPalette.ts`), the flat tab's marks
   (`components/TabMark.tsx`) and all their motion (`styles/marks.css`, which a host imports) are
   written once. `TermHostConfig.tabMarks` (optional; an owner decision named in #143's PR) says what
-  the host's STRIP draws: this app passes Off, Minimal, Ring, Full and the rainbow; Prism passes
+  the host's STRIP draws: this app passes Ring and Minimal (labelled Bar, 2026-10-12) and the rainbow; Prism passes
   nothing, so it keeps Off, Minimal and its own Full, a stored Ring reads as its default
   (`readIndicator`), and no rainbow row is drawn there. The "Rainbow finished mark" row is in its own
   list, `markOptions.ts`, NOT in `TERMINAL_OPTIONS`, for `helpOptions.ts`'s reason: Prism's gate reads
@@ -329,7 +329,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
 - **WHAT NO THEME OWNS SITS ABOVE THE THEME WALL** (owner, 2026-09-28: font and font size "should
   transcend" the theme's save, "so changing a theme should not reset the font and font size or if
   you use a minimal or full agent indicator, or edges. those options should be above the themes").
-  Since #134 Appearance runs: the Window section (Tab position, Tab width, Tab style, Tab switching, Panel edges), then the
+  Since #134 Appearance runs: the Window section (Tab position, Tab switching, Panel edges; Tab width went 2026-10-12 and Tab style the same day, one style per orientation), then the
   Theme section (the theme row with Save changes, the wall, what a theme SETS: See-through window,
   Background, Accent; the see-through row right under the wall since #156, as in Prism). The font and its size are Terminal's Text section; the indicator and the agent colours
   are on Agents, where Mark colours carries the SAME Save changes (both save the whole setup and
