@@ -699,9 +699,11 @@ export default function App(): JSX.Element {
           style={{ height: BAR_H }}
           className="drag p-styled-font flex shrink-0 items-stretch border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1.5 text-[13px]"
         >
-          {/* The quiet mark at the bar's start, a hairline after it like a
-              tab's own (TitleMark). */}
-          <TitleMark className="relative pl-3.5 pr-3 after:absolute after:inset-y-2 after:right-0 after:w-px after:bg-[var(--p-divider)]" />
+          {/* The quiet mark at the bar's start (TitleMark), a line the bar's
+              full height after it, the first tab's left edge (owner,
+              2026-10-14: "give it a full left border not just this half
+              border"). */}
+          <TitleMark className="relative pl-3.5 pr-3 after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-[var(--p-divider)]" />
           {tabs.length > 0 ? <TabStrip {...tabProps} /> : <span className="min-w-0 flex-1" />}
           <div className="flex shrink-0 items-center gap-2.5 pl-2">
             <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
