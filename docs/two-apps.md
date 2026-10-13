@@ -423,6 +423,16 @@ so an update never silently changes what an existing user sees; the bridge to ma
   `renderer/settings/sections/HelpSection.tsx` + `helpOptions.ts`, and `writeClipboard` on the bridge. This app's
   part is the way in: `F1`, the ? in the title bar, "Command help" in the terminal's right-click
   menu, the row in Settings > Terminal. The rules that must not regress:
+  - **A BASH READER SEES ONLY WHAT RUNS IN BASH** (core 0.37.0; owner, 2026-10-13: a WSL tab is for
+    learning Linux, and shared rows that "dont work in wsl" should not be there, "even though we duplicate
+    stuff"). An entry's `shell` may be 'windows' (PowerShell and Command Prompt alike, never Bash: winget,
+    wsl.exe, where.exe, the Windows pip spellings), and a variant may carry `shells` (cmd's `type FILE`).
+    `shownIn`/`variantsIn` in `shared/help/shells.ts` are the one rule the panel, the search and `helpFor`
+    read. Bash has its own `python3` venv and pip entries, each shell its own Claude Code and Codex
+    installer, and `wsl.ts` is WSL from the Windows side (install, list, open, default, shut down,
+    update, back up, delete). `catalogue.test.ts` fails on a Windows-only command (winget, a .exe,
+    `$env:`, irm, a Windows path, .ps1/.bat) or a bare `python` in any row a Bash reader is shown from a
+    shared entry. The chip stays "Bash" (owner: Bash is the language, not Linux).
   - **IT NEVER INSERTS AND NEVER RUNS** (owner, 2026-09-19: "picking a command in the help panel
     does NOT insert it into the shell"). The component is handed the clipboard and nothing else: no
     session id, no `termInput`, no bridge. It is NOT a fifth exception to "the app never types into
