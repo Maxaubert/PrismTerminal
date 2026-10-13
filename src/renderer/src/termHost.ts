@@ -27,7 +27,9 @@ configureTermCore({
   defaults: {
     theme: 'pt-default',
     acrylic: false,
-    indicator: 'minimal',
+    // Ring by default (spec 2026-10-12-tab-icons-design): the mark at the
+    // tab's end beside each agent's icon.
+    indicator: 'ring',
     // '' = follow the theme (lib/agentColors resolves what that is here).
     agentColor: '',
     agentDoneColor: ''
@@ -52,8 +54,10 @@ configureTermCore({
   acrylic: { kind: 'window', supported: () => window.prism.acrylicSupported() },
   paintsGround: true,
   // THE TAB MARKS (#143; owner, 2026-10-10): this strip draws the core's
-  // marks, so the Agents page offers all four styles and the rainbow finish.
-  tabMarks: { indicators: ['off', 'minimal', 'ring', 'full'], rainbow: true },
+  // marks and the rainbow finish. RING OR BAR, nothing else (owner,
+  // 2026-10-12: "from now on agent indicator is only ring or bar, no full",
+  // and Off went with it). A stored `off` or `full` reads as the default.
+  tabMarks: { indicators: ['ring', 'minimal'], rainbow: true },
   // DICTATION (#13). A press only counts over a shell, and App already hands
   // the controller null when the start screen or Settings is in front, so
   // there is nothing further for this app to refuse.

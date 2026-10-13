@@ -27,7 +27,6 @@ export interface AppOption {
 
 export const APP_OPTIONS: readonly AppOption[] = [
   { id: 'tab-layout', label: 'Tab position', sub: 'Tabs along the top, or down the side.', section: 'window', page: 'appearance', icon: 'sidebar', keywords: 'vertical horizontal sidebar side left strip top', store: ['prism.window.tabLayout', 'prism.window.sidebar', 'prism.window.sidebarWidth'] },
-  { id: 'tab-style', label: 'Tab style', sub: 'Flat tabs, or arrows like a prompt.', section: 'window', page: 'appearance', icon: 'prompt', keywords: 'chevron arrow segment shape powerline classic', store: ['prism.window.tabStyle'] },
   { id: 'tab-switch', label: 'Tab switching', sub: 'Which tab comes next when you switch.', section: 'window', page: 'appearance', icon: 'key', keywords: 'ctrl tab mru recent order cycle switch next previous last used', store: ['prism.window.tabSwitch'] },
   { id: 'window-edges', label: 'Panel edges', sub: 'Lines between panels and around the window.', section: 'window', page: 'appearance', icon: 'edges', keywords: 'border lines hairline outline faint solid', store: ['prism.window.edges'] },
   { id: 'window-background', label: 'Background colour', sub: 'Behind the text in window and terminal.', section: 'theme', page: 'appearance', icon: 'viewer', keywords: 'ground backdrop color transparent alpha opacity', store: ['prism.window.background'] },

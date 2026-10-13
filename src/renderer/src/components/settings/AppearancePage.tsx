@@ -9,7 +9,6 @@ import { opaque, type AlphaRange } from '@core/renderer/lib/colour'
 import { onTermLookChange, termThemeId, useTermThemeId } from '@core/renderer/lib/termLook'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { setWindowEdges, useWindowEdges } from '../../lib/edgesPrefs'
-import { setTabStyle, useTabStyle, type TabStyle } from '../../lib/tabStylePrefs'
 import { setTabSwitch, useTabSwitch, type TabSwitch } from '../../lib/tabSwitchPrefs'
 import { setTabLayout, useTabLayout, type TabLayout } from '../../lib/tabLayoutPrefs'
 import { setWindowAccent, useWindowAccent } from '../../lib/accentPrefs'
@@ -66,12 +65,6 @@ const EDGE_OPTIONS: Array<{ id: WindowEdges; name: string }> = WINDOW_EDGES.map(
 const TAB_LAYOUT_OPTIONS: Array<{ id: TabLayout; name: string }> = [
   { id: 'horizontal', name: 'Horizontal' },
   { id: 'vertical', name: 'Vertical' }
-]
-
-// Classic first: it is the default, the strip as it always was.
-const TAB_STYLE_OPTIONS: Array<{ id: TabStyle; name: string }> = [
-  { id: 'classic', name: 'Classic' },
-  { id: 'prompt', name: 'Powerline' }
 ]
 
 // In order first: it is the default, Ctrl+Tab as it always was (#158).
@@ -204,8 +197,6 @@ export function AppearancePage(): JSX.Element {
   const edges = useWindowEdges()
   const layout = useTabLayout()
   const place = appOpt('tab-layout')
-  const style = useTabStyle()
-  const shape = appOpt('tab-style')
   const switching = useTabSwitch()
   const swap = appOpt('tab-switch')
   const edge = appOpt('window-edges')
@@ -217,10 +208,6 @@ export function AppearancePage(): JSX.Element {
             button's, not a row here. */}
         <SettingRow id="tab-layout" icon={place.icon} label={place.label} sub={place.sub}>
           <Segmented value={layout} onChange={setTabLayout} options={TAB_LAYOUT_OPTIONS} />
-        </SettingRow>
-        {/* The tab style (#143): the flat strip, or Powerline's chevrons. */}
-        <SettingRow id="tab-style" icon={shape.icon} label={shape.label} sub={shape.sub}>
-          <Segmented value={style} onChange={setTabStyle} options={TAB_STYLE_OPTIONS} />
         </SettingRow>
         {/* Where Ctrl+Tab goes (#158): the strip, or the tab used last. The
             sub says what the choice in force does, so the row answers it

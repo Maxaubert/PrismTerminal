@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 // ONE SET OF TAB PARTS AND ONE CARRY FOR BOTH LAYOUTS (audit 2026-10-12): the
-// strip and the sidebar draw their close, loading ring and Powerline edge from
+// strip and the sidebar draw their close, loading ring, icon and end from
 // tabParts, and reorder through useTabReorder, so a fix to one is a fix to both.
 const layouts = ['TabStrip.tsx', 'TabSidebar.tsx'].map((f) => ({
   f,
@@ -23,8 +23,13 @@ describe('the tab layouts', () => {
       expect(src.includes('DRAG_SLOP'), f).toBe(false)
     }
   })
-  it('every Powerline edge says when it is a rainbow', () => {
-    const parts = readFileSync(join(__dirname, 'tabParts.tsx'), 'utf8')
-    expect(parts).toMatch(/data-rainbow=\{mark\.colour === 'rainbow'/)
+  it("wear the agent's icon and end in the one slot that holds the ring (owner, 2026-10-12)", () => {
+    for (const { f, src } of layouts) {
+      expect(src, f).toContain('<TabIcon ')
+      expect(src, f).toContain('<TabEnd ring={ring}')
+      // The ring is drawn only through the end slot, never by the name.
+      expect(src.match(/mark\.place === 'ring'/g)?.length, f).toBe(1)
+      expect(src.includes('prompt'), f).toBe(false)
+    }
   })
 })

@@ -23,8 +23,6 @@ export interface TabLook {
   failed: boolean
   state: MarkState | null
   mark: TabMark
-  /** Whether its Powerline segment covers what lies under it. */
-  paints: boolean
 }
 
 /**
@@ -39,8 +37,7 @@ export function useTabLooks({
   doneIds,
   questionIds,
   failedIds,
-  agentIds,
-  prompt
+  agentIds
 }: {
   tabs: Tab[]
   activeId: string | null
@@ -49,7 +46,6 @@ export function useTabLooks({
   questionIds: ReadonlySet<string>
   failedIds?: ReadonlySet<string>
   agentIds: ReadonlySet<string>
-  prompt: boolean
 }): {
   indicator: AgentIndicator
   palette: ReturnType<typeof markPalette>
@@ -65,19 +61,12 @@ export function useTabLooks({
   const rainbow = useAgentRainbow()
   // EVERY MARK'S COLOUR (#143), from what the window paints NOW: App paints
   // the chrome synchronously on every look change, before this re-renders.
-  // Held to 3:1 on every ground a mark can sit on: the strip, and under Powerline
-  // both segment shades (composited, since on glass they are see-through).
+  // Held to 3:1 on the ground every mark sits on.
   const root = getComputedStyle(document.documentElement)
   const read = (name: string, fallback: string): string =>
     root.getPropertyValue(name).trim() || fallback
   const solidGround = read('--p-bg-solid', DEFAULT_GROUND)
-  // Powerline's segments are the strip's own ground now (2026-10-10 rework: idle
-  // paints nothing, the tab in front is --p-tab-active, exactly Classic's), so
-  // every mark sits on the one ground in both styles.
   const grounds = [solidGround]
-  // Whether the tab in front PAINTS: --p-tab-active is the ground on an opaque
-  // window and fully transparent on glass (chromeTokens).
-  const activePaints = !/^#[0-9a-f]{6}00$/i.test(read('--p-tab-active', solidGround))
   const text = read('--p-text', '#e7e7ee')
   // Worked out again only when what it is made of changes: the strip renders on
   // every pointer move of a tab drag, and flooring colours each time is work
@@ -86,7 +75,7 @@ export function useTabLooks({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the key IS every input, as text
   const palette = useMemo(() => markPalette({ colours, grounds, solidGround, text, rainbow }), [paletteKey])
   /** A mark's colour role as a CSS background: the rainbow runs along a line
-   *  (`x`) or down a Powerline edge (`y`); the rule is the active rule's token. */
+   *  (`x`) or down (`y`); the rule is the active rule's token. */
   const paint = (role: MarkColour | null, axis: 'x' | 'y'): string => {
     switch (role) {
       case 'working':
@@ -105,8 +94,7 @@ export function useTabLooks({
         return 'transparent'
     }
   }
-  // Every tab's state and mark, worked out before any is drawn: a Powerline edge
-  // needs to know whether the NEXT segment paints.
+  // Every tab's state and mark.
   const looks = tabs.map((t) => {
     const on = t.id === activeId
     // The agent's state on this tab. A tab IS its shell here, so the tab's
@@ -135,15 +123,14 @@ export function useTabLooks({
     // WHICH MARK, from the core's one rule (#143): the strip only draws it.
     const mark = resolveTabMark({
       indicator,
-      tabStyle: prompt ? 'prompt' : 'flat',
+      // ONE TAB STYLE (owner, 2026-10-12): Classic along the top, the icon
+      // band down the side, both flat. Powerline went.
+      tabStyle: 'flat',
       state,
       active: on,
       rainbow
     })
-    // Whether its segment covers what lies under it: a Full fill, or the tab
-    // in front on an opaque window. An idle segment paints nothing.
-    const paints = mark.place === 'fill' || (on && activePaints)
-    return { failed, state, mark, paints }
+    return { failed, state, mark }
   })
   return { indicator, palette, paint, looks }
 }

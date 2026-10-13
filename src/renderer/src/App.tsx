@@ -27,7 +27,7 @@ import { CHORDS, chordOf } from './lib/keymap'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
 import { AppMark } from './components/AppMark'
-import { INSIDE_CORNER, INSIDE_SIZE, OUTSIDE_CORNER } from './lib/cornerShapes'
+import { CORNER_R, INSIDE_CORNER, INSIDE_SIZE, OUTSIDE_CORNER } from './lib/cornerShapes'
 import { tabSwitch } from './lib/tabSwitchPrefs'
 import {
   startWalk,
@@ -122,14 +122,20 @@ const CORNER_CUT = {
 } as const
 
 /** Under a collapsed sidebar slid out over it, the page is cut away (owner,
- *  2026-10-12: the slid-out sidebar "acrylic like the rest"): the same shape,
- *  moved right by the sidebar's width (TabSidebar's --p-sidebar-cover) on the
- *  sidebar's own slide, so only the window's acrylic lies under its tint, and
- *  its corner piece fills the outside of the curve. */
+ *  2026-10-12: the slid-out sidebar "acrylic like the rest"): the open
+ *  sidebar's cut, moved right by the sidebar's width (TabSidebar's
+ *  --p-sidebar-cover) on the sidebar's own slide, so only the window's acrylic
+ *  lies under its tint and its corner piece fills the outside of the curve.
+ *  HIDDEN, the curve is parked just off the window's left edge (cover is
+ *  -CORNER_R), so the terminal meets the bar square there (owner, 2026-10-13:
+ *  curved while the sidebar is out, "when its collapsed that the curve
+ *  shouldnt be there"). */
 const COVER_CUT = {
   ...CORNER_CUT,
-  maskPosition: 'var(--p-sidebar-cover, 0px) 0',
-  transition: `mask-position ${SIDEBAR_SLIDE}`
+  maskPosition: `var(--p-sidebar-cover, -${CORNER_R}px) 0`,
+  // At once while its width is dragged (TabSidebar sets the var to 0s), so the
+  // cut keeps to the grip rather than easing after it.
+  transition: `mask-position var(--p-sidebar-cover-t, ${SIDEBAR_SLIDE})`
 } as const
 
 export default function App(): JSX.Element {
@@ -669,6 +675,7 @@ export default function App(): JSX.Element {
     failedIds,
     failedKinds,
     agentIds,
+    agentKinds,
     loadingIds,
     onPick: (id: string) => setState((s) => pickTab(s, id)),
     onClose: requestClose,
