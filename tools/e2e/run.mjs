@@ -2747,6 +2747,30 @@ const scenarios = {
    * colour should shift to white"). Save changes and the question a theme pick
    * asks both wear the accent, with white text on a red.
    */
+  /**
+   * NO WINDOWS SYSTEM MENU ON A RIGHT-CLICK (owner, 2026-10-13: "stop chromium
+   * right click menus like this from appearing in the terminal"). Windows
+   * raises it for a right-click on a drag region; the window refuses it. The
+   * menu is the system's, drawn outside the page, so what is checked is the
+   * window's answer to the event Electron raises for it.
+   */
+  async systemMenu(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      const answer = await app.evaluate(({ BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows()[0]
+        let prevented = false
+        win.emit('system-context-menu', { preventDefault: () => (prevented = true) }, { x: 10, y: 10 })
+        return { listeners: win.listenerCount('system-context-menu'), prevented }
+      })
+      ok(answer.listeners >= 1 && answer.prevented, `the window refuses the system menu (${JSON.stringify(answer)})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async accentAsk(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
@@ -3373,7 +3397,7 @@ const scenarios = {
     // one text and the escaped replies are counted in it.
     const heard = async () => (await termText(page)).replace(/\u00a0/g, ' ')
     const count = (text, s) => text.split(s).length - 1
-    const PT_GROUND = '\\e]11;rgb:1212/1212/1212\\e\\'
+    const PT_GROUND = '\\e]11;rgb:1717/1717/1717\\e\\'
     const FAWN_GROUND = '\\e]11;rgb:e6e6/d8d8/c0c0\\e\\'
     const DARK = '\\e[?997;1n'
     const LIGHT = '\\e[?997;2n'
@@ -3390,7 +3414,7 @@ const scenarios = {
       ok(first.includes(PT_GROUND), `OSC 11 answers PT Default's ground, not black (${first.match(/\\e\]11;[^\\]*/)?.[0]})`)
       ok(!first.includes('rgb:0000/0000/0000'), 'and nothing answers transparent black')
       const ink = first.match(/\\e\]10;(rgb:[0-9a-f/]+)/)?.[1]
-      ok(!!ink && ink !== 'rgb:1212/1212/1212', `OSC 10 answers the theme's text (${ink})`)
+      ok(!!ink && ink !== 'rgb:1717/1717/1717', `OSC 10 answers the theme's text (${ink})`)
       ok(first.includes(DARK), 'CSI ? 996 n answers dark on PT Default')
       ok(first.includes('\\e[?2031;1$y'), 'DECRQM says 2031 is set once the program set it')
       ok(first.lastIndexOf('\\e[?1;2c') > first.lastIndexOf('\\e[?2031;1$y'), 'and the DA1 answer comes LAST: the replies keep stream order')
