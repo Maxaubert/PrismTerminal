@@ -581,9 +581,13 @@ describe('blankless', () => {
     expect(blankless('Set-Location FOLDER', ['FOLDER'])).toBe('Set-Location ')
     expect(blankless('wsl --export DISTRO FILE', ['DISTRO', 'FILE'])).toBe('wsl --export ')
   })
-  it('keeps a placeholder in the middle, a quoted one, and a command with none', () => {
+  it('drops a wholly quoted one at the end too', () => {
+    expect(blankless('git commit -m "MESSAGE"', ['MESSAGE'])).toBe('git commit -m ')
+    expect(blankless("Add-Content FILE 'TEXT'", ['FILE', 'TEXT'])).toBe('Add-Content ')
+  })
+  it('keeps a placeholder in the middle, a partly quoted one, and a command with none', () => {
     expect(blankless('Remove-Item FOLDER -Recurse -Force', ['FOLDER'])).toBe('Remove-Item FOLDER -Recurse -Force')
-    expect(blankless('git commit -m "MESSAGE"', ['MESSAGE'])).toBe('git commit -m "MESSAGE"')
+    expect(blankless("Get-ChildItem -Filter '*.EXT'", ['EXT'])).toBe("Get-ChildItem -Filter '*.EXT'")
     expect(blankless('git status', [])).toBe('git status')
     // Never the whole command.
     expect(blankless('FOLDER', ['FOLDER'])).toBe('FOLDER')
