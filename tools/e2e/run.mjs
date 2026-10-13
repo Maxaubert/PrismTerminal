@@ -184,7 +184,15 @@ const PREF_PAGE = {
  *  wait for the row. Returns its locator. */
 async function gotoPref(page, id) {
   if (!PREF_PAGE[id]) throw new Error(`gotoPref: no page known for ${id}`)
-  if ((await page.locator('[data-settings-page]').count()) === 0) await page.locator('[data-title-settings]').click()
+  // The cog TOGGLES since 2026-10-13: a page opened a moment ago (it loads
+  // lazily) must be waited for, not clicked again, which would close it.
+  const up = async () => (await page.locator('[data-settings-page]').count()) === 1
+  const inFront = () =>
+    page.evaluate(() => (document.querySelector('[data-tab-active]')?.textContent ?? '').trim() === 'Settings')
+  if (!(await up())) {
+    if (!(await inFront())) await page.locator('[data-title-settings]').click()
+    await until(up, 10000, 50)
+  }
   await page.locator(`[data-settings-tab="${PREF_PAGE[id]}"]`).click()
   const row = page.locator(`[data-pref="${id}"]`).first()
   await row.waitFor({ timeout: 10000 })
@@ -2747,6 +2755,36 @@ const scenarios = {
    * colour should shift to white"). Save changes and the question a theme pick
    * asks both wear the accent, with white text on a red.
    */
+  /**
+   * THE COG IS A TOGGLE (owner, 2026-10-13: "let me click the settings icon
+   * again to exit settings"): the cog opens Settings, and with Settings in
+   * front the cog closes it and goes back to the tab used before. Its key,
+   * Ctrl+comma, does the same.
+   */
+  async cogToggle(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const cog = page.locator('[data-title-settings]')
+    const settingsUp = async () => (await page.locator('[data-settings-page]').count()) === 1
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 1), 'one tab')
+      const shell = (await tabLabels(page))[0]
+      await cog.click()
+      ok(!!(await until(settingsUp, 4000, 50)), 'the cog opens Settings')
+      ok((await tabLabels(page)).length === 2, 'as a tab of its own')
+      await cog.click()
+      ok(!!(await until(async () => !(await settingsUp()), 4000, 50)), 'the cog again closes it')
+      ok(JSON.stringify(await tabLabels(page)) === JSON.stringify([shell]), `and its tab with it (${(await tabLabels(page)).join(', ')})`)
+      ok(!!(await until(async () => (await page.locator('[data-tab-active]').count()) === 1, 3000, 50)), 'the shell is in front again')
+      await page.keyboard.press('Control+Comma')
+      ok(!!(await until(settingsUp, 4000, 50)), 'Ctrl+comma opens it')
+      await page.keyboard.press('Control+Comma')
+      ok(!!(await until(async () => !(await settingsUp()), 4000, 50)), 'and closes it')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async accentAsk(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
