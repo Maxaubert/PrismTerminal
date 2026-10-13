@@ -63,9 +63,13 @@ const MAX_RESULTS = 50
 /** How long a row's copy button wears its check. */
 const COPIED_MS = 1400
 /** The slide (owner, 2026-10-13: "it has to have animation"): in on a long
- *  exponential ease-out, out faster on an ease-in. */
+ *  exponential ease-out; out quicker, on a curve that MOVES AT ONCE (owner,
+ *  2026-10-13: the close "hitches before the closing animation starts"). An
+ *  ease-in sat still for its first frames, and the rows fading as it began
+ *  read as the hitch, so the rows now stay put until the panel is out. */
 const IN_MS = 460
-const OUT_MS = 260
+const OUT_MS = 220
+const OUT_EASE = 'cubic-bezier(0.4,0,0.6,1)'
 
 const CATEGORY_NAME = new Map(HELP_CATEGORIES.map((c) => [c.id, c.name]))
 
@@ -215,7 +219,13 @@ function Row({
         onCopy(key, row.command)
       }}
       // The rows rise in after the panel lands, a few at a time.
-      style={{ transitionDelay: open ? `${Math.min(index, 12) * 18 + 120}ms` : '0ms' }}
+      // Rising in, a few at a time; going out, they stay as they are and are
+      // reset only once the panel is out of sight, ready for the next rise.
+      style={
+        open
+          ? { transitionDelay: `${Math.min(index, 12) * 18 + 120}ms` }
+          : { transitionDuration: '0ms', transitionDelay: `${OUT_MS}ms` }
+      }
       className={`group grid min-h-[36px] grid-cols-[minmax(0,.85fr)_minmax(0,1.25fr)] items-center gap-3.5 px-4 py-[3px] transition-[background-color,opacity,transform] duration-300 ease-out motion-reduce:transition-none ${
         keys ? 'cursor-default' : 'cursor-pointer'
       } ${open ? '' : 'translate-y-1.5 opacity-0'} ${fill}`}
@@ -508,7 +518,7 @@ export default function HelpPanel({
         visibility: open ? 'visible' : 'hidden',
         transition: open
           ? `transform ${IN_MS}ms cubic-bezier(0.16,1,0.3,1), visibility 0s`
-          : `transform ${OUT_MS}ms cubic-bezier(0.7,0,0.84,0), visibility 0s ${OUT_MS}ms`
+          : `transform ${OUT_MS}ms ${OUT_EASE}, visibility 0s ${OUT_MS}ms`
       }}
       className="no-drag absolute inset-y-0 right-0 z-30 flex max-w-[calc(100%-120px)] flex-col border-l border-[color:var(--p-divider)] bg-[var(--p-side-flat)] text-[var(--p-text)] shadow-[-18px_0_40px_-18px_rgba(0,0,0,.65)] motion-reduce:!transition-none"
     >
