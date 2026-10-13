@@ -3373,7 +3373,7 @@ const scenarios = {
     // one text and the escaped replies are counted in it.
     const heard = async () => (await termText(page)).replace(/\u00a0/g, ' ')
     const count = (text, s) => text.split(s).length - 1
-    const PT_GROUND = '\\e]11;rgb:1212/1212/1212\\e\\'
+    const PT_GROUND = '\\e]11;rgb:1717/1717/1717\\e\\'
     const FAWN_GROUND = '\\e]11;rgb:e6e6/d8d8/c0c0\\e\\'
     const DARK = '\\e[?997;1n'
     const LIGHT = '\\e[?997;2n'
@@ -3390,7 +3390,7 @@ const scenarios = {
       ok(first.includes(PT_GROUND), `OSC 11 answers PT Default's ground, not black (${first.match(/\\e\]11;[^\\]*/)?.[0]})`)
       ok(!first.includes('rgb:0000/0000/0000'), 'and nothing answers transparent black')
       const ink = first.match(/\\e\]10;(rgb:[0-9a-f/]+)/)?.[1]
-      ok(!!ink && ink !== 'rgb:1212/1212/1212', `OSC 10 answers the theme's text (${ink})`)
+      ok(!!ink && ink !== 'rgb:1717/1717/1717', `OSC 10 answers the theme's text (${ink})`)
       ok(first.includes(DARK), 'CSI ? 996 n answers dark on PT Default')
       ok(first.includes('\\e[?2031;1$y'), 'DECRQM says 2031 is set once the program set it')
       ok(first.lastIndexOf('\\e[?1;2c') > first.lastIndexOf('\\e[?2031;1$y'), 'and the DA1 answer comes LAST: the replies keep stream order')
