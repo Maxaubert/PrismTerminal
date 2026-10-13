@@ -24,6 +24,7 @@ import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
 import { toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
 import { CHORDS, chordOf } from './lib/keymap'
+import { agentKeys } from './lib/agentKeysPrefs'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
 import { AppMark } from './components/AppMark'
@@ -557,7 +558,8 @@ export default function App(): JSX.Element {
       const id = chordOf(e, {
         help: helpEnabled(),
         vertical: tabLayout() === 'vertical',
-        fullScreen: focusedTermFullScreen()
+        fullScreen: focusedTermFullScreen(),
+        agentKeys: agentKeys()
       })
       if (!id) return
       const hit = (): void => {
@@ -582,7 +584,8 @@ export default function App(): JSX.Element {
           return
         case 'next-tab': {
           hit()
-          const dir = e.shiftKey ? -1 : 1
+          // Shift+Ctrl+Tab, or Ctrl+PageUp with agent hotkeys, goes back.
+          const dir = e.shiftKey || e.key === 'PageUp' ? -1 : 1
           if (tabSwitch() === 'recent') {
             // The walk is a snapshot taken at the hold's first press, of the
             // list as it stands with the tab in front first (tabMru).
