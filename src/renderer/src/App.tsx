@@ -24,6 +24,7 @@ import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
 import { toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
 import { CHORDS, chordOf } from './lib/keymap'
+import { agentKeys } from './lib/agentKeysPrefs'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
 import { AppMark } from './components/AppMark'
@@ -46,6 +47,7 @@ import {
   addTab,
   closeTab,
   openSettings,
+  toggleSettings,
   pickTab,
   reorderTabs,
   setCwd,
@@ -231,6 +233,9 @@ export default function App(): JSX.Element {
     )
   )
   const walk = useRef<Walk | null>(null)
+  /** The tab used last before Settings, for the cog to go back to. */
+  const backFromSettings = (s: TabState): string | null =>
+    mru.current.find((id) => id !== 'settings' && s.tabs.some((t) => t.id === id)) ?? null
   /** The hold ended (Ctrl released, the window left, another chord): only
    *  now does the tab landed on move to the front, so repeated presses walk
    *  instead of flipping back and forth. */
@@ -566,7 +571,8 @@ export default function App(): JSX.Element {
       const id = chordOf(e, {
         help: helpEnabled(),
         vertical: tabLayout() === 'vertical',
-        fullScreen: focusedTermFullScreen()
+        fullScreen: focusedTermFullScreen(),
+        agentKeys: agentKeys()
       })
       if (!id) return
       const hit = (): void => {
@@ -591,7 +597,8 @@ export default function App(): JSX.Element {
           return
         case 'next-tab': {
           hit()
-          const dir = e.shiftKey ? -1 : 1
+          // Shift+Ctrl+Tab, or Ctrl+PageUp with agent hotkeys, goes back.
+          const dir = e.shiftKey || e.key === 'PageUp' ? -1 : 1
           if (tabSwitch() === 'recent') {
             // The walk is a snapshot taken at the hold's first press, of the
             // list as it stands with the tab in front first (tabMru).
@@ -620,7 +627,7 @@ export default function App(): JSX.Element {
         }
         case 'settings':
           hit()
-          setState(openSettings)
+          setState((s) => toggleSettings(s, backFromSettings(s)))
           return
         case 'find-tab':
           // FIND A TAB (#162): the sidebar's find box.
@@ -666,7 +673,9 @@ export default function App(): JSX.Element {
 
   // The title bar's buttons and the tab strip, placed by the title bar
   // setting below: in two rows, or in one (#91).
-  const onSettings = (): void => setState(openSettings)
+  // The cog toggles (owner, 2026-10-13): out of Settings, back to the tab
+  // used before it.
+  const onSettings = (): void => setState((s) => toggleSettings(s, backFromSettings(s)))
   const onHelp = helpOn ? toggleHelp : undefined
   const chip = (
     <UpdateChip

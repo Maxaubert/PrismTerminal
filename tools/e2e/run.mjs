@@ -167,7 +167,7 @@ const tabLabels = (page) =>
  */
 const PREF_PAGE = {
   'tab-layout': 'appearance', 'tab-switch': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
-  'window-background': 'appearance', 'window-accent': 'appearance', 'window-secondary': 'appearance', 'term-acrylic': 'appearance',
+  'agent-keys': 'terminal', 'window-background': 'appearance', 'window-accent': 'appearance', 'window-secondary': 'appearance', 'term-acrylic': 'appearance',
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
   'agent-indicator': 'agents', 'agent-done-on': 'agents', 'agent-rainbow': 'agents', 'agent-question-on': 'agents', 'agent-failed-on': 'agents',
@@ -184,7 +184,15 @@ const PREF_PAGE = {
  *  wait for the row. Returns its locator. */
 async function gotoPref(page, id) {
   if (!PREF_PAGE[id]) throw new Error(`gotoPref: no page known for ${id}`)
-  if ((await page.locator('[data-settings-page]').count()) === 0) await page.locator('[data-title-settings]').click()
+  // The cog TOGGLES since 2026-10-13: a page opened a moment ago (it loads
+  // lazily) must be waited for, not clicked again, which would close it.
+  const up = async () => (await page.locator('[data-settings-page]').count()) === 1
+  const inFront = () =>
+    page.evaluate(() => (document.querySelector('[data-tab-active]')?.textContent ?? '').trim() === 'Settings')
+  if (!(await up())) {
+    if (!(await inFront())) await page.locator('[data-title-settings]').click()
+    await until(up, 10000, 50)
+  }
   await page.locator(`[data-settings-tab="${PREF_PAGE[id]}"]`).click()
   const row = page.locator(`[data-pref="${id}"]`).first()
   await row.waitFor({ timeout: 10000 })
@@ -2747,6 +2755,101 @@ const scenarios = {
    * colour should shift to white"). Save changes and the question a theme pick
    * asks both wear the accent, with white text on a red.
    */
+  /**
+   * AGENT HOTKEYS (#198; owner, 2026-10-13: "a toggle for better key
+   * bindings", Ctrl+S "the sidebar toggle", "a setting thats by default on").
+   * Over a focused shell: Ctrl+PageUp / Ctrl+PageDown switch tabs and, with
+   * the tabs down the side, Ctrl+S shows and hides the sidebar. Switched off
+   * in Settings, Ctrl+S is the shell's again and the sidebar stays put.
+   */
+  async agentKeys(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    // Shell tabs only: Settings rides the strip as a tab of its own.
+    const shells = () => page.locator('[data-tab]').filter({ hasNotText: /^Settings$/ })
+    const front = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll('[data-tab]')]
+          .filter((t) => (t.textContent ?? '').trim() !== 'Settings')
+          .findIndex((t) => t.hasAttribute('data-tab-active'))
+      )
+    const sidebar = () => page.evaluate(() => localStorage.getItem('prism.window.sidebar'))
+    const toShell = async (i = 0) => {
+      await shells().nth(i).click()
+      await page.locator('.xterm').first().click({ force: true })
+    }
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 1), 'one tab')
+      const sw = (await gotoPref(page, 'agent-keys')).locator('[role="switch"]')
+      ok((await sw.getAttribute('aria-checked')) === 'true', 'Agent hotkeys is on by default')
+      // Settings closed (Ctrl+W on its tab), so the tabs are the two shells.
+      await page.keyboard.press('Control+w')
+      await until(async () => (await page.locator('[data-tab]').count()) === 1, 4000, 50)
+      await toShell(0)
+      await page.keyboard.press('Control+t')
+      ok(await until(async () => (await shells().count()) === 2), 'a second tab')
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.press('Control+PageUp')
+      ok(!!(await until(async () => (await front()) === 0, 3000, 50)), `Ctrl+PageUp goes to the tab before (${await front()})`)
+      await page.keyboard.press('Control+PageDown')
+      ok(!!(await until(async () => (await front()) === 1, 3000, 50)), `Ctrl+PageDown to the tab after (${await front()})`)
+
+      await setPref(page, 'tab-layout', 'vertical')
+      await page.locator('[data-title-settings]').click()
+      await until(async () => (await page.locator('[data-settings-page]').count()) === 0, 4000, 50)
+      await toShell(0)
+      const was = (await sidebar()) ?? 'open'
+      await page.keyboard.press('Control+s')
+      ok(!!(await until(async () => (await sidebar()) !== was, 3000, 50)), `Ctrl+S over a shell toggles the sidebar (${was} to ${await sidebar()})`)
+      await page.keyboard.press('Control+s')
+      ok(!!(await until(async () => ((await sidebar()) ?? 'open') === was, 3000, 50)), `and back (${await sidebar()})`)
+
+      // Off: the shell's key again.
+      await (await gotoPref(page, 'agent-keys')).locator('[role="switch"]').click()
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.agentKeys'))) === '0', 'switched off, it is stored')
+      await page.locator('[data-title-settings]').click()
+      await until(async () => (await page.locator('[data-settings-page]').count()) === 0, 4000, 50)
+      await toShell(0)
+      await page.keyboard.press('Control+s')
+      await sleep(400)
+      ok(((await sidebar()) ?? 'open') === was, `off, Ctrl+S leaves the sidebar alone (${await sidebar()})`)
+      await page.keyboard.press('Control+Shift+B')
+      ok(!!(await until(async () => ((await sidebar()) ?? 'open') !== was, 3000, 50)), 'and Ctrl+Shift+B still works')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * THE COG IS A TOGGLE (owner, 2026-10-13: "let me click the settings icon
+   * again to exit settings"): the cog opens Settings, and with Settings in
+   * front the cog closes it and goes back to the tab used before. Its key,
+   * Ctrl+comma, does the same.
+   */
+  async cogToggle(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const cog = page.locator('[data-title-settings]')
+    const settingsUp = async () => (await page.locator('[data-settings-page]').count()) === 1
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 1), 'one tab')
+      const shell = (await tabLabels(page))[0]
+      await cog.click()
+      ok(!!(await until(settingsUp, 4000, 50)), 'the cog opens Settings')
+      ok((await tabLabels(page)).length === 2, 'as a tab of its own')
+      await cog.click()
+      ok(!!(await until(async () => !(await settingsUp()), 4000, 50)), 'the cog again closes it')
+      ok(JSON.stringify(await tabLabels(page)) === JSON.stringify([shell]), `and its tab with it (${(await tabLabels(page)).join(', ')})`)
+      ok(!!(await until(async () => (await page.locator('[data-tab-active]').count()) === 1, 3000, 50)), 'the shell is in front again')
+      await page.keyboard.press('Control+Comma')
+      ok(!!(await until(settingsUp, 4000, 50)), 'Ctrl+comma opens it')
+      await page.keyboard.press('Control+Comma')
+      ok(!!(await until(async () => !(await settingsUp()), 4000, 50)), 'and closes it')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async accentAsk(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
