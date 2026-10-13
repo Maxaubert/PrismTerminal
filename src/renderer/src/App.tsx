@@ -47,6 +47,7 @@ import {
   addTab,
   closeTab,
   openSettings,
+  toggleSettings,
   pickTab,
   reorderTabs,
   setCwd,
@@ -232,6 +233,9 @@ export default function App(): JSX.Element {
     )
   )
   const walk = useRef<Walk | null>(null)
+  /** The tab used last before Settings, for the cog to go back to. */
+  const backFromSettings = (s: TabState): string | null =>
+    mru.current.find((id) => id !== 'settings' && s.tabs.some((t) => t.id === id)) ?? null
   /** The hold ended (Ctrl released, the window left, another chord): only
    *  now does the tab landed on move to the front, so repeated presses walk
    *  instead of flipping back and forth. */
@@ -610,7 +614,7 @@ export default function App(): JSX.Element {
         }
         case 'settings':
           hit()
-          setState(openSettings)
+          setState((s) => toggleSettings(s, backFromSettings(s)))
           return
         case 'find-tab':
           // FIND A TAB (#162): the sidebar's find box.
@@ -656,7 +660,9 @@ export default function App(): JSX.Element {
 
   // The title bar's buttons and the tab strip, placed by the title bar
   // setting below: in two rows, or in one (#91).
-  const onSettings = (): void => setState(openSettings)
+  // The cog toggles (owner, 2026-10-13): out of Settings, back to the tab
+  // used before it.
+  const onSettings = (): void => setState((s) => toggleSettings(s, backFromSettings(s)))
   const onHelp = helpOn ? toggleHelp : undefined
   const chip = (
     <UpdateChip
