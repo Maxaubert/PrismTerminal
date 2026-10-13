@@ -5750,7 +5750,8 @@ const scenarios = {
       await page.locator('[data-settings-tab="appearance"]').click()
       await page.locator('[data-term-card]').first().waitFor({ timeout: 10000 })
     }
-    const slider = page.locator('[data-pref="term-acrylic"] input[type="range"]')
+    // Read off the page in force: relaunchWith launches a new one.
+    const sl = () => page.locator('[data-pref="term-acrylic"] input[type="range"]')
     try {
       // 1. A preset, Opacity 60, acrylic on.
       await relaunchWith({ 'prism.term.theme': 'dracula', 'prism.term.acrylic': '1', 'prism.term.opacity': '60' })
@@ -5765,8 +5766,8 @@ const scenarios = {
       ok((await get('prism.term.opacity')) === null && (await get('prism.term.acrylic')) === null, 'and the old keys are gone')
       await openAppearance()
       ok((await page.locator('[data-pref="term-opacity"]').count()) === 0, 'there is no Opacity row')
-      await slider.scrollIntoViewIfNeeded()
-      ok((await slider.inputValue()) === '40', `the slider reads 40 (${await slider.inputValue()})`)
+      await sl().scrollIntoViewIfNeeded()
+      ok((await sl().inputValue()) === '40', `the slider reads 40 (${await sl().inputValue()})`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/opacity-alpha-row.png') }).catch(() => {})
       // The Background is a colour only now.
       const row = page.locator('[data-pref="window-background"]')
@@ -5777,13 +5778,13 @@ const scenarios = {
       ok((await pop.locator('[role="slider"][aria-label="Alpha"]').count()) === 0, 'the Background picker has no Alpha')
       await page.keyboard.press('Escape')
       // The slider moves the window.
-      await slider.fill('50')
+      await sl().fill('50')
       const moved = await until(async () => {
         const s = await sheet()
         return /^#[0-9a-f]{6}(7f|80)$/.test(s) ? s : null
       }, 4000, 50)
       ok(!!moved, `50 takes the window to half (${await sheet()})`)
-      await slider.fill('40')
+      await sl().fill('40')
       ok(!!(await until(async () => (await sheet()) === ground, 4000, 50)), 'and 40 puts it back')
 
       // A theme pick with a level of your own asks first.
@@ -5795,7 +5796,7 @@ const scenarios = {
       ok((await sheet()) === ground && (await get('prism.term.theme')) === 'dracula', 'Cancel keeps the theme and the see-through')
 
       // 0 is off: the window solid.
-      await slider.fill('0')
+      await sl().fill('0')
       ok(!!(await until(async () => /^#[0-9a-f]{6}$/.test(await sheet()), 4000, 50)), `at 0 the window is solid (${await sheet()})`)
       ok((await page.locator('[data-pref="term-acrylic"] [data-slider-value]').textContent()) === 'Off', 'and the slider says Off')
 
