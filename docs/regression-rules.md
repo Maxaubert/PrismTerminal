@@ -326,7 +326,7 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   Paper, a very light see-through accent on Paper and a very dark one (see-through and opaque) on PT
   Default; `switchKnob.test.ts` and `switchAccent.test.ts` hold the rule on every preset.
 - <a id="pt-default-theme"></a>**PT DEFAULT IS THE DEFAULT THEME HERE, AND FIRST IN THE WALL** (owner, 2026-09-22, handing over the palette he had saved as
-  Custom: "let this be the default theme ... for prism terminal"): Wombat's colours on #121212, the
+  Custom: "let this be the default theme ... for prism terminal"): Wombat's colours on #121212 (#171717 since 2026-10-13), the
   two blacks lifted, the icon's orange `#fe8f34` as the accent. A core preset like any other, and
   this host's `defaults.theme`, so anyone who never picked a theme moves to it with the update.
   **CUSTOM COMES BEFORE IT** (#60; owner, 2026-09-23: "custom should come before default"): the
