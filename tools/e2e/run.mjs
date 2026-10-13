@@ -4344,7 +4344,9 @@ const scenarios = {
       ok(heightDuring === heightBefore, `and the row does not change height (${heightBefore} -> ${heightDuring})`)
       ok(!!wantMain && /Sort-Object/.test(wantMain) && (await clip()) === wantMain, `the clipboard holds the EXACT command ("${await clip()}")`)
       ok(
-        await until(async () => (await page.locator('[data-help-copy="ps-biggest-files#0"]').getAttribute('title')) === 'Copy', 4000, 50),
+        // Its own state, not its title: the pointer is still on the button,
+        // and the app's tooltips set a hovered title aside (core Tooltips).
+        await until(async () => (await page.locator('[data-help-copy="ps-biggest-files#0"][data-help-copied]').count()) === 0, 4000, 50),
         'the answer leaves by itself'
       )
       const heightAfter = await mainRow.evaluate((el) => el.getBoundingClientRect().height)
