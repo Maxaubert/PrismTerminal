@@ -5097,6 +5097,92 @@ const scenarios = {
    * changes (Save changes lit) a pick asks first: Save as Custom, Discard or
    * Cancel, each doing what it says. Driven on the page as a user would.
    */
+  /**
+   * THE COLOUR EDITOR APPLIES AS YOU PICK (owner, 2026-10-12: "let me pick a
+   * color there and have it apply instantly so that i can ctrl tab to see how it
+   * actually looks, and when i go back to settings that popup should still be
+   * open"), and a Custom keeps its theme's accent ("when i saved it changed the
+   * accent color to blue"). Measured off the window's own tokens.
+   */
+  async themeEditorLive(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      const get = (k) => page.evaluate((key) => localStorage.getItem(key), k)
+      const token = (name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim().toLowerCase(), name)
+      await gotoPref(page, 'term-theme')
+      await page.locator('[data-term-card="pt-default"]').first().click()
+      await sleep(300)
+      const accent = await token('--p-accent')
+      const ground = await token('--p-bg-solid')
+      await page.locator('[data-edit-theme="pt-default"]').click()
+      const editor = page.locator('[data-theme-editor]')
+      await editor.waitFor({ timeout: 3000 })
+      // A pick lands on the window at once, before any save.
+      const bg = editor.locator('input[aria-label="Background"]')
+      await bg.fill('#301020')
+      await bg.press('Enter')
+      ok(!!(await until(async () => (await token('--p-bg-solid')).startsWith('#301020'), 3000, 50)), `a picked Background paints the window before Save (${await token('--p-bg-solid')} was ${ground})`)
+      ok((await get('prism.term.custom')) === null, 'and nothing is saved yet')
+      // Away to the shell and back: the draft is still worn, the editor open.
+      await page.keyboard.press('Control+Tab')
+      ok(!!(await until(async () => (await editor.count()) === 0, 3000, 50)), 'Ctrl+Tab goes to the shell')
+      ok((await token('--p-bg-solid')).startsWith('#301020'), 'which wears the picked colour')
+      await page.keyboard.press('Control+Tab')
+      ok(!!(await until(async () => (await editor.count()) === 1, 3000, 50)), 'back on Settings, the editor is open again')
+      ok((await editor.locator('input[aria-label="Background"]').inputValue()).toLowerCase().startsWith('#301020'), 'holding the pick')
+      // A PICKER LEFT OPEN COMES BACK OPEN (owner, 2026-10-13): the editor's
+      // Foreground picker, away and back, still open on the colour in force.
+      const pop = page.locator('[data-colour-popover]')
+      await editor.locator('[data-colour-swatch][aria-label="Pick Foreground"]').click()
+      await until(async () => (await pop.count()) === 1, 3000, 50)
+      await page.keyboard.press('ArrowLeft')
+      await page.keyboard.press('ArrowLeft')
+      await sleep(150)
+      const fgPicked = (await editor.locator('input[aria-label="Foreground"]').inputValue()).toLowerCase()
+      await page.keyboard.press('Control+Tab')
+      ok(!!(await until(async () => (await pop.count()) === 0, 3000, 50)), 'on another tab, the picker is not on screen')
+      await page.keyboard.press('Control+Tab')
+      ok(!!(await until(async () => (await pop.count()) === 1 && (await editor.count()) === 1, 3000, 50)), 'back on Settings, the editor and its picker are open again')
+      ok(await page.evaluate(() => !!document.activeElement?.closest('[data-colour-popover]')), 'with the keyboard in the picker')
+      ok((await editor.locator('input[aria-label="Foreground"]').inputValue()).toLowerCase() === fgPicked, `still on the picked colour (${fgPicked})`)
+      await page.keyboard.press('Escape')
+      ok(!!(await until(async () => (await pop.count()) === 0, 3000, 50)), 'Escape closes it')
+      ok((await editor.locator('input[aria-label="Foreground"]').inputValue()).toLowerCase() !== fgPicked, 'and puts back the colour it first opened with')
+      await page.keyboard.press('Control+Tab')
+      await page.keyboard.press('Control+Tab')
+      await until(async () => (await editor.count()) === 1, 3000, 50)
+      await sleep(300)
+      ok((await pop.count()) === 0, 'a picker the user closed stays closed after a tab switch')
+      // Save: Custom, with PT Default's own accent, not the palette's blue.
+      await page.locator('[data-save-custom]').click()
+      const custom = JSON.parse((await get('prism.term.custom')) ?? '{}')
+      ok(custom.bg?.startsWith('#301020') && custom.accent === '#fe8f34', `saved as Custom with PT Default's accent (${custom.bg}, ${custom.accent})`)
+      ok((await token('--p-accent')) === accent, `the window keeps its accent (${await token('--p-accent')} vs ${accent})`)
+      // Cancel puts the theme back.
+      await page.locator('[data-edit-theme="custom"]').click()
+      await editor.waitFor({ timeout: 3000 })
+      const bg2 = editor.locator('input[aria-label="Background"]')
+      await bg2.fill('#103020')
+      await bg2.press('Enter')
+      await until(async () => (await token('--p-bg-solid')).startsWith('#103020'), 3000, 50)
+      await editor.getByRole('button', { name: 'Cancel' }).click()
+      ok(!!(await until(async () => (await token('--p-bg-solid')).startsWith('#301020'), 3000, 50)), `Cancel puts the saved colour back (${await token('--p-bg-solid')})`)
+      // The same on the Appearance page: the Background colour's picker.
+      await gotoPref(page, 'window-background')
+      await page.locator('[data-pref="window-background"] [data-colour-swatch]').click()
+      await until(async () => (await pop.count()) === 1, 3000, 50)
+      await page.keyboard.press('Control+Tab')
+      await until(async () => (await pop.count()) === 0, 3000, 50)
+      await page.keyboard.press('Control+Tab')
+      ok(!!(await until(async () => (await pop.count()) === 1, 3000, 50)), 'an Appearance picker left open is open again on return')
+      await page.keyboard.press('Escape')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async themeSwitch(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
