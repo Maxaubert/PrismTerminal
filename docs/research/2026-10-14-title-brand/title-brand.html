@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Title Bar Brand</title>
+<!-- #205 (owner, 2026-10-13: "work on the title bar logo/text its just on the
+     vertical tabs theme, and i also dont love it. it needs to be on both
+     horizontal and vertical"). Six looks for the app's mark and name, each
+     shown in both layouts, on PT Default (dark) or Paper (light). -->
+<style>
+  :root {
+    --page: #0b0b0b; --page-ink: #ece8df; --page-soft: #a9a49a; --page-line: rgba(255,255,255,.09);
+    --mono: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
+    --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  /* The window's own tokens, per theme. */
+  .win {
+    --term: #171717; --chrome: #202020; --side: #1d1d1d; --text: #dedacf; --soft: #a9a59b; --dim: #77736b;
+    --divider: rgba(255,255,255,.08); --hover: rgba(255,255,255,.06); --accent: #fe8f34; --icon: #a9a59b;
+    --badge: #000; --badge-edge: #2a2a2a;
+  }
+  body.light .win {
+    --term: #f6f4ee; --chrome: #e9e6de; --side: #ecE9e1; --text: #2a2620; --soft: #5b564c; --dim: #8a857a;
+    --divider: rgba(0,0,0,.1); --hover: rgba(0,0,0,.05); --accent: #b8560a; --icon: #5b564c;
+    --badge: #111; --badge-edge: #111;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--page); color: var(--page-ink); font: 15px/1.4 var(--ui); padding: 20px 16px 80px; }
+
+  header.page {
+    position: sticky; top: 0; z-index: 5; max-width: 1280px; margin: 0 auto 18px; padding: 8px 0 14px;
+    background: linear-gradient(var(--page) 85%, transparent);
+    display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: end; justify-content: space-between;
+  }
+  header.page h1 { font-size: 24px; margin: 0 0 4px; font-weight: 650; }
+  header.page p { margin: 0; color: var(--page-soft); max-width: 70ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+  .seg { display: inline-flex; padding: 3px; border-radius: 9px; background: rgba(255,255,255,.05); border: 1px solid var(--page-line); }
+  .seg button { font: inherit; color: var(--page-soft); background: none; border: 0; cursor: pointer; padding: 7px 15px; border-radius: 7px; }
+  .seg button[aria-pressed="true"] { background: rgba(255,255,255,.11); color: var(--page-ink); font-weight: 600; }
+  .seg button:focus-visible { outline: 2px solid #fe8f34; outline-offset: 1px; }
+
+  main { max-width: 1280px; margin: 0 auto; display: grid; gap: 44px; }
+  section h2 { margin: 0 0 4px; font-size: 19px; font-weight: 650; }
+  section h2 i { font-style: normal; color: #fe8f34; margin-right: 8px; }
+  section > p { margin: 0 0 14px; color: var(--page-soft); max-width: 80ch; }
+  .pair { display: grid; gap: 16px; }
+  body.only-h .win.v, body.only-v .win.h { display: none; }
+  .tag { font-size: 12.5px; color: var(--page-soft); margin: 0 0 6px; letter-spacing: .02em; }
+  body.only-h .tag.v, body.only-v .tag.h { display: none; }
+
+  /* ---------- THE WINDOW ---------- */
+  .win { border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,.12); background: var(--chrome); color: var(--text); font: 13px/1.35 var(--ui); box-shadow: 0 24px 60px -30px rgba(0,0,0,.9); }
+  body.light .win { border-color: rgba(0,0,0,.2); }
+  .bar { height: 36px; display: flex; align-items: stretch; background: var(--chrome); border-bottom: 1px solid var(--divider); }
+  .win.v .bar { border-bottom: 0; }
+  .btns { display: flex; align-items: center; gap: 2px; padding: 0 6px 0 8px; }
+  .ib { width: 30px; height: 28px; display: grid; place-items: center; border-radius: 6px; color: var(--icon); }
+  .ib:hover { background: var(--hover); color: var(--text); }
+  .ib svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .caps { display: flex; margin-left: 4px; }
+  .cap { width: 46px; display: grid; place-items: center; color: var(--soft); }
+  .cap svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; }
+  .cap:hover { background: var(--hover); }
+  .cap.x:hover { background: #c42b1c; color: #fff; }
+
+  /* Horizontal tabs. */
+  .strip { flex: 1; min-width: 0; display: flex; align-items: stretch; font-size: 12px; }
+  .tab { position: relative; flex: 0 1 150px; min-width: 84px; display: flex; align-items: center; gap: 6px; padding: 0 10px; color: var(--soft); }
+  .tab::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 1px; background: var(--divider); }
+  .tab.on { color: var(--text); font-weight: 600; }
+  .tab.on::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--accent); }
+  .tab:hover:not(.on) { background: var(--hover); }
+  .tab .nm { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .ti { width: 16px; height: 16px; border-radius: 4px; flex: none; display: grid; place-items: center; }
+  .ti.claude { background: #d97757; }
+  .ti.claude i { width: 8px; height: 6px; background: #1a1a1a; clip-path: polygon(0 0,100% 0,100% 100%,0 100%,0 60%,20% 60%,20% 40%,0 40%); }
+  .ti.sh { background: color-mix(in srgb, var(--text) 12%, transparent); color: var(--soft); font: 700 9px var(--mono); }
+  .ti.ox { background: color-mix(in srgb, var(--text) 85%, transparent); }
+  .plus { width: 28px; display: grid; place-items: center; color: var(--icon); margin: 4px 2px; border-radius: 5px; }
+  .plus svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 1.8; }
+
+  /* The brand slot in the horizontal bar: its own cell, a hairline after it. */
+  .slot { display: flex; align-items: center; gap: 9px; padding: 0 14px 0 13px; position: relative; flex: none; user-select: none; }
+  .slot::after { content: ""; position: absolute; right: 0; top: 8px; bottom: 8px; width: 1px; background: var(--divider); }
+  .slot.flush::after { display: none; }
+
+  /* Vertical layout. */
+  .vbar { display: flex; align-items: center; flex: 1; }
+  .vbar .slot { padding-left: 16px; }
+  .vbar .slot::after { display: none; }
+  .body { display: flex; height: 250px; }
+  .win.h .body { height: 226px; }
+  .side { width: 228px; flex: none; background: var(--chrome); padding: 6px 10px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .srow { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 9px; border-radius: 7px; color: var(--soft); }
+  .srow.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); font-weight: 600; }
+  .srow .ti { width: 22px; height: 22px; border-radius: 6px; }
+  .srow small { display: block; font-weight: 400; font-size: 11px; color: var(--dim); }
+  .term { flex: 1; min-width: 0; background: var(--term); padding: 12px 16px; font: 13px/1.55 var(--mono); color: var(--text); white-space: pre; overflow: hidden; }
+  .win.v .term { border-top-left-radius: 10px; box-shadow: inset 1px 1px 0 var(--divider); }
+  .term .p { color: #82fff7; } body.light .term .p { color: #1f6f8b; }
+  .term .g { color: #b1e969; } body.light .term .g { color: #4c7a12; }
+  .term .d { color: var(--dim); }
+  .term .cur { display: inline-block; width: .6em; height: 1.1em; vertical-align: -2px; background: #bbb; }
+
+  /* ---------- THE MARKS ---------- */
+  .mark { flex: none; display: block; }
+  .mark.acc { color: var(--accent); }
+  .mark.quiet { color: var(--soft); }
+  .badge { flex: none; display: grid; place-items: center; background: var(--badge); border-radius: 6px; box-shadow: 0 0 0 1px var(--badge-edge); }
+  .name { font-size: 13.5px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
+  .name .t { font-weight: 400; color: var(--soft); }
+  .name.reg { font-weight: 500; }
+  .mono { font: 600 13px var(--mono); letter-spacing: -.01em; white-space: nowrap; }
+  .mono .c { display: inline-block; width: 7px; height: 14px; vertical-align: -2px; margin-left: 2px; border-radius: 1px; background: linear-gradient(180deg, #ffe63b, #ff43bd 45%, #3964ff 80%, #00bdff); animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0 } }
+  @media (prefers-reduced-motion: reduce) { .mono .c { animation: none; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <path id="m-large" fill-rule="evenodd" d="M452 212 H601 Q626 212 642 239 L711 351 Q724 373 711 395 L439 795 Q423 818 401 818 H249 Q227 818 213 797 L142 686 Q128 665 140 644 L410 238 Q426 212 452 212 Z M610 265 L353 649 Q343 663 351 677 L411 770 Q419 782 428 768 L684 389 Q695 373 685 357 L629 266 Q620 251 610 265 Z"/>
+    <path id="m-small" fill-rule="evenodd" d="M702 507 H788 Q810 507 824 531 L891 643 Q901 660 891 678 L803 799 Q789 818 770 818 H613 Q590 818 576 797 L544 744 Q532 725 543 707 L664 529 Q679 507 702 507 Z M790 553 L723 650 Q714 663 722 676 L780 770 Q789 782 798 767 L865 672 Q874 660 866 646 L807 550 Q798 540 790 553 Z"/>
+    <linearGradient id="rainbow" gradientUnits="userSpaceOnUse" x1="130" y1="820" x2="900" y2="210">
+      <stop offset="0" stop-color="#00bdff"/><stop offset=".29" stop-color="#3964ff"/><stop offset=".52" stop-color="#c742ee"/><stop offset=".72" stop-color="#ff43bd"/><stop offset=".87" stop-color="#ffac46"/><stop offset="1" stop-color="#ffe63b"/>
+    </linearGradient>
+    <radialGradient id="cyan" gradientUnits="userSpaceOnUse" cx="250" cy="820" r="300"><stop stop-color="#00f5ed"/><stop offset="1" stop-color="#00e4ec" stop-opacity="0"/></radialGradient>
+    <radialGradient id="yellow" gradientUnits="userSpaceOnUse" cx="880" cy="560" r="330"><stop stop-color="#fff94d"/><stop offset="1" stop-color="#fff14a" stop-opacity="0"/></radialGradient>
+  </defs>
+</svg>
+<template id="t-mono"><svg class="mark" viewBox="116 115 800 800" fill="currentColor"><use href="#m-large"/><use href="#m-small"/></svg></template>
+<template id="t-rain"><svg class="mark" viewBox="116 115 800 800"><g fill="url(#rainbow)"><use href="#m-large"/><use href="#m-small"/></g><g fill="url(#cyan)"><use href="#m-large"/><use href="#m-small"/></g><g fill="url(#yellow)"><use href="#m-small"/></g></svg></template>
+
+<header class="page">
+  <div>
+    <h1>The title bar's mark and name</h1>
+    <p>Six looks, each in both layouts. Hover the windows: tabs and buttons react. Pick one, or mix: say "mark from 3, name from 5".</p>
+  </div>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Layout">
+      <button data-lay="both" aria-pressed="true">Both</button>
+      <button data-lay="h" aria-pressed="false">Horizontal</button>
+      <button data-lay="v" aria-pressed="false">Sidebar</button>
+    </div>
+    <div class="seg" role="group" aria-label="Theme">
+      <button data-th="dark" aria-pressed="true">PT Default</button>
+      <button data-th="light" aria-pressed="false">Paper</button>
+    </div>
+  </div>
+</header>
+
+<main id="main"></main>
+
+<script>
+const OPTIONS = [
+  { n: 1, title: 'Today, now in both', note: 'The accent-coloured mark and "Prism Terminal" in semibold. Unchanged look; it just also sits left of the tabs.',
+    brand: () => mark('mono', 18, 'acc') + `<span class="name">Prism Terminal</span>` },
+  { n: 2, title: 'Rainbow mark, no name', note: 'The app icon\'s own colours, alone. The smallest footprint: the tabs keep almost all their room. Reads like a browser\'s logo slot.',
+    brand: () => mark('rain', 19) },
+  { n: 3, title: 'Rainbow mark, quiet name', note: 'The rainbow mark, "Prism" in the text colour and "Terminal" in the softer ink, so the name is there without shouting.',
+    brand: () => mark('rain', 18) + `<span class="name">Prism <span class="t">Terminal</span></span>` },
+  { n: 4, title: 'The taskbar badge', note: 'The icon exactly as the taskbar shows it: rainbow shapes on the black rounded badge, then the name in a lighter weight.',
+    brand: () => `<span class="badge" style="width:22px;height:22px">${mark('rain', 15)}</span><span class="name reg">Prism Terminal</span>` },
+  { n: 5, title: 'Terminal wordmark', note: 'No shape at all: "prism" in the terminal\'s own font with a blinking rainbow cursor. The most "terminal" of the six.',
+    brand: () => `<span class="mono">prism<span class="c"></span></span>` },
+  { n: 6, title: 'Quiet mark', note: 'The mark in the soft ink, the same grey as the buttons. Nearly invisible on purpose: the window, not the logo, is the point.',
+    brand: () => mark('mono', 17, 'quiet') }
+]
+function mark(kind, size, cls = '') {
+  const t = document.getElementById(kind === 'rain' ? 't-rain' : 't-mono').innerHTML
+  return t.replace('class="mark"', `class="mark ${cls}" width="${size}" height="${size}"`)
+}
+const I = {
+  help: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M9.4 9.3a2.7 2.7 0 1 1 4 2.4c-.9.5-1.4 1.1-1.4 2.1"/><path d="M12 17.2v.01"/></svg>',
+  cog: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+}
+const caps = `<div class="caps"><div class="cap"><svg viewBox="0 0 10 10"><path d="M0 5h10"/></svg></div><div class="cap"><svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9"/></svg></div><div class="cap x"><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10"/></svg></div></div>`
+const buttons = `<div class="btns"><div class="ib">${I.help}</div><div class="ib">${I.cog}</div></div>${caps}`
+const TABS = [['claude', 'PrismTerminal', true], ['sh', 'Prism'], ['ox', 'api-server'], ['sh', 'Downloads']]
+const ti = (k) => `<span class="ti ${k}">${k === 'claude' ? '<i></i>' : k === 'sh' ? '&gt;' : ''}</span>`
+const PS = 'PS C:\\code\\PrismTerminal&gt;'
+const term = `<span class="p">${PS}</span> git status -sb
+<span class="g">## feat/title-brand...origin/feat/title-brand</span>
+ M src/renderer/src/App.tsx
+<span class="d">?? docs/research/2026-10-14-title-brand/</span>
+<span class="p">${PS}</span> npm test
+<span class="d">  Test Files  142 passed (142)</span>
+<span class="p">${PS}</span> <span class="cur"></span>`
+function horizontal(o) {
+  const tabs = TABS.map(([k, n, on]) => `<div class="tab${on ? ' on' : ''}">${ti(k)}<span class="nm">${n}</span></div>`).join('')
+  return `<div class="win h"><div class="bar"><div class="slot">${o.brand()}</div><div class="strip">${tabs}<div class="plus">${I.plus}</div></div>${buttons}</div><div class="body"><div class="term">${term}</div></div></div>`
+}
+function vertical(o) {
+  const rows = TABS.map(([k, n, on]) => `<div class="srow${on ? ' on' : ''}">${ti(k)}<span>${n}<small>~\\code\\${n}</small></span></div>`).join('')
+  return `<div class="win v"><div class="bar"><div class="vbar"><div class="slot">${o.brand()}</div></div>${buttons}</div><div class="body"><div class="side">${rows}</div><div class="term">${term}</div></div></div>`
+}
+document.getElementById('main').innerHTML = OPTIONS.map((o) => `
+  <section><h2><i>${o.n}</i>${o.title}</h2><p>${o.note}</p>
+  <div class="pair"><div><p class="tag h">HORIZONTAL TABS</p>${horizontal(o)}</div><div><p class="tag v">VERTICAL TABS (SIDEBAR)</p>${vertical(o)}</div></div></section>`).join('')
+for (const b of document.querySelectorAll('[data-lay]')) b.onclick = () => {
+  document.querySelectorAll('[data-lay]').forEach((x) => x.setAttribute('aria-pressed', x === b))
+  document.body.classList.toggle('only-h', b.dataset.lay === 'h'); document.body.classList.toggle('only-v', b.dataset.lay === 'v')
+}
+for (const b of document.querySelectorAll('[data-th]')) b.onclick = () => {
+  document.querySelectorAll('[data-th]').forEach((x) => x.setAttribute('aria-pressed', x === b))
+  document.body.classList.toggle('light', b.dataset.th === 'light')
+}
+</script>
+</body>
+</html>

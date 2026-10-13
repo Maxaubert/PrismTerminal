@@ -26,3 +26,24 @@ export function AppMark({ size, className }: { size: number; className?: string 
     </svg>
   )
 }
+
+/**
+ * THE TITLE BAR'S MARK, THE QUIET ONE, in both layouts (#205; owner,
+ * 2026-10-14, of six looks in a mockup: "try quiet mark for both"). The mark
+ * alone, no name, in the buttons' own ink: there, not shouting, so the tabs
+ * keep their room and the window, not the logo, is the point. Part of the
+ * handle the window moves by. Before: the accent mark and "Prism Terminal",
+ * with vertical tabs only ("i also dont love it. it needs to be on both").
+ */
+export function TitleMark({ className = '' }: { className?: string }): JSX.Element {
+  return (
+    <div
+      data-app-brand
+      role="img"
+      aria-label="Prism Terminal"
+      className={`flex shrink-0 items-center select-none ${className}`}
+    >
+      <AppMark size={17} className="text-[var(--p-icon)]" />
+    </div>
+  )
+}
