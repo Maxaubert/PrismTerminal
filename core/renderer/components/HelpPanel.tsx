@@ -208,7 +208,11 @@ function Row({
       data-help-row
       onMouseDown={onPoint}
       onClick={() => {
-        if (!keys) onCopy(key, row.command)
+        // A drag that selected part of the command is a selection, not a
+        // click: it copies nothing (owner, 2026-10-13: "just clicking there
+        // still copies but you can drag to select").
+        if (keys || (window.getSelection()?.toString() ?? '') !== '') return
+        onCopy(key, row.command)
       }}
       // The rows rise in after the panel lands, a few at a time.
       style={{ transitionDelay: open ? `${Math.min(index, 12) * 18 + 120}ms` : '0ms' }}
@@ -247,9 +251,11 @@ function Row({
             active ? 'border-[color:var(--p-line)]' : 'border-transparent group-hover:border-[color:var(--p-line)]'
           }`}
         >
+          {/* The command is text to select (owner, 2026-10-13): the text
+              cursor over it, and the selection in the accent. */}
           <code
             data-help-command
-            className="min-w-0 flex-1 select-text truncate text-[12.5px] leading-[1.5] text-[var(--p-text)]"
+            className="min-w-0 flex-1 cursor-text select-text truncate text-[12.5px] leading-[1.5] text-[var(--p-text)] selection:bg-[color-mix(in_srgb,var(--p-accent)_45%,transparent)] selection:text-[var(--p-text)]"
             style={{ fontFamily: mono }}
             {...hiddenTitle(row.command)}
           >

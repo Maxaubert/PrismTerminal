@@ -4357,6 +4357,27 @@ const scenarios = {
       // THE WHOLE ROW COPIES (owner, 2026-10-13), not only its button.
       await variantRow.locator('[data-help-task]').click()
       ok(!!wantVariant && wantVariant !== wantMain && (await until(async () => (await clip()) === wantVariant, 3000, 50)), 'a click anywhere on a row copies that row')
+      // THE COMMAND IS TEXT TO SELECT (owner, 2026-10-13): the text cursor over
+      // it, the selection in the accent, and a drag selects without copying.
+      const mainCode = mainRow.locator('[data-help-command]')
+      ok((await mainCode.evaluate((el) => getComputedStyle(el).cursor)) === 'text', 'the text cursor over a command')
+      const sel = await mainCode.evaluate((el) => getComputedStyle(el, '::selection').backgroundColor)
+      ok(sel !== 'rgba(0, 0, 0, 0)' && !/^rgb\(0, 120, 215/.test(sel), `its selection wears the accent (${sel})`)
+      ok((await mainCode.evaluate((el) => getComputedStyle(el).userSelect)) === 'text', 'the command can be selected')
+      // A click that ends a selection copies nothing: part of the command is
+      // selected (as a drag leaves it) and the row is clicked.
+      await mainCode.evaluate((el) => {
+        const r = document.createRange()
+        r.setStart(el.firstChild, 0)
+        r.setEnd(el.firstChild, 13)
+        const s = window.getSelection()
+        s.removeAllRanges()
+        s.addRange(r)
+        el.closest('[data-help-row]').click()
+      })
+      await sleep(300)
+      ok((await clip()) === wantVariant, `with part of a command selected, a click copies nothing (${await clip()})`)
+      await page.evaluate(() => window.getSelection()?.removeAllRanges())
 
       /* ----- the keyboard ----- */
       await page.locator('[data-help-search]').focus()
