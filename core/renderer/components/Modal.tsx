@@ -97,6 +97,8 @@ export function Modal({
   useEffect(() => {
     const el = box.current
     if (!el) return
+    // A colour picker opened again inside it as it mounted keeps the focus.
+    if (document.activeElement?.closest('[data-colour-popover]') && el.contains(document.activeElement)) return
     ;(el.querySelector<HTMLElement>(focus) ?? el).focus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey])
