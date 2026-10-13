@@ -65,6 +65,22 @@ export function helpFor(shell: HelpShellChoice): HelpEntry[] {
 }
 
 /**
+ * A command as the row draws and copies it: the placeholders at its END
+ * dropped, so `Set-Location FOLDER` reads `Set-Location ` (owner, 2026-10-13).
+ * Only bare names the entry declares, and only trailing ones: a quoted one
+ * (`-m "MESSAGE"`) or one in the middle stays, since without it the command
+ * is a different command. The trailing space is kept: the copy is ready for
+ * the word it needs.
+ */
+export function blankless(command: string, names: readonly string[]): string {
+  if (!names.length) return command
+  const words = command.split(' ')
+  let end = words.length
+  while (end > 1 && names.includes(words[end - 1])) end -= 1
+  return end === words.length ? command : `${words.slice(0, end).join(' ')} `
+}
+
+/**
  * A "command" that is a KEY TO PRESS, not text to paste: `Ctrl+C`, `Esc`,
  * `Shift+Tab`. The catalogue holds a handful, because "how do I stop this" is
  * one of the first things anybody asks. The panel draws them as key caps and

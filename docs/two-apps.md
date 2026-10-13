@@ -412,10 +412,14 @@ so an update never silently changes what an existing user sees; the bridge to ma
   `--p-on-accent` is chosen 4.5:1 on the composite (`selectionFor`), and under a see-through
   ground the text fills are flattened over `--p-bg-solid`. The `opacityAlpha` and `accent` e2e
   hold it.
-- **THE HELP POPUP BLURS THE WINDOW BEHIND IT AND CASTS NO SHADOW** (owner, 2026-09-22: "remove the
-  shadow behind this and make the bg blurred when it's open"): `backdrop-blur` on a lighter scrim; the
-  blur already lifts the panel off the page, and a shadow on top of it read as a dark halo.
-- <a id="command-help"></a>**COMMAND HELP IS A POPUP THAT SHOWS AND COPIES, AND NOTHING ELSE** (#12; owner, 2026-09-19: "an
+- **COMMAND HELP IS A SIDE PANEL SINCE CORE 0.38.0** (#199; owner, 2026-10-13: "a sidebar that animates
+  from the side ... overlays over the terminal, like not the whole terminal"). It replaced the popup and
+  its blurred scrim (owner, 2026-09-22, "make the bg blurred"): a sheet on the terminal column's right,
+  under the title bar, not a dialog, rows in two columns, the whole row copies, the copy icon turns into
+  a check and the "Copied" badge stays down for it. Full rules and the owner's words:
+  `docs/superpowers/specs/2026-10-13-help-panel-design.md`; mockups `docs/research/2026-10-13-help-panel/`.
+  The host mounts it inside the terminal's column and passes `open` (it stays mounted to slide out).
+- <a id="command-help"></a>**COMMAND HELP SHOWS AND COPIES, AND NOTHING ELSE** (#12; owner, 2026-09-19: "an
   easy to use panel where you can find shell commands... searchable... metadata on each command so a
   natural-language search finds it... optional in settings", and 2026-09-20: "a pop up with copy
   icons for easy copying"). Built ONCE in `core/` for both apps: the catalogue and its search in

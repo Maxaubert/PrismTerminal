@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import {
   ALL_HELP,
+  blankless,
   HELP_CATEGORIES,
   HELP_ID_PREFIXES,
   HELP_SHELLS,
@@ -570,5 +571,21 @@ describe('the hidden words', () => {
         if (fresh.length < 2) bad.push(`${e.id}#${i + 1}`)
       })
     expect(bad).toEqual([])
+  })
+})
+
+// A BLANK AT THE END IS NOT DRAWN (owner, 2026-10-13: "dont say folder the
+// user understand"): the row reads, and copies, the command up to it.
+describe('blankless', () => {
+  it('drops trailing bare placeholders and keeps the space', () => {
+    expect(blankless('Set-Location FOLDER', ['FOLDER'])).toBe('Set-Location ')
+    expect(blankless('wsl --export DISTRO FILE', ['DISTRO', 'FILE'])).toBe('wsl --export ')
+  })
+  it('keeps a placeholder in the middle, a quoted one, and a command with none', () => {
+    expect(blankless('Remove-Item FOLDER -Recurse -Force', ['FOLDER'])).toBe('Remove-Item FOLDER -Recurse -Force')
+    expect(blankless('git commit -m "MESSAGE"', ['MESSAGE'])).toBe('git commit -m "MESSAGE"')
+    expect(blankless('git status', [])).toBe('git status')
+    // Never the whole command.
+    expect(blankless('FOLDER', ['FOLDER'])).toBe('FOLDER')
   })
 })
