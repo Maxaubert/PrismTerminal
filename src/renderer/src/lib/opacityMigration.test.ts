@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { migrateOpacity } from './opacityMigration'
+import { migrateSeeThrough } from './seeThroughMigration'
 import { windowBackground } from './backgroundPrefs'
 import { customTermTheme, termGroundAlpha } from '@core/renderer/lib/termLook'
 import { configureTermCore, resetTermCore } from '@core/renderer/host'
@@ -27,6 +28,13 @@ const saved = (): Record<string, unknown> => JSON.parse(localStorage.getItem(CUS
  *  migration leaves the ground opaque, and the switch alone makes it Prism's
  *  default see-through (an opaque window under acrylic on was the bug #156 fixes). */
 const DEFAULT_DARK = 0xb9 / 255
+/** What the window paints once the app has started: since 2026-10-13 the
+ *  see-through slider's move runs next, and the ground alpha is its level's
+ *  (to the percent, so within half a percent of the byte before). */
+const painted = (): number => {
+  migrateSeeThrough()
+  return termGroundAlpha()
+}
 
 beforeEach(() => {
   localStorage.clear()
@@ -54,8 +62,8 @@ describe('migrateOpacity', () => {
     migrateOpacity()
     expect(windowBackground()).toBe(DRACULA + byte(60))
     expect(localStorage.getItem(LIVE)).toBeNull()
-    expect(termGroundAlpha()).toBe(0x99 / 255)
-    expect(chromeTokens({ ...resolveTermTheme('dracula'), background: windowBackground()! }, termGroundAlpha()).vars['--p-bg']).toBe(before)
+    expect(painted()).toBeCloseTo(0x99 / 255, 2)
+    expect(chromeTokens({ ...resolveTermTheme('dracula'), background: windowBackground()! }, painted()).vars['--p-bg']).toBe(before)
   })
 
   it('a picked Background takes the live alpha', () => {
@@ -75,7 +83,7 @@ describe('migrateOpacity', () => {
     expect(customTermTheme()?.bg).toBe('#1d1f21' + byte(80))
     expect('opacity' in saved()).toBe(false)
     expect(windowBackground()).toBeNull()
-    expect(termGroundAlpha()).toBe(parseInt(byte(80), 16) / 255)
+    expect(painted()).toBeCloseTo(parseInt(byte(80), 16) / 255, 2)
   })
 
   it('a Custom whose live value differs: the saved slot keeps its own, the live one is picked', () => {
@@ -88,7 +96,7 @@ describe('migrateOpacity', () => {
     expect(customTermTheme()?.bg).toBe('#1d1f21' + byte(80))
     // What paints now is the live value, on the theme's own ground.
     expect(windowBackground()).toBe('#1d1f21' + byte(60))
-    expect(termGroundAlpha()).toBe(0x99 / 255)
+    expect(painted()).toBeCloseTo(0x99 / 255, 2)
   })
 
   // Review of #115: step 1 gave Custom.bg the saved alpha, and a live 100 was
@@ -99,10 +107,11 @@ describe('migrateOpacity', () => {
     localStorage.setItem(LIVE, '100')
     localStorage.setItem(CUSTOM, custom({ acrylic: true, opacity: 60 }))
     migrateOpacity()
-    expect(termGroundAlpha()).toBe(DEFAULT_DARK)
+    expect(painted()).toBeCloseTo(DEFAULT_DARK, 2)
     expect(windowBackground()).toBe('#1d1f21')
-    // Picking Custom again still restores the SAVED see-through.
-    expect(customTermTheme()?.bg).toBe('#1d1f21' + byte(60))
+    // Picking Custom again still restores the SAVED see-through: the slider's
+    // level since 2026-10-13, on an opaque ground.
+    expect(customTermTheme()).toMatchObject({ bg: '#1d1f21', seeThrough: 40 })
     expect(localStorage.getItem(LIVE)).toBeNull()
   })
 
@@ -111,7 +120,7 @@ describe('migrateOpacity', () => {
     localStorage.setItem(ACRYLIC, '1')
     localStorage.setItem(CUSTOM, custom({ acrylic: true, opacity: 60 }))
     migrateOpacity()
-    expect(termGroundAlpha()).toBe(DEFAULT_DARK)
+    expect(painted()).toBeCloseTo(DEFAULT_DARK, 2)
     const once = JSON.stringify({ ...localStorage })
     migrateOpacity()
     expect(JSON.stringify({ ...localStorage })).toBe(once)
@@ -123,7 +132,7 @@ describe('migrateOpacity', () => {
     localStorage.setItem(CUSTOM, custom({ acrylic: true, opacity: 60 }))
     migrateOpacity()
     expect(windowBackground()).toBeNull()
-    expect(termGroundAlpha()).toBe(DEFAULT_DARK)
+    expect(painted()).toBeCloseTo(DEFAULT_DARK, 2)
   })
 
   it('a Custom with a picked Background: the picked one takes the live value', () => {

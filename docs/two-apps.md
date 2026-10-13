@@ -393,9 +393,20 @@ so an update never silently changes what an existing user sees; the bridge to ma
   switch the Alpha stops at 95% (`SEE_THROUGH_MAX`: opaque is the switch's off). #156 first held
   High Contrast solid under the switch; that rule was removed with the theme (owner, 2026-10-11),
   so the stored switch is the one in force everywhere.
-  In this app the row reads "See-through window" / "The desktop shows behind every surface."
-  (`acrylicLabel`, `acrylicSub`); Prism keeps "Acrylic terminal background", a terminal row under
-  its own app-level See-through window, and nothing there changes. The `seeThrough` e2e holds it.
+  In this app the row reads "See-through window" / "How much of the desktop shows behind every
+  surface." (`acrylicLabel`, `acrylicSub`); Prism keeps "Acrylic terminal background", a terminal
+  row under its own app-level See-through window, and nothing there changes.
+  **SINCE CORE 0.36.0 IT IS A SLIDER, AND THE ONLY SEE-THROUGH CONTROL** (owner, 2026-10-13: "make it
+  a slider only with it being at 0 by default", then "Like Prism: an edit"; spec
+  `docs/superpowers/specs/2026-10-13-see-through-slider-design.md`). This replaces the two entries
+  above where `acrylic.kind` is 'window': the row holds a slider 0-70 (`termSeeThrough`,
+  `SEE_THROUGH_TOP`), the window's ground paints at alpha `1 - level/100`, 0 is the material off.
+  The Background pickers (this app's row and the theme editor's) carry no Alpha and store opaque;
+  `paintsAlpha`'s default levels are read only by the one-time move (`lib/seeThroughMigration.ts`,
+  after `opacityMigration`), which turns what the window painted into a level. The level is a
+  THEME EXTRA, as Prism's see-through is part of its theme: a moved slider lights Save changes, a
+  theme pick asks first and puts the theme's own 0 back, Custom keeps `seeThrough`. Prism keeps its
+  switch. The `seeThrough` and `opacityAlpha` e2e hold it.
   The Accent's alpha is for FILLS;
   `--p-accent-solid` is the line (rules, spinner, progress, rings, an unpicked working colour),
   `--p-on-accent` is chosen 4.5:1 on the composite (`selectionFor`), and under a see-through

@@ -1,4 +1,4 @@
-import { CUSTOM_KEY, customTermTheme, LEGACY_OPACITY_KEY, legacyTermOpacity, opacityPct, termAcrylic, termThemeId } from '@core/renderer/lib/termLook'
+import { CUSTOM_KEY, customTermTheme, LEGACY_ACRYLIC_KEY, LEGACY_OPACITY_KEY, legacyTermOpacity, opacityPct, termThemeId } from '@core/renderer/lib/termLook'
 import { resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { alphaOf, opaque, parseColour, withAlpha } from '@core/renderer/lib/colour'
 import { setWindowBackground, windowBackground } from './backgroundPrefs'
@@ -80,7 +80,9 @@ function foldLive(customFolded: boolean): void {
   const hasLive = localStorage.getItem(LEGACY_OPACITY_KEY) !== null
   if (!hasLive && !customFolded) return
   const n = legacyTermOpacity()
-  if (termAcrylic()) {
+  // The old switch, read as it was (termAcrylic is the slider's now, and the
+  // slider's own move, migrateSeeThrough, runs after this one).
+  if (localStorage.getItem(LEGACY_ACRYLIC_KEY) === '1') {
     const a = alphaFor(n)
     const picked = windowBackground()
     const own = termThemeId() === 'custom' ? customTermTheme() : null

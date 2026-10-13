@@ -191,6 +191,14 @@ async function gotoPref(page, id) {
   return row
 }
 
+/** The see-through slider (2026-10-13): set it to `level` percent, 0 off. */
+async function setSeeThrough(page, level) {
+  await (await gotoPref(page, 'term-acrylic')).locator('input[type="range"]').fill(String(level))
+}
+
+/** The alpha a `#rrggbb` or `#rrggbbaa` colour carries. */
+const alphaOfHex = (c) => (c.length === 9 ? parseInt(c.slice(7), 16) / 255 : 1)
+
 /** Wait for a prompt, then type a line into the shell in front. */
 async function typeLine(page, line) {
   await page.waitForFunction(
@@ -2543,7 +2551,7 @@ const scenarios = {
       // the terminal each show the desktop through one coat; the body under
       // them paints nothing. Collapsed and slid out, the sidebar is solid
       // ("that sidebar should not be see-through").
-      await (await gotoPref(page, 'term-acrylic')).locator('[role="switch"]').click()
+      await setSeeThrough(page, 27)
       await backToFirst(page)
       await sleep(600)
       const coat = () =>
@@ -2670,7 +2678,7 @@ const scenarios = {
       await page.mouse.move(800, 400)
       await sleep(500)
       await page.keyboard.press('Control+Shift+B')
-      await (await gotoPref(page, 'term-acrylic')).locator('[role="switch"]').click()
+      await setSeeThrough(page, 0)
       await backToFirst(page)
       await setPref(page, 'tab-layout', 'horizontal')
       ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-tab-strip]') && !document.querySelector('[data-tab-sidebar]')), 3000, 50)), 'Horizontal puts the strip back')
@@ -4906,14 +4914,12 @@ const scenarios = {
       await gotoPref(page, 'agent-color')
       await page.locator('[data-follow-theme="working"]').click()
       // Acrylic on: the panels stay one thin coat.
-      await gotoPref(page, 'term-acrylic')
-      const acr = page.locator('[data-pref="term-acrylic"] [role="switch"]')
-      if ((await acr.getAttribute('aria-checked')) !== 'true') await acr.click()
+      await setSeeThrough(page, 27)
       await sleep(600)
       const glass = await measure()
       ok(glass.label >= 4.5 && glass.sub >= 4.5, `with acrylic on, label and subtext still read (${glass.label.toFixed(1)}:1, ${glass.sub.toFixed(1)}:1)`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/settings-appearance-acrylic.png') }).catch(() => {})
-      await acr.click()
+      await setSeeThrough(page, 0)
       // 900px: still the full rail, nothing sideways.
       await setSize(900, 800)
       await sleep(500)
@@ -5598,12 +5604,9 @@ const scenarios = {
       ok((await editor.locator('[data-colour-swatch][aria-label="Pick Background"]').count()) === 1, 'the Background well is there')
       await editor.locator('[data-colour-swatch][aria-label="Pick Background"]').click()
       await until(async () => (await pop.count()) === 1, 3000, 50)
-      // The theme's Background alpha IS the window's see-through here (#114):
-      // offered, at least 30% as the Opacity slider was, and inert while
-      // acrylic is off, which it is on a fresh profile.
-      const bgAlpha = pop.locator('[role="slider"][aria-label="Alpha"]')
-      ok((await bgAlpha.count()) === 1 && (await bgAlpha.getAttribute('aria-valuemin')) === '30', "the theme's Background has an alpha, from 30 percent")
-      ok((await bgAlpha.getAttribute('aria-disabled')) === 'true', 'and it is inert while acrylic is off')
+      // The theme's Background is a colour only (owner, 2026-10-13: the
+      // see-through slider "only"): the slider is the window's see-through.
+      ok((await pop.locator('[role="slider"][aria-label="Alpha"]').count()) === 0, "the theme's Background has no Alpha")
       await page.keyboard.press('Escape')
       await popGone()
       await shot('editor')
@@ -5713,18 +5716,16 @@ const scenarios = {
   },
 
   /**
-   * THE OPACITY SLIDER BECAME THE BACKGROUND'S ALPHA (#114; owner, 2026-10-03:
-   * alpha "should be built into the colour pickers ... it should not be a
-   * separate opacity setting"; option a, "go ahead"). What the old app left in
+   * WHAT THE OLD APP LEFT, THE WINDOW IT WAS. The Opacity slider became the
+   * Background's alpha (#114), and that alpha and the switch became the
+   * see-through slider (owner, 2026-10-13: "make it a slider only"). Old
    * storage is seeded into a real profile, the app is quit and launched again,
    * and the window must be the window it was:
-   *  - a preset at Opacity 60 with acrylic on paints the same `--p-bg` (the
-   *    byte round(0.6 * 255) = 0x99), with no Opacity row on the page, and the
-   *    Background picker's own alpha moves it;
-   *  - a theme pick with a see-through Background asks first (#60), as a
-   *    changed Opacity did;
+   *  - a preset at Opacity 60 with acrylic on paints the same `--p-bg` (alpha
+   *    0x99), the slider at 40, the picked Background opaque, no Alpha on it;
+   *  - the moved slider is a change to save, so a theme pick asks first (#60);
    *  - a Custom saved at 80 and left live at 60 paints 60, and picking Custom
-   *    again restores its saved 80.
+   *    again restores its saved 80 (the slider at 20).
    */
   async opacityAlpha(ok) {
     const w = world()
@@ -5749,6 +5750,7 @@ const scenarios = {
       await page.locator('[data-settings-tab="appearance"]').click()
       await page.locator('[data-term-card]').first().waitFor({ timeout: 10000 })
     }
+    const slider = page.locator('[data-pref="term-acrylic"] input[type="range"]')
     try {
       // 1. A preset, Opacity 60, acrylic on.
       await relaunchWith({ 'prism.term.theme': 'dracula', 'prism.term.acrylic': '1', 'prism.term.opacity': '60' })
@@ -5757,51 +5759,45 @@ const scenarios = {
         return /^#[0-9a-f]{6}99$/.test(s) ? s : null
       }, 10000)
       ok(!!ground, `a saved Opacity 60 paints the ground at alpha 0x99, as it did (${await sheet()})`)
+      ok((await get('prism.term.seeThrough')) === '40', `it now lives on the slider, at 40 (${await get('prism.term.seeThrough')})`)
       const picked = await get('prism.window.background')
-      ok(picked === ground, `it now lives on the Background colour (${picked})`)
-      ok((await get('prism.term.opacity')) === null, 'and the old key is gone')
+      ok(picked === ground.slice(0, 7), `the Background it was carried on is opaque (${picked})`)
+      ok((await get('prism.term.opacity')) === null && (await get('prism.term.acrylic')) === null, 'and the old keys are gone')
       await openAppearance()
       ok((await page.locator('[data-pref="term-opacity"]').count()) === 0, 'there is no Opacity row')
+      await slider.scrollIntoViewIfNeeded()
+      ok((await slider.inputValue()) === '40', `the slider reads 40 (${await slider.inputValue()})`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/opacity-alpha-row.png') }).catch(() => {})
+      // The Background is a colour only now.
       const row = page.locator('[data-pref="window-background"]')
       await row.scrollIntoViewIfNeeded()
-      const field = row.locator('input:not([type])')
-      ok((await field.inputValue()) === ground, `the Background field shows the eight digits in force (${await field.inputValue()})`)
-      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/opacity-alpha-row.png') }).catch(() => {})
-      // The picker's own alpha moves the window.
       await row.locator('[data-colour-swatch]').click()
       const pop = page.locator('[data-colour-popover][role="dialog"]')
       await pop.waitFor({ timeout: 3000 })
-      const alpha = pop.locator('[role="slider"][aria-label="Alpha"]')
-      ok((await alpha.getAttribute('aria-valuenow')) === '60', `the Alpha slider reads 60 (${await alpha.getAttribute('aria-valuenow')})`)
-      ok((await alpha.getAttribute('aria-valuemin')) === '30', `and goes no lower than the slider did, 30 (${await alpha.getAttribute('aria-valuemin')})`)
-      ok((await alpha.getAttribute('aria-disabled')) !== 'true', 'and is live, with acrylic on')
-      await alpha.focus()
-      await page.keyboard.press('Shift+ArrowLeft')
+      ok((await pop.locator('[role="slider"][aria-label="Alpha"]').count()) === 0, 'the Background picker has no Alpha')
+      await page.keyboard.press('Escape')
+      // The slider moves the window.
+      await slider.fill('50')
       const moved = await until(async () => {
         const s = await sheet()
         return /^#[0-9a-f]{6}(7f|80)$/.test(s) ? s : null
       }, 4000, 50)
-      ok(!!moved, `Shift+Left takes the window to half (${await sheet()})`)
-      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/opacity-alpha-picker.png') }).catch(() => {})
-      await page.keyboard.press('Escape')
-      ok(!!(await until(async () => (await sheet()) === ground, 4000, 50)), 'Escape puts the window back as it was')
+      ok(!!moved, `50 takes the window to half (${await sheet()})`)
+      await slider.fill('40')
+      ok(!!(await until(async () => (await sheet()) === ground, 4000, 50)), 'and 40 puts it back')
 
-      // A theme pick with the see-through Background in force asks first.
-      ok(!(await page.locator('[data-save-term]').isDisabled()), 'a see-through Background lights Save changes, as a changed Opacity did')
+      // A theme pick with a level of your own asks first.
+      ok(!(await page.locator('[data-save-term]').isDisabled()), 'a moved slider lights Save changes, as a changed Opacity did')
       await page.locator('[data-term-card="nord"]').first().click()
       const ask = page.locator('[data-theme-switch-ask]')
       ok(!!(await until(async () => (await ask.count()) === 1, 3000, 50)), 'and a theme pick asks before it forgets it')
       await page.locator('[data-ask-cancel]').click()
       ok((await sheet()) === ground && (await get('prism.term.theme')) === 'dracula', 'Cancel keeps the theme and the see-through')
 
-      // Acrylic off: the bar is there, faded and inert, and the window is solid.
-      await page.locator('[data-pref="term-acrylic"] [role="switch"]').click()
-      ok(!!(await until(async () => /^#[0-9a-f]{6}$/.test(await sheet()), 4000, 50)), `with acrylic off the window is solid (${await sheet()})`)
-      await row.locator('[data-colour-swatch]').click()
-      await pop.waitFor({ timeout: 3000 })
-      ok((await pop.locator('[role="slider"][aria-label="Alpha"]').getAttribute('aria-disabled')) === 'true', 'and the Alpha slider is inert')
-      await page.keyboard.press('Escape')
-      await page.locator('[data-pref="term-acrylic"] [role="switch"]').click()
+      // 0 is off: the window solid.
+      await slider.fill('0')
+      ok(!!(await until(async () => /^#[0-9a-f]{6}$/.test(await sheet()), 4000, 50)), `at 0 the window is solid (${await sheet()})`)
+      ok((await page.locator('[data-pref="term-acrylic"] [data-slider-value]').textContent()) === 'Off', 'and the slider says Off')
 
       // 2. A Custom saved at 80, left live at 60.
       const customTheme = { bg: '#1d1f21', fg: '#c5c8c6', cursor: '#f0c674', ansi: {}, acrylic: true, opacity: 80 }
@@ -5813,7 +5809,8 @@ const scenarios = {
       })
       ok(!!(await until(async () => (await sheet()) === '#1d1f2199', 10000)), `a Custom left live at 60 paints 60 (${await sheet()})`)
       const savedSlot = JSON.parse((await get('prism.term.custom')) ?? '{}')
-      ok(savedSlot.bg === '#1d1f21cc' && savedSlot.opacity === undefined, `its saved 80 rides on its own background (${savedSlot.bg})`)
+      ok(savedSlot.bg === '#1d1f21' && savedSlot.seeThrough === 20 && savedSlot.opacity === undefined && savedSlot.acrylic === undefined,
+        `its saved 80 is its own level, 20, on an opaque ground (${JSON.stringify({ bg: savedSlot.bg, seeThrough: savedSlot.seeThrough })})`)
       await openAppearance()
       await page.locator('[data-term-card="custom"]').first().click()
       const ask2 = page.locator('[data-theme-switch-ask]')
@@ -5821,20 +5818,23 @@ const scenarios = {
       ok(!!(await until(async () => (await sheet()) === '#1d1f21cc', 4000, 50)), `picking Custom again restores the saved 80 (${await sheet()})`)
       ok((await get('prism.window.background')) === null, 'and the live 60 went with the pick')
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/opacity-alpha-custom.png') }).catch(() => {})
+      // Leave solid: a pick of a preset puts its own 0 back.
+      await page.locator('[data-term-card="dracula"]').first().click()
+      if (await until(async () => (await ask2.count()) === 1, 1500, 50)) await page.locator('[data-ask-discard]').click()
     } finally {
       await closeApp(app)
     }
   },
 
   /**
-   * THE SEE-THROUGH WINDOW (#156; owner, 2026-10-10: "add support for the see
-   * through window setting ... its in prism in style settings i want it here
-   * too"). The acrylic row IS it: named and worded as Prism's, right under the
-   * wall, and the switch ALONE makes the window see-through at Prism's own
-   * levels (0xb9 on a dark ground, 0xd1 on a light one), where before it
-   * changed the material and left a preset's ground opaque. The Background's
-   * Alpha shows what is in force and stops at 95 (opaque is the switch's off);
-   * a picked alpha wins; off is solid.
+   * THE SEE-THROUGH SLIDER (owner, 2026-10-13: "can you add a see through
+   * slider, now its just a toggle make it a slider only with it being at 0 by
+   * default"; then "Like Prism: an edit"). The row is named and placed as
+   * Prism's (#156), right under the wall, and holds a slider: 0 by default and
+   * solid, a level paints the window's ground at 1 - level/100 on every
+   * surface as one coat, the Background picker carries no Alpha and a picked
+   * colour leaves the level alone, a moved slider is a change to save, a theme
+   * pick asks and puts the theme's own 0 back, and Custom keeps its level.
    */
   async seeThrough(ok) {
     const w = world()
@@ -5863,21 +5863,11 @@ const scenarios = {
           page: seen(document.querySelector('[data-settings-page] .p-scroll'))
         }
       })
-    const sw = page.locator('[data-pref="term-acrylic"] [role="switch"]')
+    const slider = page.locator('[data-pref="term-acrylic"] input[type="range"]')
     const sub = () => page.locator('[data-pref="term-acrylic"] [data-subtext]').first().textContent()
     const bgRow = page.locator('[data-pref="window-background"]')
     const pop = page.locator('[data-colour-popover][role="dialog"]')
-    /** The Background picker's Alpha, read and closed again. */
-    const alphaReads = async () => {
-      await bgRow.scrollIntoViewIfNeeded()
-      await bgRow.locator('[data-colour-swatch]').click()
-      await pop.waitFor({ timeout: 3000 })
-      const a = pop.locator('[role="slider"][aria-label="Alpha"]')
-      const v = { now: await a.getAttribute('aria-valuenow'), max: await a.getAttribute('aria-valuemax') }
-      await page.keyboard.press('Escape')
-      await until(async () => (await pop.count()) === 0, 3000, 50)
-      return v
-    }
+    const save = page.locator('[data-save-term]')
     /** A theme pick, answering the unsaved-changes question if it asks. */
     const pick = async (id) => {
       await page.locator(`[data-term-card="${id}"]`).first().click()
@@ -5893,54 +5883,73 @@ const scenarios = {
       const rows = await page.evaluate(() => [...document.querySelectorAll('[data-pref]')].map((e) => e.getAttribute('data-pref')))
       const at = rows.indexOf('term-theme')
       ok(rows[at + 1] === 'term-acrylic' && rows[at + 2] === 'window-background', `the row sits right under the wall (${rows.join(' > ')})`)
-      ok((await sw.getAttribute('aria-label')) === 'See-through window', `it is called See-through window (${await sw.getAttribute('aria-label')})`)
-      ok((await sub()) === 'The desktop shows behind every surface.', `with Prism's words (${await sub()})`)
+      ok((await slider.getAttribute('aria-label')) === 'See-through window', `it is a slider called See-through window (${await slider.getAttribute('aria-label')})`)
+      ok((await sub()) === 'How much of the desktop shows behind every surface.', `with its words (${await sub()})`)
+      ok((await page.locator('[data-pref="term-acrylic"] [role="switch"]').count()) === 0, 'and no switch any more')
 
       // The tabs in the top row (the only layout since 2026-10-12): the row
       // and the strip in it are two boxes over one pixel.
       ok((await page.locator('[data-title-bar="tabs"]').count()) === 1, 'the tabs are in the top row')
 
-      // A dark preset: the switch alone paints 0xb9.
+      // 0 by default: solid.
       await pick('dracula')
-      ok(/^#[0-9a-f]{6}$/.test(await sheet()), `off, the window is solid (${await sheet()})`)
-      await sw.click()
-      ok(!!(await until(async () => /^#[0-9a-f]{6}b9$/.test(await sheet()), 4000, 50)), `on a dark preset the switch alone paints alpha b9 (${await sheet()})`)
+      ok((await slider.inputValue()) === '0', `it starts at 0 (${await slider.inputValue()})`)
+      ok(/^#[0-9a-f]{6}$/.test(await sheet()), `at 0 the window is solid (${await sheet()})`)
+      // 30: the ground at 70%.
+      await slider.fill('30')
+      ok(!!(await until(async () => Math.abs(alphaOfHex(await sheet()) - 0.7) < 0.01, 4000, 50)), `at 30 the ground is painted at 70% (${await sheet()})`)
       // EVERY SURFACE IS ONE COAT (owner, 2026-10-11: "not all things change
       // when you turn on see through window, like the sidebar in settings or
       // the tab bar"). A translucent box over another translucent box is two
-      // coats, b9 twice is 92% and three times 98%: solid to the eye.
-      const one = 0xb9 / 255
+      // coats: solid to the eye.
       let seen = await coats()
-      await until(async () => Object.values((seen = await coats())).every((a) => Math.abs(a - one) < 0.01), 4000, 50)
-      ok(Object.values(seen).every((a) => Math.abs(a - one) < 0.01), `on, the strip, the top row, the settings rail and its page each show the desktop through one coat at ${one.toFixed(3)} (${JSON.stringify(seen)})`)
-      const dark = await alphaReads()
-      ok(dark.now === '73' && dark.max === '95', `the Background's Alpha reads 73 and stops at 95 (${dark.now}, max ${dark.max})`)
+      await until(async () => Object.values((seen = await coats())).every((a) => Math.abs(a - 0.7) < 0.01), 4000, 50)
+      ok(Object.values(seen).every((a) => Math.abs(a - 0.7) < 0.01), `the strip, the top row, the settings rail and its page each show the desktop through one coat at 0.7 (${JSON.stringify(seen)})`)
+      ok((await page.locator('[data-pref="term-acrylic"] [data-slider-value]').textContent()) === '30%', 'the value is said beside it')
+      // The keys move it: the range is the browser's own.
+      await slider.focus()
+      await page.keyboard.press('ArrowRight')
+      ok((await slider.inputValue()) === '31', `Right steps it by one (${await slider.inputValue()})`)
+      await page.keyboard.press('ArrowLeft')
+      // The top is 70, the 30% floor.
+      ok((await slider.getAttribute('max')) === '70', `it stops at 70 (${await slider.getAttribute('max')})`)
 
-      // A picked alpha wins; Reset gives the default back.
+      // The Background picker has no Alpha, and a picked colour leaves the level alone.
+      await bgRow.scrollIntoViewIfNeeded()
+      await bgRow.locator('[data-colour-swatch]').click()
+      await pop.waitFor({ timeout: 3000 })
+      ok((await pop.locator('[role="slider"][aria-label="Alpha"]').count()) === 0, 'the Background picker has no Alpha')
+      await page.keyboard.press('Escape')
       const field = bgRow.locator('input:not([type])')
-      await field.fill('#1c233099')
+      await field.fill('#1c2330')
       await field.press('Enter')
-      ok(!!(await until(async () => (await sheet()) === '#1c233099', 4000, 50)), `a picked 60 wins (${await sheet()})`)
+      ok(!!(await until(async () => (await sheet()).startsWith('#1c2330') && Math.abs(alphaOfHex(await sheet()) - 0.7) < 0.01, 4000, 50)), `a picked colour wears the level (${await sheet()})`)
       await page.locator('[data-follow-theme="background"]').click()
-      ok(!!(await until(async () => /^#[0-9a-f]{6}b9$/.test(await sheet()), 4000, 50)), `Reset gives the default back (${await sheet()})`)
 
-      // Off is solid.
-      await sw.click()
-      ok(!!(await until(async () => /^#[0-9a-f]{6}$/.test(await sheet()), 4000, 50)), `switched off, the window is solid (${await sheet()})`)
+      // A moved slider is a change to save; a theme pick asks, then puts its own 0 back.
+      ok(!(await save.isDisabled()), 'a moved slider lights Save changes')
+      await page.locator('[data-term-card="paper"]').first().click()
+      const ask = page.locator('[data-theme-switch-ask]')
+      ok(!!(await until(async () => (await ask.count()) === 1, 3000, 50)), 'and a theme pick asks first')
+      await page.locator('[data-ask-discard]').click()
+      ok(!!(await until(async () => (await slider.inputValue()) === '0' && /^#[0-9a-f]{6}$/.test(await sheet()), 4000, 50)), `the new theme comes with its own 0, solid (${await sheet()})`)
       await until(async () => Object.values((seen = await coats())).every((a) => a === 1), 4000, 50)
-      ok(Object.values(seen).every((a) => a === 1), `off, every one of them is solid (${JSON.stringify(seen)})`)
+      ok(Object.values(seen).every((a) => a === 1), `solid, every one of them is (${JSON.stringify(seen)})`)
 
-      // A light preset: 0xd1. A theme pick resets the switch, as every extra.
-      await pick('paper')
-      await sw.click()
-      ok(!!(await until(async () => /^#[0-9a-f]{6}d1$/.test(await sheet()), 4000, 50)), `on Paper the switch paints alpha d1 (${await sheet()})`)
-      const light = await alphaReads()
-      ok(light.now === '82', `the Background's Alpha reads 82 (${light.now})`)
-      await sw.scrollIntoViewIfNeeded()
+      // Custom keeps its level: save at 45, leave, come back.
+      await slider.fill('45')
+      await save.click()
+      ok(!!(await until(async () => (await save.isDisabled()), 4000, 50)), 'Save changes keeps it')
+      ok(JSON.parse((await page.evaluate(() => localStorage.getItem('prism.term.custom'))) ?? '{}').seeThrough === 45, 'as Custom\'s own level')
+      await pick('dracula')
+      ok((await slider.inputValue()) === '0', 'another theme is at its own 0')
+      await pick('custom')
+      ok(!!(await until(async () => (await slider.inputValue()) === '45', 4000, 50)), `and Custom brings its 45 back (${await slider.inputValue()})`)
+      await slider.scrollIntoViewIfNeeded()
       await sleep(400)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/see-through.png') }).catch(() => {})
 
-      // Leave on a quiet preset, the switch off (a pick resets it): nothing holds the close.
+      // Leave on a quiet preset at 0 (a pick puts it back): nothing holds the close.
       await pick('dracula')
     } finally {
       await closeApp(app)
@@ -6412,11 +6421,10 @@ const scenarios = {
     ok(Math.abs(open.a - 128 / 255) < 0.01, `over an opaque window the Save fill is see-through (alpha ${open.a.toFixed(2)})`)
     ok(open.r >= 4.5, `and its label reads on the composite (${open.r.toFixed(1)}:1)`)
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-see-through.png') }).catch(() => {})
-    // A see-through window: acrylic on, the Background at 60%.
-    await gotoPref(page, 'term-acrylic')
-    await page.locator('[data-pref="term-acrylic"] [role="switch"]').click()
+    // A see-through window: the slider at 40, a picked Background under it.
+    await setSeeThrough(page, 40)
     const bgPick = page.locator('[data-pref="window-background"] input:not([type])')
-    await bgPick.fill('#1c233099')
+    await bgPick.fill('#1c2330')
     await bgPick.press('Enter')
     await until(async () => (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--p-bg').trim())) === '#1c233099', 6000, 50)
     await sleep(400)
@@ -6426,7 +6434,7 @@ const scenarios = {
     await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/accent-under-glass.png') }).catch(() => {})
     // Back to an opaque window and a working colour that follows the theme.
     await page.locator('[data-follow-theme="background"]').click()
-    await page.locator('[data-pref="term-acrylic"] [role="switch"]').click()
+    await setSeeThrough(page, 0)
     await gotoPref(page, 'agent-color')
     await page.locator('[data-follow-theme="working"]').click()
     await until(async () => (await save.isDisabled()), 4000, 50)
