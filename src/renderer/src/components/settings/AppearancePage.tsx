@@ -1,22 +1,12 @@
-import { useEffect, useState, useSyncExternalStore, type JSX } from 'react'
+import { useSyncExternalStore, type JSX } from 'react'
 import { WINDOW_EDGES, type WindowEdges } from '@shared/windowEdges'
 import { RESET_LINK, Segmented } from '@core/renderer/settings/fields'
 import { ColourField } from '@core/renderer/settings/ColourPicker'
 import { SettingRow } from '@core/renderer/settings/layout/SettingRow'
 import { SettingsSection } from '@core/renderer/settings/layout/SettingsSection'
 import { TerminalThemeSection } from '@core/renderer/settings/sections/TerminalThemeSection'
-import { alphaOf, withAlpha, type AlphaRange } from '@core/renderer/lib/colour'
-import {
-  customTermTheme,
-  onTermLookChange,
-  termAcrylic,
-  termGroundAlpha,
-  termThemeId,
-  useTermAcrylic,
-  useTermGroundAlpha,
-  useTermThemeId
-} from '@core/renderer/lib/termLook'
-import { SEE_THROUGH_MAX } from '@core/renderer/lib/seeThrough'
+import { opaque, type AlphaRange } from '@core/renderer/lib/colour'
+import { onTermLookChange, termThemeId, useTermThemeId } from '@core/renderer/lib/termLook'
 import { presetAccent, resolveTermTheme } from '@core/renderer/lib/termTheme'
 import { setWindowEdges, useWindowEdges } from '../../lib/edgesPrefs'
 import { setTabSwitch, useTabSwitch, type TabSwitch } from '../../lib/tabSwitchPrefs'
@@ -94,14 +84,8 @@ const themeColours = (): string => {
   const bg = windowBackground()
   const vars = chromeTokens(bg ? { ...theme, background: bg } : theme, 1, presetAccent(id)).vars
   const themeBg = chromeTokens(theme, 1, presetAccent(id)).vars['--p-bg-solid']
-  // The theme's ground AS THE WINDOW PAINTS IT (#114): its solid colour at the
-  // theme's own alpha (a Custom may carry one), so the row shows the
-  // see-through that is in force while nothing is picked. Under the switch
-  // that is what the window paints, an opaque theme's default included (#156),
-  // so the Alpha reads 73 on a dark preset rather than 100.
-  const own = id === 'custom' ? customTermTheme() : null
-  const alpha = termAcrylic() ? termGroundAlpha() : own ? alphaOf(own.bg) : 1
-  return `${vars['--p-accent']}|${withAlpha(themeBg, alpha)}|${vars['--p-secondary']}`
+  // The theme's ground, SOLID: the see-through is the slider's (2026-10-13).
+  return `${vars['--p-accent']}|${themeBg}|${vars['--p-secondary']}`
 }
 const onColoursChange = (cb: () => void): (() => void) => {
   const offs = [onTermLookChange(cb), onWindowBackgroundChange(cb), onWindowSecondaryChange(cb)]
@@ -121,7 +105,6 @@ function WindowColour({
   id,
   sub,
   chosen,
-  shown = chosen,
   fromTheme,
   onPick,
   range
@@ -129,9 +112,6 @@ function WindowColour({
   id: 'window-background' | 'window-accent' | 'window-secondary'
   sub: string
   chosen: string | null
-  /** What the field shows of the choice, where it paints otherwise than it
-   *  is stored (an opaque Background under the see-through switch, #156). */
-  shown?: string | null
   fromTheme: string
   onPick: (hex: string | null) => void
   /** The alpha this colour may carry (#114). */
@@ -153,7 +133,7 @@ function WindowColour({
           row that followed the theme included (#112). */}
       <ColourField
         label={o.label}
-        value={shown ?? fromTheme}
+        value={chosen ?? fromTheme}
         onChange={onPick}
         onRevert={() => onPick(chosen)}
         {...range}
@@ -170,40 +150,18 @@ function WindowColours(): JSX.Element {
     themeColours
   ).split('|')
   const secondary = useWindowSecondary()
-  const acrylicOn = useTermAcrylic()
-  const groundAlpha = useTermGroundAlpha()
-  // The material is Windows 11's (1809 has none): where main says it cannot
-  // be had, the window never shows the desktop, so the alpha is as inert as
-  // with the switch off, the rule the theme editor's Background follows.
-  // Null until main answers reads as supported, so the row does not flash.
-  const [acrylicOk, setAcrylicOk] = useState<boolean | null>(null)
-  useEffect(() => {
-    let live = true
-    void window.prism.acrylicSupported().then((ok) => {
-      if (live) setAcrylicOk(ok)
-    })
-    return () => {
-      live = false
-    }
-  }, [])
-  const acrylic = acrylicOn && acrylicOk !== false
   return (
     <>
-      {/* THE BACKGROUND'S ALPHA IS THE WINDOW'S SEE-THROUGH (#114; owner,
-          2026-10-03: alpha "should be built into the colour pickers ... it
-          should not be a separate opacity setting"). At least 30%, and inert
-          while acrylic is off, when the desktop does not show through.
-          OPAQUE IS THE SWITCH'S OFF (#156, Prism's rule): under it an opaque
-          pick paints the default see-through and the field shows that, and
-          the Alpha stops at 95%, so the field and the window always agree. */}
+      {/* THE BACKGROUND IS A COLOUR ONLY (owner, 2026-10-13: the see-through
+          slider "only"): the slider over the theme wall is the see-through,
+          so this picker carries no Alpha, and a pick is stored opaque. */}
       <WindowColour
         id="window-background"
-        sub={acrylic ? 'Its alpha lets the desktop show through.' : appOpt('window-background').sub}
+        sub={appOpt('window-background').sub}
         chosen={background}
-        shown={background && acrylic ? withAlpha(background, groundAlpha) : background}
         fromTheme={themeBg}
-        onPick={setWindowBackground}
-        range={{ alphaMin: 0.3, alphaMax: acrylic ? SEE_THROUGH_MAX : 1, alphaDisabled: !acrylic }}
+        onPick={(hex) => setWindowBackground(hex && opaque(hex))}
+        range={{ alpha: false }}
       />
       {/* THE SECONDARY COLOUR (owner, 2026-10-12): the vertical tabs'
           sidebar and title bar. The theme's own, a step off its ground, until
