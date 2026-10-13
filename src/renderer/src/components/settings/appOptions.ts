@@ -18,7 +18,7 @@ export interface AppOption {
   id: string
   label: string
   sub: string
-  section: 'window' | 'opening' | 'theme' | 'marks' | 'about'
+  section: 'window' | 'opening' | 'keys' | 'theme' | 'marks' | 'about'
   page: AppPageId
   icon: string
   keywords?: string
@@ -28,7 +28,7 @@ export interface AppOption {
 export const APP_OPTIONS: readonly AppOption[] = [
   { id: 'tab-layout', label: 'Tab position', sub: 'Tabs along the top, or down the side.', section: 'window', page: 'appearance', icon: 'sidebar', keywords: 'vertical horizontal sidebar side left strip top', store: ['prism.window.tabLayout', 'prism.window.sidebar', 'prism.window.sidebarWidth'] },
   { id: 'tab-switch', label: 'Tab switching', sub: 'Which tab comes next when you switch.', section: 'window', page: 'appearance', icon: 'key', keywords: 'ctrl tab mru recent order cycle switch next previous last used', store: ['prism.window.tabSwitch'] },
-  { id: 'agent-keys', label: 'Agent hotkeys', sub: 'Spare shell keys open the sidebar, switch tabs.', section: 'window', page: 'appearance', icon: 'key', keywords: 'shortcuts hotkeys keyboard bindings ctrl s page up page down sidebar agent claude codex keys', store: ['prism.window.agentKeys'] },
+  { id: 'agent-keys', label: 'Agent hotkeys', sub: 'Spare shell keys open the sidebar, switch tabs.', section: 'keys', page: 'terminal', icon: 'key', keywords: 'shortcuts hotkeys keyboard bindings ctrl s page up page down sidebar agent claude codex keys', store: ['prism.window.agentKeys'] },
   { id: 'window-edges', label: 'Panel edges', sub: 'Lines between panels and around the window.', section: 'window', page: 'appearance', icon: 'edges', keywords: 'border lines hairline outline faint solid', store: ['prism.window.edges'] },
   { id: 'window-background', label: 'Background colour', sub: 'Behind the text in window and terminal.', section: 'theme', page: 'appearance', icon: 'viewer', keywords: 'ground backdrop color transparent alpha opacity', store: ['prism.window.background'] },
   { id: 'window-secondary', label: 'Secondary colour', sub: 'The sidebar and title bar beside the terminal.', section: 'theme', page: 'appearance', icon: 'brush', keywords: 'sidebar title bar panel surface chrome secondary color vertical tabs', store: ['prism.window.secondary'] },
@@ -40,7 +40,7 @@ export const APP_OPTIONS: readonly AppOption[] = [
 ]
 
 /** This app's own section headings (the About section has none). */
-export const APP_SECTIONS = { window: 'Window', opening: 'Opening terminals', about: '' } as const
+export const APP_SECTIONS = { window: 'Window', opening: 'Opening terminals', keys: 'Keys', about: '' } as const
 
 /** One of this app's rows by id. Throws on a typo, which the tests find. */
 export function appOpt(id: string): AppOption {
