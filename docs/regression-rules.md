@@ -114,8 +114,14 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   down 1 to 4 s after it went up (MEASURED, case G2: up 3.9 s of the 14 s the box waited); so with
   phase `question` and `looksLikeQuestion` seeing the box, `working` and `working-title` change
   nothing and `done` raises Finished UNDER the Question (`screenDecides`, `hookStep`'s `seen`). The
-  measured timelines are replayed in `agentHookState.timelines.test.ts`. Finished too early while
-  background agents still run is #149, not this rule. **Failed** is a third line (`agent-failed-on`, on), the
+  measured timelines are replayed in `agentHookState.timelines.test.ts`. **A STOP WITH THE SPINNER UP
+  WAITS FOR THE NEXT TITLE** (#149, 2026-10-14): background subagents run on after the main turn's
+  Stop, and the title keeps spinning until the last ends (MEASURED, case G2; after a lone Stop the
+  star follows in 18 to 84 ms). So `done` with the title last `working` is phase `ending`, still
+  Working: the star is the finish, another spinner frame is `background` (Working, finished by the
+  star that ends it), and no title in `STOP_SETTLE_MS` (1.5 s, past the 960 ms frame) settles it as
+  a finish. A restore is no finish (#151): a resume shows only idle titles, held by
+  `launchSkeleton`. **Failed** is a third line (`agent-failed-on`, on), the
   theme's red apart from the accent by hue (`marksApart`), over Finished and under Question, counted by
   the badge, its kind on the tab's tooltip ("Failed: rate limit"); it raises Finished under it, so
   with the switch off the tab reads as before. Sessions that never send a signal (Codex, an older

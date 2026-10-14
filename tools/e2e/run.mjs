@@ -850,6 +850,31 @@ const scenarios = {
       ok(lost.length === 0, `other agents' signals leave it up while the box shows (${JSON.stringify(lost)})`)
       ok(!!(await until(async () => (await state(0)) === 'working', 8000, 50)), 'answered, the box gone, it is Working')
       await at(0, say('done'))
+      await at(0, IDLE)
+
+      // NOT FINISHED WHILE BACKGROUND SUBAGENTS STILL WORK (#149): case G2's
+      // bytes. The main turn's Stop comes with the spinner up, and the spinner
+      // carries on (a frame about every 960 ms) until the last subagent ends,
+      // when the idle star comes.
+      await look(0)
+      await until(async () => (await state(0)) === null, 4000, 50)
+      await at(0, say('working'))
+      await until(async () => (await state(0)) === 'working', 8000, 50)
+      const bgFrames = Array.from({ length: 6 }, (_, i) => `${spin(i % 2 ? '25D1' : '25D0')}; Start-Sleep -Milliseconds 900`).join('; ')
+      await at(0, `Start-Sleep -Milliseconds 800; ${spin('25D0')}; ${say('done')}; Start-Sleep -Milliseconds 300; ${bgFrames}; ${IDLE}`)
+      await tab(1).click()
+      await until(async () => (await state(0)) === 'working', 4000, 50)
+      await sleep(1500)
+      const early = []
+      for (let t = 0; t < 12; t++) {
+        const s = await state(0)
+        if (s !== 'working') early.push(s)
+        await sleep(250)
+      }
+      ok(early.length === 0, `a Stop while the spinner carries on stays Working, not Finished (${JSON.stringify(early)})`)
+      ok(!!(await until(async () => (await state(0)) === 'done', 10000, 50)), 'and the idle star that ends the background work is the finish')
+      await look(0)
+      await until(async () => (await state(0)) === null, 4000, 50)
 
       // DONE on a background tab: the Finished line.
       await at(0, say('working'))
@@ -3159,6 +3184,15 @@ const scenarios = {
       await sleep(300)
       const behind = await look()
       ok(!behind.skeleton && behind.ready, 'a tab behind, opened after it was ready, shows its agent at once')
+      // A RESUMED CONVERSATION IS NOT NEW WORK (#151; owner, 2026-10-10: about
+      // four restored tabs showed Finished though nothing had finished). The
+      // stand-in replays the measured resume (the `claude` title, then the
+      // idle star), and the poll has had time to find each agent: no tab
+      // shows Finished, a Question or Failed until a turn of its own ends.
+      await polled(page)
+      await sleep(3000)
+      const marks = await page.evaluate(() => [...document.querySelectorAll('[data-tab]')].map((t) => t.getAttribute('data-agent-state')))
+      ok(marks.every((m) => m !== 'done' && m !== 'question' && m !== 'failed'), `restored, no tab says it finished, asks or failed (${JSON.stringify(marks)})`)
     } finally {
       await closeApp(app)
     }
