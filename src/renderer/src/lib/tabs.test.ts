@@ -5,6 +5,7 @@ import {
   closeTab,
   openSettings,
   pickTab,
+  toggleSettings,
   reorderTabs,
   setCwd,
   shellTabs,
@@ -60,6 +61,17 @@ describe('tabs', () => {
     expect(s.tabs.filter((t) => t.kind === 'settings')).toHaveLength(1)
     expect(tabLabels(s.tabs).at(-1)).toBe('Settings')
     expect(shellTabs(s)).toHaveLength(3)
+  })
+  it('the cog is a toggle: open, then closed back to the tab used before it', () => {
+    const open = toggleSettings(pickTab(three(), 'a'))
+    expect(open.activeId).toBe('settings')
+    const shut = toggleSettings(open, 'a')
+    expect(shut.tabs.some((t) => t.kind === 'settings')).toBe(false)
+    expect(shut.activeId).toBe('a')
+    // Nothing to go back to: the neighbour a close hands over to.
+    expect(toggleSettings(open).activeId).toBe('c')
+    // Settings open but behind another tab: the cog fronts it.
+    expect(toggleSettings(pickTab(open, 'b')).activeId).toBe('settings')
   })
   it('reorders, correcting for the removed slot', () => {
     expect(reorderTabs(three().tabs, 'a', 3).map((t) => t.id)).toEqual(['b', 'c', 'a'])

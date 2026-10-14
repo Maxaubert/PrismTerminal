@@ -8,6 +8,8 @@ import { TerminalTextSection } from '@core/renderer/settings/sections/TerminalTe
 import { setNewTabMode, useNewTabFolder, useNewTabMode } from '../../lib/newTabPrefs'
 import { APP_SECTIONS, appOpt } from './appOptions'
 import { useHomeDir } from '../../lib/appFacts'
+import { setAgentKeys, useAgentKeys } from '../../lib/agentKeysPrefs'
+import { AGENT_CHORDS, CHORDS } from '../../lib/keymap'
 
 /**
  * Where a new tab opens and the Explorer menu: this app's own rows about how
@@ -91,12 +93,35 @@ function OpeningSection(): JSX.Element {
   )
 }
 
-/** TERMINAL: the shell, how terminals open, their text, and command help. */
+/**
+ * AGENT HOTKEYS (#198), on by default: keys a shell rarely needs do app
+ * things. On Terminal, not Appearance (owner, 2026-10-14: "put this setting in
+ * the terminal tab not appearance"): it is about what the keys in a terminal
+ * do. The sub names no key (settingsCopy); the row's tooltip lists them, from
+ * the keymap, so it cannot drift.
+ */
+function KeysSection(): JSX.Element {
+  const row = appOpt('agent-keys')
+  const on = useAgentKeys()
+  return (
+    <SettingsSection id="keys" title={APP_SECTIONS.keys}>
+      <span title={AGENT_CHORDS.map((id) => CHORDS[id].agent!.label).join(', ')} className="contents">
+        <SettingRow id="agent-keys" icon={row.icon} label={row.label} sub={row.sub} tap>
+          <Switch on={on} onChange={setAgentKeys} label={row.label} />
+        </SettingRow>
+      </span>
+    </SettingsSection>
+  )
+}
+
+/** TERMINAL: the shell, how terminals open, their keys, their text, and
+ *  command help. */
 export function TerminalPage(): JSX.Element {
   return (
     <>
       <ShellSection />
       <OpeningSection />
+      <KeysSection />
       <TerminalTextSection />
       <HelpSection />
     </>

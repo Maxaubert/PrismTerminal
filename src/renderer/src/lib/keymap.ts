@@ -37,6 +37,9 @@ export interface KeyContext {
   vertical: boolean
   /** The terminal in front runs a full-screen program (vim, less). */
   fullScreen: boolean
+  /** Agent hotkeys are on (Settings, on by default): a chord's `agent` key
+   *  is the app's too. */
+  agentKeys: boolean
 }
 
 interface Chord {
@@ -50,6 +53,16 @@ interface Chord {
    *  Ctrl+Tab or Ctrl+T moved the keyboard into a shell behind the question,
    *  and the Enter meant for it went there). */
   underModal: 'swallow' | 'act'
+  /**
+   * AGENT HOTKEYS (#198; owner, 2026-10-13: "a toggle for better key
+   * bindings ... most people who use this terminal will just use it for
+   * agents, so those key bindings are not really needed and can be better
+   * utilized for actual functions, like for example, control s ... the
+   * sidebar toggle", then "set it to be something natural ... a setting
+   * thats by default on"). A second key for the same action, the app's only
+   * while the setting is on; switched off, the key is the shell's again.
+   */
+  agent?: { label: string; match: (e: KeyEventLike, c: KeyContext) => boolean }
 }
 
 const bare = (e: KeyEventLike): boolean => !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey
@@ -67,7 +80,15 @@ export const CHORDS: Record<ChordId, Chord> = {
   // F11 toggles full screen, and the shell hears it as it always did.
   fullscreen: { label: 'F11', match: (e) => e.key === 'F11', shellToo: true, underModal: 'act' },
   // Next / previous tab (with Shift), jump to a tab, Settings.
-  'next-tab': { label: 'Ctrl+Tab', match: (e) => ctrl(e) && e.key === 'Tab', underModal: 'swallow' },
+  // With agent hotkeys, Ctrl+PageDown and Ctrl+PageUp too, the browser's
+  // and Windows Terminal's habit: nothing Claude Code or Codex binds, and at a
+  // prompt PowerShell and bash do nothing with them.
+  'next-tab': {
+    label: 'Ctrl+Tab',
+    match: (e) => ctrl(e) && e.key === 'Tab',
+    underModal: 'swallow',
+    agent: { label: 'Ctrl+PgDn', match: (e) => ctrl(e) && !e.shiftKey && (e.key === 'PageDown' || e.key === 'PageUp') }
+  },
   'jump-tab': { label: 'Ctrl+1..9', match: (e) => ctrl(e) && !e.shiftKey && /^[1-9]$/.test(e.key), underModal: 'swallow' },
   settings: { label: 'Ctrl+,', match: (e) => ctrl(e) && !e.shiftKey && e.key === ',', underModal: 'swallow' },
   // FIND A TAB, Ctrl+Shift+K (the mockup said Ctrl+K; that is the shell's
@@ -80,12 +101,15 @@ export const CHORDS: Record<ChordId, Chord> = {
   // THE SIDEBAR, Ctrl+Shift+B (owner, 2026-10-12: "bind the sidebar to a
   // hotkey like ctrl b or ctrl s"): open, or collapsed to the left edge. Not
   // Ctrl+B, Claude Code's (background a running task) and the shell's
-  // cursor-left; not Ctrl+S, PowerShell's forward history search and the
-  // terminal's pause. VS Code's sidebar key with Shift. While vertical only.
+  // cursor-left. VS Code's sidebar key with Shift. While vertical only.
+  // WITH AGENT HOTKEYS, CTRL+S as well (owner, 2026-10-13, by name). Known
+  // cost, taken knowingly while the setting is on: Claude Code's stash-the-
+  // prompt, PowerShell's forward history search, the terminal's pause.
   sidebar: {
     label: 'Ctrl+Shift+B',
     match: (e, c) => ctrl(e) && e.shiftKey && k(e) === 'b' && c.vertical,
-    underModal: 'swallow'
+    underModal: 'swallow',
+    agent: { label: 'Ctrl+S', match: (e, c) => ctrl(e) && !e.shiftKey && k(e) === 's' && c.vertical }
   },
   // New tab is Ctrl+T and close tab is Ctrl+W (owner, 2026-09-18 and -19),
   // with or without shift, as in Prism and in every browser. That takes both
@@ -110,8 +134,15 @@ const ORDER = Object.keys(CHORDS) as ChordId[]
 
 /** The app's chord for this key, or null when it is the shell's. */
 export function chordOf(e: KeyEventLike, c: KeyContext): ChordId | null {
-  return ORDER.find((id) => CHORDS[id].match(e, c)) ?? null
+  return (
+    ORDER.find((id) => CHORDS[id].match(e, c)) ??
+    (c.agentKeys ? ORDER.find((id) => CHORDS[id].agent?.match(e, c)) : undefined) ??
+    null
+  )
 }
+
+/** The chords agent hotkeys add, for the setting's tooltip and the tests. */
+export const AGENT_CHORDS = ORDER.filter((id) => CHORDS[id].agent)
 
 /** Does the app take this key from the shell? xterm yields exactly these. */
 export function appOwnsKey(e: KeyEventLike, c: KeyContext): boolean {
@@ -119,7 +150,9 @@ export function appOwnsKey(e: KeyEventLike, c: KeyContext): boolean {
   return id !== null && !CHORDS[id].shellToo
 }
 
-/** What the UI calls a chord. */
-export function keyLabel(id: ChordId): string {
-  return CHORDS[id].label
+/** What the UI calls a chord: its agent key where agent hotkeys are on and
+ *  it has one, the shorter key being the one worth teaching. */
+export function keyLabel(id: ChordId, agentKeys = false): string {
+  const a = CHORDS[id].agent
+  return agentKeys && a ? a.label : CHORDS[id].label
 }
