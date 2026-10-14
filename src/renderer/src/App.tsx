@@ -60,7 +60,7 @@ import { useAgentIndicator } from '@core/renderer/lib/useAgentIndicator'
 import { useDictationArm } from '@core/renderer/lib/useDictation'
 import { DictationPill } from '@core/renderer/components/DictationPill'
 import CopiedBadge from '@core/renderer/components/CopiedBadge'
-import { copyText } from '@core/renderer/lib/copyNotice'
+import { copyText, copyTextQuietly } from '@core/renderer/lib/copyNotice'
 import UpdateChip from '@core/renderer/components/UpdateChip'
 import UpdateDialog from '@core/renderer/components/UpdateDialog'
 import { useUpdateFlow } from '@core/renderer/lib/useUpdateFlow'
@@ -219,7 +219,7 @@ export default function App(): JSX.Element {
   }, [settingsOpen, settingsPage])
 
   // The latest of everything, for listeners registered once.
-  const live = useRef({ state, workingIds, agentIds, blocked: false, front: '' })
+  const live = useRef({ state, workingIds, agentIds, blocked: false })
 
   // MOST RECENT (#158): the tabs by last use, and the walk of a Ctrl hold.
   // Refs, not state: nothing is drawn from them, and the key listener is
@@ -481,17 +481,22 @@ export default function App(): JSX.Element {
   // Put away while RENDERING, not in an effect: an effect would paint one
   // frame of the popup over the question first.
   const helpBlocked = !!ask || update.state.open || !helpOn
-  // AND IT LEAVES WHEN WHAT IS IN FRONT CHANGES. The app's chords keep working
-  // over the popup, and three of them hand the keyboard to something BEHIND it:
-  // Ctrl+T and Ctrl+Tab mount a terminal, which takes the focus as it attaches,
-  // and Ctrl+Shift+F opens the find bar. Left up, the popup then sat over a
-  // focused shell, and a question typed "into the search field" was typed into
-  // that shell instead. So it remembers what was in front when it opened (the
-  // tab, and whether find was showing) and goes as soon as that is no longer so.
-  const inFront = `${activeId ?? ''}|${findFor ?? ''}`
-  const [helpFront, setHelpFront] = useState(inFront)
-  const helpStale = helpFront !== inFront
-  if (helpOpen && (helpBlocked || helpStale)) setHelpOpen(false)
+  // IT STAYS ACROSS A TAB SWITCH since it became a side panel (#199): it is
+  // not a dialog any more, the shell beside it is usable, and a tab switch
+  // that hands the keyboard to a shell hands it to a shell the eye can see.
+  // (The popup had to leave then: it sat over a focused shell, and a question
+  // typed "into the search field" went to that shell.)
+  if (helpOpen && helpBlocked) setHelpOpen(false)
+  // FIND AND THE PANEL SHARE THE TERMINAL'S TOP RIGHT: the one opened last
+  // wins. Find opening puts the panel in; the panel opening closes find.
+  const [findSeen, setFindSeen] = useState(findFor)
+  if (findSeen !== findFor) {
+    setFindSeen(findFor)
+    if (findFor && helpOpen) setHelpOpen(false)
+  }
+  // Mounted from the first opening on, so it can slide OUT as well as in.
+  const [helpMounted, setHelpMounted] = useState(false)
+  if (helpOpen && !helpMounted) setHelpMounted(true)
   const toggleHelp = useCallback(() => {
     // The chip it opens on is the language of the shell in front; with no
     // shell in front, the last one picked by hand, else what a new terminal
@@ -503,14 +508,17 @@ export default function App(): JSX.Element {
         ? shellOfShellId(shellIds.current.get(front.id))
         : (helpShell() ?? shellOfShellId(savedShellId()))
     )
-    setHelpFront(live.current.front)
-    setHelpOpen((was) => (was ? false : helpEnabled() && !live.current.blocked))
+    setHelpOpen((was) => {
+      const next = was ? false : helpEnabled() && !live.current.blocked
+      if (next) setFindFor(null)
+      return next
+    })
   }, [])
   // The latest of everything, for listeners registered once. `blocked` is
   // whether something that outranks the help popup is up (see above).
   const updateOpen = update.state.open
   useEffect(() => {
-    live.current = { state, workingIds, agentIds, blocked: !!ask || updateOpen, front: inFront }
+    live.current = { state, workingIds, agentIds, blocked: !!ask || updateOpen }
   })
   /** The running version, for the window's "You have" line. Asked once. */
   const version = useAppVersion()
@@ -540,9 +548,14 @@ export default function App(): JSX.Element {
   useTaskbarBadge({ doneIds, questionIds, workingIds, failedIds })
 
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
-  // keyboard back: clicking or dragging a tab is not "I left the shell".
+  // keyboard back: clicking or dragging a tab is not "I left the shell". With
+  // command help out, only when the TAB changed: its own opening keeps the
+  // keyboard in its search field (#199).
+  const focusedShell = useRef<string | null>(null)
   useEffect(() => {
-    if (activeShell && !ask && !findOpen && !update.state.open && !helpOpen)
+    const moved = activeShell?.id !== focusedShell.current
+    focusedShell.current = activeShell?.id ?? null
+    if (activeShell && !ask && !findOpen && !update.state.open && (!helpOpen || moved))
       focusTermSession(activeShell.id)
   }, [activeShell, ask, findOpen, update.state.open, helpOpen])
 
@@ -778,6 +791,24 @@ export default function App(): JSX.Element {
             className="relative flex min-h-0 min-w-0 flex-1 flex-col"
             style={beside && sidebarOpen ? CORNER_CUT : undefined}
           >
+            {/* COMMAND HELP (#12), A SIDE PANEL OVER THE TERMINAL'S RIGHT SIDE
+                (#199), under the title bar. It is handed the clipboard and
+                NOTHING ELSE: no session id, no termInput. It cannot type into
+                a shell because it has no way to reach one, which is the owner's
+                rule (picking a command does NOT insert it). Its copy is the
+                quiet one: the row's check says it, not the app's badge. */}
+            {helpMounted && helpOn && (
+              <Suspense fallback={null}>
+                <HelpPanel
+                  open={helpOpen && !helpBlocked}
+                  shell={helpFor}
+                  monoFont={termFontStack()}
+                  onCopy={copyTextQuietly}
+                  onPickShell={setHelpShell}
+                  onClose={() => setHelpOpen(false)}
+                />
+              </Suspense>
+            )}
             <div
               className="relative min-h-0 min-w-0 flex-1"
               data-term-host
@@ -938,21 +969,6 @@ export default function App(): JSX.Element {
         />
       )}
 
-      {/* COMMAND HELP (#12), mounted once. It is handed the clipboard and
-          NOTHING ELSE: no session id, no termInput. It cannot type into a shell
-          because it has no way to reach one, which is the owner's rule (picking
-          a command does NOT insert it). */}
-      {helpOpen && !helpBlocked && !helpStale && (
-        <Suspense fallback={null}>
-          <HelpPanel
-            shell={helpFor}
-            monoFont={termFontStack()}
-            onCopy={copyText}
-            onPickShell={setHelpShell}
-            onClose={() => setHelpOpen(false)}
-          />
-        </Suspense>
-      )}
 
       {/* Mounted once, here: the chip lives in the title bar, the window it
           opens belongs to the whole app. */}
