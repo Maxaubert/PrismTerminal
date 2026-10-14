@@ -2835,13 +2835,23 @@ const scenarios = {
     const hoverAndMeasure = async (sel) => {
       const b = await page.locator(sel).boundingBox()
       await page.mouse.move(b.x + b.width - 3, b.y + b.height - 3) // off-centre, as a hand lands
-      await until(async () => (await tip.count()) === 1, 3000, 50)
+      await until(async () => (await tip.count()) === 1, 4000, 50)
       await sleep(200) // its entrance
       const t = await tip.boundingBox()
       return { item: b, tip: t, text: await tip.textContent(), title: await page.locator(sel).getAttribute('title') }
     }
     try {
       await until(async () => (await tabLabels(page)).length === 1)
+      // NOT AT ONCE: the pointer rests 1.5 s first (owner, 2026-10-14: "they
+      // appear too fast").
+      {
+        const b = await page.locator('[data-title-help]').boundingBox()
+        await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
+        await sleep(1000)
+        ok((await tip.count()) === 0, 'a second on the ? shows no tip yet')
+        await page.mouse.move(5, 300)
+        await until(async () => (await tip.count()) === 0, 2000, 50)
+      }
       const help = await hoverAndMeasure('[data-title-help]')
       ok(!!help.tip, `hovering the ? shows the app's own tip ("${help.text}")`)
       if (help.tip) {
