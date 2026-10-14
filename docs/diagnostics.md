@@ -192,7 +192,10 @@ time. The only 4-hour timer in main is the update check (`src/main/update.ts`, `
 Prism's own check has the same cadence). The same GitHub request measured alone, in Electron's
 main, blocked the loop for under 70 ms, so the request itself is not shown to be the cause. Each
 check now writes an `update-check` crumb (its steps' times and the heap); the next stall's crumb
-says which step it was. The full review: `Documents\Claude\research\prism-terminal\2026-10-14-diag-review.md`.
+says which step it was. PROBED the same day: a packaged build checking every 2 min, offered an
+update, with no tabs, ran 9 checks in 16 min (each 0.24 to 0.57 s) and logged no stall. So the check
+alone does not stall; the cause needs load (many Claude tabs, a big heap) or is something else on the
+same cadence. The crumbs from a busy Stable copy (0.50.2 or later) will tell. The full review: `Documents\Claude\research\prism-terminal\2026-10-14-diag-review.md`.
 
 ## Claude Code shows a text caret and ignores clicks (#182, 2026-10-12)
 
