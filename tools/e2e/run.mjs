@@ -3338,6 +3338,10 @@ const scenarios = {
     await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x25D0 + ' Claude Code'")
     await until(() => page.evaluate(() => !!document.querySelector('[data-agent-state="working"]')), 8000, 50)
     await sleep(1200)
+    // A working tab's close takes no room until the tab is hovered (#211):
+    // the pointer goes to the tab first, as a hand does.
+    await page.locator('[data-tab]').nth(1).hover()
+    await sleep(250)
     await page.locator('[data-tab-close]').nth(1).click({ force: true })
     ok(await until(async () => (await dialog().count()) === 1, 4000), 'a working agent asks too')
     ok(/working for/.test((await dialog().textContent()) ?? ''), 'and says how long it has been working')
