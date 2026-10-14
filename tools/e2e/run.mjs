@@ -2756,6 +2756,30 @@ const scenarios = {
    * asks both wear the accent, with white text on a red.
    */
   /**
+   * NO WINDOWS SYSTEM MENU ON A RIGHT-CLICK (owner, 2026-10-13: "stop chromium
+   * right click menus like this from appearing in the terminal"). Windows
+   * raises it for a right-click on a drag region; the window refuses it. The
+   * menu is the system's, drawn outside the page, so what is checked is the
+   * window's answer to the event Electron raises for it.
+   */
+  async systemMenu(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      const answer = await app.evaluate(({ BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows()[0]
+        let prevented = false
+        win.emit('system-context-menu', { preventDefault: () => (prevented = true) }, { x: 10, y: 10 })
+        return { listeners: win.listenerCount('system-context-menu'), prevented }
+      })
+      ok(answer.listeners >= 1 && answer.prevented, `the window refuses the system menu (${JSON.stringify(answer)})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
    * AGENT HOTKEYS (#198; owner, 2026-10-13: "a toggle for better key
    * bindings", Ctrl+S "the sidebar toggle", "a setting thats by default on").
    * Over a focused shell: Ctrl+PageUp / Ctrl+PageDown switch tabs and, with
