@@ -4543,7 +4543,15 @@ const scenarios = {
       const wantVariant = await variantRow.locator('[data-help-command]').textContent()
       // THE WHOLE ROW COPIES (owner, 2026-10-13), not only its button.
       await variantRow.locator('[data-help-task]').click()
-      ok(!!wantVariant && wantVariant !== wantMain && (await until(async () => (await clip()) === wantVariant, 3000, 50)), 'a click anywhere on a row copies that row')
+      ok(!!wantVariant && wantVariant !== wantMain && (await until(async () => (await clip()) === wantVariant, 3000, 50)), 'a click on a row copies that row')
+      // BUT NOT A CLICK IN ITS COMMAND'S WELL (owner, 2026-10-14: "if i click
+      // inside the box with the command ... im probably trying to select the
+      // text"): there only the copy button copies.
+      await mainRow.locator('[data-help-command]').click()
+      await mainRow.locator('[data-help-well]').click({ position: { x: 3, y: 3 } })
+      await sleep(300)
+      ok((await clip()) === wantVariant, `a click in the command's box copies nothing (${await clip()})`)
+      await page.evaluate(() => window.getSelection()?.removeAllRanges())
       // THE COMMAND IS TEXT TO SELECT (owner, 2026-10-13): the text cursor over
       // it, the selection in the accent, and a drag selects without copying.
       const mainCode = mainRow.locator('[data-help-command]')

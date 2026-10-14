@@ -254,10 +254,16 @@ function Row({
         </span>
       ) : (
         <span
+          data-help-well
+          // INSIDE THE WELL A CLICK IS FOR SELECTING, NOT COPYING (owner,
+          // 2026-10-14: "if i click inside the box with the command i have to
+          // click the copy icon ... im probably trying to select the text"):
+          // the rest of the row copies; here only the copy button does.
+          onClick={(e) => e.stopPropagation()}
           // A quiet well (owner: "the fields stand out too much"): a shade
           // darker than the panel, fainter still on a light theme, where the
           // same black reads as a grey slab.
-          className={`flex min-w-0 items-center gap-1.5 rounded-[6px] border bg-[color-mix(in_srgb,black_16%,transparent)] py-px pl-2.5 pr-px transition-colors [[data-mode=light]_&]:bg-[color-mix(in_srgb,black_4%,transparent)] ${
+          className={`flex min-w-0 cursor-text items-center gap-1.5 rounded-[6px] border bg-[color-mix(in_srgb,black_16%,transparent)] py-px pl-2.5 pr-px transition-colors [[data-mode=light]_&]:bg-[color-mix(in_srgb,black_4%,transparent)] ${
             active ? 'border-[color:var(--p-line)]' : 'border-transparent group-hover:border-[color:var(--p-line)]'
           }`}
         >
