@@ -11,6 +11,7 @@ import { localAppData } from './appPaths'
 import { MAX_BODY_CHARS } from '@core/shared/releaseNotes'
 import type { UpdateInfo } from '@shared/types'
 import { handoffCommand } from './updateHandoff'
+import { diagMain } from '@core/main/diagLog'
 
 // The in-app update check. Releases publish themselves on every push to main
 // (release.yml), so the app's half is small: notice a newer v<version> on
@@ -112,10 +113,30 @@ export function isReleaseAssetUrl(url: string): boolean {
  */
 export function watchForUpdates(send: (info: UpdateInfo) => void): void {
   if (!app.isPackaged) return
-  const tick = (): void =>
+  // EACH CHECK LEAVES A CRUMB with its steps' times and the main heap (diag
+  // review 2026-10-14): Prism Terminal and Prism both stall main 3 to 4 s at
+  // 4, 8, 12... hours of uptime, the cadence of this check and of nothing
+  // else, while the same fetch measured on its own in Electron's main blocks
+  // for under 70 ms. The crumb next to the next `main-lag` says which step it
+  // was (the request, the parse, the offer) and how big the heap had grown.
+  const tick = (): void => {
+    const t0 = Date.now()
     void latestUpdate()
-      .then((u) => u && send(u))
+      .then((u) => {
+        const fetched = Date.now() - t0
+        if (u) send(u)
+        const mem = process.memoryUsage()
+        diagMain().write('main', 'crumb', {
+          a: 'update-check',
+          offered: !!u,
+          fetchMs: fetched,
+          offerMs: Date.now() - t0 - fetched,
+          heapMb: Math.round(mem.heapUsed / 1048576),
+          rssMb: Math.round(mem.rss / 1048576)
+        })
+      })
       .catch(() => {}) // offline is not an event; the next tick tries again
+  }
   tick()
   setInterval(tick, CHECK_EVERY_MS).unref()
 }

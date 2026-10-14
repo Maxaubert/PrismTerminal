@@ -165,6 +165,7 @@ Prism Terminal and the core say these today:
 | `shell-spawn` | main (core) | `id`, `pid`, `shell`, `cwd`, `resume`, `ms`, `warm` |
 | `shell-exit` | main (core) | `id`, `pid`, `exitCode` |
 | `shell-spawn-failed` | main (core) | `id`, `shell`, `cwd`, `err` |
+| `update-check` | main | `offered`, `fetchMs`, `offerMs`, `heapMb`, `rssMb` (every 4 h; see below) |
 
 Adding one: `crumb('name', { fields })` from `core/renderer/lib/diag` in a page, or
 `diagMain().write('main', 'crumb', { a: 'name', ... })` in main. A crumb that can fire many times a
@@ -182,6 +183,16 @@ second passes `{ often: true }`.
   stack never comes (MEASURED: "Website owner has not opted in").
 - Preload: `...createDiagApi(ipcRenderer)`. Page: `startDiag(bridge)` before the first render.
 - Settings: `<DiagnosticsPage api={bridge} />` and `coreSettingsIndex({ diagnostics: true })`.
+
+## Main stalls 3 to 4 s every 4 hours (diag review, 2026-10-14)
+
+Found reading the logs of the Stable copy and Prism, 10 to 14 Oct: a `main-lag` of 3.2 to 4.1 s at
+4, 8, 12, 16, 20 and 24 hours of uptime, in both apps, about once per 4 h and at the same second each
+time. The only 4-hour timer in main is the update check (`src/main/update.ts`, `CHECK_EVERY_MS`;
+Prism's own check has the same cadence). The same GitHub request measured alone, in Electron's
+main, blocked the loop for under 70 ms, so the request itself is not shown to be the cause. Each
+check now writes an `update-check` crumb (its steps' times and the heap); the next stall's crumb
+says which step it was. The full review: `Documents\Claude\research\prism-terminal\2026-10-14-diag-review.md`.
 
 ## Claude Code shows a text caret and ignores clicks (#182, 2026-10-12)
 
