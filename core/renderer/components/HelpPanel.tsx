@@ -170,6 +170,9 @@ const CheckIcon = ({ shown }: { shown: boolean }): JSX.Element => (
  * and similar tags"): the entry's danger sentence is still the screen
  * reader's and the pointer's.
  */
+/** How far a press may travel and still be a click, not a drag. */
+const DRAG_PX = 4
+
 function Row({
   row,
   index,
@@ -195,6 +198,8 @@ function Row({
 }): JSX.Element {
   const key = `${row.entry.id}#${row.n}`
   const keys = isKeyPress(row.command)
+  // Where this row's press began, to tell a click from a drag.
+  const down = useRef<{ x: number; y: number } | null>(null)
   const fill = active
     ? 'bg-[color-mix(in_srgb,var(--p-text)_13%,transparent)]'
     : striped
@@ -210,12 +215,21 @@ function Row({
       data-help-index={index}
       data-help-active={active || undefined}
       data-help-row
-      onMouseDown={onPoint}
-      onClick={() => {
-        // A drag that selected part of the command is a selection, not a
-        // click: it copies nothing (owner, 2026-10-13: "just clicking there
-        // still copies but you can drag to select").
-        if (keys || (window.getSelection()?.toString() ?? '') !== '') return
+      onMouseDown={(e) => {
+        down.current = { x: e.clientX, y: e.clientY }
+        onPoint()
+      }}
+      onClick={(e) => {
+        // A DRAG IS A SELECTION, NOT A CLICK: it copies nothing (owner,
+        // 2026-10-13: "you can drag to select"), as when it starts in the
+        // command and ends on the row's name. Judged by THIS press moving,
+        // never by a selection being there: one left over from selecting a
+        // command blocked every later click on every row (owner, 2026-10-14:
+        // "clicking here doesnt copy anymore").
+        const d = down.current
+        down.current = null
+        if (keys || (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) > DRAG_PX)) return
+        window.getSelection()?.removeAllRanges()
         onCopy(key, row.command)
       }}
       // The rows rise in after the panel lands, a few at a time.

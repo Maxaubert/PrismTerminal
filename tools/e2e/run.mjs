@@ -4559,19 +4559,32 @@ const scenarios = {
       const sel = await mainCode.evaluate((el) => getComputedStyle(el, '::selection').backgroundColor)
       ok(sel !== 'rgba(0, 0, 0, 0)' && !/^rgb\(0, 120, 215/.test(sel), `its selection wears the accent (${sel})`)
       ok((await mainCode.evaluate((el) => getComputedStyle(el).userSelect)) === 'text', 'the command can be selected')
-      // A click that ends a selection copies nothing: part of the command is
-      // selected (as a drag leaves it) and the row is clicked.
+      // A DRAG copies nothing: from inside the command out onto the row's
+      // name, where the click lands on the row itself.
+      {
+        const c = await mainCode.boundingBox()
+        const n = await mainRow.locator('[data-help-task]').boundingBox()
+        await page.mouse.move(c.x + c.width - 4, c.y + c.height / 2)
+        await page.mouse.down()
+        await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2, { steps: 4 })
+        await page.mouse.move(n.x + n.width / 2, n.y + n.height / 2, { steps: 4 })
+        await page.mouse.up()
+        await sleep(300)
+        ok((await clip()) === wantVariant, `a drag from the command onto the row copies nothing (${await clip()})`)
+      }
+      // A SELECTION LEFT OVER blocks nothing (owner, 2026-10-14: "clicking
+      // here doesnt copy anymore"): with part of a command selected, a click
+      // on the row's name still copies it.
       await mainCode.evaluate((el) => {
         const r = document.createRange()
         r.setStart(el.firstChild, 0)
-        r.setEnd(el.firstChild, 13)
+        r.setEnd(el.firstChild, 5)
         const s = window.getSelection()
         s.removeAllRanges()
         s.addRange(r)
-        el.closest('[data-help-row]').click()
       })
-      await sleep(300)
-      ok((await clip()) === wantVariant, `with part of a command selected, a click copies nothing (${await clip()})`)
+      await mainRow.locator('[data-help-task]').click()
+      ok(!!(await until(async () => (await clip()) === wantMain, 3000, 50)), `with a command still selected, a click on a row's name copies (${await clip()})`)
       await page.evaluate(() => window.getSelection()?.removeAllRanges())
 
       /* ----- the keyboard ----- */
