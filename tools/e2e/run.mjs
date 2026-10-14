@@ -167,7 +167,7 @@ const tabLabels = (page) =>
  */
 const PREF_PAGE = {
   'tab-layout': 'appearance', 'tab-switch': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
-  'window-background': 'appearance', 'window-accent': 'appearance', 'window-secondary': 'appearance', 'term-acrylic': 'appearance',
+  'agent-keys': 'terminal', 'window-background': 'appearance', 'window-accent': 'appearance', 'window-secondary': 'appearance', 'term-acrylic': 'appearance',
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
   'agent-indicator': 'agents', 'agent-done-on': 'agents', 'agent-rainbow': 'agents', 'agent-question-on': 'agents', 'agent-failed-on': 'agents',
@@ -184,7 +184,15 @@ const PREF_PAGE = {
  *  wait for the row. Returns its locator. */
 async function gotoPref(page, id) {
   if (!PREF_PAGE[id]) throw new Error(`gotoPref: no page known for ${id}`)
-  if ((await page.locator('[data-settings-page]').count()) === 0) await page.locator('[data-title-settings]').click()
+  // The cog TOGGLES since 2026-10-13: a page opened a moment ago (it loads
+  // lazily) must be waited for, not clicked again, which would close it.
+  const up = async () => (await page.locator('[data-settings-page]').count()) === 1
+  const inFront = () =>
+    page.evaluate(() => (document.querySelector('[data-tab-active]')?.textContent ?? '').trim() === 'Settings')
+  if (!(await up())) {
+    if (!(await inFront())) await page.locator('[data-title-settings]').click()
+    await until(up, 10000, 50)
+  }
   await page.locator(`[data-settings-tab="${PREF_PAGE[id]}"]`).click()
   const row = page.locator(`[data-pref="${id}"]`).first()
   await row.waitFor({ timeout: 10000 })
@@ -2753,6 +2761,166 @@ const scenarios = {
    * colour should shift to white"). Save changes and the question a theme pick
    * asks both wear the accent, with white text on a red.
    */
+  /**
+   * A TOOLTIP SITS BY ITS ITEM (owner, 2026-10-13: "when i hover over settings
+   * or command help they dont appear under it centered, they appear from
+   * bottom right of that item"). The app draws every title itself: centred
+   * under a title bar button, inside the window at its edge, and Windows has
+   * no title to draw meanwhile; the title is back when the pointer leaves.
+   */
+  async tooltips(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const tip = page.locator('[data-tip]')
+    const hoverAndMeasure = async (sel) => {
+      const b = await page.locator(sel).boundingBox()
+      await page.mouse.move(b.x + b.width - 3, b.y + b.height - 3) // off-centre, as a hand lands
+      await until(async () => (await tip.count()) === 1, 3000, 50)
+      await sleep(200) // its entrance
+      const t = await tip.boundingBox()
+      return { item: b, tip: t, text: await tip.textContent(), title: await page.locator(sel).getAttribute('title') }
+    }
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      const help = await hoverAndMeasure('[data-title-help]')
+      ok(!!help.tip, `hovering the ? shows the app's own tip ("${help.text}")`)
+      if (help.tip) {
+        const dx = Math.abs(help.tip.x + help.tip.width / 2 - (help.item.x + help.item.width / 2))
+        ok(dx <= 1.5, `centred under it (off by ${dx.toFixed(1)}px)`)
+        ok(Math.abs(help.tip.y - (help.item.y + help.item.height + 6)) <= 1.5, `just below it (${Math.round(help.tip.y)} vs ${Math.round(help.item.y + help.item.height)})`)
+      }
+      ok(help.title === null, 'and Windows has no title to draw meanwhile')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tooltip-help.png'), clip: { x: help.item.x - 160, y: 0, width: 320, height: 90 } }).catch(() => {})
+      await page.mouse.move(400, 400)
+      ok(await until(async () => (await tip.count()) === 0, 2000, 50), 'leaving takes it away')
+      ok(!!(await page.locator('[data-title-help]').getAttribute('title')), 'and gives the title back')
+      const cog = await hoverAndMeasure('[data-title-settings]')
+      const vw = await page.evaluate(() => innerWidth)
+      ok(!!cog.tip && cog.tip.x + cog.tip.width <= vw - 5, `near the window's edge it stays inside (${Math.round(cog.tip?.x ?? 0)}+${Math.round(cog.tip?.width ?? 0)} of ${vw})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * NO WINDOWS SYSTEM MENU ON A RIGHT-CLICK (owner, 2026-10-13: "stop chromium
+   * right click menus like this from appearing in the terminal"). Windows
+   * raises it for a right-click on a drag region; the window refuses it. The
+   * menu is the system's, drawn outside the page, so what is checked is the
+   * window's answer to the event Electron raises for it.
+   */
+  async systemMenu(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      const answer = await app.evaluate(({ BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows()[0]
+        let prevented = false
+        win.emit('system-context-menu', { preventDefault: () => (prevented = true) }, { x: 10, y: 10 })
+        return { listeners: win.listenerCount('system-context-menu'), prevented }
+      })
+      ok(answer.listeners >= 1 && answer.prevented, `the window refuses the system menu (${JSON.stringify(answer)})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * AGENT HOTKEYS (#198; owner, 2026-10-13: "a toggle for better key
+   * bindings", Ctrl+S "the sidebar toggle", "a setting thats by default on").
+   * Over a focused shell: Ctrl+PageUp / Ctrl+PageDown switch tabs and, with
+   * the tabs down the side, Ctrl+S shows and hides the sidebar. Switched off
+   * in Settings, Ctrl+S is the shell's again and the sidebar stays put.
+   */
+  async agentKeys(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    // Shell tabs only: Settings rides the strip as a tab of its own.
+    const shells = () => page.locator('[data-tab]').filter({ hasNotText: /^Settings$/ })
+    const front = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll('[data-tab]')]
+          .filter((t) => (t.textContent ?? '').trim() !== 'Settings')
+          .findIndex((t) => t.hasAttribute('data-tab-active'))
+      )
+    const sidebar = () => page.evaluate(() => localStorage.getItem('prism.window.sidebar'))
+    const toShell = async (i = 0) => {
+      await shells().nth(i).click()
+      await page.locator('.xterm').first().click({ force: true })
+    }
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 1), 'one tab')
+      const sw = (await gotoPref(page, 'agent-keys')).locator('[role="switch"]')
+      ok((await sw.getAttribute('aria-checked')) === 'true', 'Agent hotkeys is on by default')
+      // Settings closed (Ctrl+W on its tab), so the tabs are the two shells.
+      await page.keyboard.press('Control+w')
+      await until(async () => (await page.locator('[data-tab]').count()) === 1, 4000, 50)
+      await toShell(0)
+      await page.keyboard.press('Control+t')
+      ok(await until(async () => (await shells().count()) === 2), 'a second tab')
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.press('Control+PageUp')
+      ok(!!(await until(async () => (await front()) === 0, 3000, 50)), `Ctrl+PageUp goes to the tab before (${await front()})`)
+      await page.keyboard.press('Control+PageDown')
+      ok(!!(await until(async () => (await front()) === 1, 3000, 50)), `Ctrl+PageDown to the tab after (${await front()})`)
+
+      await setPref(page, 'tab-layout', 'vertical')
+      await page.locator('[data-title-settings]').click()
+      await until(async () => (await page.locator('[data-settings-page]').count()) === 0, 4000, 50)
+      await toShell(0)
+      const was = (await sidebar()) ?? 'open'
+      await page.keyboard.press('Control+s')
+      ok(!!(await until(async () => (await sidebar()) !== was, 3000, 50)), `Ctrl+S over a shell toggles the sidebar (${was} to ${await sidebar()})`)
+      await page.keyboard.press('Control+s')
+      ok(!!(await until(async () => ((await sidebar()) ?? 'open') === was, 3000, 50)), `and back (${await sidebar()})`)
+
+      // Off: the shell's key again.
+      await (await gotoPref(page, 'agent-keys')).locator('[role="switch"]').click()
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.agentKeys'))) === '0', 'switched off, it is stored')
+      await page.locator('[data-title-settings]').click()
+      await until(async () => (await page.locator('[data-settings-page]').count()) === 0, 4000, 50)
+      await toShell(0)
+      await page.keyboard.press('Control+s')
+      await sleep(400)
+      ok(((await sidebar()) ?? 'open') === was, `off, Ctrl+S leaves the sidebar alone (${await sidebar()})`)
+      await page.keyboard.press('Control+Shift+B')
+      ok(!!(await until(async () => ((await sidebar()) ?? 'open') !== was, 3000, 50)), 'and Ctrl+Shift+B still works')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * THE COG IS A TOGGLE (owner, 2026-10-13: "let me click the settings icon
+   * again to exit settings"): the cog opens Settings, and with Settings in
+   * front the cog closes it and goes back to the tab used before. Its key,
+   * Ctrl+comma, does the same.
+   */
+  async cogToggle(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const cog = page.locator('[data-title-settings]')
+    const settingsUp = async () => (await page.locator('[data-settings-page]').count()) === 1
+    try {
+      ok(await until(async () => (await tabLabels(page)).length === 1), 'one tab')
+      const shell = (await tabLabels(page))[0]
+      await cog.click()
+      ok(!!(await until(settingsUp, 4000, 50)), 'the cog opens Settings')
+      ok((await tabLabels(page)).length === 2, 'as a tab of its own')
+      await cog.click()
+      ok(!!(await until(async () => !(await settingsUp()), 4000, 50)), 'the cog again closes it')
+      ok(JSON.stringify(await tabLabels(page)) === JSON.stringify([shell]), `and its tab with it (${(await tabLabels(page)).join(', ')})`)
+      ok(!!(await until(async () => (await page.locator('[data-tab-active]').count()) === 1, 3000, 50)), 'the shell is in front again')
+      await page.keyboard.press('Control+Comma')
+      ok(!!(await until(settingsUp, 4000, 50)), 'Ctrl+comma opens it')
+      await page.keyboard.press('Control+Comma')
+      ok(!!(await until(async () => !(await settingsUp()), 4000, 50)), 'and closes it')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
   async accentAsk(ok) {
     const w = world()
     const { app, page } = await launch(w, { args: [w.alpha] })
@@ -4128,7 +4296,9 @@ const scenarios = {
     await until(async () => (await tabLabels(page)).length === 1)
     const t0 = Date.now()
     const shot = (name) => page.screenshot({ path: resolve(process.cwd(), `.e2e-shots/${name}.png`) }).catch(() => {})
-    const panel = page.locator('[data-help-panel]')
+    // A SIDE PANEL SINCE #199: mounted from its first opening on, so it can
+    // slide out as well as in; in or out is its own data-help-open.
+    const panel = page.locator('[data-help-panel][data-help-open]')
     const opened = () => until(async () => (await panel.count()) === 1, 6000, 50)
     const closed = () => until(async () => (await panel.count()) === 0, 4000, 50)
     const firstId = () => page.evaluate(() => document.querySelector('[data-help-list] [data-help-id]')?.getAttribute('data-help-id') ?? null)
@@ -4166,16 +4336,28 @@ const scenarios = {
       /* ----- the button ----- */
       ok((await page.locator('[data-title-help]').count()) === 1, 'the ? is in the title bar (the setting is on by default)')
       await page.locator('[data-title-help]').click()
-      ok(await opened(), 'a click on it opens the popup')
-      // The window behind is BLURRED and the panel casts no shadow (owner,
-      // 2026-09-22: "remove the shadow behind this and make the bg blurred").
-      const scrimLook = await page.evaluate(() => ({
-        blur: getComputedStyle(document.querySelector('[data-help-scrim]')).backdropFilter,
-        shadow: getComputedStyle(document.querySelector('[data-help-panel]')).boxShadow
-      }))
+      ok(await opened(), 'a click on it opens the panel')
+      // A SIDE PANEL OVER THE TERMINAL'S RIGHT SIDE (owner, 2026-10-13, #199:
+      // "a sidebar that animates from the side ... overlays over the terminal,
+      // like not the whole terminal"): flush to the window's right edge, under
+      // the title bar, the terminal still showing beside it, no scrim.
+      await sleep(600) // the slide
+      const sheet = await page.evaluate(() => {
+        const p = document.querySelector('[data-help-panel]').getBoundingClientRect()
+        const host = document.querySelector('[data-term-host]').getBoundingClientRect()
+        const bar = document.querySelector('[data-title-bar]')?.getBoundingClientRect()
+        return {
+          right: Math.round(innerWidth - p.right),
+          top: Math.round(p.top),
+          barBottom: Math.round(bar?.bottom ?? 0),
+          bottom: Math.round(innerHeight - p.bottom),
+          termLeftOfIt: Math.round(p.left - host.left),
+          scrim: document.querySelectorAll('[data-help-scrim]').length
+        }
+      })
       ok(
-        /blur\(/.test(scrimLook.blur) && scrimLook.shadow === 'none',
-        `the window behind is blurred and the panel has no shadow (${JSON.stringify(scrimLook)})`
+        sheet.right <= 1 && sheet.top >= sheet.barBottom - 1 && sheet.bottom <= 2 && sheet.termLeftOfIt > 200 && sheet.scrim === 0,
+        `it is a sheet on the right under the title bar, the terminal beside it, no scrim (${JSON.stringify(sheet)})`
       )
       ok(await until(focusIsSearch, 3000, 50), 'and the search field has the focus')
       ok((await page.locator('[data-help-shell="powershell"]').getAttribute('aria-pressed')) === 'true', 'the chip is the shell of the tab in front (PowerShell)')
@@ -4221,9 +4403,9 @@ const scenarios = {
         const box = el.getBoundingClientRect()
         const b = copy.getBoundingClientRect()
         const rows = [...document.querySelectorAll('[data-help-row]')]
-        const header = document.querySelector('[data-help-header]')
-        // A TABLE: every row one height, the columns starting at the same x as
-        // the header's, and the rows alternating in colour (owner, 2026-09-20).
+        // TWO COLUMNS (owner, 2026-10-13, A2): the task wraps to two lines at
+        // most, so a row is one of two heights; the columns start at one x each
+        // and the rows alternate in colour, square cornered.
         const heights = [...new Set(rows.slice(0, 12).map((r) => Math.round(r.getBoundingClientRect().height)))]
         const nameX = [...new Set(rows.slice(0, 12).map((r) => Math.round(r.querySelector('[data-help-task]').getBoundingClientRect().left)))]
         const cmdX = [...new Set(rows.slice(0, 12).filter((r) => r.querySelector('[data-help-command]')).map((r) => Math.round(r.querySelector('[data-help-command]').getBoundingClientRect().left)))]
@@ -4233,20 +4415,21 @@ const scenarios = {
         return {
           w: Math.round(box.width),
           h: Math.round(box.height),
-          inside: box.top >= 0 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth,
+          inside: box.top >= 0 && box.bottom <= innerHeight + 1 && box.left >= 0 && box.right <= innerWidth + 1,
+          edges: [box.left, box.top, box.right, box.bottom, innerWidth, innerHeight].map(Math.round).join(','),
           alpha: alpha(getComputedStyle(el).backgroundColor),
           padX: parseFloat(getComputedStyle(entry).paddingLeft),
           padY: parseFloat(getComputedStyle(entry).paddingTop),
           copyW: Math.round(b.width),
           copyH: Math.round(b.height),
-          copyAtRightEdge: Math.abs(b.right - (entry.getBoundingClientRect().right - 16)) <= 2,
+          copyAtRightEdge: Math.abs(b.right - (entry.getBoundingClientRect().right - 16)) <= 4,
+          corners: getComputedStyle(entry).borderRadius,
           heights,
           nameX,
           cmdX,
           // Row 0 is the plain ground, row 1 the stripe: Prism's own pick.
           zebra: transparent(fills[0]) && !transparent(fills[1]) && transparent(fills[2]) && fills[1] === fills[3],
           anyMarked,
-          headerCols: header ? [...header.children].map((c) => Math.round(c.getBoundingClientRect().left)) : [],
           // NO SUB TEXT (owner, 2026-09-20): a row is a name and a command.
           subText: document.querySelectorAll('[data-help-placeholders], [data-help-summary], [data-help-command-box]').length,
           mono: getComputedStyle(code).fontFamily,
@@ -4255,20 +4438,20 @@ const scenarios = {
           rule: document.querySelectorAll('[data-help-rule]').length,
         }
       })
-      ok(look.w >= 560 && look.w <= 780 && look.h >= 380, `the popup is a popup-sized box (${look.w}x${look.h})`)
-      ok(look.inside, 'wholly on screen')
+      ok(look.w >= 600 && look.w <= 640 && look.h >= 380, `the panel is 620 wide by default and the terminal's height (${look.w}x${look.h})`)
+      ok(look.inside, `wholly on screen (${look.edges})`)
       ok(look.alpha === 1, `on the opaque surface (alpha ${look.alpha})`)
       ok(look.padX >= 12, `a row has its padding (${look.padX}px)`)
       ok(look.copyW >= 26 && look.copyH >= 26, `the copy button is big enough to hit (${look.copyW}x${look.copyH})`)
       ok(look.copyAtRightEdge, 'and sits at the right edge of the row')
-      ok(look.heights.length === 1 && look.heights[0] >= 28, `IT IS A TABLE: every row is the same height (${look.heights.join(', ')}px)`)
+      ok(look.heights.length <= 2 && look.heights.every((h) => h >= 34 && h <= 44), `a row is one or two lines, never taller (${look.heights.join(', ')}px)`)
       ok(look.nameX.length === 1 && look.cmdX.length === 1, `its two columns start at one x each (${look.nameX.join(',')} / ${look.cmdX.join(',')})`)
-      ok(look.headerCols[0] === look.nameX[0] && look.headerCols[1] === look.cmdX[0], `and the header sits over them (${look.headerCols.join(', ')})`)
+      ok(look.corners === '0px', `square cornered (${look.corners})`)
       ok(look.zebra, 'the rows alternate in colour, the first row plain')
       ok(look.anyMarked === 0, `and NOTHING is marked until somebody points at it or walks the list (${look.anyMarked} marked)`)
-      ok(look.subText === 0, `no sub text and no boxed commands: a row is a name and a command (${look.subText} found)`)
+      ok(look.subText === 0, `no sub text: a row is a name and a command (${look.subText} found)`)
       ok(look.mono.split(',')[0].trim() === look.termFont.split(',')[0].trim(), `the command wears the terminal's face (${look.mono.split(',')[0]})`)
-      ok(look.listScrolls === 'auto', 'the list scrolls, the popup does not')
+      ok(look.listScrolls === 'auto', 'the list scrolls, the panel does not')
       // The sentence under the list is GONE (owner, 2026-09-20: "remove this
       // line"). What it said is still true and still proved, by the check
       // below that the terminal is untouched by everything this scenario does.
@@ -4277,42 +4460,43 @@ const scenarios = {
       /* ----- the width is the user's (owner, 2026-09-20) ----- */
       // "you also need to be able to adjust the width of this since some text
       // can be seen": a row is one line and truncates, so the width is how a
-      // long command is read in place. DRAGGED, and the drag is measured
-      // rather than the stylesheet read: the popup is centred, so a pixel of
-      // pointer has to be two of width or the edge runs away from the hand.
+      // long command is read in place. DRAGGED by the panel's left edge, which
+      // draws nothing (owner, 2026-10-13: "remove it"), one to one.
       const panelBox = () => page.locator('[data-help-panel]').evaluate((el) => el.getBoundingClientRect().width)
       const wide0 = await panelBox()
-      const gripBox = await page.locator('[data-help-grip="right"]').evaluate((el) => {
+      const gripBox = await page.locator('[data-help-grip="left"]').evaluate((el) => {
         const b = el.getBoundingClientRect()
-        return { x: b.x + b.width / 2, y: b.y + b.height / 2 }
+        return { x: b.x + b.width / 2, y: b.y + b.height / 2, seen: getComputedStyle(el).backgroundColor, kids: el.children.length }
       })
+      ok(gripBox.kids === 0 && /rgba\(0, 0, 0, 0\)|transparent/.test(gripBox.seen), `the edge draws nothing (${gripBox.seen})`)
       await page.mouse.move(gripBox.x, gripBox.y)
       await page.mouse.down()
-      await page.mouse.move(gripBox.x + 100, gripBox.y, { steps: 8 })
+      await page.mouse.move(gripBox.x - 100, gripBox.y, { steps: 8 })
       await page.mouse.up()
       const wide1 = await panelBox()
-      ok(Math.abs(wide1 - (wide0 + 200)) <= 6, `dragging the right edge 100px widens it by 200 (${wide0} -> ${wide1})`)
+      ok(Math.abs(wide1 - (wide0 + 100)) <= 6, `dragging the left edge 100px out widens it by 100 (${wide0} -> ${wide1})`)
       const cmdWidth = () => page.locator('[data-help-row] [data-help-command]').first().evaluate((el) => el.getBoundingClientRect().width)
       ok((await cmdWidth()) > 0, 'and the command column grew with it')
-      // It is REMEMBERED: the popup closes, opens again, and is still that wide.
+      // It is REMEMBERED: the panel closes, opens again, and is still that wide.
       await page.keyboard.press('Escape')
       await closed()
       await page.keyboard.press('F1')
       await opened()
       ok(Math.abs((await panelBox()) - wide1) <= 2, `and it comes back that wide (${await panelBox()})`)
-      // The keyboard can do it too, on the grip itself.
-      await page.locator('[data-help-grip="right"]').focus()
-      await page.keyboard.press('ArrowLeft')
-      ok(await until(async () => Math.abs((await panelBox()) - (wide1 - 20)) <= 2, 3000, 50), `Left on the grip narrows it a step (${await panelBox()})`)
+      // The keyboard can do it too, on the edge itself: Left moves the edge
+      // left, which widens it.
+      await page.locator('[data-help-grip="left"]').focus()
+      await page.keyboard.press('ArrowRight')
+      ok(await until(async () => Math.abs((await panelBox()) - (wide1 - 20)) <= 2, 3000, 50), `Right on the edge narrows it a step (${await panelBox()})`)
       // Back to where it started, so the rest of the scenario measures what it
       // always did and the next scenario inherits nothing.
-      await page.evaluate(() => localStorage.removeItem('prism.help.width'))
+      await page.evaluate(() => localStorage.removeItem('prism.help.panelWidth'))
       await page.keyboard.press('Escape')
       await closed()
       await page.keyboard.press('F1')
       await opened()
       ok(Math.abs((await panelBox()) - wide0) <= 2, `and clearing the setting is the default width again (${await panelBox()})`)
-      // Put the question back: the popup was closed and reopened above, and
+      // Put the question back: the panel was closed and reopened above, and
       // everything below measures the answers to this one.
       await page.locator('[data-help-search]').focus()
       await page.keyboard.type('how do I find big files')
@@ -4323,28 +4507,20 @@ const scenarios = {
       const wantMain = await mainRow.locator('[data-help-command]').textContent()
       const heightBefore = await mainRow.evaluate((el) => el.getBoundingClientRect().height)
       await page.locator('[data-help-copy="ps-biggest-files#0"]').click()
-      // A copy that worked is said by the app's "Copied" badge at the bottom of
-      // the window (owner, 2026-09-23), which replaced the check in the button.
-      const said = await until(
-        () =>
-          page.evaluate(() => {
-            const el = document.querySelector('[data-copied-badge="shown"]')
-            return el ? { role: el.getAttribute('role'), text: el.textContent } : null
-          }),
-        3000,
-        25
-      )
-      ok(!!said, 'a copy raises the "Copied" badge')
-      ok(said?.role === 'status' && said?.text === 'Copied', 'and a screen reader is told, by the badge')
+      // THE COPY ICON TURNS INTO A CHECK (owner, 2026-10-13), on the row, and
+      // the app's "Copied" badge stays down, so a success is said once.
+      ok(await until(async () => (await page.locator('[data-help-copy="ps-biggest-files#0"][data-help-copied] [data-help-check]').count()) === 1, 3000, 25), 'a copy turns its icon into a check')
+      ok((await page.locator('[data-copied-badge="shown"]').count()) === 0, 'and raises no "Copied" badge')
+      ok(/Copied/.test((await page.locator('[data-help-said]').textContent()) ?? ''), 'a screen reader is told, by the panel')
+      await sleep(400) // the check draws itself
+      await shot('help-copied-dark')
       const heightDuring = await mainRow.evaluate((el) => el.getBoundingClientRect().height)
       ok(heightDuring === heightBefore, `and the row does not change height (${heightBefore} -> ${heightDuring})`)
       ok(!!wantMain && /Sort-Object/.test(wantMain) && (await clip()) === wantMain, `the clipboard holds the EXACT command ("${await clip()}")`)
       ok(
-        await until(async () => (await page.locator('[data-copied-badge]').count()) === 0, 3000, 50),
-        'and the badge leaves the page after it has faded'
-      )
-      ok(
-        await until(async () => (await page.locator('[data-help-copy="ps-biggest-files#0"]').getAttribute('title')) === 'Copy', 4000, 50),
+        // Its own state, not its title: the pointer is still on the button,
+        // and the app's tooltips set a hovered title aside (core Tooltips).
+        await until(async () => (await page.locator('[data-help-copy="ps-biggest-files#0"][data-help-copied]').count()) === 0, 4000, 50),
         'the answer leaves by itself'
       )
       const heightAfter = await mainRow.evaluate((el) => el.getBoundingClientRect().height)
@@ -4354,8 +4530,30 @@ const scenarios = {
       const variantRow = page.locator('[data-help-id="ps-biggest-files"][data-help-variant="1"]')
       ok((await variantRow.count()) === 1 && ((await variantRow.locator('[data-help-task]').textContent()) ?? '').trim().length > 3, `a variant is a row of its own, with a name ("${((await variantRow.locator('[data-help-task]').textContent()) ?? '').trim()}")`)
       const wantVariant = await variantRow.locator('[data-help-command]').textContent()
-      await page.locator('[data-help-copy="ps-biggest-files#1"]').click()
-      ok(!!wantVariant && wantVariant !== wantMain && (await until(async () => (await clip()) === wantVariant, 3000, 50)), "a variant's own button copies the variant")
+      // THE WHOLE ROW COPIES (owner, 2026-10-13), not only its button.
+      await variantRow.locator('[data-help-task]').click()
+      ok(!!wantVariant && wantVariant !== wantMain && (await until(async () => (await clip()) === wantVariant, 3000, 50)), 'a click anywhere on a row copies that row')
+      // THE COMMAND IS TEXT TO SELECT (owner, 2026-10-13): the text cursor over
+      // it, the selection in the accent, and a drag selects without copying.
+      const mainCode = mainRow.locator('[data-help-command]')
+      ok((await mainCode.evaluate((el) => getComputedStyle(el).cursor)) === 'text', 'the text cursor over a command')
+      const sel = await mainCode.evaluate((el) => getComputedStyle(el, '::selection').backgroundColor)
+      ok(sel !== 'rgba(0, 0, 0, 0)' && !/^rgb\(0, 120, 215/.test(sel), `its selection wears the accent (${sel})`)
+      ok((await mainCode.evaluate((el) => getComputedStyle(el).userSelect)) === 'text', 'the command can be selected')
+      // A click that ends a selection copies nothing: part of the command is
+      // selected (as a drag leaves it) and the row is clicked.
+      await mainCode.evaluate((el) => {
+        const r = document.createRange()
+        r.setStart(el.firstChild, 0)
+        r.setEnd(el.firstChild, 13)
+        const s = window.getSelection()
+        s.removeAllRanges()
+        s.addRange(r)
+        el.closest('[data-help-row]').click()
+      })
+      await sleep(300)
+      ok((await clip()) === wantVariant, `with part of a command selected, a click copies nothing (${await clip()})`)
+      await page.evaluate(() => window.getSelection()?.removeAllRanges())
 
       /* ----- the keyboard ----- */
       await page.locator('[data-help-search]').focus()
@@ -4366,30 +4564,30 @@ const scenarios = {
         const n = await markedAt()
         return n >= 0 && n !== from ? n : null
       }, 3000, 50)
-      ok(to === from + 1 || (from === -1 && to === 0), `Down moves the mark one row (${from} -> ${to})`)
+      // With nothing marked, the first Down marks where the cursor is: the top,
+      // or the row last clicked (a click copies it and puts the cursor there).
+      ok(to === from + 1 || (from === -1 && to >= 0), `Down marks a row, then moves it (${from} -> ${to})`)
       const wantSecond = await page.locator(`[data-help-index="${to}"] [data-help-command]`).textContent()
       await page.keyboard.press('Enter')
       ok(!!wantSecond && (await until(async () => (await clip()) === wantSecond, 3000, 50)), "Enter copies the marked row's command")
       await page.keyboard.press('ArrowUp')
-      // Tab stays inside the popup: behind it is a shell, and a Tab that got out
-      // would be typed into it.
-      let escaped = 0
-      for (let i = 0; i < 8; i += 1) {
-        await page.keyboard.press('Tab')
-        if (!(await page.evaluate(() => !!document.activeElement?.closest('[data-help-panel]')))) escaped += 1
-      }
-      ok(escaped === 0, 'Tab cycles inside the popup')
+      // The pointer moving over the list takes the keyboard's mark away (owner,
+      // 2026-10-13: a row "always highlighted").
+      await page.locator('[data-help-list]').hover({ position: { x: 40, y: 60 } })
+      await page.mouse.move(60, 0, { steps: 2 }).catch(() => {})
+      const box = await page.locator('[data-help-list]').boundingBox()
+      await page.mouse.move(box.x + 50, box.y + 80, { steps: 4 })
+      ok(await until(async () => (await page.locator('[data-help-active]').count()) === 0, 2000, 50), 'the pointer over the list takes the mark away')
 
       /* ----- a warning, and a key that is not a command ----- */
       await setQuery('delete a folder')
       ok(await until(async () => (await firstId()) === 'ps-delete-folder', 4000, 50), `"delete a folder" finds it (${await firstId()})`)
-      // The warning is a MARK on the row now, its sentence still there for the
-      // pointer and for a screen reader.
-      const dangerMark = page.locator('[data-help-id="ps-delete-folder"][data-help-variant="0"] [data-help-danger]')
-      const danger = ((await dangerMark.textContent()) ?? '').trim()
-      ok(danger.length > 25 && /^Careful\./.test(danger), `and it carries its warning ("${danger.slice(0, 70)}...")`)
-      ok(/^Careful\./.test((await dangerMark.getAttribute('title')) ?? ''), 'said on hover as well as to a screen reader')
-      ok((await dangerMark.locator('svg').count()) === 1, 'and drawn as a mark, not a paragraph')
+      // NO WARNING LABELS (owner, 2026-10-13: "remove warning labels and
+      // similar tags"): nothing drawn; the sentence is the screen reader's.
+      const dangerRow = page.locator('[data-help-id="ps-delete-folder"][data-help-variant="0"]')
+      ok((await dangerRow.locator('[data-help-danger], svg[stroke="#e0a100"]').count()) === 0, 'no warning mark is drawn')
+      const told = ((await dangerRow.locator('.sr-only').textContent()) ?? '').trim()
+      ok(/Careful\./.test(told) && told.length > 25, `and a screen reader is still told ("${told.slice(0, 60)}...")`)
       await shot('help-danger-dark')
       await setQuery('stop a running command')
       const keys = await until(
@@ -4414,24 +4612,22 @@ const scenarios = {
       await page.keyboard.press('Enter')
       ok(await until(async () => (await termText(page)).includes('landed-2'), 10000), 'and the next keystroke lands in the shell')
 
-      /* ----- a chord that changes what is in front puts it away ----- */
-      // The app's chords work over the popup, and a new tab's terminal takes the
-      // focus as it attaches. Left up, the popup sat over a focused shell and the
-      // next "search" was typed into that shell.
+      /* ----- a new tab: the panel stays, the shell gets the keyboard ----- */
+      // Not a dialog (#199): it stays out across a tab switch, beside a shell
+      // the eye can see, and the keyboard goes to that shell.
       const focusIsShell = () => page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea') === true)
       await page.keyboard.press('F1')
-      ok(await opened(), 'the popup is up again')
+      ok(await opened(), 'the panel is out again')
       await page.keyboard.press('Control+t')
-      ok(await until(async () => (await tabLabels(page)).length === 2), 'Ctrl+T opens a tab over the popup')
-      ok(await closed(), 'and the popup leaves with the tab it was opened over')
-      ok(await until(focusIsShell, 4000, 50), 'the new shell has the keyboard, with nothing over it')
+      ok(await until(async () => (await tabLabels(page)).length === 2), 'Ctrl+T opens a tab')
+      ok((await panel.count()) === 1, 'and the panel stays out beside it')
+      ok(await until(focusIsShell, 4000, 50), 'the new shell has the keyboard')
       await page.keyboard.press('Control+w')
       ok(await until(async () => (await tabLabels(page)).length === 1), 'the extra tab closes again')
-      await page.keyboard.press('F1')
-      ok(await opened(), 'up once more')
+      ok(await opened(), 'and the panel is still out')
       await page.keyboard.press('Control+Shift+f')
-      ok(await until(async () => (await page.locator('[data-term-find]').count()) === 1, 4000, 50), 'Ctrl+Shift+F opens find over the popup')
-      ok(await closed(), 'and the popup leaves, so the find bar is never typed into from underneath it')
+      ok(await until(async () => (await page.locator('[data-term-find]').count()) === 1, 4000, 50), 'Ctrl+Shift+F opens find')
+      ok(await closed(), 'and the panel goes in, since find sits where it is')
       await page.keyboard.press('Escape')
       ok(await until(async () => (await page.locator('[data-term-find]').count()) === 0, 4000, 50), 'Escape closes find')
 
@@ -4451,6 +4647,7 @@ const scenarios = {
       await until(() => page.evaluate(() => document.documentElement.dataset.mode === 'light'), 6000, 50)
       await page.keyboard.press('F1')
       ok(await opened(), 'F1 opens it over Settings too')
+      await sleep(600) // the slide
       await shot('help-browse-light')
       await page.keyboard.type('delete a folder')
       await until(async () => (await firstId()) === 'ps-delete-folder', 4000, 50)

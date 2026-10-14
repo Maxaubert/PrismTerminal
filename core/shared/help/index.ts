@@ -4,8 +4,9 @@ import { CMD_HELP } from './cmd'
 import { GIT_HELP } from './git'
 import { PACKAGES_HELP } from './packages'
 import { POWERSHELL_HELP } from './powershell'
+import { WSL_HELP } from './wsl'
 import type { HelpCategory, HelpEntry } from './types'
-import type { HelpShellChoice } from './shells'
+import { shownIn, type HelpShellChoice } from './shells'
 
 /**
  * THE HELP CATALOGUE, WHOLE (#12). Six files, one list: a file per command
@@ -26,7 +27,8 @@ export const ALL_HELP: readonly HelpEntry[] = [
   ...BASH_HELP,
   ...GIT_HELP,
   ...AGENTS_HELP,
-  ...PACKAGES_HELP
+  ...PACKAGES_HELP,
+  ...WSL_HELP
 ]
 
 /** The id prefix an entry of each shell wears, held by the catalogue test.
@@ -52,13 +54,33 @@ export const HELP_CATEGORIES: ReadonlyArray<{ id: HelpCategory; name: string }> 
   { id: 'git', name: 'Git' },
   { id: 'agents', name: 'Claude Code and Codex' },
   { id: 'packages', name: 'Installing things' },
+  { id: 'wsl', name: 'WSL (Linux on Windows)' },
   { id: 'shell', name: 'The shell itself' }
 ]
 
 /** What one shell's reader is offered: its own entries and every 'any' one,
  *  in catalogue order. */
 export function helpFor(shell: HelpShellChoice): HelpEntry[] {
-  return ALL_HELP.filter((e) => e.shell === shell || e.shell === 'any')
+  return ALL_HELP.filter((e) => shownIn(e.shell, shell))
+}
+
+/**
+ * A command as the row draws and copies it: the placeholders at its END
+ * dropped, so `Set-Location FOLDER` reads `Set-Location ` (owner, 2026-10-13).
+ * Only names the entry declares, bare or wholly quoted (`-m "MESSAGE"` reads
+ * `-m `, owner 2026-10-14: "yes" to rewording the rows that still showed one),
+ * and only trailing ones: one in the middle stays, since without it the
+ * command is a different command. The catalogue is written so that a blank
+ * sits last wherever the shell allows. The trailing space is kept: the copy is
+ * ready for the word it needs.
+ */
+export function blankless(command: string, names: readonly string[]): string {
+  if (!names.length) return command
+  const words = command.split(' ')
+  const blank = (w: string): boolean => names.includes(w.replace(/^(["'])(.*)\1$/, '$2'))
+  let end = words.length
+  while (end > 1 && blank(words[end - 1])) end -= 1
+  return end === words.length ? command : `${words.slice(0, end).join(' ')} `
 }
 
 /**
@@ -72,5 +94,5 @@ export function isKeyPress(command: string): boolean {
   return /^(?:(?:Ctrl|Alt|Shift|Win)\+)*(?:[A-Z]|Esc|Tab|Enter|Space|Backspace|F\d{1,2})$/.test(command)
 }
 
-export { HELP_SHELLS, shellOfShellId, type HelpShellChoice } from './shells'
+export { HELP_SHELLS, shellOfShellId, shownIn, variantsIn, type HelpShellChoice } from './shells'
 export type { HelpCategory, HelpEntry, HelpShell } from './types'

@@ -108,9 +108,14 @@ export function TabSidebar({
   // The sidebar starts under the bar across the window's top.
   const top = BAR_H
   const fromMain = useEdgeWants(collapsed, (p) => sideWants(p, shownNow.current, top, width))
+  // WHILE ITS EDGE IS DRAGGED THE POINTER IS ON IT, whatever the width says:
+  // the window hears each move before the grip has widened the sidebar, so the
+  // last reading before the release was "just outside", and with a short wait
+  // (100 ms) the sidebar went away under the hand that had resized it.
+  const resizing = useRef(false)
   const shown = useHoverReveal(
     collapsed,
-    (e) => sideWants({ x: e.clientX, y: e.clientY }, shownNow.current, top, width),
+    (e) => resizing.current || sideWants({ x: e.clientX, y: e.clientY }, shownNow.current, top, width),
     menu.open || dragW !== null || finding || fromMain
   )
   useEffect(() => {
@@ -151,6 +156,7 @@ export function TabSidebar({
     const w0 = width
     const grip = e.currentTarget
     grip.setPointerCapture(e.pointerId)
+    resizing.current = true
     let last = w0
     const move = (ev: globalThis.PointerEvent): void => {
       last = Math.max(SIDEBAR_WIDTH.min, Math.min(SIDEBAR_WIDTH.max, w0 + ev.clientX - x0))
@@ -162,6 +168,7 @@ export function TabSidebar({
       grip.removeEventListener('pointercancel', up)
       setSidebarWidth(last)
       setDragW(null)
+      resizing.current = false
     }
     grip.addEventListener('pointermove', move)
     grip.addEventListener('pointerup', up)
@@ -186,6 +193,9 @@ export function TabSidebar({
         aria-label="Open tabs"
         aria-orientation="vertical"
         data-tab-sidebar
+        // A tip here sits BESIDE the row it names (Tooltips), not over the
+        // next row down.
+        data-tip-side="right"
         data-sidebar-mode={mode}
         data-sidebar-shown={visible || undefined}
         inert={!visible}

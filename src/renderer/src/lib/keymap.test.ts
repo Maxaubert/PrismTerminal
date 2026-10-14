@@ -11,7 +11,7 @@ const ev = (key: string, mods: Partial<{ ctrlKey: boolean; shiftKey: boolean; al
   metaKey: false,
   ...mods
 })
-const on: KeyContext = { help: true, vertical: true, fullScreen: false }
+const on: KeyContext = { help: true, vertical: true, fullScreen: false, agentKeys: false }
 
 /** The key a label names, as an event: "Ctrl+Shift+K" is K with Ctrl and Shift. */
 const fromLabel = (label: string) => {
@@ -28,6 +28,30 @@ describe('the keymap', () => {
   it('the app takes from the shell exactly the chords it acts on (F11 the shell hears too)', () => {
     for (const id of Object.keys(CHORDS) as ChordId[])
       expect(appOwnsKey(fromLabel(keyLabel(id)), on), id).toBe(id !== 'fullscreen')
+  })
+
+  // AGENT HOTKEYS (#198, owner, 2026-10-13): on by default, a second key for
+  // the sidebar and the tabs; off, those keys are the shell's again.
+  it('agent hotkeys: Ctrl+S is the sidebar (vertical only), Ctrl+PgDn/PgUp the tabs', () => {
+    const agent = { ...on, agentKeys: true }
+    expect(chordOf(ev('s', { ctrlKey: true }), agent)).toBe('sidebar')
+    expect(chordOf(ev('s', { ctrlKey: true }), { ...agent, vertical: false })).toBeNull()
+    expect(chordOf(ev('PageDown', { ctrlKey: true }), agent)).toBe('next-tab')
+    expect(chordOf(ev('PageUp', { ctrlKey: true }), agent)).toBe('next-tab')
+    expect(appOwnsKey(ev('s', { ctrlKey: true }), agent)).toBe(true)
+    // The usual keys still work with them on.
+    expect(chordOf(ev('b', { ctrlKey: true, shiftKey: true }), agent)).toBe('sidebar')
+    expect(chordOf(ev('Tab', { ctrlKey: true }), agent)).toBe('next-tab')
+    // Off: the shell's.
+    for (const e of [ev('s', { ctrlKey: true }), ev('PageDown', { ctrlKey: true }), ev('PageUp', { ctrlKey: true })]) {
+      expect(chordOf(e, on), e.key).toBeNull()
+      expect(appOwnsKey(e, on), e.key).toBe(false)
+    }
+    // Claude Code's own keys stay its, on or off: Ctrl+B, Ctrl+O, Ctrl+R,
+    // Ctrl+G, Ctrl+K, Ctrl+L, Ctrl+J (code.claude.com interactive mode).
+    for (const k of ['b', 'o', 'r', 'g', 'k', 'l', 'j']) expect(chordOf(ev(k, { ctrlKey: true }), agent), k).toBeNull()
+    expect(keyLabel('sidebar', true)).toBe('Ctrl+S')
+    expect(keyLabel('sidebar')).toBe('Ctrl+Shift+B')
   })
 
   it('leaves the shell its own keys', () => {
@@ -58,7 +82,9 @@ describe('the keymap', () => {
         const p = join(dir, f)
         return statSync(p).isDirectory() ? walk(p) : /\.tsx$/.test(f) && !/\.test\./.test(f) ? [p] : []
       })
-    const labels = (Object.keys(CHORDS) as ChordId[]).map(keyLabel).filter((l) => l.includes('+'))
+    const labels = (Object.keys(CHORDS) as ChordId[])
+      .flatMap((id) => [keyLabel(id), keyLabel(id, true)])
+      .filter((l) => l.includes('+'))
     const typed = walk(join(__dirname, '..')).flatMap((f) =>
       readFileSync(f, 'utf8')
         .split(/\r?\n/)
