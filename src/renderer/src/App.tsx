@@ -22,8 +22,9 @@ import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
-import { toggleSidebar, useSidebarMode } from './lib/sidebarPrefs'
+import { toggleSidebar, useSidebarLayout } from './lib/sidebarPrefs'
 import { CHORDS, chordOf } from './lib/keymap'
+import { agentKeys } from './lib/agentKeysPrefs'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
 import { TitleMark } from './components/AppMark'
@@ -46,6 +47,7 @@ import {
   addTab,
   closeTab,
   openSettings,
+  toggleSettings,
   pickTab,
   reorderTabs,
   setCwd,
@@ -58,7 +60,8 @@ import { useAgentIndicator } from '@core/renderer/lib/useAgentIndicator'
 import { useDictationArm } from '@core/renderer/lib/useDictation'
 import { DictationPill } from '@core/renderer/components/DictationPill'
 import CopiedBadge from '@core/renderer/components/CopiedBadge'
-import { copyText } from '@core/renderer/lib/copyNotice'
+import Tooltips from '@core/renderer/components/Tooltips'
+import { copyText, copyTextQuietly } from '@core/renderer/lib/copyNotice'
 import UpdateChip from '@core/renderer/components/UpdateChip'
 import UpdateDialog from '@core/renderer/components/UpdateDialog'
 import { useUpdateFlow } from '@core/renderer/lib/useUpdateFlow'
@@ -165,7 +168,8 @@ export default function App(): JSX.Element {
   // no title bar"). With no tab open there is no sidebar, so the window keeps
   // the top row (#91) to be moved by.
   const beside = vertical && state.tabs.length > 0
-  const sidebarOpen = useSidebarMode() === 'open'
+  // As LAID OUT: still collapsed while a just-pinned sidebar slides in.
+  const sidebarOpen = useSidebarLayout() === 'open'
   /** Which shell each tab was SPAWNED with. The Shell setting only names what
    *  the next terminal launches, so a tab opened before it was changed still
    *  speaks its old language, and the popup preselects by what is running. */
@@ -217,7 +221,7 @@ export default function App(): JSX.Element {
   }, [settingsOpen, settingsPage])
 
   // The latest of everything, for listeners registered once.
-  const live = useRef({ state, workingIds, agentIds, blocked: false, front: '' })
+  const live = useRef({ state, workingIds, agentIds, blocked: false })
 
   // MOST RECENT (#158): the tabs by last use, and the walk of a Ctrl hold.
   // Refs, not state: nothing is drawn from them, and the key listener is
@@ -231,6 +235,9 @@ export default function App(): JSX.Element {
     )
   )
   const walk = useRef<Walk | null>(null)
+  /** The tab used last before Settings, for the cog to go back to. */
+  const backFromSettings = (s: TabState): string | null =>
+    mru.current.find((id) => id !== 'settings' && s.tabs.some((t) => t.id === id)) ?? null
   /** The hold ended (Ctrl released, the window left, another chord): only
    *  now does the tab landed on move to the front, so repeated presses walk
    *  instead of flipping back and forth. */
@@ -476,17 +483,22 @@ export default function App(): JSX.Element {
   // Put away while RENDERING, not in an effect: an effect would paint one
   // frame of the popup over the question first.
   const helpBlocked = !!ask || update.state.open || !helpOn
-  // AND IT LEAVES WHEN WHAT IS IN FRONT CHANGES. The app's chords keep working
-  // over the popup, and three of them hand the keyboard to something BEHIND it:
-  // Ctrl+T and Ctrl+Tab mount a terminal, which takes the focus as it attaches,
-  // and Ctrl+Shift+F opens the find bar. Left up, the popup then sat over a
-  // focused shell, and a question typed "into the search field" was typed into
-  // that shell instead. So it remembers what was in front when it opened (the
-  // tab, and whether find was showing) and goes as soon as that is no longer so.
-  const inFront = `${activeId ?? ''}|${findFor ?? ''}`
-  const [helpFront, setHelpFront] = useState(inFront)
-  const helpStale = helpFront !== inFront
-  if (helpOpen && (helpBlocked || helpStale)) setHelpOpen(false)
+  // IT STAYS ACROSS A TAB SWITCH since it became a side panel (#199): it is
+  // not a dialog any more, the shell beside it is usable, and a tab switch
+  // that hands the keyboard to a shell hands it to a shell the eye can see.
+  // (The popup had to leave then: it sat over a focused shell, and a question
+  // typed "into the search field" went to that shell.)
+  if (helpOpen && helpBlocked) setHelpOpen(false)
+  // FIND AND THE PANEL SHARE THE TERMINAL'S TOP RIGHT: the one opened last
+  // wins. Find opening puts the panel in; the panel opening closes find.
+  const [findSeen, setFindSeen] = useState(findFor)
+  if (findSeen !== findFor) {
+    setFindSeen(findFor)
+    if (findFor && helpOpen) setHelpOpen(false)
+  }
+  // Mounted from the first opening on, so it can slide OUT as well as in.
+  const [helpMounted, setHelpMounted] = useState(false)
+  if (helpOpen && !helpMounted) setHelpMounted(true)
   const toggleHelp = useCallback(() => {
     // The chip it opens on is the language of the shell in front; with no
     // shell in front, the last one picked by hand, else what a new terminal
@@ -498,14 +510,17 @@ export default function App(): JSX.Element {
         ? shellOfShellId(shellIds.current.get(front.id))
         : (helpShell() ?? shellOfShellId(savedShellId()))
     )
-    setHelpFront(live.current.front)
-    setHelpOpen((was) => (was ? false : helpEnabled() && !live.current.blocked))
+    setHelpOpen((was) => {
+      const next = was ? false : helpEnabled() && !live.current.blocked
+      if (next) setFindFor(null)
+      return next
+    })
   }, [])
   // The latest of everything, for listeners registered once. `blocked` is
   // whether something that outranks the help popup is up (see above).
   const updateOpen = update.state.open
   useEffect(() => {
-    live.current = { state, workingIds, agentIds, blocked: !!ask || updateOpen, front: inFront }
+    live.current = { state, workingIds, agentIds, blocked: !!ask || updateOpen }
   })
   /** The running version, for the window's "You have" line. Asked once. */
   const version = useAppVersion()
@@ -535,9 +550,14 @@ export default function App(): JSX.Element {
   useTaskbarBadge({ doneIds, questionIds, workingIds, failedIds })
 
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
-  // keyboard back: clicking or dragging a tab is not "I left the shell".
+  // keyboard back: clicking or dragging a tab is not "I left the shell". With
+  // command help out, only when the TAB changed: its own opening keeps the
+  // keyboard in its search field (#199).
+  const focusedShell = useRef<string | null>(null)
   useEffect(() => {
-    if (activeShell && !ask && !findOpen && !update.state.open && !helpOpen)
+    const moved = activeShell?.id !== focusedShell.current
+    focusedShell.current = activeShell?.id ?? null
+    if (activeShell && !ask && !findOpen && !update.state.open && (!helpOpen || moved))
       focusTermSession(activeShell.id)
   }, [activeShell, ask, findOpen, update.state.open, helpOpen])
 
@@ -553,7 +573,8 @@ export default function App(): JSX.Element {
       const id = chordOf(e, {
         help: helpEnabled(),
         vertical: tabLayout() === 'vertical',
-        fullScreen: focusedTermFullScreen()
+        fullScreen: focusedTermFullScreen(),
+        agentKeys: agentKeys()
       })
       if (!id) return
       const hit = (): void => {
@@ -578,7 +599,8 @@ export default function App(): JSX.Element {
           return
         case 'next-tab': {
           hit()
-          const dir = e.shiftKey ? -1 : 1
+          // Shift+Ctrl+Tab, or Ctrl+PageUp with agent hotkeys, goes back.
+          const dir = e.shiftKey || e.key === 'PageUp' ? -1 : 1
           if (tabSwitch() === 'recent') {
             // The walk is a snapshot taken at the hold's first press, of the
             // list as it stands with the tab in front first (tabMru).
@@ -607,7 +629,7 @@ export default function App(): JSX.Element {
         }
         case 'settings':
           hit()
-          setState(openSettings)
+          setState((s) => toggleSettings(s, backFromSettings(s)))
           return
         case 'find-tab':
           // FIND A TAB (#162): the sidebar's find box.
@@ -653,7 +675,9 @@ export default function App(): JSX.Element {
 
   // The title bar's buttons and the tab strip, placed by the title bar
   // setting below: in two rows, or in one (#91).
-  const onSettings = (): void => setState(openSettings)
+  // The cog toggles (owner, 2026-10-13): out of Settings, back to the tab
+  // used before it.
+  const onSettings = (): void => setState((s) => toggleSettings(s, backFromSettings(s)))
   const onHelp = helpOn ? toggleHelp : undefined
   const chip = (
     <UpdateChip
@@ -769,6 +793,24 @@ export default function App(): JSX.Element {
             className="relative flex min-h-0 min-w-0 flex-1 flex-col"
             style={beside && sidebarOpen ? CORNER_CUT : undefined}
           >
+            {/* COMMAND HELP (#12), A SIDE PANEL OVER THE TERMINAL'S RIGHT SIDE
+                (#199), under the title bar. It is handed the clipboard and
+                NOTHING ELSE: no session id, no termInput. It cannot type into
+                a shell because it has no way to reach one, which is the owner's
+                rule (picking a command does NOT insert it). Its copy is the
+                quiet one: the row's check says it, not the app's badge. */}
+            {helpMounted && helpOn && (
+              <Suspense fallback={null}>
+                <HelpPanel
+                  open={helpOpen && !helpBlocked}
+                  shell={helpFor}
+                  monoFont={termFontStack()}
+                  onCopy={copyTextQuietly}
+                  onPickShell={setHelpShell}
+                  onClose={() => setHelpOpen(false)}
+                />
+              </Suspense>
+            )}
             <div
               className="relative min-h-0 min-w-0 flex-1"
               data-term-host
@@ -830,6 +872,9 @@ export default function App(): JSX.Element {
               <DictationPill sessionId={activeShell ? activeShell.id : null} />
               {/* "Copied", at the bottom centre, for every copy the app makes. */}
               <CopiedBadge />
+              {/* EVERY TOOLTIP PLACED BY ITS ITEM (core Tooltips): centred under
+                  it, not where Windows puts a title, at the pointer. */}
+              <Tooltips />
               {activeShell && findOpen && (
                 <TermFind sessionId={activeShell.id} onClose={() => setFindFor(null)} />
               )}
@@ -929,21 +974,6 @@ export default function App(): JSX.Element {
         />
       )}
 
-      {/* COMMAND HELP (#12), mounted once. It is handed the clipboard and
-          NOTHING ELSE: no session id, no termInput. It cannot type into a shell
-          because it has no way to reach one, which is the owner's rule (picking
-          a command does NOT insert it). */}
-      {helpOpen && !helpBlocked && !helpStale && (
-        <Suspense fallback={null}>
-          <HelpPanel
-            shell={helpFor}
-            monoFont={termFontStack()}
-            onCopy={copyText}
-            onPickShell={setHelpShell}
-            onClose={() => setHelpOpen(false)}
-          />
-        </Suspense>
-      )}
 
       {/* Mounted once, here: the chip lives in the title bar, the window it
           opens belongs to the whole app. */}

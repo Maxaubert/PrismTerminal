@@ -290,6 +290,15 @@ so an update never silently changes what an existing user sees; the bridge to ma
   selection, the menu's Copy and Copy link, and Command help all use it. The badge REPLACED
   Command help's in-row check (owner's pick), so a success is said once; a failed copy still
   marks its row. `selectionEdit` and `helpPanel` assert it; `.e2e-shots/copied-badge.png`.
+- **A TOOLTIP SITS BY ITS ITEM** (core 0.39.0; owner, 2026-10-13: tips "dont appear under it
+  centered, they appear from bottom right of that item ... prism is the exact same ... as a general
+  rule for icons and so on"). Windows draws a `title` at the pointer. `components/Tooltips`, mounted
+  ONCE by each host (it is in the page only while a tip shows, like the badge), takes over every
+  `title`: while the pointer is on an element its title is set aside (Windows has none to draw) and
+  drawn by the app, placed by `lib/tipPlace.ts` centred under the item, above it with no room
+  below, beside it where an ancestor says `data-tip-side="right"` (Prism Terminal's vertical tab
+  sidebar), always inside the window; the title goes back when the pointer leaves. Nothing else
+  changes for a component: it keeps writing `title`. The `tooltips` e2e holds it.
 - **FIND IS CTRL+F, EXCEPT IN A FULL-SCREEN PROGRAM** (#50; owner, 2026-09-23: "can the find
   hotkey be ctrl f", then "lets do it"). This app's `ownsKey` and App's handler take Ctrl+F unless
   the focused shell is on the alternate screen or asked for the mouse (the core's
@@ -412,10 +421,14 @@ so an update never silently changes what an existing user sees; the bridge to ma
   `--p-on-accent` is chosen 4.5:1 on the composite (`selectionFor`), and under a see-through
   ground the text fills are flattened over `--p-bg-solid`. The `opacityAlpha` and `accent` e2e
   hold it.
-- **THE HELP POPUP BLURS THE WINDOW BEHIND IT AND CASTS NO SHADOW** (owner, 2026-09-22: "remove the
-  shadow behind this and make the bg blurred when it's open"): `backdrop-blur` on a lighter scrim; the
-  blur already lifts the panel off the page, and a shadow on top of it read as a dark halo.
-- <a id="command-help"></a>**COMMAND HELP IS A POPUP THAT SHOWS AND COPIES, AND NOTHING ELSE** (#12; owner, 2026-09-19: "an
+- **COMMAND HELP IS A SIDE PANEL SINCE CORE 0.38.0** (#199; owner, 2026-10-13: "a sidebar that animates
+  from the side ... overlays over the terminal, like not the whole terminal"). It replaced the popup and
+  its blurred scrim (owner, 2026-09-22, "make the bg blurred"): a sheet on the terminal column's right,
+  under the title bar, not a dialog, rows in two columns, the whole row copies, the copy icon turns into
+  a check and the "Copied" badge stays down for it. Full rules and the owner's words:
+  `docs/superpowers/specs/2026-10-13-help-panel-design.md`; mockups `docs/research/2026-10-13-help-panel/`.
+  The host mounts it inside the terminal's column and passes `open` (it stays mounted to slide out).
+- <a id="command-help"></a>**COMMAND HELP SHOWS AND COPIES, AND NOTHING ELSE** (#12; owner, 2026-09-19: "an
   easy to use panel where you can find shell commands... searchable... metadata on each command so a
   natural-language search finds it... optional in settings", and 2026-09-20: "a pop up with copy
   icons for easy copying"). Built ONCE in `core/` for both apps: the catalogue and its search in
@@ -423,6 +436,16 @@ so an update never silently changes what an existing user sees; the bridge to ma
   `renderer/settings/sections/HelpSection.tsx` + `helpOptions.ts`, and `writeClipboard` on the bridge. This app's
   part is the way in: `F1`, the ? in the title bar, "Command help" in the terminal's right-click
   menu, the row in Settings > Terminal. The rules that must not regress:
+  - **A BASH READER SEES ONLY WHAT RUNS IN BASH** (core 0.37.0; owner, 2026-10-13: a WSL tab is for
+    learning Linux, and shared rows that "dont work in wsl" should not be there, "even though we duplicate
+    stuff"). An entry's `shell` may be 'windows' (PowerShell and Command Prompt alike, never Bash: winget,
+    wsl.exe, where.exe, the Windows pip spellings), and a variant may carry `shells` (cmd's `type FILE`).
+    `shownIn`/`variantsIn` in `shared/help/shells.ts` are the one rule the panel, the search and `helpFor`
+    read. Bash has its own `python3` venv and pip entries, each shell its own Claude Code and Codex
+    installer, and `wsl.ts` is WSL from the Windows side (install, list, open, default, shut down,
+    update, back up, delete). `catalogue.test.ts` fails on a Windows-only command (winget, a .exe,
+    `$env:`, irm, a Windows path, .ps1/.bat) or a bare `python` in any row a Bash reader is shown from a
+    shared entry. The chip stays "Bash" (owner: Bash is the language, not Linux).
   - **IT NEVER INSERTS AND NEVER RUNS** (owner, 2026-09-19: "picking a command in the help panel
     does NOT insert it into the shell"). The component is handed the clipboard and nothing else: no
     session id, no `termInput`, no bridge. It is NOT a fifth exception to "the app never types into
