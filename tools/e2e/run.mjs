@@ -2437,8 +2437,14 @@ const scenarios = {
       // still at full width, part of the way out, and only then beside it.
       await page.keyboard.press('Control+Shift+B')
       ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open', 'Ctrl+Shift+B pins it again, and Open is stored')
-      const mid = await geo()
-      ok(mid.host.left === 0 && mid.nav.left < 0 && mid.shown, `pinned, it slides in over the terminal first (${JSON.stringify(mid.nav)}, terminal at ${mid.host.left})`)
+      // Read in one go, not mid-slide by luck: a sample can land after the
+      // 240 ms slide and still before the layout moves.
+      const mid = await page.evaluate(() => {
+        const nav = document.querySelector('[data-tab-sidebar]')
+        const host = document.querySelector('[data-term-host]')
+        return { shown: nav?.hasAttribute('data-sidebar-shown') ?? false, slides: nav ? getComputedStyle(nav).transitionProperty.includes('left') : false, host: Math.round(host?.getBoundingClientRect().left ?? -1) }
+      })
+      ok(mid.host === 0 && mid.shown && mid.slides, `pinned, it slides in over the terminal first (${JSON.stringify(mid)})`)
       ok(!!(await until(async () => (await geo()).host.left > 100, 3000, 30)), 'then takes its room beside the terminal')
 
       // THE BAR BESIDE THE SIDEBAR, ALWAYS DOWN (owner, 2026-10-12, removing
