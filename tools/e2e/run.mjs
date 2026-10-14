@@ -884,6 +884,22 @@ const scenarios = {
       await look(0)
       await until(async () => (await state(0)) === null, 4000, 50)
 
+      // FINISHED ON THE TAB IN FRONT WHILE AWAY, THEN BACK (owner, 2026-10-14:
+      // "changed window, it completed i came back, and that mark was there").
+      // Away, the finish is marked and the badge counts it; the pointer moving
+      // over the window again takes both down, before any click.
+      await at(0, say('working'))
+      await until(async () => (await state(0)) === 'working', 8000, 50)
+      await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+      await at(0, `Start-Sleep -Milliseconds 2500; ${say('done')}`)
+      ok(!!(await until(async () => (await state(0)) === 'done', 10000, 50)), 'a finish on the tab in front, with the window away, is marked')
+      ok(!!(await until(async () => (await badge()) === '1 tab needs a look', 4000, 50)), `and the badge counts it (${await badge()})`)
+      await page.mouse.move(500, 300)
+      await page.mouse.move(520, 320, { steps: 3 })
+      ok(!!(await until(async () => (await state(0)) === null, 4000, 50)), 'back, the pointer moving over the window takes the mark down')
+      ok(!!(await until(async () => (await badge()) === '', 4000, 50)), `and the badge with it (${await badge()})`)
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+
       // FAILED, with its kind: the two hooks of one failure, the kind's first.
       await at(0, say('working'))
       await at(0, later(`${osc('prism-agent;state=failed;kind=rate_limit')}; ${say('failed')}`))
