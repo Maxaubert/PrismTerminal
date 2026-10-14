@@ -319,6 +319,13 @@ function createWindow(): void {
     }
   })
   mainWindow = win
+  // NO WINDOWS SYSTEM MENU ON A RIGHT-CLICK (owner, 2026-10-13: "stop
+  // chromium right click menus like this from appearing in the terminal", of
+  // Restore / Move / Size / Minimise / Maximise / Close). The custom title bar
+  // and the slid-out sidebar's edge are drag regions, so Windows treats a
+  // right-click there as one on a caption and offers its window menu; the
+  // window's own buttons already do all of it. Alt+Space still opens it.
+  win.on('system-context-menu', (e) => e.preventDefault())
   // Its hang events, and its frame for the page's stack when the heartbeat stops.
   diag?.watchWindow(win)
   win.on('ready-to-show', () => {

@@ -34,6 +34,7 @@ describe("this app's own settings rows", () => {
       [
         "tab-layout=prism.window.tabLayout+prism.window.sidebar+prism.window.sidebarWidth",
         "tab-switch=prism.window.tabSwitch",
+        "agent-keys=prism.window.agentKeys",
         "window-edges=prism.window.edges",
         "window-background=prism.window.background",
         "window-secondary=prism.window.secondary",
