@@ -1810,6 +1810,9 @@ const scenarios = {
               ringAtEnd: !!ring && !!end && end.contains(ring) && box(ring).left >= box(name).right - 0.5,
               ringShown: ring ? getComputedStyle(ring.closest('[data-tab-end-ring]')).opacity : null,
               closeShown: close ? getComputedStyle(close).opacity : null,
+              closeW: Math.round(box(close)?.width ?? 0),
+              closeSlotW: Math.round(box(t.querySelector('[data-tab-end-close]'))?.width ?? -1),
+              closeAfterRing: !!ring && !!close && box(close).left >= box(ring).right - 0.5,
               width: Math.round(box(t).width),
               state: t.getAttribute('data-agent-state'),
               marks: [...t.querySelectorAll('[data-mark]')].map((m) => m.getAttribute('data-mark'))
@@ -1824,13 +1827,15 @@ const scenarios = {
       // RING, THE DEFAULT, AT THE END: in the close button's place.
       ok([0, 2, 3, 4, 5].every((i) => t[i].ringAtEnd), `every marked tab's ring is at its end (${t.map((x) => x.ringAtEnd).join(', ')})`)
       ok([0, 2, 3, 4, 5].every((i) => t[i].marks.join() === 'ring'), `Ring is the only mark: no bar (${t.map((x) => x.marks.join('+')).join(', ')})`)
-      ok(t[2].ringShown === '1' && t[2].closeShown === '0', `behind its ring the close waits (${t[2].ringShown}, ${t[2].closeShown})`)
+      ok(t[2].ringShown === '1' && t[2].closeShown === '0' && t[2].closeSlotW === 0, `beside its ring the close waits, taking no room (${t[2].ringShown}, ${t[2].closeShown}, ${t[2].closeSlotW}px)`)
       ok(t[1].closeShown === '0' && t[1].ringShown === null, 'an idle tab behind shows no ring and no close')
-      // On hover the ring gives way to the close.
+      // ON HOVER THE RING STAYS AND THE CLOSE COMES IN AFTER IT (owner,
+      // 2026-10-14: "4 Beside the ring genius"; the close had taken the
+      // ring's place, which hid that the agent was working).
       await page.locator('[data-tab]').nth(2).hover()
       await sleep(250)
       t = await tabs()
-      ok(t[2].ringShown === '0' && t[2].closeShown === '1', `hovered, the close takes the ring's place (${t[2].ringShown}, ${t[2].closeShown})`)
+      ok(t[2].ringShown === '1' && t[2].closeShown === '1' && t[2].closeAfterRing && t[2].closeSlotW === 16, `hovered, the ring stays and the close slides in after it (${t[2].ringShown}, ${t[2].closeShown}, after: ${t[2].closeAfterRing}, ${t[2].closeSlotW}px)`)
       await page.mouse.move(0, 400)
       await sleep(200)
       // EVERY TAB ONE WIDTH (2026-10-12: 150 px for the icon's room).

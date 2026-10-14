@@ -14,13 +14,12 @@ import { keyLabel } from '../lib/keymap'
  *  sidebar). */
 export const TAB_ICON = 18
 
-/** The X: shown on the tab in front and on hover; behind a ring, on hover only. */
+/** The X: shown on the tab in front and on hover. */
 export function TabClose({
   label,
   on,
   ink,
   size,
-  behindRing = false,
   onClose
 }: {
   label: string
@@ -28,15 +27,13 @@ export function TabClose({
   ink?: string
   /** 16 on the strip, 18 in the sidebar's taller rows. */
   size: 16 | 18
-  /** A ring holds the slot: the X shows only while the tab is hovered. */
-  behindRing?: boolean
   onClose: () => void
 }): JSX.Element {
   return (
     <button
-      className={`z-[1] grid shrink-0 place-items-center rounded-sm text-[var(--p-icon)] transition-opacity hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] ${
-        behindRing ? 'absolute inset-0' : 'relative'
-      } ${on && !behindRing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+      className={`relative z-[1] grid shrink-0 place-items-center rounded-sm text-[var(--p-icon)] transition-opacity hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] ${
+        on ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+      }`}
       style={{ width: size, height: size, ...(ink ? { color: ink } : {}) }}
       data-tab-close
       title={`Close ${label} (${keyLabel('close-tab')})`}
@@ -64,8 +61,11 @@ export function TabClose({
 
 /**
  * THE END OF A TAB (owner, 2026-10-12: "the ring goes on the right where you
- * close the tab"). A ring holds the close button's place and gives way to it
- * while the tab is hovered; with no ring the close is as it always was.
+ * close the tab"). The ring STAYS while the tab is hovered: the close slides
+ * in after it (owner, 2026-10-14, of the mockups: "4 Beside the ring genius").
+ * The close used to take the ring's place on hover, which hid that the agent
+ * was working ("the X appears on the same spot, which don't let you see that
+ * it's working"). With no ring the close is as it always was.
  */
 export function TabEnd({
   ring,
@@ -83,11 +83,20 @@ export function TabEnd({
 }): JSX.Element {
   if (!ring) return <TabClose label={label} on={on} size={size} onClose={onClose} />
   return (
-    <span data-tab-end className="relative grid shrink-0 place-items-center" style={{ width: size, height: size }}>
-      <span data-tab-end-ring className="grid place-items-center transition-opacity group-hover:opacity-0">
+    <span data-tab-end className="flex shrink-0 items-center gap-0.5">
+      <span data-tab-end-ring className="grid place-items-center" style={{ width: size, height: size }}>
         {ring}
       </span>
-      <TabClose label={label} on={on} size={size} behindRing onClose={onClose} />
+      {/* No room until the tab is hovered (or the close has the keyboard),
+          then its own width, on the same quick curve as the sidebar. */}
+      <span
+        data-tab-end-close
+        className={`grid overflow-hidden transition-[width] duration-150 ease-[cubic-bezier(.16,1,.3,1)] motion-reduce:transition-none w-0 ${
+          size === 16 ? 'group-hover:w-4 focus-within:w-4' : 'group-hover:w-[18px] focus-within:w-[18px]'
+        }`}
+      >
+        <TabClose label={label} on={false} size={size} onClose={onClose} />
+      </span>
     </span>
   )
 }
