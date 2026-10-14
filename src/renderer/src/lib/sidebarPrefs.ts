@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { SIDEBAR_SLIDE_MS } from './chromeLayout'
 
 // THE TAB SIDEBAR'S OWN STATE (#162; owner, 2026-10-11: "a sidebar you can have
 // open as a static sidebar, or it can open as the cursor moves near it").
@@ -33,9 +34,41 @@ export function sidebarMode(): SidebarMode {
   return validSidebarMode(localStorage.getItem(MODE_KEY))
 }
 
+// PINNED FROM HIDDEN, IT SLIDES IN FIRST (owner, 2026-10-14: "when you go from
+// unpinned to pin and unpinned is collapsed theres no animmation, make sure it
+// then has the animationo that unpninned has when it opens"). For one slide
+// the LAYOUT stays collapsed with the sidebar held out, so it comes in over
+// the terminal exactly as the hover reveal does; only then does it take its
+// room beside the terminal, which is resized once, never on every frame.
+let arriving = false
+let arriveTimer: ReturnType<typeof setTimeout> | null = null
+
 export function setSidebarMode(mode: SidebarMode): void {
-  localStorage.setItem(MODE_KEY, validSidebarMode(mode))
+  const was = sidebarMode()
+  const next = validSidebarMode(mode)
+  localStorage.setItem(MODE_KEY, next)
+  if (arriveTimer) clearTimeout(arriveTimer)
+  arriveTimer = null
+  arriving = was === 'collapsed' && next === 'open'
+  if (arriving) {
+    arriveTimer = setTimeout(() => {
+      arriving = false
+      arriveTimer = null
+      tell()
+    }, SIDEBAR_SLIDE_MS)
+  }
   tell()
+}
+
+/** The mode the window is LAID OUT in: collapsed while a pinned sidebar is
+ *  still sliding in, the stored mode otherwise. */
+export function sidebarLayout(): SidebarMode {
+  return arriving ? 'collapsed' : sidebarMode()
+}
+
+/** True while a just-pinned sidebar slides in: held out, over the terminal. */
+export function sidebarArriving(): boolean {
+  return arriving
 }
 
 export function sidebarWidth(): number {
@@ -56,6 +89,8 @@ export function onSidebarChange(cb: () => void): () => void {
 
 export const useSidebarMode = (): SidebarMode => useSyncExternalStore(onSidebarChange, sidebarMode)
 export const useSidebarWidth = (): number => useSyncExternalStore(onSidebarChange, sidebarWidth)
+export const useSidebarLayout = (): SidebarMode => useSyncExternalStore(onSidebarChange, sidebarLayout)
+export const useSidebarArriving = (): boolean => useSyncExternalStore(onSidebarChange, sidebarArriving)
 
 /** Open becomes collapsed, collapsed becomes open. */
 export function toggleSidebar(): void {

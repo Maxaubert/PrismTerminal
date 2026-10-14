@@ -2431,9 +2431,21 @@ const scenarios = {
         ok(!!(await until(async () => !(await geo()).shown, 3000, 30)), 'and goes once the cursor is clearly off it')
         await cursor(null)
       }
-      // Back to open, through the same key.
+      // Back to open, through the same key. PINNED FROM HIDDEN IT SLIDES IN
+      // FIRST (owner, 2026-10-14: "theres no animmation, make sure it then has
+      // the animationo that unpninned has when it opens"): over the terminal,
+      // still at full width, part of the way out, and only then beside it.
       await page.keyboard.press('Control+Shift+B')
-      ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open' && (await geo()).host.left > 100, 'Ctrl+Shift+B keeps it open again')
+      ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open', 'Ctrl+Shift+B pins it again, and Open is stored')
+      // Read in one go, not mid-slide by luck: a sample can land after the
+      // 240 ms slide and still before the layout moves.
+      const mid = await page.evaluate(() => {
+        const nav = document.querySelector('[data-tab-sidebar]')
+        const host = document.querySelector('[data-term-host]')
+        return { shown: nav?.hasAttribute('data-sidebar-shown') ?? false, slides: nav ? getComputedStyle(nav).transitionProperty.includes('left') : false, host: Math.round(host?.getBoundingClientRect().left ?? -1) }
+      })
+      ok(mid.host === 0 && mid.shown && mid.slides, `pinned, it slides in over the terminal first (${JSON.stringify(mid)})`)
+      ok(!!(await until(async () => (await geo()).host.left > 100, 3000, 30)), 'then takes its room beside the terminal')
 
       // THE BAR BESIDE THE SIDEBAR, ALWAYS DOWN (owner, 2026-10-12, removing
       // Show title bar: the look of the dropped-down bar, "but I want it to be

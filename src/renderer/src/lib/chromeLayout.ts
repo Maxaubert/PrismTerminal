@@ -10,7 +10,8 @@ export const BAR_H = 36
 
 /** The collapsed sidebar's slide, and the page cut away under it (App's
  *  COVER_CUT): one motion, so the cut never runs ahead of the panel. */
-export const SIDEBAR_SLIDE = '240ms cubic-bezier(.16,1,.3,1)'
+export const SIDEBAR_SLIDE_MS = 240
+export const SIDEBAR_SLIDE = `${SIDEBAR_SLIDE_MS}ms cubic-bezier(.16,1,.3,1)`
 
 /** A dragged tab's neighbours sliding open the gap (#70), in both layouts. */
 export const CARRY_SLIDE = '170ms cubic-bezier(.23,1,.32,1)'

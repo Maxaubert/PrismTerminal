@@ -66,3 +66,34 @@ describe('the sidebar key (#162)', () => {
     expect(sidebarMode()).toBe('open')
   })
 })
+
+// Pinned from hidden, it slides in before it takes its room (owner, 2026-10-14).
+describe('pinning a hidden sidebar', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('lays the window out collapsed, the sidebar held out, for one slide', async () => {
+    vi.useFakeTimers()
+    try {
+      const { sidebarArriving, sidebarLayout } = await import('./sidebarPrefs')
+      const { SIDEBAR_SLIDE_MS } = await import('./chromeLayout')
+      setSidebarMode('collapsed')
+      expect(sidebarLayout()).toBe('collapsed')
+      setSidebarMode('open')
+      expect(sidebarMode()).toBe('open')
+      expect(sidebarLayout()).toBe('collapsed')
+      expect(sidebarArriving()).toBe(true)
+      vi.advanceTimersByTime(SIDEBAR_SLIDE_MS)
+      expect(sidebarLayout()).toBe('open')
+      expect(sidebarArriving()).toBe(false)
+      // Collapsed again mid-slide: no arrival left over.
+      setSidebarMode('open')
+      setSidebarMode('collapsed')
+      setSidebarMode('open')
+      setSidebarMode('collapsed')
+      expect(sidebarArriving()).toBe(false)
+      expect(sidebarLayout()).toBe('collapsed')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
