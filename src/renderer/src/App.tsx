@@ -60,6 +60,7 @@ import { useAgentIndicator } from '@core/renderer/lib/useAgentIndicator'
 import { useDictationArm } from '@core/renderer/lib/useDictation'
 import { DictationPill } from '@core/renderer/components/DictationPill'
 import CopiedBadge from '@core/renderer/components/CopiedBadge'
+import Tooltips from '@core/renderer/components/Tooltips'
 import { copyText, copyTextQuietly } from '@core/renderer/lib/copyNotice'
 import UpdateChip from '@core/renderer/components/UpdateChip'
 import UpdateDialog from '@core/renderer/components/UpdateDialog'
@@ -870,6 +871,9 @@ export default function App(): JSX.Element {
               <DictationPill sessionId={activeShell ? activeShell.id : null} />
               {/* "Copied", at the bottom centre, for every copy the app makes. */}
               <CopiedBadge />
+              {/* EVERY TOOLTIP PLACED BY ITS ITEM (core Tooltips): centred under
+                  it, not where Windows puts a title, at the pointer. */}
+              <Tooltips />
               {activeShell && findOpen && (
                 <TermFind sessionId={activeShell.id} onClose={() => setFindFor(null)} />
               )}

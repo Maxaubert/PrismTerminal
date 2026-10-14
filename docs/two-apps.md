@@ -290,6 +290,15 @@ so an update never silently changes what an existing user sees; the bridge to ma
   selection, the menu's Copy and Copy link, and Command help all use it. The badge REPLACED
   Command help's in-row check (owner's pick), so a success is said once; a failed copy still
   marks its row. `selectionEdit` and `helpPanel` assert it; `.e2e-shots/copied-badge.png`.
+- **A TOOLTIP SITS BY ITS ITEM** (core 0.39.0; owner, 2026-10-13: tips "dont appear under it
+  centered, they appear from bottom right of that item ... prism is the exact same ... as a general
+  rule for icons and so on"). Windows draws a `title` at the pointer. `components/Tooltips`, mounted
+  ONCE by each host (it is in the page only while a tip shows, like the badge), takes over every
+  `title`: while the pointer is on an element its title is set aside (Windows has none to draw) and
+  drawn by the app, placed by `lib/tipPlace.ts` centred under the item, above it with no room
+  below, beside it where an ancestor says `data-tip-side="right"` (Prism Terminal's vertical tab
+  sidebar), always inside the window; the title goes back when the pointer leaves. Nothing else
+  changes for a component: it keeps writing `title`. The `tooltips` e2e holds it.
 - **FIND IS CTRL+F, EXCEPT IN A FULL-SCREEN PROGRAM** (#50; owner, 2026-09-23: "can the find
   hotkey be ctrl f", then "lets do it"). This app's `ownsKey` and App's handler take Ctrl+F unless
   the focused shell is on the alternate screen or asked for the mouse (the core's

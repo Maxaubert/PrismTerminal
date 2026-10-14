@@ -2756,6 +2756,47 @@ const scenarios = {
    * asks both wear the accent, with white text on a red.
    */
   /**
+   * A TOOLTIP SITS BY ITS ITEM (owner, 2026-10-13: "when i hover over settings
+   * or command help they dont appear under it centered, they appear from
+   * bottom right of that item"). The app draws every title itself: centred
+   * under a title bar button, inside the window at its edge, and Windows has
+   * no title to draw meanwhile; the title is back when the pointer leaves.
+   */
+  async tooltips(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const tip = page.locator('[data-tip]')
+    const hoverAndMeasure = async (sel) => {
+      const b = await page.locator(sel).boundingBox()
+      await page.mouse.move(b.x + b.width - 3, b.y + b.height - 3) // off-centre, as a hand lands
+      await until(async () => (await tip.count()) === 1, 3000, 50)
+      await sleep(200) // its entrance
+      const t = await tip.boundingBox()
+      return { item: b, tip: t, text: await tip.textContent(), title: await page.locator(sel).getAttribute('title') }
+    }
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      const help = await hoverAndMeasure('[data-title-help]')
+      ok(!!help.tip, `hovering the ? shows the app's own tip ("${help.text}")`)
+      if (help.tip) {
+        const dx = Math.abs(help.tip.x + help.tip.width / 2 - (help.item.x + help.item.width / 2))
+        ok(dx <= 1.5, `centred under it (off by ${dx.toFixed(1)}px)`)
+        ok(Math.abs(help.tip.y - (help.item.y + help.item.height + 6)) <= 1.5, `just below it (${Math.round(help.tip.y)} vs ${Math.round(help.item.y + help.item.height)})`)
+      }
+      ok(help.title === null, 'and Windows has no title to draw meanwhile')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/tooltip-help.png'), clip: { x: help.item.x - 160, y: 0, width: 320, height: 90 } }).catch(() => {})
+      await page.mouse.move(400, 400)
+      ok(await until(async () => (await tip.count()) === 0, 2000, 50), 'leaving takes it away')
+      ok(!!(await page.locator('[data-title-help]').getAttribute('title')), 'and gives the title back')
+      const cog = await hoverAndMeasure('[data-title-settings]')
+      const vw = await page.evaluate(() => innerWidth)
+      ok(!!cog.tip && cog.tip.x + cog.tip.width <= vw - 5, `near the window's edge it stays inside (${Math.round(cog.tip?.x ?? 0)}+${Math.round(cog.tip?.width ?? 0)} of ${vw})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
    * NO WINDOWS SYSTEM MENU ON A RIGHT-CLICK (owner, 2026-10-13: "stop chromium
    * right click menus like this from appearing in the terminal"). Windows
    * raises it for a right-click on a drag region; the window refuses it. The

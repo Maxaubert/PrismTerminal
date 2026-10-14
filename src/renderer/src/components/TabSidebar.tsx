@@ -190,6 +190,9 @@ export function TabSidebar({
         aria-label="Open tabs"
         aria-orientation="vertical"
         data-tab-sidebar
+        // A tip here sits BESIDE the row it names (Tooltips), not over the
+        // next row down.
+        data-tip-side="right"
         data-sidebar-mode={mode}
         data-sidebar-shown={visible || undefined}
         inert={!visible}
