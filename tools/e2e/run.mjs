@@ -1642,6 +1642,9 @@ const scenarios = {
         await sleep(300)
       }
       await page.locator('.xterm').first().click()
+      // THE CLIPBOARD HERE IS THE STAND-IN (#183): what this scenario writes
+      // never reaches the owner's own clipboard.
+      ok(await app.evaluate(() => !!globalThis.__e2eClipboard), 'under --e2e the clipboard is a stand-in in memory')
 
       await app.evaluate(({ clipboard }) => clipboard.writeText('PASTEONCEA'))
       await page.keyboard.press('Control+v')
@@ -3304,6 +3307,10 @@ const scenarios = {
     await typeLine(page, "$Host.UI.RawUI.WindowTitle = [char]0x25D0 + ' Claude Code'")
     await until(() => page.evaluate(() => !!document.querySelector('[data-agent-state="working"]')), 8000, 50)
     await sleep(1200)
+    // A working tab's close takes no room until the tab is hovered (#211):
+    // the pointer goes to the tab first, as a hand does.
+    await page.locator('[data-tab]').nth(1).hover()
+    await sleep(250)
     await page.locator('[data-tab-close]').nth(1).click({ force: true })
     ok(await until(async () => (await dialog().count()) === 1, 4000), 'a working agent asks too')
     ok(/working for/.test((await dialog().textContent()) ?? ''), 'and says how long it has been working')
@@ -7879,6 +7886,23 @@ function collectStalls(scenario) {
   }
 }
 /** Scenarios that honestly take longer than the default limit. */
+/**
+ * THE OWNER'S CLIPBOARD IS NOT TOUCHED (#183). Windows counts every change to
+ * the clipboard (GetClipboardSequenceNumber); the count is read before the
+ * first scenario and after the last. Under --e2e the app's clipboard is a
+ * stand-in in memory (src/main/e2eClipboard.ts), so a run changes nothing; a
+ * different count means a write got through, or the owner copied something
+ * while the suite ran.
+ */
+function clipboardChanges() {
+  try {
+    const ps = "Add-Type -Namespace W -Name U -MemberDefinition '[DllImport(\"user32.dll\")] public static extern uint GetClipboardSequenceNumber();'; [W.U]::GetClipboardSequenceNumber()"
+    return Number(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8' }).trim())
+  } catch {
+    return null
+  }
+}
+const clipBefore = clipboardChanges()
 const SLOW = { verticalTabs: 360000, linkPaintStall: 300000, dictation: 360000, dictationParakeet: 360000, helpPanel: 300000, updateWindow: 300000, indicatorStyles: 360000 }
 reapStrays()
 for (const [name, run] of Object.entries(scenarios)) {
@@ -7930,6 +7954,13 @@ else {
   console.log(`  ${'scenario'.padEnd(18)}${'kind'.padEnd(16)}${'ms'.padStart(7)}  detail`)
   for (const r of stalls)
     console.log(`  ${r.scenario.padEnd(18)}${r.kind.padEnd(16)}${(r.ms === null ? '-' : String(r.ms)).padStart(7)}  ${r.expected ? '(expected) ' : ''}${r.detail}`)
+}
+const clipAfter = clipboardChanges()
+if (clipBefore === null || clipAfter === null) console.log('\nThe real clipboard: could not be read, not checked')
+else if (clipAfter === clipBefore) console.log('\nThe real clipboard: untouched by the run')
+else {
+  console.log(`\n  FAIL  the real clipboard changed during the run (${clipAfter - clipBefore} change(s)); if you copied something while it ran, run it again`)
+  table.push({ name: 'realClipboard', checks: 1, fails: 1, secs: '0', strays: 0 })
 }
 const failed = table.filter((r) => r.fails > 0)
 console.log(failed.length ? `\n${failed.length} scenario(s) FAILED` : '\nall scenarios passed')
