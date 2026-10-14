@@ -24,6 +24,7 @@ import { installUpdate, updateCalls, watchForUpdates } from './update'
 import { previewUpdate, runPreviewInstall, wantsPreview } from '@core/main/updatePreview'
 import { createVerbSwitch } from './verbSwitch'
 import { bellFlash } from './bellFlash'
+import { stubClipboard } from './e2eClipboard'
 import { localAppData } from './appPaths'
 import { MIN_WINDOW, readWindowState, watchWindowState } from './windowState'
 import { APP_CH, E2E_CH } from '@shared/channels'
@@ -72,6 +73,11 @@ try {
  */
 const e2eOpenedLinks: string[] = []
 if (E2E) Object.assign(globalThis, { __e2eOpenedLinks: e2eOpenedLinks })
+
+// THE CLIPBOARD UNDER --e2e IS A STAND-IN (#183, `e2eClipboard.ts`): a test
+// run never reads or replaces what the owner copied. On the global so a
+// scenario can see it is the stand-in.
+if (E2E) Object.assign(globalThis, { __e2eClipboard: stubClipboard(clipboard, () => nativeImage.createEmpty()) })
 function openLink(url: string): void {
   if (E2E) {
     e2eOpenedLinks.push(url)
@@ -818,7 +824,9 @@ if (!app.requestSingleInstanceLock()) {
     // own window, the clipboard the terminal already used, and nothing else.
     // Never the camera, never another origin.
     const own = (wc: Electron.WebContents | null): boolean => !!wc && wc === mainWindow?.webContents
-    const granted = new Set(['media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen'])
+    // Under --e2e not the clipboard: the page's copy then goes through main,
+    // whose clipboard is the stand-in (#183).
+    const granted = new Set(E2E ? ['media', 'fullscreen'] : ['media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen'])
     session.defaultSession.setPermissionRequestHandler((wc, permission, callback, details) => {
       if (!own(wc) || !granted.has(permission)) return callback(false)
       if (permission === 'media') {
