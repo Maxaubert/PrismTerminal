@@ -27,7 +27,7 @@ import { CHORDS, chordOf } from './lib/keymap'
 import { agentKeys } from './lib/agentKeysPrefs'
 import { TitleButtons } from './components/TitleBar'
 import { TermEdge } from './components/TermEdge'
-import { AppMark } from './components/AppMark'
+import { TitleMark } from './components/AppMark'
 import { CORNER_R, INSIDE_CORNER, INSIDE_SIZE, OUTSIDE_CORNER } from './lib/cornerShapes'
 import { tabSwitch } from './lib/tabSwitchPrefs'
 import {
@@ -723,6 +723,11 @@ export default function App(): JSX.Element {
           style={{ height: BAR_H }}
           className="drag p-styled-font flex shrink-0 items-stretch border-b border-[var(--p-divider)] bg-[var(--p-tabs)] pr-1.5 text-[13px]"
         >
+          {/* The quiet mark at the bar's start (TitleMark), a line the bar's
+              full height after it, the first tab's left edge (owner,
+              2026-10-14: "give it a full left border not just this half
+              border"). */}
+          <TitleMark className="relative pl-3.5 pr-3 after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-[var(--p-divider)]" />
           {tabs.length > 0 ? <TabStrip {...tabProps} /> : <span className="min-w-0 flex-1" />}
           <div className="flex shrink-0 items-center gap-2.5 pl-2">
             <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />
@@ -740,21 +745,16 @@ export default function App(): JSX.Element {
       {/* THE BAR ACROSS THE TOP, with vertical tabs (owner, 2026-10-12: the
           app's name "part of the title bar instead of the sidebar", the
           sidebar starting under it, pinned or slid out, so it never covers the
-          bar): the app's mark and name at its left, the window's buttons at
-          its right, the handle the window moves by. The sidebar's colour, so
-          the two read as one surface. */}
+          bar): the app's quiet mark at its left (TitleMark), the window's
+          buttons at its right, the handle the window moves by. The sidebar's
+          colour, so the two read as one surface. */}
       {beside && (
         <div
           data-title-bar="beside"
           style={{ height: BAR_H }}
           className="drag p-styled-font flex shrink-0 items-center gap-2.5 bg-[var(--p-secondary)] pl-4 pr-1.5 text-[13px]"
         >
-          <div data-app-brand className="flex min-w-0 items-center gap-2.5">
-            <AppMark size={18} className="shrink-0 text-[var(--p-accent-solid)]" />
-            <span className="truncate text-[13.5px] font-semibold tracking-[0.01em] text-[var(--p-side-text)] select-none">
-              Prism Terminal
-            </span>
-          </div>
+          <TitleMark />
           <span className="min-w-0 flex-1" />
           <div data-window-buttons className="no-drag flex items-center gap-2.5">
             <TitleButtons onSettings={onSettings} onHelp={onHelp} chip={chip} />

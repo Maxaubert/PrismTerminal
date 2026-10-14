@@ -2500,20 +2500,20 @@ const scenarios = {
       // bottom".
       ok(!!up.newBtn && !up.newBtn.inRows && up.newBtn.gapBelow <= 12 && up.newBtn.w >= up.newBtn.navW - 20, `New tab is a button across the sidebar's foot (${JSON.stringify(up.newBtn)})`)
       ok(up.colours.side === up.colours.secondary && up.colours.bar === up.colours.secondary, `the sidebar and the bar wear the secondary colour (${JSON.stringify(up.colours)})`)
-      // Owner, 2026-10-12: "a prism terminal logo and text could look nice up
-      // there"; then "use this for the sidebar logo ... it should adapt to the
-      // accent color".
-      const brand = await page.evaluate(() => {
-        const b = document.querySelector('[data-title-bar="beside"] [data-app-brand]')
+      // THE QUIET MARK (#205; owner, 2026-10-14: "try quiet mark for both"):
+      // the app's mark alone, no name, in the buttons' own ink.
+      const brandIn = (bar) => page.evaluate((sel) => {
+        const b = document.querySelector(`[data-title-bar="${sel}"] [data-app-brand]`)
         const mark = b?.querySelector('[data-app-mark]')
         const probe = document.createElement('span')
-        probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-accent-solid')
+        probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--p-icon')
         document.body.appendChild(probe)
-        const accent = getComputedStyle(probe).color
+        const icon = getComputedStyle(probe).color
         probe.remove()
-        return { text: b?.textContent?.trim() ?? null, paths: mark?.querySelectorAll('path').length ?? 0, ink: mark ? getComputedStyle(mark).color : null, accent }
-      })
-      ok(brand.text === 'Prism Terminal' && brand.paths === 2 && brand.ink === brand.accent, `the bar says Prism Terminal beside the app's mark, in the accent (${JSON.stringify(brand)})`)
+        return { text: b?.textContent?.trim() ?? null, label: b?.getAttribute('aria-label') ?? null, paths: mark?.querySelectorAll('path').length ?? 0, ink: mark ? getComputedStyle(mark).color : null, icon, left: b ? Math.round(b.getBoundingClientRect().left) : null }
+      }, bar)
+      const brand = await brandIn('beside')
+      ok(brand.text === '' && brand.label === 'Prism Terminal' && brand.paths === 2 && brand.ink === brand.icon, `the bar shows the app's mark alone, in the buttons' ink (${JSON.stringify(brand)})`)
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/side-beside-bar.png') }).catch(() => {})
       // THE DRAG ITSELF, as Windows decides it: 2 (HTCAPTION) moves the window.
       const spots = await page.evaluate(() => {
@@ -2708,6 +2708,11 @@ const scenarios = {
       await backToFirst(page)
       await setPref(page, 'tab-layout', 'horizontal')
       ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-tab-strip]') && !document.querySelector('[data-tab-sidebar]')), 3000, 50)), 'Horizontal puts the strip back')
+      // The quiet mark is in this layout too (#205: "it needs to be on both"),
+      // at the bar's start, before the first tab.
+      const markH = await brandIn('tabs')
+      const firstTab = await page.evaluate(() => Math.round(document.querySelector('[data-tab-strip] [data-tab]')?.getBoundingClientRect().left ?? -1))
+      ok(markH.paths === 2 && markH.text === '' && markH.ink === markH.icon && markH.left !== null && markH.left < firstTab, `with the strip, the same quiet mark sits before the tabs (${JSON.stringify(markH)}, first tab at ${firstTab})`)
       // With the strip, Ctrl+Shift+B is the shell's again.
       await page.keyboard.press('Control+Shift+B')
       ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open', 'with the strip, Ctrl+Shift+B does not touch the sidebar')
