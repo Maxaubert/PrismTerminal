@@ -1,4 +1,5 @@
 import { useState, type JSX, type MouseEvent } from 'react'
+import { copyText } from '@core/renderer/lib/copyNotice'
 import { keyLabel } from '../lib/keymap'
 import type { Tab } from '../lib/tabs'
 import {
@@ -78,7 +79,9 @@ export function useTabMenus({
                   {
                     label: 'Copy folder path',
                     icon: <MenuIcon name="folder" />,
-                    onPick: () => void navigator.clipboard.writeText(tabMenu.cwd)
+                    // The core's copy: the page's clipboard, or main's when
+                    // the page is refused one (as under --e2e, #183).
+                    onPick: () => void copyText(tabMenu.cwd)
                   }
                 ]
               : [])
