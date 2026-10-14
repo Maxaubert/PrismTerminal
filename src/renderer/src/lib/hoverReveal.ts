@@ -8,9 +8,9 @@ import { REVEAL_ZONE } from '@shared/revealZones'
  * "should be invisible, and only appear when your cursor is near the top").
  *
  * A short wait before it opens, so a pointer passing the edge on its way
- * somewhere does not flash it, and a longer grace before it goes, so a hand
- * that slips off for a moment (the owner works zoomed in, where a few pixels
- * of travel are a long way) does not lose it. `hold` keeps it open whatever the
+ * somewhere does not flash it, and a short grace before it goes, so a hand
+ * that slips off for a moment does not lose it, without the wait reading as
+ * a sidebar that does not answer. `hold` keeps it open whatever the
  * pointer does: a menu it opened is still in use.
  */
 export const REVEAL = {
@@ -19,7 +19,11 @@ export const REVEAL = {
   left: REVEAL_ZONE.left,
   top: REVEAL_ZONE.top,
   openDelay: 60,
-  closeDelay: 340
+  // 100, was 340 (owner, 2026-10-13: "make it close faster right now it just
+  // feels unresponsive ... id like it to be more responsive to the cursor not
+  // being over it"). Enough for a pointer that slips off for a frame or two;
+  // the slide itself (SIDEBAR_SLIDE) is the rest of the way out.
+  closeDelay: 100
 } as const
 
 export interface Reveal {

@@ -1,4 +1,5 @@
 import { appOwnsKey } from './lib/keymap'
+import { agentKeys } from './lib/agentKeysPrefs'
 import { tabLayout } from './lib/tabLayoutPrefs'
 import { focusedTermFullScreen } from '@core/renderer/components/TerminalPanel'
 import { configureTermCore } from '@core/renderer/host'
@@ -65,5 +66,10 @@ configureTermCore({
   // The app's keys (lib/keymap), the same table App's handler reads, so xterm
   // yields exactly the chords the app acts on.
   ownsKey: (e) =>
-    appOwnsKey(e, { help: helpEnabled(), vertical: tabLayout() === 'vertical', fullScreen: focusedTermFullScreen() })
+    appOwnsKey(e, {
+      help: helpEnabled(),
+      vertical: tabLayout() === 'vertical',
+      fullScreen: focusedTermFullScreen(),
+      agentKeys: agentKeys()
+    })
 })
