@@ -197,6 +197,14 @@ update, with no tabs, ran 9 checks in 16 min (each 0.24 to 0.57 s) and logged no
 alone does not stall; the cause needs load (many Claude tabs, a big heap) or is something else on the
 same cadence. The crumbs from a busy Stable copy (0.50.2 or later) will tell. The full review: `Documents\Claude\research\prism-terminal\2026-10-14-diag-review.md`.
 
+ANSWERED 2026-10-15: memory pressure, not the check. Before that day's reboot the machine had a
+~29 GB kernel-pool leak (an ASUS `asus_framework` process holding 352,952 handles; commit 89.7 of
+97.7 GB). After the reboot the Stable copy's next two checks (17:53 and 21:53, fetch 0.3 s, heap 6
+to 10 MB) logged no `main-lag` at all. If the 4-hourly stall comes back, read free memory and the
+paged/nonpaged pool first (`Win32_PerfFormattedData_PerfOS_Memory`), then that process's handle
+count. A stall of both apps in the same second is machine-wide too (the display waking, a starved
+disk): compare the two logs before suspecting either app.
+
 ## Claude Code shows a text caret and ignores clicks (#182, 2026-10-12)
 
 Not the terminal (the `mouseReport` e2e proves a program that asks for the mouse gets it, under Node
