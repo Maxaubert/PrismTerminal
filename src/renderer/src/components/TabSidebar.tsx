@@ -379,6 +379,7 @@ export function TabSidebar({
                   tabIndex={on ? 0 : -1}
                   className="relative z-[1] flex min-w-0 flex-1 flex-col py-1 text-left"
                   title={tabTitle(t, failed, failedKinds)}
+                  data-tip-to="[data-tab]"
                   onClick={(e) => {
                     e.stopPropagation()
                     if (reorder.isPick()) onPick(t.id)
