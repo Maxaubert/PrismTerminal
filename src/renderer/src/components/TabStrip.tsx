@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type JSX, type MouseEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type JSX, type MouseEvent } from 'react'
 import { tabLabels } from '../lib/tabs'
+import { planStrip } from '../lib/stripPlan'
+import { TabOverflowList, type OverflowRow } from './TabOverflowList'
 import { DictationTabMark } from '@core/renderer/components/DictationTabMark'
 import { TabMark } from '@core/renderer/components/TabMark'
 import { useTabLooks } from './tabLooks'
@@ -76,11 +78,57 @@ export function TabStrip({
   }, [])
   const menu = useTabMenus({ onClose, onOpenRecent })
   const strip = useRef<HTMLDivElement>(null)
+  const plus = useRef<HTMLButtonElement>(null)
+  const moreBtn = useRef<HTMLButtonElement>(null)
+  // MANY TABS (#146): the room the tabs have, measured, so the plan below can
+  // say which are named, which are icons and which wait in the +N list.
+  const [room, setRoom] = useState(Number.POSITIVE_INFINITY)
+  const anyTabs = tabs.length > 0
+  useLayoutEffect(() => {
+    const el = strip.current
+    if (!el) return
+    const measure = (): void => setRoom(el.clientWidth - 4 - (plus.current?.offsetWidth ?? 28) - 4)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [anyTabs])
+  /** The open +N list: its anchor, and whether it lists every tab (Find a tab). */
+  const [list, setList] = useState<{ anchor: DOMRect; all: boolean } | null>(null)
+  const closeList = useCallback((): void => setList(null), [])
+  // FIND A TAB in this layout (#146): the list with every tab in it.
+  useEffect(() => {
+    const go = (): void => {
+      const anchor = moreBtn.current?.getBoundingClientRect() ?? plus.current?.getBoundingClientRect()
+      if (anchor) setList({ anchor, all: true })
+    }
+    window.addEventListener('prism:find-tab', go)
+    return () => window.removeEventListener('prism:find-tab', go)
+  }, [])
   // Carried along the row, never out of it (useTabReorder, the sidebar's too).
   const reorder = useTabReorder({ axis: 'x', container: strip, onReorder })
   const { carry } = reorder
   if (!tabs.length) return null
   const labels = tabLabels(tabs)
+  const needs = new Set([...doneIds, ...questionIds, ...(failedIds ?? [])])
+  const plan = planStrip({ ids: tabs.map((t) => t.id), activeId, needs, room })
+  const hiddenIdx = plan.flatMap((s, i) => (s === 'hidden' ? [i] : []))
+  /** Tab i's ring mark, or null: the end slot's and the +N list's. */
+  const ringOf = (i: number): JSX.Element | null => {
+    const { state, mark } = looks[i]
+    return mark.place === 'ring' ? <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} /> : null
+  }
+  const rowOf = (i: number): OverflowRow => {
+    const t = tabs[i]
+    return {
+      id: t.id,
+      label: labels[i],
+      cwd: t.cwd,
+      icon: <TabIcon agent={agentIds.has(t.id) ? agentKinds?.current.get(t.id) : null} settings={t.kind === 'settings'} />,
+      mark: looks[i].state ? ringOf(i) : null,
+      needs: needs.has(t.id)
+    }
+  }
   return (
     <div
       role="tablist"
@@ -96,11 +144,12 @@ export function TabStrip({
       // In the top row the ROW paints --p-tabs: a second coat here made the
       // strip 92% solid under See-through while the buttons beside it were
       // 73% (owner, 2026-10-11: "the tab bar" stays opaque).
-      className={`${dragInFlight ? 'no-drag' : 'drag'} p-styled-font relative flex min-w-0 flex-1 items-stretch gap-0 overflow-x-auto pr-1 text-[12px] transition-[background-color,border-color] duration-[550ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
+      className={`${dragInFlight ? 'no-drag' : 'drag'} p-styled-font relative flex min-w-0 flex-1 items-stretch gap-0 overflow-hidden pr-1 text-[12px] transition-[background-color,border-color] duration-[550ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
         carry?.live ? 'cursor-grabbing [&_*]:cursor-grabbing' : ''
       }`}
     >
       {tabs.map((t, i) => {
+        if (plan[i] === 'hidden') return null
         const on = t.id === activeId
         const { failed, state, mark } = looks[i]
         // The tab in front is told by its brighter ink.
@@ -114,11 +163,7 @@ export function TabStrip({
         // still coming back to its agent (#106) wears its loading ring there
         // too (owner, 2026-10-13: "make that ring appear where the ring style
         // agent indicator goes, not on the left side").
-        const ring = loadingIds?.has(t.id) ? (
-          <TabLoading />
-        ) : mark.place === 'ring' ? (
-          <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
-        ) : null
+        const ring = loadingIds?.has(t.id) ? <TabLoading /> : ringOf(i)
         const body = (
           <>
             {bar}
@@ -167,6 +212,47 @@ export function TabStrip({
           ...reorder.handlers(t.id, i)
         }
         const motion = reorder.motion(t.id, i)
+        if (plan[i] === 'icon')
+          return (
+            // AN ICON TAB (#146): a tab at rest when names no longer fit. Its
+            // name is its tooltip and its accessible name; its mark sits on the
+            // icon's corner; it closes from its menu, a middle click or Ctrl+W.
+            <div
+              key={t.id}
+              {...shared}
+              data-tab-icon-only
+              className={`no-drag group relative isolate flex w-10 shrink-0 items-center justify-center transition-colors ${nameInk} hover:bg-[var(--p-hover)]`}
+              style={motion}
+            >
+              {bar}
+              {t.kind !== 'settings' && <DictationTabMark sessionId={t.id} />}
+              <button
+                role="tab"
+                aria-selected={false}
+                tabIndex={-1}
+                aria-label={labels[i]}
+                data-label={labels[i]}
+                className="relative z-[1] grid h-full w-full place-items-center"
+                title={tabTitle(t, failed, failedKinds)}
+                data-tip-to="[data-tab]"
+                onClick={() => {
+                  if (reorder.isPick()) onPick(t.id)
+                }}
+              >
+                <TabIcon agent={agentIds.has(t.id) ? agentKinds?.current.get(t.id) : null} settings={t.kind === 'settings'} />
+                <span className="sr-only">{labels[i]}</span>
+              </button>
+              {ring && (
+                <span
+                  data-tab-icon-mark
+                  className="pointer-events-none absolute right-[2px] top-[3px] z-[2] grid h-[15px] w-[15px] place-items-center rounded-full bg-[var(--p-tabs)]"
+                >
+                  {ring}
+                </span>
+              )}
+              <span data-tab-sep aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[var(--p-divider)]" />
+            </div>
+          )
         return (
           <div
             key={t.id}
@@ -211,7 +297,47 @@ export function TabStrip({
           </div>
         )
       })}
+      {hiddenIdx.length > 0 && (
+        // THE +N BUTTON (#146): how many tabs wait in the list, and a dot in
+        // its mark colour for each that needs you (up to four).
+        <button
+          ref={moreBtn}
+          data-tab-more
+          aria-haspopup="listbox"
+          aria-expanded={!!list}
+          aria-label={`${hiddenIdx.length} more tabs`}
+          title={`${hiddenIdx.length} more tabs`}
+          className={`no-drag my-1 flex shrink-0 items-center gap-1.5 rounded px-2 text-[12px] font-semibold tabular-nums text-[var(--p-text-soft)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)] ${
+            list ? 'bg-[var(--p-hover-hi)] text-[var(--p-text)]' : ''
+          }`}
+          onClick={(e) => {
+            const anchor = e.currentTarget.getBoundingClientRect()
+            setList((l) => (l ? null : { anchor, all: false }))
+          }}
+        >
+          +{hiddenIdx.length}
+          {hiddenIdx.some((i) => needs.has(tabs[i].id)) && (
+            <span className="flex gap-[3px]" aria-hidden>
+              {hiddenIdx
+                .filter((i) => needs.has(tabs[i].id))
+                .slice(0, 4)
+                .map((i) => (
+                  <span
+                    key={tabs[i].id}
+                    data-tab-more-dot={looks[i].state ?? ''}
+                    className="h-[6px] w-[6px] rounded-full"
+                    style={{ background: paint(looks[i].mark.colour, 'x') }}
+                  />
+                ))}
+            </span>
+          )}
+          <svg viewBox="0 0 24 24" width={11} height={11} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+      )}
       <button
+        ref={plus}
         className="no-drag my-1 grid w-7 shrink-0 place-items-center rounded text-[var(--p-icon)] transition-colors hover:bg-[var(--p-hover-hi)] hover:text-[var(--p-text)]"
         title={`New tab (${keyLabel('new-tab')}). Right-click for recent folders`}
         aria-label="New tab"
@@ -234,6 +360,18 @@ export function TabStrip({
         </svg>
       </button>
       {menu.menus}
+      {list && (
+        <TabOverflowList
+          rows={(list.all ? tabs.map((_, i) => i) : hiddenIdx).map(rowOf)}
+          anchor={list.anchor}
+          onPick={onPick}
+          onRowMenu={(e, id) => {
+            const t = tabs.find((x) => x.id === id)
+            if (t) menu.openTabMenu(e, t)
+          }}
+          onClose={closeList}
+        />
+      )}
     </div>
   )
 }

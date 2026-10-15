@@ -632,7 +632,8 @@ export default function App(): JSX.Element {
           setState((s) => toggleSettings(s, backFromSettings(s)))
           return
         case 'find-tab':
-          // FIND A TAB (#162): the sidebar's find box.
+          // FIND A TAB (#162): the sidebar's find box, or in the top bar the
+          // +N list with every tab in it (#146).
           hit()
           window.dispatchEvent(new Event('prism:find-tab'))
           return

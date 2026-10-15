@@ -2907,6 +2907,78 @@ const scenarios = {
   },
 
   /**
+   * MANY TABS (#146; owner, 2026-10-15, option C: "icons first, then the
+   * list"). Sixteen tabs in a narrow window: the strip never scrolls, resting
+   * tabs are icons, the tab in front keeps its name, the rest wait behind +N,
+   * whose list brings a tab in front; Ctrl+Shift+K opens it with every tab.
+   */
+  async manyTabs(ok) {
+    const w = world()
+    const root = dirname(w.alpha)
+    const names = Array.from({ length: 16 }, (_, i) => `proj${String(i + 1).padStart(2, '0')}`)
+    const dirs = names.map((n) => {
+      const d = join(root, n)
+      mkdirSync(d, { recursive: true })
+      return d
+    })
+    const { app, page } = await launch(w, { args: dirs })
+    try {
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(700, 600))
+      await until(async () => (await page.locator('[data-tab]').count()) + Number((await page.locator('[data-tab-more]').textContent().catch(() => '+0'))?.match(/\d+/)?.[0] ?? 0) === 16, 30000, 100)
+      await sleep(400)
+      const look = () =>
+        page.evaluate(() => {
+          const strip = document.querySelector('[data-tab-strip]')
+          const tabs = [...document.querySelectorAll('[data-tab-strip] [data-tab]')]
+          const more = document.querySelector('[data-tab-more]')
+          return {
+            scrolls: strip ? strip.scrollWidth > strip.clientWidth + 1 : null,
+            drawn: tabs.length,
+            icons: tabs.filter((t) => t.hasAttribute('data-tab-icon-only')).length,
+            activeNamed: tabs.some((t) => t.hasAttribute('data-tab-active') && !t.hasAttribute('data-tab-icon-only')),
+            more: more ? Number(more.textContent.match(/\d+/)?.[0] ?? 0) : 0,
+            active: document.querySelector('[data-tab-active] [role="tab"]')?.getAttribute('data-label') ?? document.querySelector('[data-tab-active]')?.textContent?.trim()
+          }
+        })
+      const a = await look()
+      ok(a.scrolls === false, `the strip never scrolls (${JSON.stringify(a)})`)
+      ok(a.icons > 0, `resting tabs are icons (${a.icons})`)
+      ok(a.activeNamed, 'the tab in front keeps its name')
+      ok(a.more > 0 && a.drawn + a.more === 16, `the rest wait behind +N (${a.drawn} drawn + ${a.more} listed = 16)`)
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/strip-many.png'), clip: { x: 0, y: 0, width: 700, height: 80 } }).catch(() => {})
+
+      // The list: the hidden tabs, and picking one brings it in front and into the bar.
+      await page.locator('[data-tab-more]').click()
+      const rows = page.locator('[data-tab-overflow] [data-overflow-row]')
+      ok(await until(async () => (await rows.count()) === a.more, 3000, 50), `the list holds the ${a.more} hidden tabs (${await rows.count()})`)
+      ok(await page.evaluate(() => document.activeElement?.hasAttribute('data-overflow-find')), 'its Find field has the keyboard')
+      await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/strip-many-list.png') }).catch(() => {})
+      const pickName = (await rows.first().textContent()).trim().slice(0, 6)
+      await rows.first().click()
+      ok(await until(async () => (await page.locator('[data-tab-overflow]').count()) === 0, 2000, 50), 'picking a row closes the list')
+      const b = await look()
+      ok((b.active ?? '').startsWith(pickName) && b.activeNamed, `and its tab is in front, named, in the bar (${b.active}, wanted ${pickName})`)
+      ok(b.drawn + b.more === 16 && b.scrolls === false, `still 16 tabs, still no scroll (${b.drawn} + ${b.more})`)
+
+      // Find a tab in this layout: the list with every tab, filtered as you type.
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.press('Control+Shift+K')
+      ok(await until(async () => (await rows.count()) === 16, 3000, 50), `Ctrl+Shift+K lists every tab (${await rows.count()})`)
+      await page.keyboard.type('proj03')
+      ok(await until(async () => (await rows.count()) === 1, 2000, 50), `typing a name keeps its row (${await rows.count()})`)
+      await page.keyboard.press('Enter')
+      const c = await look()
+      ok((c.active ?? '').startsWith('proj03'), `Enter puts it in front (${c.active})`)
+      await page.keyboard.press('Control+Shift+K')
+      await until(async () => (await rows.count()) > 0, 2000, 50)
+      await page.keyboard.press('Escape')
+      ok(await until(async () => (await page.locator('[data-tab-overflow]').count()) === 0, 2000, 50), 'Escape closes it')
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
    * NO WINDOWS SYSTEM MENU ON A RIGHT-CLICK (owner, 2026-10-13: "stop chromium
    * right click menus like this from appearing in the terminal"). Windows
    * raises it for a right-click on a drag region; the window refuses it. The
