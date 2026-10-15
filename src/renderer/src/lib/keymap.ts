@@ -92,10 +92,11 @@ export const CHORDS: Record<ChordId, Chord> = {
   'jump-tab': { label: 'Ctrl+1..9', match: (e) => ctrl(e) && !e.shiftKey && /^[1-9]$/.test(e.key), underModal: 'swallow' },
   settings: { label: 'Ctrl+,', match: (e) => ctrl(e) && !e.shiftKey && e.key === ',', underModal: 'swallow' },
   // FIND A TAB, Ctrl+Shift+K (the mockup said Ctrl+K; that is the shell's
-  // kill-to-end-of-line, in readline and PSReadLine alike), while vertical.
+  // kill-to-end-of-line, in readline and PSReadLine alike). In both layouts
+  // since #146: in the top bar it opens the +N list with every tab in it.
   'find-tab': {
     label: 'Ctrl+Shift+K',
-    match: (e, c) => ctrl(e) && e.shiftKey && k(e) === 'k' && c.vertical,
+    match: (e) => ctrl(e) && e.shiftKey && k(e) === 'k',
     underModal: 'swallow'
   },
   // THE SIDEBAR, Ctrl+Shift+B (owner, 2026-10-12: "bind the sidebar to a

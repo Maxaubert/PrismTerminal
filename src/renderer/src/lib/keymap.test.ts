@@ -61,10 +61,10 @@ describe('the keymap', () => {
     expect(chordOf(ev('F1', { shiftKey: true }), on)).toBeNull()
   })
 
-  it('the sidebar and find-a-tab keys only while the tabs are vertical', () => {
+  it('the sidebar key only while the tabs are vertical; find-a-tab in both layouts (#146)', () => {
     const flat = { ...on, vertical: false }
     expect(chordOf(ev('B', { ctrlKey: true, shiftKey: true }), flat)).toBeNull()
-    expect(chordOf(ev('K', { ctrlKey: true, shiftKey: true }), flat)).toBeNull()
+    expect(chordOf(ev('K', { ctrlKey: true, shiftKey: true }), flat)).toBe('find-tab')
     expect(chordOf(ev('b', { ctrlKey: true, shiftKey: true }), on)).toBe('sidebar')
   })
 
