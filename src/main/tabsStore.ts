@@ -1,5 +1,5 @@
 import { readFileSync } from 'fs'
-import { writeAtomic } from '@core/main/atomicWrite'
+import { createAtomicWriter } from '@core/main/atomicWrite'
 import type { SavedTab, SavedTabs } from '@shared/types'
 import { isResumable } from '@core/shared/types'
 
@@ -57,12 +57,16 @@ export function createTabsStore(
 } {
   let pending: SavedTabs | null = null
   let timer: NodeJS.Timeout | null = null
-  const write = (): void => {
+  // The debounced save is written off the main thread; the flush (close, quit,
+  // session end) synchronously, as the process is about to end (rule 7).
+  const out = createAtomicWriter(file)
+  const write = (now: boolean): void => {
     if (timer) clearTimeout(timer)
     timer = null
     if (!pending) return
     try {
-      writeAtomic(file, JSON.stringify(pending))
+      if (now) out.saveNow(JSON.stringify(pending))
+      else out.save(JSON.stringify(pending))
     } catch {
       /* a lost save is a tab that does not come back, not a crash */
     }
@@ -82,11 +86,11 @@ export function createTabsStore(
     save: (s) => {
       pending = s
       if (timer) clearTimeout(timer)
-      timer = setTimeout(write, delayMs)
+      timer = setTimeout(() => write(false), delayMs)
     },
     // Close flushes the debounce: a report still in its 400ms window (an agent
     // flag lands up to 2.5s after claude appears) must not die with the app -
     // a lost last write is a Claude session that never resumes.
-    flush: write
+    flush: () => write(true)
   }
 }
