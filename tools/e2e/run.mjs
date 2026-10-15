@@ -2377,7 +2377,9 @@ const scenarios = {
       await page.keyboard.press('Escape')
       const cleared = await findState()
       ok(!cleared.focused && cleared.value === '' && cleared.seen === 6, `Escape clears it and lets go (${JSON.stringify(cleared)})`)
-      const target = await page.evaluate(() => document.querySelectorAll('[data-tab-sidebar] [data-tab]')[3].querySelector('[data-tab-folder]').previousElementSibling.textContent.trim())
+      // The one card with no mark (#220): putting a marked tab in front is a look,
+      // and a look takes its Finished down before the marks are checked below.
+      const target = await page.evaluate(() => document.querySelectorAll('[data-tab-sidebar] [data-tab]')[1].querySelector('[data-tab-folder]').previousElementSibling.textContent.trim())
       await page.keyboard.press('Control+Shift+K')
       await page.keyboard.type(target)
       const narrowed = await findState()
