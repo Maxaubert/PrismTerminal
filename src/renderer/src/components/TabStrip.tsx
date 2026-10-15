@@ -135,6 +135,7 @@ export function TabStrip({
               data-label={labels[i]}
               className="relative z-[1] min-w-[4ch] flex-1 truncate py-1 text-center"
               title={tabTitle(t, failed, failedKinds)}
+              data-tip-to="[data-tab]"
               onClick={() => {
                 // A press that travelled is a drag, not a pick.
                 if (reorder.isPick()) onPick(t.id)
