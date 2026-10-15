@@ -1,6 +1,6 @@
 import { app, screen, type BrowserWindow } from 'electron'
 import { readFileSync } from 'fs'
-import { writeAtomic } from '@core/main/atomicWrite'
+import { createAtomicWriter } from '@core/main/atomicWrite'
 import { join } from 'path'
 
 /**
@@ -84,21 +84,24 @@ export function readWindowState(): WindowState {
  *  to hear about every pixel of it. */
 export function watchWindowState(win: BrowserWindow): void {
   let timer: NodeJS.Timeout | null = null
-  const write = (): void => {
+  // A move or a resize is saved off the main thread; the close synchronously.
+  const out = createAtomicWriter(WINDOW_STATE())
+  const write = (now: boolean): void => {
     if (win.isDestroyed() || win.isMinimized()) return
     // getNormalBounds is the un-maximised size, which is what should come back
     // when the window is restored.
     const b = win.getNormalBounds()
     const state: WindowState = { ...b, maximised: win.isMaximized() }
     try {
-      writeAtomic(WINDOW_STATE(), JSON.stringify(state))
+      if (now) out.saveNow(JSON.stringify(state))
+      else out.save(JSON.stringify(state))
     } catch {
       /* a terminal that cannot write its window size is still a terminal */
     }
   }
   const save = (): void => {
     if (timer) clearTimeout(timer)
-    timer = setTimeout(write, 400)
+    timer = setTimeout(() => write(false), 400)
   }
   // Listed one by one: BrowserWindow's overloads are per event name, so a loop
   // over a union of them has no single signature to match.
@@ -111,6 +114,6 @@ export function watchWindowState(win: BrowserWindow): void {
   // size that is still true.)
   win.on('close', () => {
     if (timer) clearTimeout(timer)
-    write()
+    write(true)
   })
 }
