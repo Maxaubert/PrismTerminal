@@ -7,6 +7,7 @@ import { dirname, join } from 'path'
 import type { BadgeImage, Restored, SavedTabs, UpdateInfo } from '@shared/types'
 import { claudeSessionsAsync } from '@core/main/agentResume'
 import { registerTermIpc } from '@core/main/ipc'
+import { openFolderDefault } from '@core/main/termPathOpen'
 import { registerDictationIpc } from '@core/main/dictationIpc'
 import { startDiagnostics, type Diagnostics } from '@core/main/diagnostics'
 import { withStackPolicy } from '@core/main/diagIpc'
@@ -91,7 +92,7 @@ function openLink(url: string): void {
  * exists, and decided open or show. Under --e2e it is RECORDED, like a link:
  * a test run never opens a file or an Explorer window on the owner's desktop.
  */
-const e2eOpenedPaths: Array<{ how: 'open' | 'reveal'; abs: string }> = []
+const e2eOpenedPaths: Array<{ how: 'open' | 'reveal' | 'folder'; abs: string }> = []
 if (E2E) Object.assign(globalThis, { __e2eOpenedPaths: e2eOpenedPaths })
 const pathOpeners = {
   openPath: (abs: string): void => {
@@ -101,6 +102,12 @@ const pathOpeners = {
   revealPath: (abs: string): void => {
     if (E2E) e2eOpenedPaths.push({ how: 'reveal', abs })
     else shell.showItemInFolder(abs)
+  },
+  // A folder through Windows' default verb, so the folder app the user
+  // picked gets it (Prism #393); recorded, never opened, under --e2e.
+  openFolder: (abs: string): void => {
+    if (E2E) e2eOpenedPaths.push({ how: 'folder', abs })
+    else openFolderDefault(abs, (p) => void shell.openPath(p))
   }
 }
 

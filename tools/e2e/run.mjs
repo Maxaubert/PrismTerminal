@@ -3484,7 +3484,10 @@ const scenarios = {
       )
       const png = join(w.alpha, 'docs', 'wireframes', 'png')
       await clickOn('docs/wireframes/png/')
-      ok(!!(await until(async () => (await opened()).some((o) => o.how === 'open' && o.abs === png), 4000)), 'a folder opens (in Explorer)')
+      ok(
+        !!(await until(async () => (await opened()).some((o) => o.how === 'folder' && o.abs === png), 4000)),
+        "a folder opens through Windows' folder verb (Prism #393)"
+      )
       await clickOn('run.bat')
       ok(!!(await until(async () => (await opened()).some((o) => o.abs === bat), 4000)), 'the script was clicked')
       ok(
