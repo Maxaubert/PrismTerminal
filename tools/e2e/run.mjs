@@ -2862,13 +2862,13 @@ const scenarios = {
     }
     try {
       await until(async () => (await tabLabels(page)).length === 1)
-      // NOT AT ONCE: the pointer rests 1.5 s first (owner, 2026-10-14: "they
-      // appear too fast").
+      // NOT AT ONCE: the pointer rests 1 s first (owner, 2026-10-14: "they
+      // appear too fast"; 2026-10-15: "a bit too slow make it maybe 1 second").
       {
         const b = await page.locator('[data-title-help]').boundingBox()
         await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
-        await sleep(1000)
-        ok((await tip.count()) === 0, 'a second on the ? shows no tip yet')
+        await sleep(600)
+        ok((await tip.count()) === 0, 'over half a second on the ? shows no tip yet')
         await page.mouse.move(5, 300)
         await until(async () => (await tip.count()) === 0, 2000, 50)
       }
@@ -2887,6 +2887,18 @@ const scenarios = {
       const cog = await hoverAndMeasure('[data-title-settings]')
       const vw = await page.evaluate(() => innerWidth)
       ok(!!cog.tip && cog.tip.x + cog.tip.width <= vw - 5, `near the window's edge it stays inside (${Math.round(cog.tip?.x ?? 0)}+${Math.round(cog.tip?.width ?? 0)} of ${vw})`)
+      // A TAB'S TIP IS PLACED BY THE TAB, not by its name inside it (owner,
+      // 2026-10-15: "placed oddly"): centred under the whole tab.
+      await page.mouse.move(400, 400)
+      await until(async () => (await tip.count()) === 0, 2000, 50)
+      const tabBox = await page.locator('[data-tab]').first().boundingBox()
+      const named = await hoverAndMeasure('[data-tab] [role="tab"]')
+      if (named.tip && tabBox) {
+        const dx = Math.abs(named.tip.x + named.tip.width / 2 - (tabBox.x + tabBox.width / 2))
+        const left = tabBox.x + tabBox.width / 2 - named.tip.width / 2 < 6
+        ok(left || dx <= 1.5, `a tab's tip is centred under the whole tab (off by ${dx.toFixed(1)}px)`)
+        ok(Math.abs(named.tip.y - (tabBox.y + tabBox.height + 6)) <= 1.5, `just below the tab (${Math.round(named.tip.y)} vs ${Math.round(tabBox.y + tabBox.height)})`)
+      } else ok(false, 'hovering a tab shows its tip')
     } finally {
       await closeApp(app)
     }
