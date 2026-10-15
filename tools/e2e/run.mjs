@@ -208,6 +208,25 @@ async function setSeeThrough(page, level) {
 const alphaOfHex = (c) => (c.length === 9 ? parseInt(c.slice(7), 16) / 255 : 1)
 
 /** Wait for a prompt, then type a line into the shell in front. */
+/**
+ * THE SHELL'S OWN PASTE KEYS DO NOTHING in a scenario that presses them
+ * (2026-10-15, found by the Prism session in Prism's e2e: a ^V that reached
+ * PSReadLine pasted the owner's REAL clipboard into the test shell, and a later
+ * Enter ran it). The app's clipboard is the stand-in (#183), but PSReadLine
+ * reads Windows' own. The app's paste writes text to the pty and never needs
+ * these keys, so muting them changes nothing a scenario checks.
+ */
+async function muteShellPaste(page) {
+  await typeLine(page, "Set-PSReadLineKeyHandler -Chord 'Ctrl+v','Ctrl+V','Shift+Insert' -ScriptBlock {}; Clear-Host")
+  await sleep(300)
+}
+
+/** Stops the scenario: a key that only a running probe may receive would
+ *  otherwise reach the shell. */
+function mustHave(cond, what) {
+  if (!cond) throw new Error(`${what}: stopped before the next Ctrl+V reaches the shell`)
+}
+
 async function typeLine(page, line) {
   await page.waitForFunction(
     () => /PS [^>]*>\s*$/.test((document.querySelector('.xterm .xterm-rows')?.textContent ?? '').trimEnd()),
@@ -1682,6 +1701,7 @@ const scenarios = {
         await page.keyboard.press('Escape')
         await sleep(300)
       }
+      await muteShellPaste(page)
       await page.locator('.xterm').first().click()
       // THE CLIPBOARD HERE IS THE STAND-IN (#183): what this scenario writes
       // never reaches the owner's own clipboard.
@@ -3822,10 +3842,13 @@ const scenarios = {
     try {
       await until(async () => (await tabLabels(page)).length === 1)
       await polled(page) // the poll's first "no agent" verdict, so the next one is a change
+      await muteShellPaste(page)
 
       // A plain program: ^V.
       await typeLine(page, `& '${process.execPath}' '${plain}' P`)
-      ok(!!(await until(async () => (await text()).includes('READY P'), 15000)), 'the plain probe is running')
+      const plainUp = !!(await until(async () => (await text()).includes('READY P'), 15000))
+      ok(plainUp, 'the plain probe is running')
+      mustHave(plainUp, 'the plain probe never started')
       await putImage()
       await page.locator('.xterm-helper-textarea').first().focus()
       await page.keyboard.press('Control+v')
@@ -3834,7 +3857,9 @@ const scenarios = {
 
       // Claude, as the poll sees it: ESC v, and only that.
       await typeLine(page, `& '${process.execPath}' '${asClaude}' C`)
-      ok(!!(await until(async () => (await text()).includes('READY C'), 15000)), 'the stand-in for Claude is running')
+      const claudeUp = !!(await until(async () => (await text()).includes('READY C'), 15000))
+      ok(claudeUp, 'the stand-in for Claude is running')
+      mustHave(claudeUp, 'the stand-in for Claude never started')
       ok(!!(await until(() => page.evaluate(() => !!document.querySelector('[data-agent-present]')), 30000, 100)), 'and the poll calls it an agent')
       await putImage()
       await page.locator('.xterm-helper-textarea').first().focus()
