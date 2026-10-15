@@ -2,7 +2,6 @@ import type { JSX, ReactNode } from 'react'
 import { AgentIcon } from '@core/renderer/components/AgentIcon'
 import { iconKind } from '@core/renderer/lib/agentIcon'
 import type { DetectedAgent } from '@core/shared/types'
-import { keyLabel } from '../lib/keymap'
 
 /**
  * THE PIECES EVERY TAB IS MADE OF, once for the strip and the sidebar (audit
@@ -36,7 +35,7 @@ export function TabClose({
       }`}
       style={{ width: size, height: size, ...(ink ? { color: ink } : {}) }}
       data-tab-close
-      title={`Close ${label} (${keyLabel('close-tab')})`}
+      title="Close"
       aria-label={`Close ${label}`}
       onClick={(e) => {
         e.stopPropagation()
