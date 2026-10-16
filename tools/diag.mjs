@@ -24,6 +24,7 @@ const APPS = { pt: 'PrismTerminal', stable: 'PrismTerminalStable', prism: 'Prism
 const PROBLEMS = new Set([
   'main-lag',
   'fs-slow',
+  'mem-high',
   'ipc-slow',
   'ipc-error',
   'page-stall',
