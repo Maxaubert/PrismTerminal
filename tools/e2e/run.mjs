@@ -2996,6 +2996,34 @@ const scenarios = {
   },
 
   /**
+   * WORK STILL RUNNING AFTER A STOP (owner, 2026-10-16: a session waiting on
+   * a workflow, or with a shell started in the background, read as finished).
+   * A shell draws Claude Code's footer with its "· 1 shell" (MEASURED wording,
+   * core lib/agentBackground) and says the Stop: the tab stays Working, past
+   * the settle and the re-read, until the footer no longer says so.
+   */
+  async backgroundWork(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    try {
+      await until(async () => (await tabLabels(page)).length === 2)
+      await polled(page)
+      const state = (i) => page.locator('[data-tab]').nth(i).getAttribute('data-agent-state')
+      await page.locator('[data-tab]').nth(1).click()
+      const footer = (count) =>
+        `$r = [string]::new([char]0x2500, 40); Clear-Host; Write-Host $r; Write-Host ([char]0x276F); Write-Host $r; Write-Host '  auto mode on${count}'`
+      await typeLine(page, `${hookSay('working')}; Start-Sleep -Milliseconds 400; ${footer(' · 1 shell')}; ${hookSay('done')}`)
+      ok(!!(await until(async () => (await state(1)) === 'working', 8000, 100)), 'a working hook lights the tab')
+      await sleep(5500) // past the 1.5 s settle and a 3 s re-read
+      ok((await state(1)) === 'working', `a Stop with "1 shell" in the footer stays Working (${await state(1)})`)
+      await typeLine(page, footer(''))
+      ok(!!(await until(async () => (await state(1)) !== 'working', 8000, 100)), `the footer without it: the work is over (${await state(1)})`)
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
    * NO WINDOWS SYSTEM MENU ON A RIGHT-CLICK (owner, 2026-10-13: "stop chromium
    * right click menus like this from appearing in the terminal"). Windows
    * raises it for a right-click on a drag region; the window refuses it. The
