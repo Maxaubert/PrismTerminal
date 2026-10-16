@@ -1,4 +1,5 @@
-import { readFileSync } from 'fs'
+import { readFileSync, rmSync, writeFileSync } from 'fs'
+import { dirname, join } from 'path'
 import { createAtomicWriter } from '@core/main/atomicWrite'
 import { setSessionsFile, tabToken } from '@core/main/terminal'
 import { createLedger, type LedgerTab, type Presence } from './sessionLedger'
@@ -30,7 +31,7 @@ export interface SessionsDeps {
   window: () => WindowLike | null
   power: () => PowerLike
   on: (channel: string, fn: (...args: unknown[]) => void) => void
-  channels: { tabs: string; front: string; link: string; engage: string }
+  channels: { tabs: string; front: string; link: string; engage: string; enable: string }
   now?: () => number
 }
 
@@ -50,7 +51,22 @@ export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } 
   }
   const ledger = createLedger(now, saved)
   const writer = createAtomicWriter(d.file)
-  setSessionsFile(d.file)
+  // OFF until the page says the orchestrator is switched on (beta, off by
+  // default): no file written, no PRISM_SESSIONS_FILE given to a shell.
+  let enabled = false
+  /** The promoted tab's PRISM_TAB_ID, for the orchestrator plugin's role hook. */
+  const leadFile = join(dirname(d.file), 'orchestrator-tab.txt')
+  let leadToken: string | null = null
+  const setLead = (token: string | null): void => {
+    if (token === leadToken) return
+    leadToken = token
+    try {
+      if (token) writeFileSync(leadFile, token)
+      else rmSync(leadFile, { force: true })
+    } catch {
+      /* the role hook then stays quiet; the next change tries again */
+    }
+  }
 
   let locked = false
   let asleep = false
@@ -78,6 +94,10 @@ export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } 
   // (off the main thread), carrying the newest stamps with it.
   let laterDue = false
   const write = (): void => {
+    if (!enabled) {
+      ledger.takeChanged()
+      return
+    }
     const c = ledger.takeChanged()
     if (c === 'later') laterDue = true
     if (c === 'now' || (laterDue && now() - lastWrite >= LATER_MS)) {
@@ -126,10 +146,20 @@ export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } 
       if (!id || label === null || cwd === null) continue
       const agent = str(t.agent, 40)
       const state = typeof t.state === 'string' && STATES.has(t.state) ? t.state : null
-      tabs.push({ id, tab: tabToken(id) ?? '', label, cwd, agent, state })
+      tabs.push({ id, tab: tabToken(id) ?? '', label, cwd, agent, state, orchestrator: t.orchestrator === true })
     }
     ledger.tabs(tabs)
+    const lead = tabs.find((t) => t.orchestrator)
+    if (enabled) setLead(lead?.tab || null)
     write()
+  })
+  d.on(d.channels.enable, (on: unknown) => {
+    const next = on === true
+    if (next === enabled) return
+    enabled = next
+    setSessionsFile(enabled ? d.file : null)
+    if (!enabled) setLead(null)
+    else writer.save(body())
   })
   d.on(d.channels.front, (id: unknown) => {
     // The front tab first, then a fresh reading: a switch made while present
@@ -153,6 +183,7 @@ export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } 
   return {
     // The close, the quit and a Windows shutdown: written now (rule 7).
     flush: () => {
+      if (!enabled) return
       try {
         ledger.takeChanged()
         writer.saveNow(body())

@@ -12,9 +12,15 @@
 #   catch-up.ps1 -Commit T  the report was given: the next one starts after it
 #   catch-up.ps1 -All       ignore what was reported before (still skips what
 #                           the owner has seen)
+#   catch-up.ps1 -List      the tabs now: label, folder, state, which is the
+#                           orchestrator, and each one's transcript
+#   catch-up.ps1 -Only Wind only the sessions whose label or folder contains
+#                           the word (with -All: everything new in them)
 param(
   [string]$Commit = '',
   [switch]$All,
+  [switch]$List,
+  [string]$Only = '',
   [string]$SessionsFile = $env:PRISM_SESSIONS_FILE
 )
 
@@ -105,8 +111,8 @@ if ($Commit) {
 }
 
 # ---------------------------------------------------------------- digest
-$list = Read-JsonFile $SessionsFile
-if (-not $list) {
+$data = Read-JsonFile $SessionsFile
+if (-not $data) {
   Out-Line "NOT AVAILABLE: the session list at $SessionsFile could not be read."
   exit 2
 }
@@ -128,19 +134,31 @@ function Find-Transcript([string]$id) {
 # Which tab shows which session now, and its state.
 $tabOf = @{}
 $bareTabs = @()
-foreach ($t in @($list.tabs)) {
+foreach ($t in @($data.tabs)) {
   if ($t.session) { $tabOf[[string]$t.session] = $t } elseif ($t.state) { $bareTabs += $t }
 }
 
 $now = (Get-Date).ToUniversalTime()
 $appNote = ''
 try {
-  $proc = Get-Process -Id ([int]$list.pid) -ErrorAction Stop
+  $proc = Get-Process -Id ([int]$data.pid) -ErrorAction Stop
   if ($proc.ProcessName -notlike 'Prism*') { $appNote = 'closed' }
 } catch { $appNote = 'closed' }
 
+if ($List) {
+  Out-Line "# Tabs in $($data.app) (list written $($data.updatedAt)$(if ($appNote) { ', the app is CLOSED' }))"
+  foreach ($t in @($data.tabs)) {
+    $f = if ($t.session) { Find-Transcript ([string]$t.session) } else { $null }
+    $role = if ($t.orchestrator) { ' | ORCHESTRATOR (this is you if your PRISM_TAB_ID matches)' } else { '' }
+    Out-Line ("- $($t.label) | folder: $($t.cwd) | now: " + $(if ($t.state) { $t.state } else { 'idle' }) + " | agent: " + $(if ($t.agent) { $t.agent } else { 'none' }) + $role)
+    if ($t.session) { Out-Line "  session $($t.session)$(if ($f) { " | transcript: $f" } else { ' | transcript not found' })" }
+  }
+  Out-Line "Your own tab: PRISM_TAB_ID=$($env:PRISM_TAB_ID)"
+  exit 0
+}
+
 $sessions = @()
-foreach ($p in $list.sessions.PSObject.Properties) {
+foreach ($p in $data.sessions.PSObject.Properties) {
   $sessions += [pscustomobject]@{ Id = $p.Name; Rec = $p.Value; Last = (Parse-Time $p.Value.lastHookAt) }
 }
 $sessions = @($sessions | Sort-Object -Property @{ Expression = { if ($_.Last) { $_.Last } else { [DateTime]::MinValue } } } -Descending)
@@ -178,6 +196,7 @@ foreach ($s in $sessions) {
   if ($id -notmatch $UUID -or $id -eq $self) { continue }
   $cur = $reported[$id]
   $label = if ($rec.label) { [string]$rec.label } else { $id.Substring(0, 8) }
+  if ($Only -and -not ($label -like "*$Only*" -or ([string]$rec.cwd) -like "*$Only*")) { continue }
   if (-not $s.Last) { continue }   # never spoke through a hook: nothing to read
   $curAt = if ($cur -and -not $All) { Parse-Time $cur.at } else { $null }
   $seen = Parse-Time $rec.seen
@@ -385,7 +404,7 @@ foreach ($t in $bareTabs) {
 $token = [guid]::NewGuid().ToString('N').Substring(0, 12)
 Write-Atomic $pendingFile ((@{ token = $token; sessions = $pending } | ConvertTo-Json -Depth 5))
 
-Out-Line "# Catch-up digest ($($list.app), list written $($list.updatedAt)$(if ($appNote) { ', the app is CLOSED: this is its last list' }))"
+Out-Line "# Catch-up digest ($($data.app), list written $($data.updatedAt)$(if ($appNote) { ', the app is CLOSED: this is its last list' }))"
 Out-Line ''
 if ($out.Length -eq 0) { Out-Line 'Nothing new in any session since you last looked or were told.' }
 else { Out-Line $out.ToString().TrimEnd() }

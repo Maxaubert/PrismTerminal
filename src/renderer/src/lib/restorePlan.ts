@@ -26,7 +26,12 @@ export function peekState(saved: SavedTabs, newId: () => string): Boot {
     slots.push(id)
     // An agent tab wears the skeleton from its first frame; a plain one the
     // bare ground, its prompt being well under a second away.
-    return { id, cwd: t.cwd, pending: isResumable(t.agent) ? 'agent' : 'shell' }
+    return {
+      id,
+      cwd: t.cwd,
+      pending: isResumable(t.agent) ? 'agent' : 'shell',
+      ...(t.orchestrator ? { orchestrator: true } : {})
+    }
   })
   const front = slots[Math.min(Math.max(0, saved.active), slots.length - 1)] ?? null
   return { state: { tabs, activeId: front }, slots }
@@ -57,7 +62,8 @@ export function settleRestore(s: TabState, slots: string[], r: Restored, newId: 
   const tabs: Tab[] = []
   for (const t of s.tabs) {
     if (!t.pending) tabs.push(t)
-    else if (claim.has(t.id)) tabs.push({ id: t.id, cwd: claim.get(t.id)!.cwd })
+    else if (claim.has(t.id))
+      tabs.push({ id: t.id, cwd: claim.get(t.id)!.cwd, ...(t.orchestrator ? { orchestrator: true } : {}) })
   }
   tabs.push(...extra)
   // The restore's front tab, unless the user has already picked one that stays.

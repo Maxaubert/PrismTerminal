@@ -34,7 +34,14 @@ export const claudeResume = (resume: string | undefined): string | null => (resu
 const ENGAGE_GAP_MS = 1000
 const TABS_DEBOUNCE_MS = 500
 
-export function useLedgerReport(tabs: LedgerTabReport[], frontId: string | null): void {
+/**
+ * Only with the orchestrator switched on (beta, off by default): off, main
+ * keeps no list, writes no file and gives shells no PRISM_SESSIONS_FILE.
+ */
+export function useLedgerReport(tabs: LedgerTabReport[], frontId: string | null, on: boolean): void {
+  useEffect(() => {
+    window.prism.ledgerEnable(on)
+  }, [on])
   const key = JSON.stringify(tabs)
   useEffect(() => {
     const t = window.setTimeout(() => window.prism.ledgerTabs(JSON.parse(key) as LedgerTabReport[]), TABS_DEBOUNCE_MS)

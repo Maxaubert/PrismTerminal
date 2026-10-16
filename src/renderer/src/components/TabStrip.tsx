@@ -35,7 +35,8 @@ export function TabStrip({
   onNew,
   onDropFolder,
   onReorder,
-  onOpenRecent
+  onOpenRecent,
+  onOrchestrator
 }: TabListProps): JSX.Element | null {
   // Every tab's state, mark and colours: the one reading the sidebar shares (#162).
   const { indicator, paint, looks } = useTabLooks({
@@ -76,7 +77,7 @@ export function TabStrip({
       window.removeEventListener('drop', off, true)
     }
   }, [])
-  const menu = useTabMenus({ onClose, onOpenRecent })
+  const menu = useTabMenus({ onClose, onOpenRecent, onOrchestrator })
   const strip = useRef<HTMLDivElement>(null)
   const plus = useRef<HTMLButtonElement>(null)
   const moreBtn = useRef<HTMLButtonElement>(null)
@@ -209,11 +210,28 @@ export function TabStrip({
           // right click cannot start a carry: onTabPointerDown ignores button 2.
           onContextMenu: (e: MouseEvent) => menu.openTabMenu(e, t),
           'data-tab': true,
+          'data-tab-orchestrator': t.orchestrator || undefined,
           ...reorder.handlers(t.id, i)
         }
         const motion = reorder.motion(t.id, i)
+        // THE ORCHESTRATOR LEADS (owner, 2026-10-16: "first in the list and
+        // there's a divider line"): an accent outline on the tab, and an accent
+        // rule after it, before the rest.
+        const lead = t.orchestrator ? ' outline outline-[1.5px] -outline-offset-[1.5px] outline-[color-mix(in_srgb,var(--p-accent-hi)_70%,transparent)]' : ''
+        const withRule = (el: JSX.Element): JSX.Element | JSX.Element[] =>
+          t.orchestrator
+            ? [
+                el,
+                <span
+                  key={`${t.id}-lead`}
+                  data-tab-lead-divider
+                  aria-hidden
+                  className="mx-1.5 my-2 w-0.5 shrink-0 self-stretch rounded-full bg-[color-mix(in_srgb,var(--p-accent-hi)_60%,transparent)]"
+                />
+              ]
+            : el
         if (plan[i] === 'icon')
-          return (
+          return withRule(
             // AN ICON TAB (#146): a tab at rest when names no longer fit. Its
             // name is its tooltip and its accessible name; its mark sits on the
             // icon's corner; it closes from its menu, a middle click or Ctrl+W.
@@ -221,7 +239,7 @@ export function TabStrip({
               key={t.id}
               {...shared}
               data-tab-icon-only
-              className={`no-drag group relative isolate flex w-10 shrink-0 items-center justify-center transition-colors ${nameInk} hover:bg-[var(--p-hover)]`}
+              className={`no-drag group relative isolate flex w-10 shrink-0 items-center justify-center transition-colors ${nameInk} hover:bg-[var(--p-hover)]${lead}`}
               style={motion}
             >
               {bar}
@@ -253,14 +271,14 @@ export function TabStrip({
               <span data-tab-sep aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[var(--p-divider)]" />
             </div>
           )
-        return (
+        return withRule(
           <div
             key={t.id}
             {...shared}
             // WIDER FOR THE ICON (2026-10-12): 18 px and its gap came out of the
             // name's room, so the basis grew from 114 to 150 and the floor from
             // 64 to 84; every tab is still one width.
-            className={`no-drag group relative isolate flex items-center gap-1.5 px-2.5 transition-colors min-w-[84px] flex-[0_1_150px] ${nameInk} ${
+            className={`no-drag group relative isolate flex items-center gap-1.5 px-2.5 transition-colors min-w-[84px] flex-[0_1_150px] ${nameInk}${lead} ${
               on
                 ? // THE SECONDARY COLOUR (owner, 2026-09-03): the strip, the
                   // tabs at rest and this one are all --p-tabs, one surface

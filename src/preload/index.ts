@@ -55,6 +55,8 @@ const api = {
 
   /** The tabs as the report names them: label, folder, agent and its state. */
   ledgerTabs: (tabs: LedgerTabReport[]): void => ipcRenderer.send(APP_CH.ledgerTabs, tabs),
+  /** The orchestrator switch: off, main keeps no list and names no file. */
+  ledgerEnable: (on: boolean): void => ipcRenderer.send(APP_CH.ledgerEnable, on),
   /** The tab in front changed: sent at once, it decides what counts as seen. */
   ledgerFront: (id: string | null): void => ipcRenderer.send(APP_CH.ledgerFront, id),
   /** Tab `id` hosts Claude session `session` (its hook said so, or a restore

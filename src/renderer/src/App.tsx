@@ -51,6 +51,7 @@ import {
   toggleSettings,
   pickTab,
   reorderTabs,
+  setOrchestrator,
   setCwd,
   shellTabs,
   stepTab,
@@ -86,7 +87,7 @@ import {
   closeQuestionTitle,
   holdsWindowClose
 } from '@core/renderer/lib/agentClose'
-import { agentHooksOn, termFontStack } from '@core/renderer/lib/termLook'
+import { pluginChoice, termFontStack, useOrchestratorOn } from '@core/renderer/lib/termLook'
 import { claudeResume, ledgerState, useLedgerReport } from './lib/ledgerReport'
 import { useTaskbarBadge } from './lib/taskbarBadge'
 import { usePaintedChrome } from './lib/paintChrome'
@@ -324,7 +325,7 @@ export default function App(): JSX.Element {
     const dir = newTabMode() === 'folder' ? newTabFolder() || home.current : ''
     // With the plugin or without, as the spawn will ask (#131): a warm shell
     // is only adopted by a spawn that wants what it was started with.
-    if (dir) window.prism.termPrewarm(dir, savedShellId(), agentHooksOn())
+    if (dir) window.prism.termPrewarm(dir, savedShellId(), pluginChoice())
   }, [])
 
   const newTab = useCallback(async () => {
@@ -540,7 +541,8 @@ export default function App(): JSX.Element {
       tabs: shells.map((t) => {
         const kind = agentIds.has(t.id) ? agentKinds.current.get(t.id) : undefined
         const agent: AgentKind | undefined = isResumable(kind) ? kind : undefined
-        return agent ? { cwd: t.cwd, agent } : { cwd: t.cwd }
+        const saved = agent ? { cwd: t.cwd, agent } : { cwd: t.cwd }
+        return t.orchestrator ? { ...saved, orchestrator: true as const } : saved
       }),
       active: Math.max(
         0,
@@ -556,6 +558,7 @@ export default function App(): JSX.Element {
   // THE TASKBAR BADGE (2026-09-28): how many tabs show a mark (lib/taskbarBadge).
   useTaskbarBadge({ doneIds, questionIds, workingIds, failedIds })
 
+  const orchestrating = useOrchestratorOn()
   // THE CATCH-UP REPORT'S LEDGER (2026-10-16, lib/ledgerReport): main keeps
   // which Claude session is in which tab and when the owner really looked.
   const allLabels = tabLabels(state.tabs)
@@ -569,11 +572,13 @@ export default function App(): JSX.Element {
               label: allLabels[i] ?? '',
               cwd: t.cwd,
               agent: agentIds.has(t.id) ? (agentKinds.current.get(t.id) ?? null) : null,
-              state: ledgerState(t.id, { workingIds, questionIds, doneIds, failedIds })
+              state: ledgerState(t.id, { workingIds, questionIds, doneIds, failedIds }),
+              orchestrator: !!t.orchestrator
             }
           ]
     ),
-    activeShell ? activeShell.id : null
+    activeShell ? activeShell.id : null,
+    orchestrating
   )
 
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
@@ -741,7 +746,9 @@ export default function App(): JSX.Element {
       void window.prism.folderOf(path).then((dir) => dir && openTab(dir)),
     onReorder: (id: string, to: number) =>
       setState((s) => ({ ...s, tabs: reorderTabs(s.tabs, id, to) })),
-    onOpenRecent: openRecent
+    onOpenRecent: openRecent,
+    // THE ORCHESTRATOR (beta, 2026-10-16): offered only with it switched on.
+    ...(orchestrating ? { onOrchestrator: (id: string | null) => setState((s) => setOrchestrator(s, id)) } : {})
   }
   return (
     <div className="flex h-full w-full flex-col overflow-hidden text-[var(--p-text)]">

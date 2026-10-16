@@ -142,6 +142,14 @@ function claudePluginDir(): string | undefined {
   return existsSync(join(dir, 'hooks', 'hooks.json')) ? dir : undefined
 }
 
+/** The opt-in orchestrator plugin (2026-10-16), found the same way. */
+function orchestratorPluginDir(): string | undefined {
+  const dir = app.isPackaged
+    ? join(process.resourcesPath, 'claude-plugin-orchestrator')
+    : join(__dirname, '../../core/claude-plugin-orchestrator')
+  return existsSync(join(dir, 'hooks', 'hooks.json')) ? dir : undefined
+}
+
 // userData is `%APPDATA%\PrismTerminal`, whatever the product name's spacing
 // would have made it. The e2e (and anyone else) passing Chromium's own
 // --user-data-dir keeps the profile they asked for: Electron has already
@@ -462,7 +470,13 @@ function wireIpc(): void {
     window: () => mainWindow,
     power: () => powerMonitor,
     on: (ch, fn) => ipcMain.on(ch, (_e, ...args: unknown[]) => fn(...args)),
-    channels: { tabs: APP_CH.ledgerTabs, front: APP_CH.ledgerFront, link: APP_CH.ledgerLink, engage: APP_CH.ledgerEngage }
+    channels: {
+      tabs: APP_CH.ledgerTabs,
+      front: APP_CH.ledgerFront,
+      link: APP_CH.ledgerLink,
+      engage: APP_CH.ledgerEngage,
+      enable: APP_CH.ledgerEnable
+    }
   })
 
   /* ----- tabs ----- */
@@ -544,6 +558,7 @@ function wireIpc(): void {
     // the app (electron-builder's extraResources), and a dev build reads the
     // core's own copy. A shell gets it while the page's setting is on.
     claudePluginDir: claudePluginDir(),
+    orchestratorPluginDir: orchestratorPluginDir(),
     // A bell flashes the taskbar while the window is unfocused (#177).
     attention: bellAttention
   })

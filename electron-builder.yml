@@ -43,6 +43,10 @@ extraResources:
   # on disk, never inside the asar (core/** is left out of it above).
   - from: core/claude-plugin
     to: claude-plugin
+  # The opt-in orchestrator plugin (2026-10-16): added to a shell only when
+  # Settings > Agents > Orchestrator is on.
+  - from: core/claude-plugin-orchestrator
+    to: claude-plugin-orchestrator
 win:
   icon: build/icon.ico
   executableName: PrismTerminal

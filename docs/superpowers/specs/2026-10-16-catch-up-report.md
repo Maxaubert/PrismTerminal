@@ -11,9 +11,34 @@ nothing else knows: which Claude session runs in which tab, and when the owner w
 Reviewed before building (two reviewers, 2026-10-16): 16 design findings and 9 transcript-format
 findings, all folded in below.
 
+## Reworked the same day: opt-in, and an orchestrator tab
+
+Owner, after the first build: "I want others that download this terminal to also be able to use
+that if they want ... if they don't want it, it's like already in there", "differentiate a
+orchestrator tab by having it promoted in the tab bar ... first in the list and there's a divider
+line", "if you right click and choose make orchestrator it already knows", and "we'll move it to a
+plug-in later perhaps". So:
+
+- **Settings > Agents > Orchestrator (beta), OFF by default.** Off: no session list, no file, no
+  `PRISM_SESSIONS_FILE`, no orchestrator plugin, no menu entry. On: NEW tabs get a second Claude
+  plugin, `prism-terminal-orchestrator` (`core/claude-plugin-orchestrator`), beside the status one.
+- **The skills moved there**: `catch-up` (the report) and `orchestrator` (the role: find a session
+  by label or folder, ask when unsure, report, summarise one session with `-Only`, list tabs with
+  `-List`). The status plugin keeps only the `+sid` hooks.
+- **Make orchestrator** in a tab's right-click menu: at most one tab, moved first, an accent
+  outline and an accent rule after it (strip) or under it (sidebar), kept across restarts.
+- **It knows by itself**: the orchestrator plugin's `UserPromptSubmit` hook (`role.cmd`) compares
+  the tab's `PRISM_TAB_ID` with `orchestrator-tab.txt` beside `sessions.json` and, in that tab only,
+  adds a fixed `additionalContext` telling Claude to use the orchestrator skill. MEASURED (Claude
+  Code 2.1.301): a plugin hook's `additionalContext` reaches the model.
+- **Not built, an owner decision**: sending a message INTO another tab. Rule 2 says the app never
+  types into a shell; until the owner decides (an exception for an idle Claude prompt, or Claude's
+  own cross-session messages), the orchestrator says which tab and gives the message to paste.
+
 ## What the owner gets
 
-In any Prism Terminal tab running Claude Code: `/prism-terminal-status:catch-up` ("catch me up").
+With the orchestrator switched on, in any tab opened since: `/prism-terminal-orchestrator:catch-up`
+("catch me up"), or just ask the orchestrator tab.
 Claude runs the bundled script, reads a small digest, and answers:
 
 - per session with something unseen: **done**, **still working**, **needs you** (an open question

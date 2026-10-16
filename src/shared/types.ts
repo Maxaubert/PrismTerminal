@@ -7,6 +7,8 @@ import type { AgentKind } from '@core/shared/types'
 export interface SavedTab {
   cwd: string
   agent?: AgentKind
+  /** The tab the owner made the orchestrator (2026-10-16); at most one. */
+  orchestrator?: true
 }
 
 /** The renderer owns the tab list; main persists this snapshot of it. */
@@ -62,4 +64,6 @@ export interface LedgerTabReport {
   cwd: string
   agent: string | null
   state: 'working' | 'question' | 'done' | 'failed' | null
+  /** The tab the owner promoted to orchestrator. */
+  orchestrator?: boolean
 }

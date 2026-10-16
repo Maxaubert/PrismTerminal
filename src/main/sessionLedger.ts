@@ -48,6 +48,8 @@ export interface LedgerTab {
   cwd: string
   agent: string | null
   state: string | null
+  /** The tab the owner promoted to orchestrator. */
+  orchestrator?: boolean
 }
 
 interface SessionRec {
@@ -73,6 +75,7 @@ export interface SessionsFile {
     stateSince: string | null
     front: boolean
     session: string | null
+    orchestrator: boolean
   }>
   sessions: Record<
     string,
@@ -171,7 +174,8 @@ export function createLedger(now: () => number, saved?: unknown): Ledger {
         seenIds.add(t.id)
         const was = tabs.get(t.id)
         const stateSince = was && was.state === t.state ? was.stateSince : now()
-        if (!was || was.state !== t.state || was.label !== t.label || was.cwd !== t.cwd) changed = true
+        if (!was || was.state !== t.state || was.label !== t.label || was.cwd !== t.cwd || !!was.orchestrator !== !!t.orchestrator)
+          changed = true
         tabs.set(t.id, { ...t, session: was?.session ?? null, stateSince })
         const sid = was?.session
         const rec = sid ? sessions.get(sid) : undefined
@@ -260,7 +264,8 @@ export function createLedger(now: () => number, saved?: unknown): Ledger {
           state: t.state,
           stateSince: iso(t.stateSince),
           front: t.id === frontId,
-          session: t.session
+          session: t.session,
+          orchestrator: !!t.orchestrator
         })
       for (const [id, r] of sessions)
         out.sessions[id] = {

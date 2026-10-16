@@ -54,15 +54,18 @@ session's id, so the app knows which conversation is in which tab. It is passed 
 written into your Claude Code settings. Settings > Appearance > "Exact status from Claude Code"
 turns it off for every terminal opened afterwards.
 
-## The catch-up report
+## The orchestrator (beta, off unless you turn it on)
 
-To answer "what happened in my other tabs while I was away", Prism Terminal keeps a small list on
+Settings > Agents > Orchestrator is OFF by default; with it off, none of this happens. Turned on,
+to answer "what happened in my other tabs while I was away", Prism Terminal keeps a small list on
 your PC, `sessions.json` beside its settings: each tab's label and folder, the id of the Claude
 session in it, its state (working, finished, waiting on you), and when you last really looked at it
 (the tab in front, the window focused, and you using the keyboard or mouse). No conversation text,
 nothing you type. Every tab's shell is told where the list is (`PRISM_SESSIONS_FILE`).
 
-The plugin's catch-up skill reads that list and the NEW part of each session's own Claude Code
+New tabs then also get a second local plugin, the orchestrator's: its skills, and a hook that tells
+Claude it is the orchestrator in the one tab you promoted (its id is kept in
+`orchestrator-tab.txt` beside the list). The catch-up skill reads that list and the NEW part of each session's own Claude Code
 transcript on your PC, and puts excerpts of them (your prompts, Claude's answers, PRs and commits)
 into the Claude session where you asked for the report, which, like anything in a Claude Code
 session, goes to Anthropic. It sends nothing anywhere else, and writes only its own cursor

@@ -18,18 +18,24 @@ export function parseTabs(raw: string): SavedTabs {
   try {
     const j = JSON.parse(raw) as { tabs?: unknown; active?: unknown } | null
     if (!j || !Array.isArray(j.tabs)) return none()
+    let lead = false
     const tabs = j.tabs
       .filter(
-        (t): t is { cwd: string; agent?: unknown } =>
+        (t): t is { cwd: string; agent?: unknown; orchestrator?: unknown } =>
           !!t && typeof (t as { cwd?: unknown }).cwd === 'string' && (t as { cwd: string }).cwd !== ''
       )
       .slice(0, MAX_TABS)
       // Only an agent that can be resumed is worth remembering; anything else
       // in that field is dropped and the tab comes back as a plain shell.
-      .map(
-        (t): SavedTab =>
-          isResumable(t.agent) ? { cwd: t.cwd, agent: t.agent } : { cwd: t.cwd }
-      )
+      .map((t): SavedTab => {
+        const tab: SavedTab = isResumable(t.agent) ? { cwd: t.cwd, agent: t.agent } : { cwd: t.cwd }
+        // One orchestrator at most (2026-10-16): the first one marked.
+        if (t.orchestrator === true && !lead) {
+          lead = true
+          tab.orchestrator = true
+        }
+        return tab
+      })
     const active =
       typeof j.active === 'number' &&
       Number.isInteger(j.active) &&

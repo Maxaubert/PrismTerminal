@@ -40,7 +40,7 @@ const PAGE_OF: Record<SettingsSectionId, AppPageId> = {
 export const ROW_ORDER = [
   'tab-layout', 'tab-switch', 'window-edges', 'term-theme', 'term-acrylic', 'window-background', 'window-secondary', 'window-accent',
   'term-shell', 'newtab-mode', 'explorer-verb', 'agent-keys', 'agent-guard', 'term-font-family', 'term-font', 'help-enabled',
-  'agent-indicator', 'agent-done-on', 'agent-rainbow', 'agent-question-on', 'agent-failed-on', 'taskbar-badge', 'agent-hooks',
+  'agent-indicator', 'agent-done-on', 'agent-rainbow', 'agent-question-on', 'agent-failed-on', 'taskbar-badge', 'agent-hooks', 'orchestrator',
   'agent-color', 'agent-done-color', 'agent-question-color',
   'dictation-enabled', 'dictation-mode', 'dictation-hotkey', 'dictation-mic', 'dictation-language',
   'dictation-pause-media', 'dictation-sounds', 'dictation-model', 'dictation-gpu',

@@ -14,6 +14,9 @@ export interface Tab {
   /** Drawn from the saved list before the restore settled it (#106): no shell
    *  yet. 'agent' wears the resume skeleton, 'shell' the bare ground. */
   pending?: 'agent' | 'shell'
+  /** THE ORCHESTRATOR (owner, 2026-10-16: "promoted in the tab bar ... first
+   *  in the list and there's a divider line"): at most one, always first. */
+  orchestrator?: boolean
 }
 
 export interface TabState {
@@ -105,7 +108,36 @@ export function reorderTabs(tabs: readonly Tab[], id: string, toIndex: number): 
   // was aimed past its old home has to come back by one too.
   const at = Math.max(0, Math.min(toIndex > from ? toIndex - 1 : toIndex, next.length))
   next.splice(at, 0, moved)
+  return leadFirst(next)
+}
+
+/** The orchestrator stays first, whatever was dragged where. */
+function leadFirst(tabs: Tab[]): Tab[] {
+  const i = tabs.findIndex((t) => t.orchestrator)
+  if (i <= 0) return tabs
+  const next = [...tabs]
+  const [lead] = next.splice(i, 1)
+  next.unshift(lead)
   return next
+}
+
+/**
+ * Make tab `id` the orchestrator (null: no tab is). The one before it, if
+ * any, becomes an ordinary tab where it stands; the new one moves first. The
+ * Settings tab owns no shell and is never one.
+ */
+export function setOrchestrator(s: TabState, id: string | null): TabState {
+  const target = id ? s.tabs.find((t) => t.id === id) : undefined
+  if (id && (!target || target.kind === 'settings')) return s
+  const tabs = s.tabs.map((t) => {
+    const lead = t.id === id
+    if (!!t.orchestrator === lead) return t
+    const next = { ...t }
+    if (lead) next.orchestrator = true
+    else delete next.orchestrator
+    return next
+  })
+  return { ...s, tabs: leadFirst(tabs) }
 }
 
 /** One folder however it was spelled: case, slash direction, trailing separator. */

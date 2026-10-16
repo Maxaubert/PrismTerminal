@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
  * the content a list.
  */
 
-const SCRIPT = join(__dirname, '..', 'claude-plugin', 'skills', 'catch-up', 'catch-up.ps1')
+const SCRIPT = join(__dirname, '..', 'claude-plugin-orchestrator', 'skills', 'catch-up', 'catch-up.ps1')
 const W = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const SELF = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const QUIET = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
@@ -176,6 +176,24 @@ describe.runIf(process.platform === 'win32')('the catch-up digest', () => {
     expect(code).toBe(2)
     expect(out).toContain('NOT AVAILABLE')
   }, 30_000)
+
+  // The orchestrator's view of the tabs, and one session on its own.
+  it('lists the tabs with the orchestrator marked, and digests one session by name', () => {
+    const w = world()
+    w.sessions({ [W]: rec(), [QUIET]: rec({ label: 'Sonara', cwd: 'C:\\src\\sonara' }) }, [
+      { tab: 'a', label: 'Wind', cwd: 'C:\\src\\wind', agent: 'claude', state: 'working', front: false, session: W },
+      { tab: 'b', label: 'Lead', cwd: 'C:\\src', agent: 'claude', state: null, front: true, session: null, orchestrator: true }
+    ])
+    w.transcript(W, owner(t(10), 'wind work'))
+    w.transcript(QUIET, owner(t(10), 'sonara work'))
+    const list = w.run('-List').out
+    expect(list).toContain('- Wind | folder: C:\\src\\wind | now: working | agent: claude')
+    expect(list).toMatch(/- Lead .*ORCHESTRATOR/)
+    expect(list).toContain(`session ${W} | transcript: `)
+    const one = w.run('-Only', 'wind').out
+    expect(one).toContain('wind work')
+    expect(one).not.toContain('sonara work')
+  })
 
   it('lists a session with nothing new in one line', () => {
     const w = world()

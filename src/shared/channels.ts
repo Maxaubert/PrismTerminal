@@ -16,6 +16,7 @@ export const APP_CH = {
   closeRequest: 'close:request',
   openFolder: 'open:folder',
   dialogPickFolder: 'dialog:pick-folder',
+  ledgerEnable: 'ledger:enable',
   ledgerEngage: 'ledger:engage',
   ledgerFront: 'ledger:front',
   ledgerLink: 'ledger:link',
