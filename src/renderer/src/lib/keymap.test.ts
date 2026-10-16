@@ -33,6 +33,10 @@ describe('keep agent sessions open', () => {
   it('leaves Ctrl+C to an agent at work: it is how it is stopped', () => {
     expect(chordOf(c, { ...on, agentWorking: true })).toBeNull()
   })
+  it('leaves Ctrl+C to an agent holding its own selection: it is its copy (Ctrl+D stays taken)', () => {
+    expect(chordOf(c, { ...on, agentSelecting: true })).toBeNull()
+    expect(chordOf(d, { ...on, agentSelecting: true })).toBe('agent-guard')
+  })
   it('a plain shell keeps both, and so does everything with the setting off', () => {
     expect(chordOf(c, { ...on, agentHere: false })).toBeNull()
     expect(chordOf(d, { ...on, agentHere: false })).toBeNull()

@@ -78,3 +78,47 @@ describe('"Copied" for a program that copies its own selection (2026-10-16)', ()
     expect(b.announce).not.toHaveBeenCalled()
   })
 })
+
+// Owner, 2026-10-16: with Claude's Copy on select off, "highlighting text then
+// clicking ctrl c does nothing ... it shows no chip".
+describe('the program\'s own selection, copied with Ctrl+C', () => {
+  it('stands from the selecting release until a press, another key or the copy', async () => {
+    const { w } = setup()
+    expect(w.selecting()).toBe(false)
+    w.down(10, 10, 1)
+    w.up(80, 10)
+    expect(w.selecting()).toBe(true)
+    w.otherKey()
+    expect(w.selecting()).toBe(false)
+    w.down(10, 10, 2)
+    w.up(10, 10)
+    expect(w.selecting()).toBe(true)
+    w.down(50, 50, 1)
+    expect(w.selecting()).toBe(false)
+    w.up(51, 50)
+    expect(w.selecting()).toBe(false)
+  })
+
+  it('Ctrl+C on it shows the badge once the program has copied', async () => {
+    const { w, announce, set, tick } = setup()
+    w.down(10, 10, 2)
+    await flush()
+    w.up(10, 10)
+    // Copy on select off: the release copies nothing.
+    for (let i = 0; i < 3; i += 1) await tick()
+    expect(announce).not.toHaveBeenCalled()
+    w.copyKey()
+    expect(w.selecting()).toBe(false)
+    set('the word')
+    await tick()
+    expect(announce).toHaveBeenCalledTimes(1)
+  })
+
+  it('a Ctrl+C with no selection of its own looks at nothing', async () => {
+    const { w, announce, set, tick } = setup()
+    w.copyKey()
+    set('something')
+    for (let i = 0; i < 3; i += 1) await tick()
+    expect(announce).not.toHaveBeenCalled()
+  })
+})

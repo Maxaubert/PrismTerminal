@@ -49,6 +49,9 @@ export interface KeyContext {
   /** An agent runs in the tab in front, and whether it is working. */
   agentHere?: boolean
   agentWorking?: boolean
+  /** The agent holds a selection of its own (its fullscreen view): Ctrl+C is
+   *  its copy then, and goes through. */
+  agentSelecting?: boolean
 }
 
 interface Chord {
@@ -152,7 +155,7 @@ export const CHORDS: Record<ChordId, Chord> = {
       !!c.agentHere &&
       ctrl(e) &&
       !e.shiftKey &&
-      (letter(e, 'd') || (letter(e, 'c') && !c.agentWorking)),
+      (letter(e, 'd') || (letter(e, 'c') && !c.agentWorking && !c.agentSelecting)),
     underModal: 'swallow'
   }
 }

@@ -1,18 +1,26 @@
 /**
  * "COPIED" FOR A PROGRAM'S OWN SELECTION (owner, 2026-10-16: "the copied chip
  * dont always show"). A full-screen program that asked for the mouse (Claude
- * Code's fullscreen view) draws its own selection and copies it itself on the
- * mouse's release, through the system clipboard and not through the terminal
- * (no OSC 52), so the app never heard of it and said nothing. Now a press that
- * selects (a drag, or a double or triple click) is followed by a look at the
- * clipboard's text: changed since the press, it was that copy, and the badge
- * shows. The text is compared and dropped, never kept or logged.
+ * Code's fullscreen view) draws its own selection and copies it itself,
+ * through the system clipboard and not through the terminal (no OSC 52): on
+ * the mouse's release with its Copy on select on, on Ctrl+C with it off. The
+ * app never heard of either and said nothing. Now a press that selects (a
+ * drag, or a double or triple click) is followed by a look at the clipboard's
+ * text, and so is a Ctrl+C while that selection stands: changed since the
+ * press, it was the program's copy, and the badge shows. The text is compared
+ * and dropped, never kept or logged.
+ *
+ * WHILE THE PROGRAM'S SELECTION STANDS, Ctrl+C is its copy, not a "clear the
+ * prompt" (owner, 2026-10-16: "highlighting text then clicking ctrl c does
+ * nothing": the keep-agents-open rule had taken it). `selecting()` says so
+ * from the selecting release until the next press, the next other key, or
+ * the Ctrl+C that copies it.
  *
  * Pure apart from the clock and the reads it is handed, so a test holds it.
  */
 
-/** When the clipboard is looked at after the release: the program copies
- *  through a helper process, which takes a moment. */
+/** When the clipboard is looked at after the release or the Ctrl+C: the
+ *  program copies through a helper process, which takes a moment. */
 export const COPY_LOOKS_MS = [150, 500, 1000] as const
 /** A press that moved this far is a drag. */
 export const DRAG_PX = 4
@@ -29,16 +37,43 @@ export interface AppCopyDeps {
 export interface AppCopyWatch {
   down(x: number, y: number, clicks: number): void
   up(x: number, y: number): void
+  /** Ctrl+C reached the program: its copy, while its selection stands. */
+  copyKey(): void
+  /** Any other key: the program's selection is over. */
+  otherKey(): void
+  /** The program's own selection stands (a selecting release since the
+   *  last press, key or copy). */
+  selecting(): boolean
 }
 
 export function watchAppCopies(deps: AppCopyDeps): AppCopyWatch {
   const wait = deps.wait ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
   let press: { x: number; y: number; clicks: number; before: Promise<string | null> } | null = null
+  /** The selection the program holds: the clipboard as it was at its press. */
+  let selection: { before: Promise<string | null> } | null = null
   /** Bumped by each press: a look from an older press stops. */
   let gen = 0
+  const look = (before: Promise<string | null>): void => {
+    const mine = gen
+    void (async () => {
+      const was = await before
+      let waited = 0
+      for (const at of COPY_LOOKS_MS) {
+        await wait(at - waited)
+        waited = at
+        if (mine !== gen) return
+        const now = await deps.read()
+        if (now && now !== was) {
+          deps.announce()
+          return
+        }
+      }
+    })()
+  }
   return {
     down: (x, y, clicks) => {
       gen += 1
+      selection = null
       press = deps.programHasMouse() ? { x, y, clicks, before: deps.read() } : null
     },
     up: (x, y) => {
@@ -47,21 +82,17 @@ export function watchAppCopies(deps: AppCopyDeps): AppCopyWatch {
       if (!p) return
       const dragged = Math.hypot(x - p.x, y - p.y) >= DRAG_PX
       if (!dragged && p.clicks < 2) return
-      const mine = gen
-      void (async () => {
-        const before = await p.before
-        let waited = 0
-        for (const at of COPY_LOOKS_MS) {
-          await wait(at - waited)
-          waited = at
-          if (mine !== gen) return
-          const now = await deps.read()
-          if (now && now !== before) {
-            deps.announce()
-            return
-          }
-        }
-      })()
-    }
+      selection = { before: p.before }
+      look(p.before)
+    },
+    copyKey: () => {
+      const s = selection
+      selection = null
+      if (s) look(s.before)
+    },
+    otherKey: () => {
+      selection = null
+    },
+    selecting: () => selection !== null
   }
 }

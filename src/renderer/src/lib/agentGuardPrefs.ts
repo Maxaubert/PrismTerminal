@@ -1,4 +1,5 @@
 import { boolPref } from '@core/renderer/lib/prefStore'
+import { focusedTermProgramSelecting } from '@core/renderer/components/TerminalPanel'
 
 // KEEP AGENT SESSIONS OPEN (owner, 2026-10-16: "when i click ctrl c with
 // nothing marked in claude it clears the input text and says click ctrl c
@@ -30,8 +31,16 @@ export function guardedFront(): { here: boolean; working: boolean } {
 }
 
 /** What the keep-agents-open rule needs at a key press (lib/keymap). */
-export const guardContext = (): { agentGuard: boolean; agentHere: boolean; agentWorking: boolean } => ({
+export const guardContext = (): {
+  agentGuard: boolean
+  agentHere: boolean
+  agentWorking: boolean
+  agentSelecting: boolean
+} => ({
   agentGuard: agentGuard(),
   agentHere: front.here,
-  agentWorking: front.working
+  agentWorking: front.working,
+  // Its own selection standing, Ctrl+C is its copy (owner, 2026-10-16:
+  // "highlighting text then clicking ctrl c does nothing").
+  agentSelecting: front.here && focusedTermProgramSelecting()
 })

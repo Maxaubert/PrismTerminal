@@ -76,7 +76,7 @@ import {
   suppressActivity,
   takeResume
 } from '../lib/termActivity'
-import { termKeyAction } from '../lib/termKeys'
+import { isKey, termKeyAction } from '../lib/termKeys'
 import '@xterm/xterm/css/xterm.css'
 
 // The terminal surface. This module is a lazy chunk (xterm is ~350KB the
@@ -104,6 +104,8 @@ interface Session {
   /** The uri of the OSC 8 link over buffer cell (`line`, `x`) of the screen in
    *  front, while it still stands (#169). */
   oscLink(line: number, x: number): string | null
+  /** The program in front holds a selection of its own (lib/appCopyNotice). */
+  programSelecting(): boolean
 }
 
 const sessions = new Map<string, Session>()
@@ -498,6 +500,19 @@ export function focusedTermFullScreen(): boolean {
   for (const s of sessions.values()) {
     if (!active || !s.el.contains(active)) continue
     return s.term.buffer.active.type !== 'normal' || s.term.modes.mouseTrackingMode !== 'none'
+  }
+  return false
+}
+
+/**
+ * Does the program in the shell that has the keyboard hold a selection of its
+ * own (Claude Code's fullscreen view, lib/appCopyNotice)? Then Ctrl+C is its
+ * copy, and a host that keeps Ctrl+C from an idle agent lets it through.
+ */
+export function focusedTermProgramSelecting(): boolean {
+  const active = document.activeElement
+  for (const s of sessions.values()) {
+    if (active && s.el.contains(active)) return s.programSelecting()
   }
   return false
 }
@@ -1086,6 +1101,13 @@ function createSession(id: string, root: string, shellId: string | undefined): S
       hostOwns: (k) => termHost().ownsKey(k as KeyboardEvent),
       agentHere: arm.here
     })
+    // THE PROGRAM'S OWN SELECTION (lib/appCopyNotice) ends with this key:
+    // a Ctrl+C that reached it was its copy, any other key ends it. After
+    // the host's own handler has read it for this same key (a task later).
+    if (e.type === 'keydown' && !['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+      const copy = action === 'xterm' && e.ctrlKey && !e.shiftKey && !e.altKey && isKey(e, 'c')
+      setTimeout(() => (copy ? appCopies.copyKey() : appCopies.otherKey()), 0)
+    }
     switch (action) {
       case 'xterm':
         return true
@@ -1145,7 +1167,18 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     const now = spanText(sp, term.cols, (l) => bufferRowCells(term.buffer.active.getLine(l), term.cols))
     return now === sp.text ? sp.uri : null
   }
-  const session: Session = { term, fit, search, links, el, unsub, cwd: () => cwdNow, tellTheme, oscLink }
+  const session: Session = {
+    term,
+    fit,
+    search,
+    links,
+    el,
+    unsub,
+    cwd: () => cwdNow,
+    tellTheme,
+    oscLink,
+    programSelecting: () => term.modes.mouseTrackingMode !== 'none' && appCopies.selecting()
+  }
   sessions.set(id, session)
 
   // A session restored over a Claude conversation launches straight into it:
