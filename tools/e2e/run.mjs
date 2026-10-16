@@ -167,7 +167,7 @@ const tabLabels = (page) =>
  */
 const PREF_PAGE = {
   'tab-layout': 'appearance', 'tab-switch': 'appearance', 'window-edges': 'appearance', 'term-theme': 'appearance',
-  'agent-keys': 'terminal', 'window-background': 'appearance', 'window-accent': 'appearance', 'window-secondary': 'appearance', 'term-acrylic': 'appearance',
+  'agent-keys': 'terminal', 'agent-guard': 'terminal', 'window-background': 'appearance', 'window-accent': 'appearance', 'window-secondary': 'appearance', 'term-acrylic': 'appearance',
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
   'agent-indicator': 'agents', 'agent-done-on': 'agents', 'agent-rainbow': 'agents', 'agent-question-on': 'agents', 'agent-failed-on': 'agents',
@@ -3963,6 +3963,12 @@ const scenarios = {
       ok(!!(await until(async () => /IN C 1b 76\b/.test(await text()), 5000)), 'an image on Ctrl+V sends Alt+V (ESC v) to Claude')
       await sleep(500)
       ok(!/IN C 16\b/.test(await text()), 'and no ^V with it: one key, one paste')
+      // KEEP AGENT SESSIONS OPEN (owner, 2026-10-16), on by default: an idle
+      // agent hears neither Ctrl+D (exit) nor Ctrl+C (clear, then exit).
+      await page.keyboard.press('Control+d')
+      await page.keyboard.press('Control+c')
+      await sleep(600)
+      ok(!/IN C 0[34]\b/.test(await text()), 'Ctrl+D and Ctrl+C never reach an idle agent (keep agent sessions open)')
       await page.keyboard.press('Shift+Enter')
       ok(!!(await until(async () => /IN C 0a\b/.test(await text()), 5000)), "Shift+Enter is Ctrl+J, Claude's own newline (#175)")
       await sleep(500)

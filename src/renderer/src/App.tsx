@@ -22,6 +22,7 @@ import TermFind from '@core/renderer/components/TermFind'
 import { TabStrip } from './components/TabStrip'
 import { TabSidebar } from './components/TabSidebar'
 import { tabLayout, useTabLayout } from './lib/tabLayoutPrefs'
+import { guardContext, setGuardedFront } from './lib/agentGuardPrefs'
 import { toggleSidebar, useSidebarLayout } from './lib/sidebarPrefs'
 import { CHORDS, chordOf } from './lib/keymap'
 import { agentKeys } from './lib/agentKeysPrefs'
@@ -210,6 +211,9 @@ export default function App(): JSX.Element {
   const findOpen = !!activeShell && findFor === activeShell.id
   const { agentIds, workingIds, doneIds, questionIds, failedIds, failedKinds, agentKinds } =
     indicator
+  // Keep agent sessions open (lib/agentGuardPrefs): the key rule reads the
+  // agent in front, and whether it works, at the key press.
+  setGuardedFront(!!activeShell && agentIds.has(activeShell.id), !!activeShell && workingIds.has(activeShell.id))
 
   // THE TIMELINE (#140): which tab is in front, and which Settings page, as
   // crumbs, so a stall in the log says what the user had just done.
@@ -574,7 +578,8 @@ export default function App(): JSX.Element {
         help: helpEnabled(),
         vertical: tabLayout() === 'vertical',
         fullScreen: focusedTermFullScreen(),
-        agentKeys: agentKeys()
+        agentKeys: agentKeys(),
+        ...guardContext()
       })
       if (!id) return
       const hit = (): void => {
@@ -589,6 +594,10 @@ export default function App(): JSX.Element {
         return
       }
       switch (id) {
+        case 'agent-guard':
+          // Taken from the agent and dropped (lib/agentGuardPrefs).
+          hit()
+          return
         case 'fullscreen':
           e.preventDefault()
           window.prism.windowToggleFullscreen()
