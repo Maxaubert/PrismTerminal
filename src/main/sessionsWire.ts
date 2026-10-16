@@ -1,8 +1,10 @@
-import { readFileSync, rmSync, writeFileSync } from 'fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { readFile, readdir, rename, rm, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import { createAtomicWriter } from '@core/main/atomicWrite'
-import { setSessionsFile, tabToken } from '@core/main/terminal'
+import { setSessionsFile, tabToken, writeTerm } from '@core/main/terminal'
 import { createLedger, type LedgerTab, type Presence } from './sessionLedger'
+import { decideSend, pasteOf, SEND_ENTER_MS } from './orchestratorSend'
 
 /**
  * The catch-up report's ledger, wired to the window, the power monitor and the
@@ -38,6 +40,10 @@ export interface SessionsDeps {
 /** The presence reading's beat, and the longest a seen stamp waits unwritten. */
 const TICK_MS = 5000
 const LATER_MS = 60_000
+/** How often the orchestrator's outbox is read while the feature is on. */
+const OUTBOX_MS = 750
+/** A request file's name: the script's 32-hex id. Results and temp files differ. */
+const REQUEST = /^[0-9a-f]{32}\.json$/
 const STATES = new Set(['working', 'question', 'done', 'failed'])
 const str = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length <= max ? v : null)
 
@@ -160,7 +166,65 @@ export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } 
     setSessionsFile(enabled ? d.file : null)
     if (!enabled) setLead(null)
     else writer.save(body())
+    if (enabled) {
+      try {
+        mkdirSync(outbox, { recursive: true })
+      } catch {
+        /* the drain says nothing until it exists */
+      }
+      outboxTimer ??= setInterval(() => void drain(), OUTBOX_MS)
+    } else if (outboxTimer) {
+      clearInterval(outboxTimer)
+      outboxTimer = null
+    }
   })
+
+  /**
+   * THE ORCHESTRATOR'S OUTBOX (owner, 2026-10-16: send "to any session, not
+   * just whichever is in focus"). Its script drops `<id>.json` ({ from, to,
+   * text }, written to a temp name and renamed); main reads and removes it,
+   * decides (orchestratorSend: only from the promoted tab, only into a tab
+   * whose Claude is running and not asking), types it, and answers with
+   * `<id>.result.json`. Off the main thread but for the write into the pty.
+   */
+  const outbox = join(dirname(d.file), 'orchestrator-outbox')
+  let outboxTimer: ReturnType<typeof setInterval> | null = null
+  let draining = false
+  const drain = async (): Promise<void> => {
+    if (!enabled || draining) return
+    draining = true
+    try {
+      const names = await readdir(outbox).catch(() => [] as string[])
+      for (const name of names) {
+        if (!REQUEST.test(name)) continue
+        const file = join(outbox, name)
+        let req: { from?: unknown; to?: unknown; text?: unknown } = {}
+        try {
+          req = JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
+        } catch {
+          /* unreadable: answered as such below */
+        }
+        await rm(file, { force: true }).catch(() => {})
+        const asked = {
+          from: typeof req.from === 'string' ? req.from : '',
+          to: typeof req.to === 'string' ? req.to : '',
+          text: typeof req.text === 'string' ? req.text : ''
+        }
+        const said = decideSend(asked, ledger.live(), enabled)
+        if (said.ok) {
+          const id = said.target.id
+          writeTerm(id, pasteOf(asked.text))
+          setTimeout(() => writeTerm(id, '\r'), SEND_ENTER_MS)
+        }
+        const out = join(outbox, name.replace(/\.json$/, '.result.json'))
+        const answer = said.ok ? { ok: true, to: said.target.label } : { ok: false, reason: said.reason }
+        await writeFile(`${out}.tmp`, JSON.stringify(answer)).catch(() => {})
+        await rename(`${out}.tmp`, out).catch(() => {})
+      }
+    } finally {
+      draining = false
+    }
+  }
   d.on(d.channels.front, (id: unknown) => {
     // The front tab first, then a fresh reading: a switch made while present
     // starts the new tab's look at once.
@@ -191,6 +255,9 @@ export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } 
         /* a lost write is the last one standing */
       }
     },
-    stop: () => clearInterval(timer)
+    stop: () => {
+      clearInterval(timer)
+      if (outboxTimer) clearInterval(outboxTimer)
+    }
   }
 }

@@ -216,6 +216,9 @@ describe('sessionLedger', () => {
     expect(w.l.takeChanged()).toBeNull()
     w.l.tabs([{ ...tab('t1'), state: 'done' }])
     expect(w.l.takeChanged()).toBe('now')
+    // An agent arriving is news too: the orchestrator sends only to a Claude.
+    w.l.tabs([{ ...tab('t1'), state: 'done', agent: 'codex' }])
+    expect(w.l.takeChanged()).toBe('now')
     w.l.link('t1', A, true)
     w.l.front('t1')
     w.l.takeChanged()

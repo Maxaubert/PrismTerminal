@@ -103,6 +103,17 @@ export interface Ledger {
   /** Read presence now; stamps the front tab when it has been looked at. */
   tick(p: Presence): void
   snapshot(app: string, pid: number): SessionsFile
+  /** The live tabs, for the orchestrator's sends (orchestratorSend). */
+  live(): Array<{
+    id: string
+    tab: string
+    label: string
+    cwd: string
+    agent: string | null
+    state: string | null
+    orchestrator: boolean
+    session: string | null
+  }>
   /**
    * What changed since the last take: 'now' for the tab list, a link, the
    * front tab or a state (write it soon); 'later' for a seen stamp alone,
@@ -174,7 +185,7 @@ export function createLedger(now: () => number, saved?: unknown): Ledger {
         seenIds.add(t.id)
         const was = tabs.get(t.id)
         const stateSince = was && was.state === t.state ? was.stateSince : now()
-        if (!was || was.state !== t.state || was.label !== t.label || was.cwd !== t.cwd || !!was.orchestrator !== !!t.orchestrator)
+        if (!was || was.state !== t.state || was.agent !== t.agent || was.label !== t.label || was.cwd !== t.cwd || !!was.orchestrator !== !!t.orchestrator)
           changed = true
         tabs.set(t.id, { ...t, session: was?.session ?? null, stateSince })
         const sid = was?.session
@@ -277,6 +288,18 @@ export function createLedger(now: () => number, saved?: unknown): Ledger {
           seen: iso(r.seen)
         }
       return out
+    },
+    live() {
+      return [...tabs.values()].map((t) => ({
+        id: t.id,
+        tab: t.tab,
+        label: t.label,
+        cwd: t.cwd,
+        agent: t.agent,
+        state: t.state,
+        orchestrator: !!t.orchestrator,
+        session: t.session
+      }))
     },
     takeChanged() {
       const c = changed ? 'now' : seenMoved ? 'later' : null

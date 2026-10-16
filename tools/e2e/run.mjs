@@ -3111,6 +3111,28 @@ const scenarios = {
       const again = await menuItems(0)
       ok(again.some((x) => x.includes('Stop being orchestrator')), 'its menu offers to stop')
       await page.keyboard.press('Escape')
+      // SENDING INTO ANY TAB (owner, 2026-10-16: "to any session, not just
+      // whichever is in focus"). The other tab plays a Claude (its hook names a
+      // session); the orchestrator's script sends while the orchestrator is in
+      // front, and the text lands and is entered in the other tab. The stand-in
+      // is a pwsh prompt, so what arrives runs, and its output proves it.
+      const shown = () =>
+        page.evaluate(() => [...document.querySelectorAll('.xterm')].filter((x) => x.offsetParent !== null).map((x) => x.querySelector('.xterm-rows')?.textContent ?? '').join('\n'))
+      const SID2 = 'e1e2e3e4-f5f6-4a70-8b9c-0d1e2f3a4b5c'
+      await shells().nth(1).click()
+      await page.locator('.xterm').last().click({ force: true })
+      await typeLine(page, hookSay('done', `;session=${SID2}`))
+      ok(!!(await until(() => list()?.tabs?.some((x) => x.session === SID2 && x.agent === 'claude'), 8000, 100)), 'the other tab is a Claude with a session')
+      await shells().nth(0).click()
+      const msg = dir + '\\send-message.txt'
+      writeFileSync(msg, "Write-Output ('SENT-' + 'MARK-42')")
+      const SEND = resolve(process.cwd(), 'core/claude-plugin-orchestrator/skills/orchestrator/send.ps1')
+      await typeLine(page, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${SEND}' -To alpha -TextFile '${msg}'`)
+      ok(!!(await until(async () => (await shown()).includes('SENT to alpha'), 12000, 100)), 'the orchestrator sends to a tab that is not in front')
+      await typeLine(page, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${SEND}' -To nosuchtab -Text 'x'`)
+      ok(!!(await until(async () => (await shown()).includes('NOT SENT: no tab matches'), 12000, 100)), 'and says so when no tab matches')
+      await shells().nth(1).click()
+      ok(!!(await until(async () => (await shown()).includes('SENT-MARK-42'), 8000, 100)), 'the message arrived in that tab and was entered')
       // Off again: the role hook's name goes.
       const sw2 = (await gotoPref(page, 'orchestrator')).locator('[role="switch"]')
       await sw2.click()

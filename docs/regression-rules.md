@@ -181,6 +181,12 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   the FIRST token too: a native `claude.exe` started by bare name has the command line `claude`.
 - <a id="only-command-is-resume"></a>**The only command the app writes into a shell is the agent resume**, as the shell's STARTUP
   command, with the id shape-checked in main (`validResume`). Never type into a user's shell.
+  **One owner exception, the orchestrator's sends** (owner, 2026-10-16: "the terminal needs to be able to send it, and
+  it needs to be able to send it to any session, not just whichever is in focus. That is very important."): with
+  Settings > Agents > Orchestrator on, the promoted tab's Claude may have the app type a message into ANOTHER tab's
+  Claude Code prompt (`src/main/orchestratorSend.ts`): only from the promoted tab, only into a tab whose Claude is
+  running (never a bare shell, where it would run), never while that tab asks a question (it would answer it), as
+  one sanitised bracketed paste and then Enter (rule 1). Held by `orchestratorSend.test.ts` and the e2e `catchUp`.
 - <a id="same-command-line"></a>**EVERY SHELL OF A KIND STARTS WITH THE SAME COMMAND LINE, AND NO POWERSHELL IS
   `-EncodedCommand`** (#180; owner, 2026-10-11: "slow on startup and not responding until Claude sessions load").
   Windows Defender judges each NEW command line a process from `PrismTerminal.exe` starts, inside `CreateProcess`,
