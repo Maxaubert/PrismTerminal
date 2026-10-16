@@ -5,7 +5,17 @@ import { forgetAgentTitle, readAgentTitle } from './agentTitle'
 import { noteWorking } from './agentClock'
 import { onAgentSignal, onTermKey, onTitle, readScreenTail } from './termBus'
 import { answersQuestion, looksLikeQuestion, questionAnswered } from './agentQuestion'
-import { hookStep, raisedWhileSeen, screenDecides, STOP_SETTLE_MS, type AttentionMark, type HookEvent, type HookSession } from './agentHookState'
+import {
+  BACKGROUND_CHECK_MS,
+  hookStep,
+  raisedWhileSeen,
+  screenDecides,
+  STOP_SETTLE_MS,
+  type AttentionMark,
+  type HookEvent,
+  type HookSession
+} from './agentHookState'
+import { looksLikeBackgroundWork } from './agentBackground'
 import { termApi } from '../host'
 import { forgetAgentDiag, logAgentHook, logAgentMarks, logAgentTitle, noteWhy } from './agentDiag'
 
@@ -223,9 +233,17 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     const boxUp = screenDecides(prev, ev) && looksLikeQuestion(readScreenTail(id))
     // A Stop is told the title's last word: a spinner still up may be
     // background subagents at work (#149).
+    // The steps that can end a turn read the screen for work still running
+    // after it: a background shell, a workflow (`agentBackground`).
+    const turnEnds =
+      ev.state === 'done' || ev.state === 'settle' || ev.state === 'bg-check' || ev.state === 'idle-title'
+    const bgUp = turnEnds && (ev.state !== 'idle-title' || prev?.phase === 'ending' || prev?.phase === 'background')
+      ? looksLikeBackgroundWork(readScreenTail(id))
+      : false
     const o = hookStep(prev, ev, {
       ...(boxUp ? { questionOnScreen: true } : {}),
-      ...(ev.state === 'done' ? { titleWorking: titleState.current.get(id) === 'working' } : {})
+      ...(ev.state === 'done' || ev.state === 'bg-check' ? { titleWorking: titleState.current.get(id) === 'working' } : {}),
+      ...(bgUp ? { backgroundOnScreen: true } : {})
     })
     if (!o) {
       if (boxUp && ev.state === 'working-title' && !titleRecheck.current.has(id)) {
@@ -249,10 +267,24 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           applyHookRef.current(id, { state: 'settle' })
         }, STOP_SETTLE_MS)
       )
+    // Background work is re-read until the screen lets it go (the same
+    // per-session timer: one wait at a time).
+    if (o.phase === 'background')
+      settleTimers.current.set(
+        id,
+        window.setTimeout(() => {
+          settleTimers.current.delete(id)
+          applyHookRef.current(id, { state: 'bg-check' })
+        }, BACKGROUND_CHECK_MS)
+      )
     // The rule that fired, for the diagnostics log (#152).
     const said =
-      ev.state === 'settle'
-        ? 'no title after a Stop'
+      ev.state === 'bg-check'
+        ? 'background work over'
+        : bgUp && o.phase === 'background'
+          ? 'work still running on screen'
+          : ev.state === 'settle'
+            ? 'no title after a Stop'
         : ev.state === 'idle-title'
           ? prev?.phase === 'ending' || prev?.phase === 'background'
             ? `idle title after a Stop${prev.phase === 'background' ? ' and background work' : ''}`
