@@ -39,6 +39,7 @@ import { bellGate, groundMode, type GroundMode } from '../lib/termReplies'
 import { attachReplies } from './termReplyHandlers'
 import { followsHostStyle, paintsGround, termApi, termHost, type ClipboardRead } from '../host'
 import { findLinks, linkColor } from '../lib/termLinks'
+import { watchAppCopies } from '../lib/appCopyNotice'
 import { announceCopied, copyText } from '../lib/copyNotice'
 import { arrowKeys, caretClickAllowed, caretDelta, type ClickGate } from '../lib/termClickCaret'
 import {
@@ -1025,7 +1026,37 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // The title arms the agent's keys before the poll (#175), and takes back an
   // agent only it vouched for (`agentArm` has the rules).
   term.onTitleChange((t) => moveArm(armOnTitle(arm, t)))
+  // "COPIED" FOR A PROGRAM'S OWN SELECTION (lib/appCopyNotice): Claude
+  // Code's fullscreen view copies on the mouse's release itself, past the
+  // terminal; a selecting press is followed by a look at the clipboard.
+  // Mouse events, not pointer events: only they carry the click count.
+  // Shift held is xterm's own selection, which Ctrl+C copies and announces.
+  const appCopies = watchAppCopies({
+    read: async () => {
+      const api = termApi()
+      if (!api.readClipboardAsync) return null
+      try {
+        return (await api.readClipboardAsync()).text
+      } catch {
+        return null
+      }
+    },
+    programHasMouse: () => term.modes.mouseTrackingMode !== 'none',
+    announce: announceCopied
+  })
+  const copyDown = (e: MouseEvent): void => {
+    if (e.button === 0 && !e.shiftKey) appCopies.down(e.clientX, e.clientY, e.detail)
+  }
+  const copyUp = (e: MouseEvent): void => {
+    if (e.button === 0) appCopies.up(e.clientX, e.clientY)
+  }
+  el.addEventListener('mousedown', copyDown, true)
+  window.addEventListener('mouseup', copyUp, true)
   const unsub = [
+    () => {
+      el.removeEventListener('mousedown', copyDown, true)
+      window.removeEventListener('mouseup', copyUp, true)
+    },
     attachClickCaret(term, el, id, (line, x) => oscLink(line, x) !== null),
     // A path this session asked about turned out to exist: paint the lines
     // that asked (#167; it used to be every line of every tab).

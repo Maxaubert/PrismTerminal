@@ -21,9 +21,13 @@ export type ChordId =
   | 'new-tab'
   | 'close-tab'
   | 'find'
+  | 'agent-guard'
 
 export interface KeyEventLike {
   key: string
+  /** The physical key, where the event has one (Ctrl+C and Ctrl+D on a
+   *  Russian or Greek layout, regression rule 11). */
+  code?: string
   ctrlKey: boolean
   shiftKey: boolean
   altKey: boolean
@@ -40,6 +44,11 @@ export interface KeyContext {
   /** Agent hotkeys are on (Settings, on by default): a chord's `agent` key
    *  is the app's too. */
   agentKeys: boolean
+  /** Keep agent sessions open (Settings, on by default). */
+  agentGuard?: boolean
+  /** An agent runs in the tab in front, and whether it is working. */
+  agentHere?: boolean
+  agentWorking?: boolean
 }
 
 interface Chord {
@@ -68,6 +77,8 @@ interface Chord {
 const bare = (e: KeyEventLike): boolean => !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey
 const ctrl = (e: KeyEventLike): boolean => e.ctrlKey && !e.altKey && !e.metaKey
 const k = (e: KeyEventLike): string => e.key.toLowerCase()
+/** The letter, by the key or by the physical key (regression rule 11). */
+const letter = (e: KeyEventLike, l: string): boolean => k(e) === l || e.code === `Key${l.toUpperCase()}`
 
 export const CHORDS: Record<ChordId, Chord> = {
   // COMMAND HELP IS F1 (#12), the key every Windows program answers help
@@ -127,6 +138,21 @@ export const CHORDS: Record<ChordId, Chord> = {
   find: {
     label: 'Ctrl+F',
     match: (e, c) => ctrl(e) && k(e) === 'f' && (e.shiftKey || !c.fullScreen),
+    underModal: 'swallow'
+  },
+  // KEEP AGENT SESSIONS OPEN (owner, 2026-10-16; lib/agentGuardPrefs): where
+  // an agent runs, Ctrl+D (exit) never reaches it, and Ctrl+C (clear the
+  // prompt, then exit) only while it works, where it stops it. Taken and
+  // dropped: nothing happens. Never in a plain shell, where both are the
+  // interrupt and end-of-input everyone expects.
+  'agent-guard': {
+    label: 'Ctrl+D',
+    match: (e, c) =>
+      !!c.agentGuard &&
+      !!c.agentHere &&
+      ctrl(e) &&
+      !e.shiftKey &&
+      (letter(e, 'd') || (letter(e, 'c') && !c.agentWorking)),
     underModal: 'swallow'
   }
 }
