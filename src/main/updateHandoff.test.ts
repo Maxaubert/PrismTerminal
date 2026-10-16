@@ -35,13 +35,19 @@ describe('handoffCommand', () => {
     const steps = cmd.split('; ')
     expect(steps[0]).toContain("-ArgumentList '/S'")
     expect(steps[1]).toBe('Wait-Process -Id 4321 -Timeout 30 -ErrorAction SilentlyContinue')
-    expect(steps[2]).toBe(`robocopy '${INSTALLED}' '${stable}' /MIR /NFL /NDL /NJH /NJS /NP | Out-Null`)
-    expect(steps[3]).toBe(`Move-Item -Force -LiteralPath '${stable}\\PrismTerminal.exe' -Destination '${stable}\\PrismTerminalStable.exe'`)
+    // Its helper processes run the same exe and hold it too (2026-10-16).
+    expect(steps[2]).toBe("Wait-Process -Name 'PrismTerminalStable' -Timeout 30 -ErrorAction SilentlyContinue")
+    expect(steps[3]).toBe(`robocopy '${INSTALLED}' '${stable}' /MIR /NFL /NDL /NJH /NJS /NP | Out-Null`)
+    // The uninstaller goes BEFORE the step that can fail.
     expect(steps[4]).toContain("-Filter 'Uninstall*.exe' | Remove-Item -Force")
+    // The rename is tried again while Windows still holds the old exe.
     expect(steps[5]).toBe(
+      `foreach ($n in 1..20) { try { Move-Item -Force -LiteralPath '${stable}\\PrismTerminal.exe' -Destination '${stable}\\PrismTerminalStable.exe' -ErrorAction Stop;break } catch { Start-Sleep -Milliseconds 500 } }`
+    )
+    expect(steps[6]).toBe(
       `Start-Process -FilePath '${stable}\\PrismTerminalStable.exe' -ArgumentList '--user-data-dir="C:\\Users\\me\\AppData\\Roaming\\PrismTerminalStable"'`
     )
-    expect(steps[6]).toContain('Remove-Item')
+    expect(steps[7]).toContain('Remove-Item')
   })
 
   it("doubles a quote in a path, PowerShell's own escaping", () => {

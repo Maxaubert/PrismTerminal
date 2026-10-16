@@ -57,11 +57,17 @@ export function handoffCommand(i: HandoffInput): string {
     const dir = dirname(i.execPath)
     steps.push(
       `Wait-Process -Id ${Math.trunc(i.pid)} -Timeout 30 -ErrorAction SilentlyContinue`,
+      // And every helper process of the copy (page, GPU): they run the same
+      // exe and hold it too (2026-10-16: the rename below failed while the
+      // copy was still closing, and the copy was left half refreshed).
+      `Wait-Process -Name ${q(basename(i.execPath, '.exe'))} -Timeout 30 -ErrorAction SilentlyContinue`,
       // Exit codes below 8 are success; /MIR makes the copy exactly the install.
       `robocopy ${q(i.installedDir)} ${q(dir)} /MIR /NFL /NDL /NJH /NJS /NP | Out-Null`,
-      `Move-Item -Force -LiteralPath ${q(join(dir, 'PrismTerminal.exe'))} -Destination ${q(i.execPath)}`,
-      // The uninstaller belongs to the installed app; one in the copy would remove it.
-      `Get-ChildItem -LiteralPath ${q(dir)} -Filter 'Uninstall*.exe' | Remove-Item -Force`
+      // The uninstaller belongs to the installed app; one in the copy would
+      // remove it. Gone before the step that can fail.
+      `Get-ChildItem -LiteralPath ${q(dir)} -Filter 'Uninstall*.exe' | Remove-Item -Force`,
+      // Windows lets go of an exe a moment after its process ends: tried again.
+      `foreach ($n in 1..20) { try { Move-Item -Force -LiteralPath ${q(join(dir, 'PrismTerminal.exe'))} -Destination ${q(i.execPath)} -ErrorAction Stop;break } catch { Start-Sleep -Milliseconds 500 } }`
     )
   }
   steps.push(
