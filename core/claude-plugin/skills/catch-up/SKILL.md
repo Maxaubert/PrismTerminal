@@ -1,7 +1,6 @@
 ---
 name: catch-up
 description: Report what happened in the other Prism Terminal tabs' Claude sessions since the owner last looked at them, and what needs them next. Use when the owner asks to catch up, for a report or summary of the sessions or tabs, "what happened while I was away", "what did everyone do", or "what needs me".
-allowed-tools: Bash(powershell.exe:*), PowerShell
 ---
 
 # Catch up on the other tabs
