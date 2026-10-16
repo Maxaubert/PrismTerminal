@@ -2508,7 +2508,7 @@ const scenarios = {
       // switches"): the sidebar's room grows on the slide's curve while the
       // sidebar slides in, and the terminal keeps its columns until the end.
       const screenW = () => page.evaluate(() => Math.round(document.querySelector('[data-term-host] .xterm-screen')?.getBoundingClientRect().width ?? -1))
-      const before = await screenW()
+      const screenBefore = await screenW()
       await page.keyboard.press('Control+Shift+B')
       ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open', 'Ctrl+Shift+B pins it again, and Open is stored')
       // Read in one go, inside the 280 ms the slide and the hold last.
@@ -2524,9 +2524,9 @@ const scenarios = {
         }
       })
       ok(mid.shown && mid.slides && mid.roomSlides, `pinned, the sidebar and its room slide together (${JSON.stringify(mid)})`)
-      ok(mid.screen === before, `and the terminal keeps its width while they do (${mid.screen} vs ${before})`)
+      ok(mid.screen === screenBefore, `and the terminal keeps its width while they do (${mid.screen} vs ${screenBefore})`)
       ok(!!(await until(async () => (await geo()).host.left > 100, 3000, 30)), 'then it sits beside the terminal')
-      ok(!!(await until(async () => (await screenW()) < before, 3000, 30)), `and the terminal fits its new width once the slide is over (${await screenW()} < ${before})`)
+      ok(!!(await until(async () => (await screenW()) < screenBefore, 3000, 30)), `and the terminal fits its new width once the slide is over (${await screenW()} < ${screenBefore})`)
 
       // THE BAR BESIDE THE SIDEBAR, ALWAYS DOWN (owner, 2026-10-12, removing
       // Show title bar: the look of the dropped-down bar, "but I want it to be
