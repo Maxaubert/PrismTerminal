@@ -90,7 +90,7 @@ Quiet level, always on:
 | `session-end` | main | Windows is shutting down or logging off (no `quit` follows) | |
 | `main-lag` | main | main's 50 ms tick came 100 ms or more late (never for a sleep: `powerMonitor`) | `ms`, `inflight` (`ch`, `ms`, `done`) |
 | `fs-slow` | main | a `stat` of userData (every 5 s) took 500 ms or more | `ms` |
-| `mem-high` | main | the page process passed 2 GB of private memory, then again at each doubling (2026-10-16: a leak took the page to 15.9 GB unseen) | `mainMb`, `pageMb`, `gpuMb`, `otherMb`, `overMb` |
+| `mem-high` | main | the page process passed 2 GB of private memory, main 1 GB or the GPU process 2 GB, then again at each doubling, each on its own (2026-10-16: a leak took the page to 15.9 GB unseen) | `proc` (`page`, `main`, `gpu`), `mainMb`, `pageMb`, `gpuMb`, `otherMb`, `overMb` |
 | `ipc-slow` | main | a `handle` settled after 500 ms, or a sync `on` body ran 100 ms; never a call that waits on the user or a download (the folder picker, an update install, a dictation download: `LONG_WAIT` plus the host's `longWaitChannels`), which is also left out of `inflight` | `ch`, `ms`, `args`, `ok`, `sync` |
 | `ipc-error` | main | a handler threw or rejected (rethrown unchanged) | `ch`, `ms`, `err`, `stack` |
 | `page-stall` | page | a long animation frame of 200 ms or more | `ms`, `blocking`, `scripts` (`src`, `fn`, `invoker`, `ms`), `crumbs` (`a`, `ago`) |
@@ -166,6 +166,7 @@ Prism Terminal and the core say these today:
 | `shell-spawn` | main (core) | `id`, `pid`, `shell`, `cwd`, `resume`, `ms`, `warm` |
 | `shell-exit` | main (core) | `id`, `pid`, `exitCode` |
 | `shell-spawn-failed` | main (core) | `id`, `shell`, `cwd`, `err` |
+| `kill-stuck` | main (core) | `pid`, `ms`: a killed shell had no exit code after `ms`; its poll slows to once a second (perf review 2026-10-16) |
 | `update-check` | main | `offered`, `fetchMs`, `offerMs`, `heapMb`, `rssMb` (every 4 h; see below) |
 | `memory` | main | `mainMb`, `pageMb`, `gpuMb`, `otherMb`: each kind of process's private memory, every 5 min (`core/main/memWatch.ts`; a host passes `app.getAppMetrics`). A rising `pageMb` is a page leak: `npm run diag -- --all --kinds crumb` shows the line |
 
