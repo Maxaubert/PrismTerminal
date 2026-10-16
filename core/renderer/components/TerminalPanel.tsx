@@ -76,6 +76,7 @@ import {
   takeResume
 } from '../lib/termActivity'
 import { termKeyAction } from '../lib/termKeys'
+import { watchQuestions } from '../questionWatch'
 import '@xterm/xterm/css/xterm.css'
 
 // The terminal surface. This module is a lazy chunk (xterm is ~350KB the
@@ -1025,7 +1026,11 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   // The title arms the agent's keys before the poll (#175), and takes back an
   // agent only it vouched for (`agentArm` has the rules).
   term.onTitleChange((t) => moveArm(armOnTitle(arm, t)))
+  // Claude Code's question widget: the question the user moved to is told
+  // to Sonara, the text-to-speech reader, which reads it (Sonara #323).
+  const questions = watchQuestions(term, (shown) => termApi().termQuestion?.(id, shown))
   const unsub = [
+    () => questions.dispose(),
     attachClickCaret(term, el, id, (line, x) => oscLink(line, x) !== null),
     // A path this session asked about turned out to exist: paint the lines
     // that asked (#167; it used to be every line of every tab).

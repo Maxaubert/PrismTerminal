@@ -18,6 +18,7 @@ import { execFileSync, spawn } from 'child_process'
 import { createHash } from 'crypto'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
+import { createServer } from 'http'
 import { dirname, join, resolve } from 'path'
 import { createRequire } from 'module'
 
@@ -3708,6 +3709,79 @@ const scenarios = {
         "and B's oldest lines are painted within 10 s (the backlog finished)"
       )
     } finally {
+      await closeApp(app)
+    }
+  },
+
+  // SONARA HEARS WHICH QUESTION IS ON SCREEN (Sonara #323). A stand-in draws
+  // Claude Code's question widget as the probe of 2026-10-16 measured it
+  // (core/renderer/questionWidget.screens.json); `n` draws the next screen,
+  // `x` redraws the same one (an answer being typed). A stand-in Sonara on
+  // 127.0.0.1, named by a runtime.json in SONARA_HOME, records the posts:
+  // one per change of question, the review once, the tab named by one id.
+  async sonaraQuestion(ok) {
+    const w = world()
+    const home = join(w.alpha, 'sonara-home')
+    mkdirSync(home)
+    const got = []
+    const server = createServer((req, res) => {
+      let body = ''
+      req.on('data', (d) => (body += d))
+      req.on('end', () => {
+        got.push({ url: req.url, auth: req.headers.authorization, body: JSON.parse(body) })
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end('{"ok":true,"moved":true}')
+      })
+    })
+    await new Promise((r) => server.listen(0, '127.0.0.1', r))
+    writeFileSync(join(home, 'runtime.json'), JSON.stringify({ http_port: server.address().port, token: 'e2e-token' }))
+    const screens = JSON.parse(readFileSync(resolve(process.cwd(), 'core/renderer/questionWidget.screens.json'), 'utf8'))
+    const order = ['run2-01-question-1', 'run2-02-right', 'run2-07-enter-answer', 'run2-08-enter-answer'].map((k) => screens[k])
+    const probe = join(w.alpha, 'question-probe.cjs')
+    writeFileSync(
+      probe,
+      [
+        `const screens = ${JSON.stringify(order)}`,
+        'let k = 0',
+        "const draw = () => process.stdout.write('\\x1b[2J\\x1b[H' + screens[k].join('\\r\\n'))",
+        'process.stdin.setRawMode(true)',
+        'process.stdin.resume()',
+        "process.stdin.on('data', (b) => {",
+        '  const s = b.toString()',
+        "  if (s === 'q') process.exit(0)",
+        "  if (s === 'n' && k < screens.length - 1) k += 1",
+        '  draw()',
+        '})',
+        'draw()'
+      ].join('\n')
+    )
+    const { app, page } = await launch(w, { args: [w.alpha], env: { SONARA_HOME: home } })
+    const texts = () => got.map((g) => ('review' in g.body ? 'REVIEW' : g.body.text))
+    try {
+      await typeLine(page, `& '${process.execPath}' '${probe}'`)
+      ok(!!(await until(async () => got.length >= 1, 15000)), 'Sonara hears the question the widget shows')
+      ok(got[0].url === '/v1/question_shown' && got[0].auth === 'Bearer e2e-token', `posted to question_shown with runtime.json's key (${got[0]?.url})`)
+      ok(typeof got[0].body.host_tab === 'string' && got[0].body.host_tab.length >= 16, `the tab is named by its shell's PRISM_TAB_ID (${got[0]?.body.host_tab})`)
+      ok(texts()[0] === 'Pick a colour?', `the first question (${texts()[0]})`)
+      await page.keyboard.type('x')
+      await sleep(800)
+      ok(got.length === 1, `a redraw of the same question says nothing (${got.length} posts)`)
+      await page.keyboard.type('n')
+      ok(!!(await until(async () => got.length >= 2, 5000)), 'moving to the next question is heard')
+      // One move at a time: moves inside the settle time (150 ms) are told
+      // as the question landed on, by design.
+      await page.keyboard.type('n')
+      ok(!!(await until(async () => got.length >= 3, 5000)), 'the next move is heard')
+      await page.keyboard.type('n')
+      ok(!!(await until(async () => got.length >= 4, 5000)), 'and the review after the last answer')
+      ok(
+        JSON.stringify(texts()) === JSON.stringify(['Pick a colour?', 'Pick a size?', 'Pick a shape?', 'REVIEW']),
+        `in order, the review last (${texts().join(' | ')})`
+      )
+      ok(new Set(got.map((g) => g.body.host_tab)).size === 1, 'always the same tab id')
+      await page.keyboard.type('q')
+    } finally {
+      server.close()
       await closeApp(app)
     }
   },
