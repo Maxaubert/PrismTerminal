@@ -35,21 +35,46 @@ if (-not (Test-Path (Join-Path $source 'PrismTerminal.exe'))) { throw "Prism Ter
 
 # A refresh replaces the files, so the copy must not be running. It is closed
 # by its OWN name only; the installed app and its shells are never touched.
+# WAITED FOR, not slept on (2026-10-16): a fixed 3 s was not enough while
+# eight Claude tabs closed their shells, the copy's exe was still held when
+# it was replaced, the rename below failed, and the run stopped half done:
+# the new files in place but the exe not renamed, and the installed app's
+# uninstaller left in the copy.
+function Wait-StableGone([int]$seconds) {
+  $until = (Get-Date).AddSeconds($seconds)
+  while ((Get-Process PrismTerminalStable -ErrorAction SilentlyContinue) -and (Get-Date) -lt $until) {
+    Start-Sleep -Milliseconds 250
+  }
+  -not (Get-Process PrismTerminalStable -ErrorAction SilentlyContinue)
+}
 $running = Get-Process PrismTerminalStable -ErrorAction SilentlyContinue
 if ($running) {
   Write-Host 'Closing the stable copy to refresh it (its tabs come back when it starts).'
   $running | ForEach-Object { $_.CloseMainWindow() | Out-Null }
-  Start-Sleep 3
-  Get-Process PrismTerminalStable -ErrorAction SilentlyContinue | Stop-Process -Force
+  if (-not (Wait-StableGone 20)) {
+    Get-Process PrismTerminalStable -ErrorAction SilentlyContinue | Stop-Process -Force
+    if (-not (Wait-StableGone 15)) { throw 'the stable copy did not close; nothing was changed' }
+  }
 }
 
 # /MIR makes the copy exactly the installed app; exit codes below 8 are success.
 robocopy $source $target /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "copy failed (robocopy $LASTEXITCODE)" }
 $global:LASTEXITCODE = 0
-Move-Item -Force (Join-Path $target 'PrismTerminal.exe') $exe
-# The uninstaller belongs to the installed app; one in the copy would remove it.
+# The uninstaller belongs to the installed app; one in the copy would remove
+# it. Gone before anything below can fail.
 Get-ChildItem $target -Filter 'Uninstall*.exe' | Remove-Item -Force
+# Windows lets go of an exe a moment after its process ends: tried again.
+$copied = Join-Path $target 'PrismTerminal.exe'
+for ($try = 1; ; $try++) {
+  try {
+    Move-Item -Force $copied $exe -ErrorAction Stop
+    break
+  } catch {
+    if ($try -ge 20) { Remove-Item -Force $copied -ErrorAction SilentlyContinue; throw }
+    Start-Sleep -Milliseconds 500
+  }
+}
 # The copy at the old place (the process was closed above, by name).
 if (Test-Path $oldTarget) { Remove-Item -Recurse -Force $oldTarget -ErrorAction SilentlyContinue }
 
