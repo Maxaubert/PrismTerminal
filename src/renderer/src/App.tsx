@@ -88,6 +88,7 @@ import {
   holdsWindowClose
 } from '@core/renderer/lib/agentClose'
 import { pluginChoice, termFontStack, useOrchestratorOn } from '@core/renderer/lib/termLook'
+import { useDictateAnywhereBridge } from './lib/dictateAnywhere'
 import { claudeResume, ledgerState, useLedgerReport } from './lib/ledgerReport'
 import { useTaskbarBadge } from './lib/taskbarBadge'
 import { usePaintedChrome } from './lib/paintChrome'
@@ -559,6 +560,8 @@ export default function App(): JSX.Element {
   useTaskbarBadge({ doneIds, questionIds, workingIds, failedIds })
 
   const orchestrating = useOrchestratorOn()
+  // DICTATE FROM ANY APP (2026-10-16, lib/dictateAnywhere).
+  useDictateAnywhereBridge()
   // THE CATCH-UP REPORT'S LEDGER (2026-10-16, lib/ledgerReport): main keeps
   // which Claude session is in which tab and when the owner really looked.
   const allLabels = tabLabels(state.tabs)

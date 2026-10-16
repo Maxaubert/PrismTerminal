@@ -90,6 +90,15 @@ pressed Enter before; it does here, because the owner asked for "sent", and only
 The orchestrator is ACTIVE when: the Orchestrator switch is on, a tab is promoted, Windows says
 Claude runs under it, and it is not asking. Anything less falls back to the picker.
 
+## Measured (2026-10-16)
+
+- **The hook, option (a) won**: a Windows PowerShell helper with an `Add-Type` C# `WH_KEYBOARD_LL` hook
+  and a message loop. Key to hook: **0.3 to 1.2 ms** (QPC on both sides, 10 software taps of F24, a key
+  no app uses); ready in about 0.35 s; 0.03 s of CPU over 10 s at rest; **no Windows Defender
+  detection** (`Get-MpThreatDetection` before and after). Option (b), a native addon, was not needed.
+- **The Start menu mask** (VK 0xE8 before Win's up after Ctrl+Win) is built; it needs the real Win key,
+  so it is on the owner's hands-on list.
+
 ## Decisions (mine, defaults; the owner can change them)
 
 - Default key Ctrl+Win, hold-to-talk (today's default mode).

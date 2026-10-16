@@ -43,6 +43,7 @@ describe("this app's own settings rows", () => {
         "newtab-mode=prism.newtab.mode+prism.newtab.folder",
         "explorer-verb=registry",
         "orchestrator=prism.term.orchestrator",
+        "dictation-anywhere=prism.dictation.anywhere",
         "taskbar-badge=prism.window.taskbarBadge",
         "app-version=null",
       ]

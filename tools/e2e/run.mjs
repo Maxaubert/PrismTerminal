@@ -172,7 +172,7 @@ const PREF_PAGE = {
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
   'agent-indicator': 'agents', 'agent-done-on': 'agents', 'agent-rainbow': 'agents', 'agent-question-on': 'agents', 'agent-failed-on': 'agents',
-  'taskbar-badge': 'agents', 'agent-hooks': 'agents', 'orchestrator': 'agents', 'agent-color': 'agents', 'agent-done-color': 'agents',
+  'taskbar-badge': 'agents', 'agent-hooks': 'agents', 'orchestrator': 'agents', 'dictation-anywhere': 'dictation', 'agent-color': 'agents', 'agent-done-color': 'agents',
   'agent-question-color': 'agents',
   'dictation-enabled': 'dictation', 'dictation-mode': 'dictation', 'dictation-hotkey': 'dictation', 'dictation-mic': 'dictation',
   'dictation-language': 'dictation', 'dictation-pause-media': 'dictation', 'dictation-sounds': 'dictation',
@@ -3156,6 +3156,94 @@ const scenarios = {
       await closeApp(app)
     }
     ok(!!list()?.sessions?.[SID], 'the list written while it was on stays on disk')
+  },
+
+  /**
+   * DICTATE FROM ANY APP (owner, 2026-10-16; spec:
+   * docs/superpowers/specs/2026-10-16-dictate-anywhere.md). The suite never
+   * runs the real keyboard hook: helper lines arrive through a seam, and what
+   * was heard is handed to main as the page would. A stand-in Claude (a copy of
+   * PowerShell named claude.exe, so Windows' process check passes) takes the
+   * words, and runs them, which proves they were typed and entered.
+   * - No orchestrator: the widget lists the sessions, numbered; "1" sends.
+   * - An ACTIVE orchestrator: it is sent there with no list.
+   * - The key with the app not in front opens the widget.
+   */
+  async dictateAnywhere(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const SID = 'f1f2f3f4-a5a6-4b70-8c9d-0e1f2a3b4c5d'
+    const dir = await app.evaluate(({ app: a }) => a.getPath('userData'))
+    const shells = () => page.locator('[data-tab]').filter({ hasNotText: /^Settings$/ })
+    const shown = () =>
+      page.evaluate(() => [...document.querySelectorAll('.xterm')].filter((x) => x.offsetParent !== null).map((x) => x.querySelector('.xterm-rows')?.textContent ?? '').join('\n'))
+    const widget = async () => app.windows().find((p) => p.url().includes('overlay.html')) ?? null
+    const widgetText = async () => {
+      const p = await widget()
+      return p ? await p.evaluate(() => document.getElementById('card')?.textContent ?? '').catch(() => '') : ''
+    }
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      await polled(page)
+      // The stand-in Claude.
+      await page.locator('.xterm').first().click({ force: true })
+      await typeLine(page, hookSay('done', `;session=${SID}`))
+      const fake = dir + '\\stand-in\\claude.exe'
+      mkdirSync(dir + '\\stand-in', { recursive: true })
+      copyFileSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', fake)
+      await typeLine(page, `& '${fake}' -NoLogo -NoProfile`)
+      await sleep(2500)
+
+      // 1. No orchestrator: the list, then "1".
+      await page.evaluate(() => window.prism.dictRouted({ text: "Write-Output ('DICT-' + 'OK')" }))
+      ok(!!(await until(async () => (await widgetText()).includes('Send to'), 10000, 100)), 'with no orchestrator the widget lists the sessions')
+      const w1 = await widgetText()
+      ok(w1.includes('1') && w1.includes('alpha'), `numbered, by tab (${w1.slice(0, 120)})`)
+      const unfocusable = await app.evaluate(({ BrowserWindow }) => {
+        const o = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().includes('overlay.html'))
+        return o ? !o.isFocusable() && o.isAlwaysOnTop() : null
+      })
+      ok(unfocusable === true, 'the widget never takes focus and stays on top')
+      const wp = await widget()
+      await wp?.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-widget-pick.png') }).catch(() => {})
+      await app.evaluate(() => globalThis.__e2eDictLine('p 1'))
+      ok(!!(await until(async () => (await widgetText()).includes('Sent to alpha'), 15000, 100)), 'the number sends it, and the widget says sent')
+      await wp?.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-widget-sent.png') }).catch(() => {})
+      ok(!!(await until(async () => (await shown()).includes('DICT-OK'), 8000, 100)), 'and it was typed and entered in that session')
+
+      // 2. An active orchestrator: no list.
+      const sw = (await gotoPref(page, 'orchestrator')).locator('[role="switch"]')
+      await sw.click()
+      await page.keyboard.press('Control+w')
+      await until(async () => (await page.locator('[data-tab]').count()) === 1, 4000, 50)
+      await shells().nth(0).click({ button: 'right' })
+      await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Make orchestrator' }).click()
+      await sleep(800)
+      await page.evaluate(() => window.prism.dictRouted({ text: "Write-Output ('LEAD-' + 'OK')" }))
+      ok(!!(await until(async () => (await widgetText()).includes('Sent to alpha'), 15000, 100)), 'with an active orchestrator it is sent straight there')
+      ok(!(await widgetText()).includes('Send to'), 'with no list')
+      ok(!!(await until(async () => (await shown()).includes('LEAD-OK'), 8000, 100)), 'and it arrived')
+
+      // 3. The key, with the app not in front (the suite's window is parked
+      // and unfocused): Ctrl then Win, held past the solo wait.
+      await page.evaluate(() => localStorage.setItem('prism.dictation.enabled', '1'))
+      await gotoPref(page, 'dictation-anywhere')
+      await page.keyboard.press('Control+w')
+      await sleep(600)
+      await app.evaluate(() => {
+        globalThis.__e2eDictLine('d A2')
+        globalThis.__e2eDictLine('d 5B')
+      })
+      await sleep(500)
+      const keyed = await widgetText()
+      ok(/Listening|speech model|Speak now/.test(keyed), `Ctrl+Win from another app opens the widget (${keyed.slice(0, 80)})`)
+      await app.evaluate(() => {
+        globalThis.__e2eDictLine('u 5B')
+        globalThis.__e2eDictLine('u A2')
+      })
+    } finally {
+      await closeApp(app)
+    }
   },
 
   /**

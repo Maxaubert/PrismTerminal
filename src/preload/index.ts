@@ -51,6 +51,19 @@ const api = {
    *  there, whatever else is open. Only ever arrives after a restore answered. */
   onOpenFolder: (cb: (cwd: string) => void): (() => void) => on(APP_CH.openFolder, cb),
 
+  /* ----- dictating from any app (2026-10-16) ----- */
+
+  /** The key, the mode, and whether it works from any app. */
+  dictAnywhere: (cfg: { on: boolean; hotkey: unknown; mode: string }): void => ipcRenderer.send(APP_CH.dictAnywhere, cfg),
+  /** The outside recording's live state, for the widget. */
+  dictLive: (v: { phase: string; text: string; level: number; starting: boolean }): void => ipcRenderer.send(APP_CH.dictLive, v),
+  /** What the outside recording heard, or why it heard nothing. */
+  dictRouted: (r: { text: string } | { message: string }): void => ipcRenderer.send(APP_CH.dictRouted, r),
+  /** The theme's inks, for the widget. */
+  dictLook: (l: { ground: string; text: string; dim: string; accent: string; edge: string }): void => ipcRenderer.send(APP_CH.dictLook, l),
+  /** Main's global key: start, stop or cancel the outside recording. */
+  onDictOutside: (cb: (action: 'start' | 'stop' | 'cancel') => void): (() => void) => on(APP_CH.dictOutside, cb),
+
   /* ----- the catch-up report's ledger (2026-10-16) ----- */
 
   /** The tabs as the report names them: label, folder, agent and its state. */

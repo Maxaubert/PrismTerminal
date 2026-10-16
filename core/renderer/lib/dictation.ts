@@ -131,6 +131,38 @@ interface Recording {
 let rec: Recording | null = null
 let messageTimer: number | null = null
 
+/**
+ * DICTATING FROM OUTSIDE THE APP (owner, 2026-10-16: "you can start the
+ * dictation while not having the app in focus"). A host with a global key
+ * (Prism Terminal's globalDictKey) starts and stops a recording through
+ * `dictationOutside`; it belongs to no tab (`OUTSIDE`), and what was heard goes
+ * to the host's `setDictationRoute` sink instead of being pasted: the host
+ * decides where it goes (the orchestrator, or a session the owner picks). A
+ * host that sets none never starts one.
+ */
+export const OUTSIDE = '\u0000outside'
+export type RouteResult = { text: string } | { message: string }
+let routeSink: ((r: RouteResult) => void) | null = null
+export function setDictationRoute(sink: ((r: RouteResult) => void) | null): void {
+  routeSink = sink
+}
+export function dictationOutside(action: 'start' | 'stop' | 'cancel'): void {
+  if (action === 'start') {
+    if (!routeSink || !dictationEnabled() || !dictationHost()) return
+    // No model: said in the host's widget, where the owner is looking.
+    if (!dictationModel()) return routeSink({ message: 'Choose a speech model in Settings' })
+    void begin(OUTSIDE)
+  } else if (action === 'stop') stop()
+  else cancel()
+}
+/** Said to the sink when the recording is the outside one, else on the pill. */
+function tell(r: Recording, message: string): void {
+  if (r.sessionId === OUTSIDE) {
+    routeSink?.({ message })
+    setView(IDLE)
+  } else say(message)
+}
+
 function say(message: string): void {
   if (messageTimer !== null) clearTimeout(messageTimer)
   setView({ ...IDLE, message })
@@ -190,7 +222,7 @@ async function begin(sessionId: string): Promise<void> {
   } catch (err) {
     rec = null
     resumeMedia(r)
-    say(FAILURE_TEXT[(typeof err === 'string' ? err : 'failed') as CaptureFailure] ?? FAILURE_TEXT.failed)
+    tell(r, FAILURE_TEXT[(typeof err === 'string' ? err : 'failed') as CaptureFailure] ?? FAILURE_TEXT.failed)
     return
   }
   // The key was released (or Escape pressed) while the mic was still opening.
@@ -226,6 +258,7 @@ function finishCancel(r: Recording): void {
   if (rec === r) rec = null
   resumeMedia(r)
   if (dictationSounds()) cancelCue()
+  if (r.sessionId === OUTSIDE) routeSink?.({ message: 'Cancelled' })
   setView(IDLE)
 }
 
@@ -236,6 +269,7 @@ async function finishStop(r: Recording): Promise<void> {
   if (!host || samples.length < MIN_SECONDS * TARGET_RATE) {
     if (rec === r) rec = null
     resumeMedia(r)
+    if (r.sessionId === OUTSIDE) routeSink?.({ message: 'Heard nothing' })
     setView(IDLE)
     return
   }
@@ -257,7 +291,8 @@ async function finishStop(r: Recording): Promise<void> {
   if (rec === r) rec = null
   resumeMedia(r)
   if (!res.ok) {
-    say(
+    tell(
+      r,
       res.reason === 'no-model'
         ? 'Choose a model in Settings'
         : res.reason === 'no-engine'
@@ -267,7 +302,14 @@ async function finishStop(r: Recording): Promise<void> {
     return
   }
   const text = cleanTranscript(res.text)
-  if (!text) return say('Heard nothing')
+  if (!text) return tell(r, 'Heard nothing')
+  // From outside the app: the host routes it (and presses Enter there, by the
+  // owner's own route), never a paste into whatever tab is in front.
+  if (r.sessionId === OUTSIDE) {
+    routeSink?.({ text })
+    setView(IDLE)
+    return
+  }
   // A trailing space, so the next dictation (or the next typed word) does not
   // run into this one. Never a newline: that is Enter.
   if (!pasteTextInto(r.sessionId, text + ' ')) return say('That tab has closed')

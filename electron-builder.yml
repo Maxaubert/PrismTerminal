@@ -47,6 +47,9 @@ extraResources:
   # Settings > Agents > Orchestrator is on.
   - from: core/claude-plugin-orchestrator
     to: claude-plugin-orchestrator
+  # The dictation key from any app (2026-10-16): the keyboard hook helper.
+  - from: src/main/hook
+    to: global-key
 win:
   icon: build/icon.ico
   executableName: PrismTerminal

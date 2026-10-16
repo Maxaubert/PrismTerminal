@@ -187,6 +187,11 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   Claude Code prompt (`src/main/orchestratorSend.ts`): only from the promoted tab, only into a tab whose Claude is
   running (never a bare shell, where it would run), never while that tab asks a question (it would answer it), as
   one sanitised bracketed paste and then Enter (rule 1). Held by `orchestratorSend.test.ts` and the e2e `catchUp`.
+  **The same exception carries dictation from any app** (owner, 2026-10-16: the widget lists the sessions and "you
+  essentially just click or pick the session", or with an active orchestrator it is sent there): the words go
+  through the same checked path (`sessionsWire` `sendInto`), into a running Claude only. Inside the app dictation
+  still only pastes at the cursor and never presses Enter. Held by `dictateAnywhere.test.ts` and the e2e
+  `dictateAnywhere`.
 - <a id="same-command-line"></a>**EVERY SHELL OF A KIND STARTS WITH THE SAME COMMAND LINE, AND NO POWERSHELL IS
   `-EncodedCommand`** (#180; owner, 2026-10-11: "slow on startup and not responding until Claude sessions load").
   Windows Defender judges each NEW command line a process from `PrismTerminal.exe` starts, inside `CreateProcess`,

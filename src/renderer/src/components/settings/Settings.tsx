@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type JSX } from 'react'
 import { dictationHost } from '@core/renderer/host'
 import { SettingsFrame } from '@core/renderer/settings/layout/SettingsFrame'
 import { DiagnosticsPage } from '@core/renderer/settings/sections/DiagnosticsPage'
+import { DictateAnywhereRow } from './DictateAnywherePage'
 import { DictationPage } from '@core/renderer/settings/sections/DictationPage'
 import { AboutPage } from './AboutPage'
 import { AgentsPage } from './AgentsPage'
@@ -63,7 +64,7 @@ export default function Settings({
       ) : page === 'agents' ? (
         <AgentsPage />
       ) : page === 'dictation' ? (
-        <DictationPage />
+        <DictationPage after={<DictateAnywhereRow />} />
       ) : page === 'diagnostics' ? (
         <DiagnosticsPage api={window.prism} />
       ) : (

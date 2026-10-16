@@ -20,7 +20,9 @@ import { createEdgeWatch } from './edgeWatch'
 import { DEFAULT_WINDOW_EDGES, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 import { detectShells } from '@core/main/shells'
 import { createTabsStore } from './tabsStore'
-import { startSessions } from './sessionsWire'
+import { startSessions, type Sessions } from './sessionsWire'
+import { startDictateAnywhere } from './dictateAnywhere'
+import { parseHelperLine } from './globalDictKey'
 import { killAll, shellsDying, shellsGone } from '@core/main/terminal'
 import { installUpdate, updateCalls, watchForUpdates } from './update'
 import { previewUpdate, runPreviewInstall, wantsPreview } from '@core/main/updatePreview'
@@ -256,7 +258,7 @@ let pendingFolders: string[] = []
 const tabs = createTabsStore(join(app.getPath('userData'), 'tabs.json'))
 /** The catch-up report's ledger (2026-10-16): which Claude session is in which
  *  tab and when the owner really looked, written to sessions.json. */
-let sessions: { flush(): void } | null = null
+let sessions: Sessions | null = null
 
 /** The newest update offer, remembered so a page that loads after it was made
  *  still hears about it (`update:announce`), and so `update:install` can tell a
@@ -478,6 +480,32 @@ function wireIpc(): void {
       enable: APP_CH.ledgerEnable
     }
   })
+
+  /* ----- dictating from any app (2026-10-16) ----- */
+
+  // The key from any app, the widget, and where the words go. Under --e2e the
+  // real keyboard hook never runs (it would read the owner's keys and mask
+  // their Start menu); the suite feeds helper lines through a seam instead.
+  const anywhere = startDictateAnywhere({
+    script: app.isPackaged ? join(process.resourcesPath, 'global-key', 'globalKeyHook.ps1') : join(__dirname, '../../src/main/hook/globalKeyHook.ps1'),
+    preload: join(__dirname, '../preload/overlay.js'),
+    loadPage: (w) => {
+      const devUrl = process.env['ELECTRON_RENDERER_URL']
+      if (devUrl) void w.loadURL(`${devUrl}/overlay.html`)
+      else void w.loadFile(join(__dirname, '../renderer/overlay.html'))
+    },
+    mainWindow: () => mainWindow,
+    sessions: () => sessions,
+    toPage: (action) => send(APP_CH.dictOutside, action),
+    channels: { anywhere: APP_CH.dictAnywhere, live: APP_CH.dictLive, routed: APP_CH.dictRouted, look: APP_CH.dictLook },
+    onIpc: (ch, fn) => ipcMain.on(ch, (_e, ...args: unknown[]) => fn(...args)),
+    e2e: E2E
+  })
+  app.on('will-quit', () => anywhere.stop())
+  if (E2E) (globalThis as { __e2eDictLine?: (l: string) => void }).__e2eDictLine = (l: string) => {
+    const parsed = parseHelperLine(l)
+    if (parsed) anywhere.line(parsed)
+  }
 
   /* ----- tabs ----- */
 

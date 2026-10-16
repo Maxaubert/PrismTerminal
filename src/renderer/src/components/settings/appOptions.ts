@@ -18,7 +18,7 @@ export interface AppOption {
   id: string
   label: string
   sub: string
-  section: 'window' | 'opening' | 'keys' | 'theme' | 'marks' | 'orchestrator' | 'about'
+  section: 'window' | 'opening' | 'keys' | 'theme' | 'marks' | 'orchestrator' | 'anywhere' | 'about'
   page: AppPageId
   icon: string
   keywords?: string
@@ -37,12 +37,13 @@ export const APP_OPTIONS: readonly AppOption[] = [
   { id: 'newtab-mode', label: 'Folder for new tabs', sub: 'Opens in your user folder.', section: 'opening', page: 'terminal', icon: 'newtab', keywords: 'folder home directory start new tab ask', store: ['prism.newtab.mode', 'prism.newtab.folder'] },
   { id: 'explorer-verb', label: 'Add to the Explorer menu', sub: 'Open terminal here, on every folder.', section: 'opening', page: 'terminal', icon: 'menu', keywords: 'context menu right click open here', store: 'registry' },
   { id: 'orchestrator', label: 'Orchestrator', sub: 'Reports on other tabs, and a lead tab.', section: 'orchestrator', page: 'agents', icon: 'lead', keywords: 'orchestrator lead catch up report summary summarise away sessions tabs claude skill plugin promote', store: ['prism.term.orchestrator'] },
+  { id: 'dictation-anywhere', label: 'Dictate from any app', sub: 'The key works with another app in front.', section: 'anywhere', page: 'dictation', icon: 'mic', keywords: 'global anywhere outside background other app widget overlay send session orchestrator hotkey ctrl win', store: ['prism.dictation.anywhere'] },
   { id: 'taskbar-badge', label: 'Count marked tabs on the taskbar', sub: 'A number on the taskbar button.', section: 'marks', page: 'agents', icon: 'taskbar', keywords: 'count number badge overlay', store: ['prism.window.taskbarBadge'] },
   { id: 'app-version', label: 'Version', sub: 'The version you are running.', section: 'about', page: 'about', icon: 'version', keywords: 'update release number', store: null }
 ]
 
 /** This app's own section headings (the About section has none). */
-export const APP_SECTIONS = { window: 'Window', opening: 'Opening terminals', keys: 'Keys', orchestrator: 'Orchestrator (beta)', about: '' } as const
+export const APP_SECTIONS = { window: 'Window', opening: 'Opening terminals', keys: 'Keys', orchestrator: 'Orchestrator (beta)', anywhere: 'From any app', about: '' } as const
 
 /** One of this app's rows by id. Throws on a typo, which the tests find. */
 export function appOpt(id: string): AppOption {
