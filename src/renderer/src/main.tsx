@@ -5,6 +5,7 @@ import { StrictMode } from 'react'
 import { startDiag } from '@core/renderer/lib/diag'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { watchMarksPause } from './lib/marksPause'
 import { migrateOpacity } from './lib/opacityMigration'
 import { migrateSeeThrough } from './lib/seeThroughMigration'
 import './index.css'
@@ -20,6 +21,9 @@ migrateSeeThrough()
 // heartbeat main watches, and the crumbs the app says. Before the first
 // render, so a stall or an error while App mounts is caught too.
 startDiag(window.prism)
+
+// The tab marks hold still while the window is minimised (lib/marksPause).
+watchMarksPause(window.prism.onMinimized, document.documentElement)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

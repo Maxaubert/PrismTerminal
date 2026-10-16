@@ -23,6 +23,14 @@ export const EDGE = { ...REVEAL_ZONE, everyMs: 50 } as const
 
 export type { EdgeNear }
 
+/** How far outside the content the cursor is "far": well past the resize
+ *  border's band (`outside`) and anything the page reads (the slid-out
+ *  sidebar lies inside the content). */
+export const EDGE_FAR_DIP = 48
+/** What the page hears for a cursor far from the window: at no edge, and up
+ *  and to the left of everything, where no reveal zone reaches. */
+export const FAR: EdgeNear = { top: false, left: false, x: -100000, y: -100000 }
+
 /** Pure: where `cursor` is against the content box. */
 export function edgeNear(cursor: Point, content: Rectangle, zone = EDGE): EdgeNear {
   const x = cursor.x - content.x
@@ -52,11 +60,22 @@ export function createEdgeWatch(
   const tick = (): void => {
     const w = win()
     if (!w || w.isDestroyed() || w.isMinimized() || !w.isVisible()) return
-    const near = edgeNear(cursor(), w.getContentBounds())
-    const key = `${Math.round(near.x)}|${Math.round(near.y)}`
+    const box = w.getContentBounds()
+    const near = edgeNear(cursor(), box)
+    // FAR FROM THE WINDOW IS ONE PLACE (perf review 2026-10-16): with the
+    // sidebar collapsed for days, every move of the mouse in other apps was an
+    // IPC and a page wakeup, up to 20 a second, for an answer that is always
+    // "nowhere near". Once the cursor is EDGE_FAR_DIP outside the content, the page
+    // hears FAR once, and nothing more until it comes back.
+    const far =
+      near.x < -EDGE_FAR_DIP ||
+      near.y < -EDGE_FAR_DIP ||
+      near.x >= box.width + EDGE_FAR_DIP ||
+      near.y >= box.height + EDGE_FAR_DIP
+    const key = far ? 'far' : `${Math.round(near.x)}|${Math.round(near.y)}`
     if (key === last) return
     last = key
-    send(near)
+    send(far ? FAR : near)
   }
   const stop = (): void => {
     if (timer) clearInterval(timer)

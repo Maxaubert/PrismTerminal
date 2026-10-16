@@ -49,8 +49,9 @@ import {
   type SelectionGate
 } from '../lib/termSelectionEdit'
 import { attachLinkPaint, type LinkPainter } from '../lib/termLinkPaint'
+import { lookChanged, oncePerFrame, type LookSeen } from '../lib/lookApply'
 import { termFitHeld, whenTermFitReleased } from '../lib/fitHold'
-import { findPath, linkRanges, onPathsFound, pathCandidates, takeAsked, type PathHit } from '../lib/termPathLinks'
+import { findPath, forgetPathOwner, linkRanges, onPathsFound, pathCandidates, takeAsked, type PathHit } from '../lib/termPathLinks'
 import {
   initialCaretHold,
   onCaretKey,
@@ -93,6 +94,8 @@ interface Session {
   search: SearchAddon
   /** Paints the links in the buffer; told when the colours change. */
   links: LinkPainter
+  /** The theme and link ink this session was last given (lib/lookApply). */
+  look: LookSeen
   el: HTMLDivElement
   unsub: Array<() => void>
   /** Ctrl+scroll zoom, this session only: never persisted, dies with it. */
@@ -432,17 +435,24 @@ function refitSession(id: string, s: Session): void {
 // One restyler for every running shell, driven by the Terminal settings
 // changing (theme, acrylic and its opacity, base font size). A session the
 // user Ctrl+scrolled keeps its own font; everything else follows the base.
+//
+// ONLY WHAT DIFFERS (perf review 2026-10-16, `lib/lookApply`): a colour or
+// see-through drag restyles once per input event, and each one used to assign
+// every tab's theme and start every tab's link painting over, its whole
+// scrollback. The theme is still assigned in the same task when it changed (the
+// panel's ground moves now, and the text must move with it, rule 15); the link
+// repaint waits for the frame and happens only when the ink moved.
 function applyLook(): void {
   const theme = currentTermTheme()
+  const themeKey = JSON.stringify(theme)
   const base = termBaseFontPx()
   const family = termFontStack()
   // Measured once from the ground as painted (rule 15), told to each program
   // that asked (?2031h) only when it differs from what it was last told.
   const mode = groundMode(groundedTheme().background)
   for (const [id, s] of sessions) {
-    s.term.options.theme = theme
+    if (lookChanged(s.look, 'theme', themeKey)) s.term.options.theme = theme
     s.tellTheme(mode)
-    s.links.repaint() // the link colour is measured against the theme's ground
     const want = s.fontOverride ?? base
     const sizeChanged = s.term.options.fontSize !== want
     const familyChanged = s.term.options.fontFamily !== family
@@ -450,7 +460,14 @@ function applyLook(): void {
     if (familyChanged) s.term.options.fontFamily = family
     if (sizeChanged || familyChanged) refitSession(id, s)
   }
+  relinkSoon()
 }
+// The link colour is measured against the theme's ground: a tab whose ink
+// moved paints its links again, from scratch, once per frame at most.
+const relinkSoon = oncePerFrame(() => {
+  const ink = currentLinkColor()
+  for (const s of sessions.values()) if (lookChanged(s.look, 'ink', ink)) s.links.repaint()
+}, requestAnimationFrame)
 onTermLookChange(applyLook)
 // A host with styles of its own repaints :root when the style changes, and a
 // terminal following it has to follow that too. Armed lazily: the host has
@@ -556,6 +573,8 @@ export function disposeTermSession(id: string): void {
   s.search.dispose()
   s.term.dispose()
   s.el.remove()
+  // After the painter is gone, so no last paint teaches the tab again.
+  forgetPathOwner(id)
 }
 
 /**
@@ -727,6 +746,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   const osc8 = new Osc8Spans()
   const links = attachLinkPaint(term, currentLinkColor, (text) => linkRanges(text, cwdNow, id), {
     asked: () => takeAsked(id),
+    context: () => cwdNow,
     spans: (first, last) => osc8.overlapping(first, last, term.buffer.active.type === 'alternate')
   })
   // A PATH IS A LINK TOO, when it exists (#99). The painter colours it; this
@@ -1066,16 +1086,21 @@ function createSession(id: string, root: string, shellId: string | undefined): S
   const copyDown = (e: MouseEvent): void => {
     if (e.button === 0 && !e.shiftKey) appCopies.down(e.clientX, e.clientY, e.detail)
   }
+  const copyMove = (e: MouseEvent): void => {
+    if (e.buttons & 1) appCopies.move(e.clientX, e.clientY)
+  }
   const copyUp = (e: MouseEvent): void => {
     if (e.button === 0) appCopies.up(e.clientX, e.clientY)
   }
   el.addEventListener('mousedown', copyDown, true)
   window.addEventListener('mouseup', copyUp, true)
+  window.addEventListener('mousemove', copyMove, true)
   const unsub = [
     () => questions.dispose(),
     () => {
       el.removeEventListener('mousedown', copyDown, true)
       window.removeEventListener('mouseup', copyUp, true)
+      window.removeEventListener('mousemove', copyMove, true)
     },
     attachClickCaret(term, el, id, (line, x) => oscLink(line, x) !== null),
     // A path this session asked about turned out to exist: paint the lines
@@ -1177,6 +1202,7 @@ function createSession(id: string, root: string, shellId: string | undefined): S
     fit,
     search,
     links,
+    look: {},
     el,
     unsub,
     cwd: () => cwdNow,
@@ -1236,6 +1262,9 @@ export default function TerminalPanel({
     const s =
       sessions.get(sessionId) ?? createSession(sessionId, spawnWith.current.root, spawnWith.current.shellId)
     host.appendChild(s.el)
+    // Its links were not painted while it was out of the page (perf review
+    // 2026-10-16, lib/termLinkPaint): catch up now.
+    s.links.attached()
     s.term.focus()
     const refit = (): void => {
       // A hidden or zero-sized panel would fit to nonsense; the observer fires

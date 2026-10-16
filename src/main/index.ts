@@ -231,6 +231,7 @@ const closeFlow = createCloseFlow()
 let diag: Diagnostics | null = null
 /** Kills dictation's children (the speech server, the media helper). Set by wireIpc. */
 let stopDictation: () => void = () => {}
+let cpuEngineDirFound: string | null = null
 /**
  * The renderer has no tab list worth saving: it has not restored yet (launch,
  * a reload). Two things follow.
@@ -384,6 +385,11 @@ function createWindow(): void {
     diag?.log.flushSync()
   })
 
+  // The page pauses the tab marks' motion while nobody can see it (perf review
+  // 2026-10-16): the window is never throttled, so it would go on drawing them.
+  win.on('minimize', () => send(APP_CH.windowMinimized, true))
+  win.on('restore', () => send(APP_CH.windowMinimized, false))
+
   win.on('enter-full-screen', () => {
     send(APP_CH.windowFullscreen, true)
     material.settled()
@@ -529,10 +535,16 @@ function wireIpc(): void {
     ipcMain,
     send,
     cpuEngineDir: () => {
+      // Found once and kept (perf review 2026-10-16: an existsSync on main for
+      // every dictation pass): the bundled engine ships with the app and does
+      // not move while it runs. A miss is asked again.
+      if (cpuEngineDirFound) return cpuEngineDirFound
       const dir =
         process.env.PT_WHISPER_DIR ??
         (app.isPackaged ? join(process.resourcesPath, 'bin', 'whisper') : join(app.getAppPath(), 'vendor', 'whisper'))
-      return existsSync(join(dir, 'whisper-server.exe')) ? dir : null
+      if (!existsSync(join(dir, 'whisper-server.exe'))) return null
+      cpuEngineDirFound = dir
+      return dir
     },
     sharedRoot:
       process.env.PT_DICTATION_ROOT ??
