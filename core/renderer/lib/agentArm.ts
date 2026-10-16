@@ -15,7 +15,9 @@ import { titleAgent, titleArmsAgent } from './agentTitle'
  *   message. Only what `titleArmsAgent` takes as proof arms it. An agent only
  *   the title vouches for goes when the title stops naming it: in a WSL tab
  *   the poll sees wsl.exe and bash prints no prompt report, so nothing else
- *   would ever say it left.
+ *   would ever say it left. It asks the poll for its answer too: the
+ *   tab's agent mark is the poll's to take back, and a poll that never saw
+ *   the agent has no news to send unless asked (Prism e2e, 2026-10-16).
  * - The POLL says when an agent arrives or leaves (#73); a wrapper ('other')
  *   does not undo the title's claude or codex. Its "no agent" takes back only
  *   what it saw itself.
@@ -74,7 +76,7 @@ export function armOnTitle(s: AgentArm, title: string): ArmStep {
   if (!s.titled || stillNames(s, title)) return step(s)
   // The poll saw it: the poll says when it leaves, whatever the title does.
   if (s.polled) return step({ ...s, titled: false })
-  return step(BARE, true)
+  return step(BARE, true, true)
 }
 
 export function armOnPoll(s: AgentArm, present: boolean, kind: DetectedAgent | null): ArmStep {
@@ -92,5 +94,8 @@ export function armOnPrompt(s: AgentArm): ArmStep {
   // Gone even with nothing armed: a program that died without its ?2031l
   // left reports on, and a push would reach the shell (PSReadLine reads the
   // ESC as RevertLine).
-  return step(BARE, true, s.polled)
+  // An agent only the title vouched for asks too: the poll never saw it,
+  // so its "no agent" is unsent news, and the tab would keep the agent's
+  // mark (Prism e2e, 2026-10-16: a claude that lived three seconds).
+  return step(BARE, true, s.polled || s.titled)
 }

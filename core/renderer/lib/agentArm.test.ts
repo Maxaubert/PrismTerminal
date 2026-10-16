@@ -75,6 +75,16 @@ describe('agentArm', () => {
     expect(step.gone).toBe(true)
   })
 
+  // MEASURED (Prism full e2e, 2026-10-16, core 0.41.2): a claude that lived
+  // three seconds left its tab marked for good. The title put the mark up,
+  // only the poll takes it back, and since the forced looks are spaced
+  // (#238) the poll had not seen it, so its "no agent" was no news and was
+  // never sent. The title's agent leaving asks the poll for its answer anyway.
+  it("asks the poll again when the title stops naming an agent only the title armed", () => {
+    expect(armOnTitle(titled(IDLE), 'PS C:\\src').recheck).toBe(true)
+    expect(armOnTitle(titled(IDLE), '◐ Claude Code').recheck).toBe(false)
+  })
+
   it("keeps a title-armed agent through its own titles", () => {
     let s = titled(IDLE)
     for (const t of ['◐ Claude Code', '◓ Claude Code', '✳ Fix the bug']) s = titled(t, s)
@@ -125,7 +135,11 @@ describe('agentArm', () => {
 
   it('does not ask the poll again on a prompt it has nothing to correct', () => {
     expect(armOnPrompt(armAtStart(null)).recheck).toBe(false)
-    expect(armOnPrompt(titled(IDLE)).recheck).toBe(false)
+  })
+
+  // The same e2e: the prompt came back under a title the poll never saw.
+  it('asks the poll again on a prompt after an agent only the title armed', () => {
+    expect(armOnPrompt(titled(IDLE)).recheck).toBe(true)
   })
 
   it('is armed again when the poll answers after the prompt', () => {
