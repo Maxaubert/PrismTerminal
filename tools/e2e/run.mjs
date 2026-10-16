@@ -8012,6 +8012,9 @@ const scenarios = {
     await page.evaluate(() => {
       localStorage.setItem('prism.dictation.model', 'tiny')
       localStorage.setItem('prism.dictation.sounds', '0')
+      // These scenarios hold Right Alt, the default until 2026-10-16 (now Ctrl+Win):
+      // they set it, so the AltGr-era rules keep their real-key proof.
+      localStorage.setItem('prism.dictation.hotkey', JSON.stringify({ code: 'AltRight', ctrl: false, alt: false, shift: false, meta: false }))
     })
     await page.locator('[data-title-settings]').click()
     await page.locator('[data-settings-tab="dictation"]').click()
@@ -8262,6 +8265,9 @@ const scenarios = {
     // so the English sentence must still come back in English.
     await page.evaluate(() => {
       localStorage.setItem('prism.dictation.model', 'parakeet-v3-q4')
+      // These scenarios hold Right Alt, the default until 2026-10-16 (now Ctrl+Win):
+      // they set it, so the AltGr-era rules keep their real-key proof.
+      localStorage.setItem('prism.dictation.hotkey', JSON.stringify({ code: 'AltRight', ctrl: false, alt: false, shift: false, meta: false }))
       localStorage.setItem('prism.dictation.language', 'no')
       localStorage.setItem('prism.dictation.sounds', '0')
     })
