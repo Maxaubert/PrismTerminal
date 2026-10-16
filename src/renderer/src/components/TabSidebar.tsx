@@ -17,7 +17,7 @@ import { onDevicePixels, useDevicePixelRatio } from '../lib/devicePixels'
 import {
   SIDEBAR_WIDTH,
   setSidebarWidth,
-  useSidebarArriving,
+  useSidebarSliding,
   useSidebarLayout,
   useSidebarWidth
 } from '../lib/sidebarPrefs'
@@ -63,9 +63,9 @@ export function TabSidebar({
   onReorder,
   onOpenRecent
 }: TabListProps): JSX.Element | null {
-  // Laid out collapsed while a just-pinned sidebar slides in (sidebarPrefs).
   const mode = useSidebarLayout()
-  const arriving = useSidebarArriving()
+  // Pinned or unpinned just now: its room and its left slide together.
+  const sliding = useSidebarSliding()
   const storedWidth = useSidebarWidth()
   const { indicator, paint, looks } = useTabLooks({
     tabs,
@@ -121,7 +121,7 @@ export function TabSidebar({
   useEffect(() => {
     shownNow.current = shown
   }, [shown])
-  const visible = !collapsed || shown || arriving
+  const visible = !collapsed || shown
   // How much of the page beside it a slid-out sidebar covers: App cuts that
   // strip of the page away, so only the window's acrylic lies under it.
   // Out: its width. Hidden: -CORNER_R, the cut's curve parked just off the
@@ -186,7 +186,9 @@ export function TabSidebar({
       data-sidebar-slot
       className={`relative ${LAYER.panel} flex min-h-0 shrink-0`}
       // Collapsed, the slot takes no room: the terminal keeps its full width.
-      style={{ width: collapsed ? 0 : width }}
+      // Pinned or unpinned, the room grows or shrinks on the slide's curve,
+      // so the terminal beside it moves with the sidebar's edge.
+      style={{ width: collapsed ? 0 : width, transition: sliding && dragW === null ? `width ${SIDEBAR_SLIDE}` : undefined }}
     >
       <nav
         role="tablist"
@@ -223,7 +225,7 @@ export function TabSidebar({
           // all through the slide (owner, 2026-10-13: the edge "grows thicker
           // to like between 5 to 10 pixels"; measured 14 px, verticalTabs e2e).
           left: collapsed && !visible ? -(width + CORNER_R) : 0,
-          transition: collapsed ? `left ${SIDEBAR_SLIDE}` : undefined,
+          transition: collapsed || sliding ? `left ${SIDEBAR_SLIDE}` : undefined,
           clipPath: 'inset(0 -60px 0 0)'
         }}
       >

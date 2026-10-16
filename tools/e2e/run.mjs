@@ -2502,21 +2502,31 @@ const scenarios = {
         ok(!!(await until(async () => !(await geo()).shown, 3000, 30)), 'and goes once the cursor is clearly off it')
         await cursor(null)
       }
-      // Back to open, through the same key. PINNED FROM HIDDEN IT SLIDES IN
-      // FIRST (owner, 2026-10-14: "theres no animmation, make sure it then has
-      // the animationo that unpninned has when it opens"): over the terminal,
-      // still at full width, part of the way out, and only then beside it.
+      // Back to open, through the same key. PINNED, THE SIDEBAR AND THE
+      // TERMINAL SLIDE TOGETHER (owner, 2026-10-14: a pin from hidden must
+      // slide in; 2026-10-16: "the sidebar animates but the main view just
+      // switches"): the sidebar's room grows on the slide's curve while the
+      // sidebar slides in, and the terminal keeps its columns until the end.
+      const screenW = () => page.evaluate(() => Math.round(document.querySelector('[data-term-host] .xterm-screen')?.getBoundingClientRect().width ?? -1))
+      const before = await screenW()
       await page.keyboard.press('Control+Shift+B')
       ok((await page.evaluate(() => localStorage.getItem('prism.window.sidebar'))) === 'open', 'Ctrl+Shift+B pins it again, and Open is stored')
-      // Read in one go, not mid-slide by luck: a sample can land after the
-      // 240 ms slide and still before the layout moves.
+      // Read in one go, inside the 280 ms the slide and the hold last.
       const mid = await page.evaluate(() => {
         const nav = document.querySelector('[data-tab-sidebar]')
-        const host = document.querySelector('[data-term-host]')
-        return { shown: nav?.hasAttribute('data-sidebar-shown') ?? false, slides: nav ? getComputedStyle(nav).transitionProperty.includes('left') : false, host: Math.round(host?.getBoundingClientRect().left ?? -1) }
+        const slot = document.querySelector('[data-sidebar-slot]')
+        const screen = document.querySelector('[data-term-host] .xterm-screen')
+        return {
+          shown: nav?.hasAttribute('data-sidebar-shown') ?? false,
+          slides: nav ? getComputedStyle(nav).transitionProperty.includes('left') : false,
+          roomSlides: slot ? getComputedStyle(slot).transitionProperty.includes('width') : false,
+          screen: Math.round(screen?.getBoundingClientRect().width ?? -1)
+        }
       })
-      ok(mid.host === 0 && mid.shown && mid.slides, `pinned, it slides in over the terminal first (${JSON.stringify(mid)})`)
-      ok(!!(await until(async () => (await geo()).host.left > 100, 3000, 30)), 'then takes its room beside the terminal')
+      ok(mid.shown && mid.slides && mid.roomSlides, `pinned, the sidebar and its room slide together (${JSON.stringify(mid)})`)
+      ok(mid.screen === before, `and the terminal keeps its width while they do (${mid.screen} vs ${before})`)
+      ok(!!(await until(async () => (await geo()).host.left > 100, 3000, 30)), 'then it sits beside the terminal')
+      ok(!!(await until(async () => (await screenW()) < before, 3000, 30)), `and the terminal fits its new width once the slide is over (${await screenW()} < ${before})`)
 
       // THE BAR BESIDE THE SIDEBAR, ALWAYS DOWN (owner, 2026-10-12, removing
       // Show title bar: the look of the dropped-down bar, "but I want it to be

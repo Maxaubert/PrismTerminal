@@ -67,31 +67,39 @@ describe('the sidebar key (#162)', () => {
   })
 })
 
-// Pinned from hidden, it slides in before it takes its room (owner, 2026-10-14).
-describe('pinning a hidden sidebar', () => {
+// Pinned or unpinned, the sidebar and the terminal slide together, and the
+// terminals keep their size until the slide is over (owner, 2026-10-14 and
+// 2026-10-16).
+describe('pinning and unpinning slide', () => {
   beforeEach(() => localStorage.clear())
 
-  it('lays the window out collapsed, the sidebar held out, for one slide', async () => {
+  it('lays out the new mode at once, slides for one slide, and holds the terminals until then', async () => {
     vi.useFakeTimers()
     try {
-      const { sidebarArriving, sidebarLayout } = await import('./sidebarPrefs')
+      const { sidebarSliding, sidebarLayout } = await import('./sidebarPrefs')
       const { SIDEBAR_SLIDE_MS } = await import('./chromeLayout')
+      const { termFitHeld } = await import('@core/renderer/lib/fitHold')
       setSidebarMode('collapsed')
-      expect(sidebarLayout()).toBe('collapsed')
+      vi.advanceTimersByTime(SIDEBAR_SLIDE_MS + 40)
+      expect(sidebarSliding()).toBe(false)
       setSidebarMode('open')
-      expect(sidebarMode()).toBe('open')
-      expect(sidebarLayout()).toBe('collapsed')
-      expect(sidebarArriving()).toBe(true)
-      vi.advanceTimersByTime(SIDEBAR_SLIDE_MS)
       expect(sidebarLayout()).toBe('open')
-      expect(sidebarArriving()).toBe(false)
-      // Collapsed again mid-slide: no arrival left over.
+      expect(sidebarSliding()).toBe(true)
+      expect(termFitHeld()).toBe(true)
+      vi.advanceTimersByTime(SIDEBAR_SLIDE_MS + 40)
+      expect(sidebarSliding()).toBe(false)
+      expect(termFitHeld()).toBe(false)
+      // The same mode again is no slide.
       setSidebarMode('open')
+      expect(sidebarSliding()).toBe(false)
+      // Unpinned: a slide too, and a toggle mid-slide starts a fresh one.
       setSidebarMode('collapsed')
+      vi.advanceTimersByTime(100)
       setSidebarMode('open')
-      setSidebarMode('collapsed')
-      expect(sidebarArriving()).toBe(false)
-      expect(sidebarLayout()).toBe('collapsed')
+      vi.advanceTimersByTime(SIDEBAR_SLIDE_MS)
+      expect(sidebarSliding()).toBe(true)
+      vi.advanceTimersByTime(40)
+      expect(sidebarSliding()).toBe(false)
     } finally {
       vi.useRealTimers()
     }

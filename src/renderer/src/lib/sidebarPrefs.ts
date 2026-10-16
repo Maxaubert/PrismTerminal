@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { SIDEBAR_SLIDE_MS } from './chromeLayout'
+import { holdTermFit } from '@core/renderer/lib/fitHold'
 
 // THE TAB SIDEBAR'S OWN STATE (#162; owner, 2026-10-11: "a sidebar you can have
 // open as a static sidebar, or it can open as the cursor moves near it").
@@ -34,41 +35,43 @@ export function sidebarMode(): SidebarMode {
   return validSidebarMode(localStorage.getItem(MODE_KEY))
 }
 
-// PINNED FROM HIDDEN, IT SLIDES IN FIRST (owner, 2026-10-14: "when you go from
-// unpinned to pin and unpinned is collapsed theres no animmation, make sure it
-// then has the animationo that unpninned has when it opens"). For one slide
-// the LAYOUT stays collapsed with the sidebar held out, so it comes in over
-// the terminal exactly as the hover reveal does; only then does it take its
-// room beside the terminal, which is resized once, never on every frame.
-let arriving = false
-let arriveTimer: ReturnType<typeof setTimeout> | null = null
+// PINNED OR UNPINNED, THE SIDEBAR AND THE TERMINAL SLIDE TOGETHER (owner,
+// 2026-10-14: a sidebar pinned from hidden must slide in; 2026-10-16: "the
+// sidebar animates but the main view just switches"). For one slide the
+// sidebar's room grows or shrinks on the slide's own curve while the sidebar
+// itself slides in or out, so the edge between it and the terminal moves as
+// one. The terminals keep their size all the while (core lib/fitHold) and fit
+// once at the end: a shell resized every frame redraws every frame.
+let sliding = false
+let slideTimer: ReturnType<typeof setTimeout> | null = null
 
 export function setSidebarMode(mode: SidebarMode): void {
   const was = sidebarMode()
   const next = validSidebarMode(mode)
   localStorage.setItem(MODE_KEY, next)
-  if (arriveTimer) clearTimeout(arriveTimer)
-  arriveTimer = null
-  arriving = was === 'collapsed' && next === 'open'
-  if (arriving) {
-    arriveTimer = setTimeout(() => {
-      arriving = false
-      arriveTimer = null
+  if (was !== next) {
+    if (slideTimer) clearTimeout(slideTimer)
+    sliding = true
+    // A frame past the slide, so its last frame is laid out before the fit.
+    holdTermFit(SIDEBAR_SLIDE_MS + 40)
+    slideTimer = setTimeout(() => {
+      sliding = false
+      slideTimer = null
       tell()
-    }, SIDEBAR_SLIDE_MS)
+    }, SIDEBAR_SLIDE_MS + 40)
   }
   tell()
 }
 
-/** The mode the window is LAID OUT in: collapsed while a pinned sidebar is
- *  still sliding in, the stored mode otherwise. */
+/** The mode the window is laid out in: the stored one, from the first frame
+ *  of a slide (the room itself animates, `sidebarSliding`). */
 export function sidebarLayout(): SidebarMode {
-  return arriving ? 'collapsed' : sidebarMode()
+  return sidebarMode()
 }
 
-/** True while a just-pinned sidebar slides in: held out, over the terminal. */
-export function sidebarArriving(): boolean {
-  return arriving
+/** True while the sidebar slides in or out after a pin or an unpin. */
+export function sidebarSliding(): boolean {
+  return sliding
 }
 
 export function sidebarWidth(): number {
@@ -90,7 +93,7 @@ export function onSidebarChange(cb: () => void): () => void {
 export const useSidebarMode = (): SidebarMode => useSyncExternalStore(onSidebarChange, sidebarMode)
 export const useSidebarWidth = (): number => useSyncExternalStore(onSidebarChange, sidebarWidth)
 export const useSidebarLayout = (): SidebarMode => useSyncExternalStore(onSidebarChange, sidebarLayout)
-export const useSidebarArriving = (): boolean => useSyncExternalStore(onSidebarChange, sidebarArriving)
+export const useSidebarSliding = (): boolean => useSyncExternalStore(onSidebarChange, sidebarSliding)
 
 /** Open becomes collapsed, collapsed becomes open. */
 export function toggleSidebar(): void {
