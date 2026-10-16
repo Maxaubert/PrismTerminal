@@ -214,13 +214,26 @@ export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } 
         let said = decideSend(asked, ledger.live(), enabled)
         // The tab's Claude mark is only what the tab's own output said; a
         // program printing the same signal would earn it. So the process tree
-        // is asked, at the moment of typing (security review, 2026-10-16).
+        // is asked (security review, 2026-10-16).
         if (said.ok && (await agentUnder(said.target.id)) !== 'claude')
           said = { ok: false, reason: `no Claude is running in ${said.target.label} (checked with Windows)` }
+        // That question takes about a second, in which the switch, the tab or
+        // its state can change: decide again, synchronously, right before
+        // typing, and the same tab must win (security review, 2026-10-16).
+        if (said.ok) {
+          const was = said.target
+          const now = decideSend(asked, ledger.live(), enabled)
+          said = now.ok && now.target.id === was.id && now.target.session === was.session ? now : { ok: false, reason: `${was.label} changed while it was checked: send again` }
+        }
         if (said.ok) {
           const id = said.target.id
           writeTerm(id, pasteOf(asked.text))
-          setTimeout(() => writeTerm(id, '\r'), SEND_ENTER_MS)
+          // And once more before Enter: a question that opened in between
+          // would take the Enter as its answer. The text then waits, unsent.
+          setTimeout(() => {
+            const still = decideSend(asked, ledger.live(), enabled)
+            if (still.ok && still.target.id === id) writeTerm(id, '\r')
+          }, SEND_ENTER_MS)
         }
         const out = join(outbox, name.replace(/\.json$/, '.result.json'))
         const answer = said.ok ? { ok: true, to: said.target.label } : { ok: false, reason: said.reason }
