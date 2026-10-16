@@ -765,7 +765,8 @@ if (!app.requestSingleInstanceLock()) {
     openFolder: (dir) => pathOpeners.openPath(dir),
     // These wait on the user (the picker) or a download: never a stall.
     longWaitChannels: [APP_CH.dialogPickFolder, APP_CH.updateInstall],
-    powerMonitor: () => powerMonitor
+    powerMonitor: () => powerMonitor,
+    appMetrics: () => app.getAppMetrics()
   })
   app.on('second-instance', (_e, argv, workingDirectory) => {
     // Resolved against the folder the second launch was typed in (#16).
