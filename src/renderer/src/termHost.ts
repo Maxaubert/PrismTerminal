@@ -1,3 +1,4 @@
+import { guardContext } from './lib/agentGuardPrefs'
 import { appOwnsKey } from './lib/keymap'
 import { agentKeys } from './lib/agentKeysPrefs'
 import { tabLayout } from './lib/tabLayoutPrefs'
@@ -70,6 +71,7 @@ configureTermCore({
       help: helpEnabled(),
       vertical: tabLayout() === 'vertical',
       fullScreen: focusedTermFullScreen(),
-      agentKeys: agentKeys()
+      agentKeys: agentKeys(),
+      ...guardContext()
     })
 })

@@ -11,7 +11,7 @@ const ev = (key: string, mods: Partial<{ ctrlKey: boolean; shiftKey: boolean; al
   metaKey: false,
   ...mods
 })
-const on: KeyContext = { help: true, vertical: true, fullScreen: false, agentKeys: false }
+const on: KeyContext = { help: true, vertical: true, fullScreen: false, agentKeys: false, agentGuard: true, agentHere: true, agentWorking: false }
 
 /** The key a label names, as an event: "Ctrl+Shift+K" is K with Ctrl and Shift. */
 const fromLabel = (label: string) => {
@@ -19,6 +19,35 @@ const fromLabel = (label: string) => {
   const key = parts.pop()!
   return ev(key, { ctrlKey: parts.includes('Ctrl'), shiftKey: parts.includes('Shift'), altKey: parts.includes('Alt') })
 }
+
+// KEEP AGENT SESSIONS OPEN (owner, 2026-10-16): Ctrl+C and Ctrl+D never clear
+// or close an agent, except Ctrl+C stopping one that works.
+describe('keep agent sessions open', () => {
+  const c = ev('c', { ctrlKey: true })
+  const d = ev('d', { ctrlKey: true })
+  it('takes Ctrl+D always, and Ctrl+C while the agent is idle', () => {
+    expect(chordOf(d, on)).toBe('agent-guard')
+    expect(chordOf(c, on)).toBe('agent-guard')
+    expect(chordOf(d, { ...on, agentWorking: true })).toBe('agent-guard')
+  })
+  it('leaves Ctrl+C to an agent at work: it is how it is stopped', () => {
+    expect(chordOf(c, { ...on, agentWorking: true })).toBeNull()
+  })
+  it('leaves Ctrl+C to an agent holding its own selection: it is its copy (Ctrl+D stays taken)', () => {
+    expect(chordOf(c, { ...on, agentSelecting: true })).toBeNull()
+    expect(chordOf(d, { ...on, agentSelecting: true })).toBe('agent-guard')
+  })
+  it('a plain shell keeps both, and so does everything with the setting off', () => {
+    expect(chordOf(c, { ...on, agentHere: false })).toBeNull()
+    expect(chordOf(d, { ...on, agentHere: false })).toBeNull()
+    expect(chordOf(c, { ...on, agentGuard: false })).toBeNull()
+    expect(chordOf(d, { ...on, agentGuard: false })).toBeNull()
+  })
+  it('matches the physical key on another layout, and leaves Ctrl+Shift+C alone', () => {
+    expect(chordOf({ ...ev('\u0441', { ctrlKey: true }), code: 'KeyC' }, on)).toBe('agent-guard')
+    expect(chordOf(ev('C', { ctrlKey: true, shiftKey: true }), on)).toBeNull()
+  })
+})
 
 describe('the keymap', () => {
   it('every label is the key that chord answers to', () => {
@@ -56,7 +85,8 @@ describe('the keymap', () => {
 
   it('leaves the shell its own keys', () => {
     // Claude Code's Ctrl+B, PowerShell's Ctrl+S, readline's Ctrl+K.
-    for (const k of ['b', 's', 'k', 'c', 'v']) expect(chordOf(ev(k, { ctrlKey: true }), on), k).toBeNull()
+    // (In a plain shell: an agent's Ctrl+C is the keep-open rule's, above.)
+    for (const k of ['b', 's', 'k', 'c', 'v']) expect(chordOf(ev(k, { ctrlKey: true }), { ...on, agentHere: false }), k).toBeNull()
     expect(chordOf(ev('B', { ctrlKey: true, shiftKey: true, altKey: true }), on)).toBeNull()
     expect(chordOf(ev('F1', { shiftKey: true }), on)).toBeNull()
   })

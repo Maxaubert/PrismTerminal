@@ -1,3 +1,4 @@
+import { setAgentGuard, useAgentGuard } from '../../lib/agentGuardPrefs'
 import { useEffect, useState, type JSX } from 'react'
 import { ROW_BUTTON, Segmented, Switch } from '@core/renderer/settings/fields'
 import { SettingRow } from '@core/renderer/settings/layout/SettingRow'
@@ -103,11 +104,20 @@ function OpeningSection(): JSX.Element {
 function KeysSection(): JSX.Element {
   const row = appOpt('agent-keys')
   const on = useAgentKeys()
+  const guardRow = appOpt('agent-guard')
+  const guard = useAgentGuard()
   return (
     <SettingsSection id="keys" title={APP_SECTIONS.keys}>
       <span title={AGENT_CHORDS.map((id) => CHORDS[id].agent!.label).join(', ')} className="contents">
         <SettingRow id="agent-keys" icon={row.icon} label={row.label} sub={row.sub} tap>
           <Switch on={on} onChange={setAgentKeys} label={row.label} />
+        </SettingRow>
+      </span>
+      {/* KEEP AGENT SESSIONS OPEN (owner, 2026-10-16): its tooltip says the
+          one exception, Ctrl+C stopping an agent that works. */}
+      <span title="Ctrl+C and Ctrl+D never reach an agent. Ctrl+C still stops one while it works, and copies a selection." className="contents">
+        <SettingRow id="agent-guard" icon={guardRow.icon} label={guardRow.label} sub={guardRow.sub} tap>
+          <Switch on={guard} onChange={setAgentGuard} label={guardRow.label} />
         </SettingRow>
       </span>
     </SettingsSection>
