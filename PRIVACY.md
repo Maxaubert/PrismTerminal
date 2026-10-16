@@ -36,6 +36,11 @@ Everything else happens **only when you ask for it**:
   own machine (127.0.0.1, or straight into the engine's input for the Parakeet model) and is never
   written to disk.
 - **Links:** clicking a link printed in the terminal opens it in your browser.
+- **Sonara** (the text-to-speech reader for Claude Code, if you run it): when Claude Code's
+  question widget in a tab changes question, Prism Terminal tells the Sonara running on your own
+  PC (127.0.0.1, at the address and with the key in Sonara's own `runtime.json`) the question
+  showing and a random id of that tab, so Sonara can read the question you moved to. Without
+  Sonara nothing is sent. Each tab's shell carries that id as `PRISM_TAB_ID`.
 - **What you run:** the terminal runs your own shell, and whatever you run in it reaches the
   network as you tell it to.
 
