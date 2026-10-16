@@ -48,6 +48,14 @@ ask me."* And: *"why can't this repo be the core?"* It can, and this is it.
    the page's setting to `termPrewarm`; one that passes no folder changes no
    shell's environment. Its strip draws `failedIds` as a third line, and its
    `themedAgentColors` may name `failed` (else `FAILED_RED`).
+   **The catch-up report** (2026-10-16): the turn's own hooks (`UserPromptSubmit`,
+   `Stop`) add `session=<Claude session id>` to the signal (`AgentSignal.session`,
+   a lower-case UUID or nothing), and the plugin ships the `catch-up` skill and
+   its script. A host that keeps a session list calls `setSessionsFile(path)`
+   (`main/terminal.ts`) before its first shell, and every shell then gets
+   `PRISM_SESSIONS_FILE` (an inherited one is always dropped). Prism Terminal's
+   ledger is app code (`src/main/sessionLedger.ts`); a host without one sets
+   no path, and the skill says the report is not available there.
    **The bell and OSC 52** (#177, #176) ride the bridge, not `TermHostConfig`.
    A program's OSC 52 copy needs nothing from a host: `createTermApi` and
    `registerTermIpc` carry `clipboard:term-write` (write-only, 1 MB). The bell

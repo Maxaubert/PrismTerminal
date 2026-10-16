@@ -134,6 +134,18 @@ const SESSION_MARKERS = new Set([
 const PLUGIN_DIRS = 'CLAUDE_CODE_PLUGIN_DIRS'
 
 /**
+ * THE CATCH-UP REPORT'S FILE (2026-10-16): every shell is told where its own
+ * app keeps the tab-to-session list (`PRISM_SESSIONS_FILE`), so the bundled
+ * catch-up script reads the stable copy's, a dev build's or Prism's and never
+ * another's. An inherited value is always dropped; a host that keeps no list
+ * sets none, and its catch-up skill says so.
+ */
+let sessionsFile: string | null = null
+export function setSessionsFile(path: string | null): void {
+  sessionsFile = path
+}
+
+/**
  * What a host that ships the plugin says about a shell: where its plugin is,
  * and whether the setting is on. A host that ships none (Prism, until it does)
  * passes nothing, and the variable is left exactly as inherited.
@@ -168,7 +180,8 @@ export function ptyEnv(
   shellId?: string,
   plugin?: ClaudePluginEnv,
   isOurs?: (d: string) => boolean,
-  tabToken?: string
+  tabToken?: string,
+  sessionsAt?: string | null
 ): Record<string, string> {
   const env: Record<string, string> = {}
   let prompt: string | undefined
@@ -189,6 +202,8 @@ export function ptyEnv(
   // value inherited from a Prism the app was started in is never kept.
   for (const k of Object.keys(env)) if (k.toUpperCase() === 'PRISM_TAB_ID') delete env[k]
   if (tabToken) env.PRISM_TAB_ID = tabToken
+  for (const k of Object.keys(env)) if (k.toUpperCase() === 'PRISM_SESSIONS_FILE') delete env[k]
+  if (sessionsAt) env.PRISM_SESSIONS_FILE = sessionsAt
   // NO FORCE_HYPERLINK (#173 set it; review 2026-10-11 took it out). Claude
   // Code prints OSC 8 links only when told (MEASURED 2.1.296: "label (long
   // url)" without it), but supports-hyperlinks, which it and the vercel CLI
@@ -383,7 +398,7 @@ export async function prewarmShell(
       cols: size.cols,
       rows: size.rows,
       cwd: root,
-      env: ptyEnv(process.env, def.id, plugin, isOurPlugin, tabToken)
+      env: ptyEnv(process.env, def.id, plugin, isOurPlugin, tabToken, sessionsFile)
     })
     const w: WarmShell = {
       pty: p,
@@ -576,7 +591,7 @@ async function spawnPending(
       cols: size.cols,
       rows: size.rows,
       cwd: root,
-      env: { ...ptyEnv(process.env, def.id, plugin, isOurPlugin, tabToken), ...('env' in launch ? launch.env : {}) }
+      env: { ...ptyEnv(process.env, def.id, plugin, isOurPlugin, tabToken, sessionsFile), ...('env' in launch ? launch.env : {}) }
     })
     // Closed while node-pty loaded: the tab is gone, so is this shell.
     if (killedWhilePending.has(id)) {

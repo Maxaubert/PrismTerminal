@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { createTermApi, subscribe } from '@core/preload/api'
 import { createDictationApi } from '@core/preload/dictationApi'
 import { createDiagApi } from '@core/preload/diagApi'
-import type { BadgeImage, EdgeNear, Restored, SavedTabs, UpdateInfo } from '@shared/types'
+import type { BadgeImage, EdgeNear, LedgerTabReport, Restored, SavedTabs, UpdateInfo } from '@shared/types'
 import type { WindowEdges } from '@shared/windowEdges'
 import { APP_CH, E2E_CH } from '@shared/channels'
 
@@ -50,6 +50,19 @@ const api = {
   /** A folder handed over (the Explorer verb, a second launch): open a NEW tab
    *  there, whatever else is open. Only ever arrives after a restore answered. */
   onOpenFolder: (cb: (cwd: string) => void): (() => void) => on(APP_CH.openFolder, cb),
+
+  /* ----- the catch-up report's ledger (2026-10-16) ----- */
+
+  /** The tabs as the report names them: label, folder, agent and its state. */
+  ledgerTabs: (tabs: LedgerTabReport[]): void => ipcRenderer.send(APP_CH.ledgerTabs, tabs),
+  /** The tab in front changed: sent at once, it decides what counts as seen. */
+  ledgerFront: (id: string | null): void => ipcRenderer.send(APP_CH.ledgerFront, id),
+  /** Tab `id` hosts Claude session `session` (its hook said so, or a restore
+   *  resumed it: `hook` false). */
+  ledgerLink: (id: string, session: string, hook: boolean): void =>
+    ipcRenderer.send(APP_CH.ledgerLink, id, session, hook),
+  /** The owner typed into tab `id`: reading it. */
+  ledgerEngage: (id: string): void => ipcRenderer.send(APP_CH.ledgerEngage, id),
 
   /* ----- closing ----- */
 

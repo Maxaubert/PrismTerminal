@@ -87,6 +87,7 @@ import {
   holdsWindowClose
 } from '@core/renderer/lib/agentClose'
 import { agentHooksOn, termFontStack } from '@core/renderer/lib/termLook'
+import { claudeResume, ledgerState, useLedgerReport } from './lib/ledgerReport'
 import { useTaskbarBadge } from './lib/taskbarBadge'
 import { usePaintedChrome } from './lib/paintChrome'
 import { BAR_H, SIDEBAR_SLIDE } from './lib/chromeLayout'
@@ -295,6 +296,8 @@ export default function App(): JSX.Element {
     // A shell restored over an agent conversation launches straight into it:
     // the id rides the spawn, nothing is ever visibly typed.
     if (resume) markResume(id, resume, cwd)
+    const sid = claudeResume(resume)
+    if (sid) window.prism.ledgerLink(id, sid, false)
     rememberRoot(cwd)
     const shellId = savedShellId()
     shellIds.current.set(id, shellId)
@@ -552,6 +555,26 @@ export default function App(): JSX.Element {
 
   // THE TASKBAR BADGE (2026-09-28): how many tabs show a mark (lib/taskbarBadge).
   useTaskbarBadge({ doneIds, questionIds, workingIds, failedIds })
+
+  // THE CATCH-UP REPORT'S LEDGER (2026-10-16, lib/ledgerReport): main keeps
+  // which Claude session is in which tab and when the owner really looked.
+  const allLabels = tabLabels(state.tabs)
+  useLedgerReport(
+    state.tabs.flatMap((t, i) =>
+      t.kind === 'settings'
+        ? []
+        : [
+            {
+              id: t.id,
+              label: allLabels[i] ?? '',
+              cwd: t.cwd,
+              agent: agentIds.has(t.id) ? (agentKinds.current.get(t.id) ?? null) : null,
+              state: ledgerState(t.id, { workingIds, questionIds, doneIds, failedIds })
+            }
+          ]
+    ),
+    activeShell ? activeShell.id : null
+  )
 
   // Whatever a tab interaction did to DOM focus, the shell in front gets the
   // keyboard back: clicking or dragging a tab is not "I left the shell". With

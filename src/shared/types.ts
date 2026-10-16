@@ -53,3 +53,13 @@ export interface BadgeImage {
   scale: number
   width: number
 }
+
+/** A tab as the catch-up report's ledger hears it (2026-10-16): the page's
+ *  pty id, its label and folder, the agent in it and the indicator's state. */
+export interface LedgerTabReport {
+  id: string
+  label: string
+  cwd: string
+  agent: string | null
+  state: 'working' | 'question' | 'done' | 'failed' | null
+}

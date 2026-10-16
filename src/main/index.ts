@@ -3,7 +3,7 @@ import pkg from '../../package.json'
 import { existsSync } from 'fs'
 import { stat } from 'fs/promises'
 import { homedir } from 'os'
-import { dirname, join } from 'path'
+import { basename, dirname, join } from 'path'
 import type { BadgeImage, Restored, SavedTabs, UpdateInfo } from '@shared/types'
 import { claudeSessionsAsync } from '@core/main/agentResume'
 import { registerTermIpc } from '@core/main/ipc'
@@ -20,6 +20,7 @@ import { createEdgeWatch } from './edgeWatch'
 import { DEFAULT_WINDOW_EDGES, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 import { detectShells } from '@core/main/shells'
 import { createTabsStore } from './tabsStore'
+import { startSessions } from './sessionsWire'
 import { killAll, shellsDying, shellsGone } from '@core/main/terminal'
 import { installUpdate, updateCalls, watchForUpdates } from './update'
 import { previewUpdate, runPreviewInstall, wantsPreview } from '@core/main/updatePreview'
@@ -245,6 +246,9 @@ let firstRestore = true
 let pendingFolders: string[] = []
 
 const tabs = createTabsStore(join(app.getPath('userData'), 'tabs.json'))
+/** The catch-up report's ledger (2026-10-16): which Claude session is in which
+ *  tab and when the owner really looked, written to sessions.json. */
+let sessions: { flush(): void } | null = null
 
 /** The newest update offer, remembered so a page that loads after it was made
  *  still hears about it (`update:announce`), and so `update:install` can tell a
@@ -373,6 +377,7 @@ function createWindow(): void {
       return
     }
     tabs.flush()
+    sessions?.flush()
     killAll()
     // Not prevented: the window closes, and window-all-closed ends the app.
   })
@@ -381,6 +386,7 @@ function createWindow(): void {
   // (those just before a hang at shutdown) are written here.
   win.on('session-end', () => {
     tabs.flush()
+    sessions?.flush()
     diag?.log.write('main', 'session-end', {})
     diag?.log.flushSync()
   })
@@ -446,6 +452,19 @@ function createWindow(): void {
  * IPC. Registered once, at ready; every handler reads `mainWindow` live.
  * ------------------------------------------------------------------ */
 function wireIpc(): void {
+  /* ----- the catch-up report's ledger ----- */
+
+  // First: it names the sessions file every shell is given, so even a warm
+  // shell spawned next carries it.
+  sessions = startSessions({
+    file: join(app.getPath('userData'), 'sessions.json'),
+    app: basename(app.getPath('userData')),
+    window: () => mainWindow,
+    power: () => powerMonitor,
+    on: (ch, fn) => ipcMain.on(ch, (_e, ...args: unknown[]) => fn(...args)),
+    channels: { tabs: APP_CH.ledgerTabs, front: APP_CH.ledgerFront, link: APP_CH.ledgerLink, engage: APP_CH.ledgerEngage }
+  })
+
   /* ----- tabs ----- */
 
   // What the strip comes back as. The FIRST answer of the process also carries
@@ -819,6 +838,7 @@ if (!app.requestSingleInstanceLock()) {
     stopDictation()
     killAll()
     tabs.flush()
+    sessions?.flush()
     // Nothing dying: no hold. A hold that ends at once is worse than none:
     // its app.quit() lands inside the quit it cancelled and Electron drops it,
     // so the app stayed up (MEASURED, the opacityAlpha quit). Hence also the

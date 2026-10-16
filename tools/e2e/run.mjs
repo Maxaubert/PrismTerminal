@@ -3024,6 +3024,51 @@ const scenarios = {
   },
 
   /**
+   * THE CATCH-UP REPORT'S LEDGER (2026-10-16; spec:
+   * docs/superpowers/specs/2026-10-16-catch-up-report.md). A shell is told
+   * where its app's session list is; a turn's hook naming its Claude session
+   * links that session to the tab in sessions.json; an id that is not a UUID
+   * links nothing; and a parked window (unfocused, the suite's) is nobody
+   * looking, so nothing is stamped seen. The list outlives the window.
+   */
+  async catchUp(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha, w.beta] })
+    const SID = 'd1d2d3d4-e5e6-4f70-8a9b-0c1d2e3f4a5b'
+    const file = (await app.evaluate(({ app: a }) => a.getPath('userData'))) + '\\sessions.json'
+    const list = () => {
+      try {
+        return JSON.parse(readFileSync(file, 'utf8'))
+      } catch {
+        return null
+      }
+    }
+    try {
+      await until(async () => (await tabLabels(page)).length === 2)
+      await polled(page)
+      await page.locator('[data-tab]').nth(1).click()
+      await typeLine(page, `if ($env:PRISM_SESSIONS_FILE -eq '${file.replace(/'/g, "''")}') { 'SFILE-' + 'OK' } else { 'SFILE-' + 'BAD' }`)
+      ok(!!(await until(async () => (await termText(page)).includes('SFILE-OK'), 8000, 100)), "the shell names its own app's session list")
+      await typeLine(page, `${hookSay('working', ';session=../../etc')}; ${hookSay('done', `;session=${SID}`)}`)
+      const linked = await until(() => {
+        const l = list()
+        return l && l.sessions?.[SID] && l.tabs?.some((t) => t.session === SID) ? l : null
+      }, 10000, 200)
+      ok(!!linked, 'a hook naming its session links it to the tab in sessions.json')
+      ok(!!linked && Object.keys(linked.sessions).length === 1, `an id that is not a UUID links nothing (${linked ? Object.keys(linked.sessions).join(',') : '-'})`)
+      const rec = linked?.sessions?.[SID]
+      ok(!!rec?.lastHookAt && rec.open === true, `with its last hook and open (${JSON.stringify(rec)})`)
+      const t = linked?.tabs?.find((x) => x.session === SID)
+      ok(!!t && typeof t.tab === 'string' && t.tab.length > 10 && t.label !== '', `the tab carries its PRISM_TAB_ID and label (${JSON.stringify(t)})`)
+      await sleep(12000) // past the 10 s look
+      ok(list()?.sessions?.[SID]?.seen == null, 'a parked window is nobody looking: nothing is stamped seen')
+    } finally {
+      await closeApp(app)
+    }
+    ok(!!list()?.sessions?.[SID], 'the list is written out when the window closes')
+  },
+
+  /**
    * NO WINDOWS SYSTEM MENU ON A RIGHT-CLICK (owner, 2026-10-13: "stop chromium
    * right click menus like this from appearing in the terminal"). Windows
    * raises it for a right-click on a drag region; the window refuses it. The
