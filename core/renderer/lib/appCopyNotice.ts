@@ -36,6 +36,8 @@ export interface AppCopyDeps {
 
 export interface AppCopyWatch {
   down(x: number, y: number, clicks: number): void
+  /** The pointer moved with the button down: a drag is read once it is one. */
+  move(x: number, y: number): void
   up(x: number, y: number): void
   /** Ctrl+C reached the program: its copy, while its selection stands. */
   copyKey(): void
@@ -78,10 +80,16 @@ export function watchAppCopies(deps: AppCopyDeps): AppCopyWatch {
       // 2026-10-16): it was read on EVERY press in a mouse-owning program,
       // the whole text across the bridge and Win32 clipboard calls on main's
       // thread, for every plain click. A double or triple click is known to
-      // select here; a drag only at its release, and is read then: the
-      // program copies through a helper process a moment after the release
-      // (why the looks start at 150 ms), so the read still comes first.
+      // select here; a drag is known once the pointer has moved past
+      // DRAG_PX with the button down (`move`), and is read then, well before
+      // the release the program copies on (a read at the release could lose
+      // the race with a fast copy and miss the badge).
       press = deps.programHasMouse() ? { x, y, clicks, before: clicks >= 2 ? deps.read() : null } : null
+    },
+    move: (x, y) => {
+      const p = press
+      if (!p || p.before) return
+      if (Math.hypot(x - p.x, y - p.y) >= DRAG_PX) p.before = deps.read()
     },
     up: (x, y) => {
       const p = press

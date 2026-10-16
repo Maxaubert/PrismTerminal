@@ -138,3 +138,19 @@ describe('the program\'s own selection, copied with Ctrl+C', () => {
     expect(announce).not.toHaveBeenCalled()
   })
 })
+
+// The drag's clipboard is read when it becomes a drag, before the release the
+// program copies on: a copy faster than the read must still raise the badge.
+describe('a drag is read as it starts', () => {
+  it('a copy that lands the instant the button is released is still heard', async () => {
+    const { w, announce, set, tick } = setup()
+    w.down(10, 10, 1)
+    w.move(12, 10)
+    w.move(40, 10)
+    await flush()
+    set('copied at once')
+    w.up(80, 10)
+    await tick()
+    expect(announce).toHaveBeenCalledTimes(1)
+  })
+})

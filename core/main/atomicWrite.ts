@@ -1,5 +1,5 @@
 import { renameSync, writeFileSync } from 'fs'
-import { rename, rm, writeFile } from 'fs/promises'
+import { rm, writeFile } from 'fs/promises'
 
 /**
  * WRITE A FILE ALL AT ONCE OR NOT AT ALL (code review 2026-09-24, #18).
@@ -23,7 +23,7 @@ export function writeAtomic(file: string, data: string): void {
  * fs canary 1 to 7 s), main stalled 3 to 6 s with no IPC around it, and the
  * page with it, while Prism, writing less, barely did. `writeFileSync` on
  * main waits for the disk; here the data goes to the `.tmp` on the
- * threadpool, and so (since the 2026-10-16 perf review) does the rename.
+ * threadpool, and only the rename, which is all-or-nothing, runs on main.
  *
  * `save` is debounce-friendly: one write at a time, and a save made while one
  * is on its way replaces any other waiting, so only the newest is written
@@ -46,16 +46,6 @@ export function createAtomicWriter(file: string): AtomicWriter {
   let landed = 0
   let next: { data: string; n: number } | null = null
   let running: Promise<void> | null = null
-  /**
-   * THE RENAME IS OFF MAIN TOO (perf review 2026-10-16): on a starved volume a
-   * metadata op waits like the write it follows, and `renameSync` held main
-   * for it on every debounced save. A rename on the threadpool can land AFTER
-   * a `saveNow` made while it was on its way, putting the older data over the
-   * close's: so a `saveNow` made then is remembered (`redo`) and written
-   * again, synchronously, the moment the rename has landed.
-   */
-  let renaming = false
-  let redo: string | null = null
   const run = async (): Promise<void> => {
     while (next) {
       const job = next
@@ -63,19 +53,8 @@ export function createAtomicWriter(file: string): AtomicWriter {
       try {
         await writeFile(tmp, job.data)
         if (job.n > landed) {
+          renameSync(tmp, file)
           landed = job.n
-          renaming = true
-          try {
-            await rename(tmp, file)
-          } finally {
-            renaming = false
-            const again = redo
-            redo = null
-            if (again !== null) {
-              writeFileSync(nowTmp, again)
-              renameSync(nowTmp, file)
-            }
-          }
         } else await rm(tmp, { force: true })
       } catch {
         /* a lost save is the one before it staying; the next save tries again */
@@ -95,7 +74,6 @@ export function createAtomicWriter(file: string): AtomicWriter {
       writeFileSync(nowTmp, data)
       renameSync(nowTmp, file)
       landed = n
-      if (renaming) redo = data
     },
     idle: async () => {
       while (running) await running
