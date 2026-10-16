@@ -724,7 +724,8 @@ const scenarios = {
         page.evaluate(() => {
           const l = document.querySelectorAll('[data-tab]')[2].querySelector('[data-attention="done"]')
           if (!l) return null
-          const cs = getComputedStyle(l)
+          // A flowing rainbow is the line's inner layer (perf review 2026-10-16).
+          const cs = getComputedStyle(l.querySelector('.p-mark-flow-x') ?? l)
           return { rainbow: l.hasAttribute('data-rainbow'), image: cs.backgroundImage, colour: cs.backgroundColor, motion: cs.animationName }
         })
       const rb = await fin()
@@ -2101,8 +2102,13 @@ const scenarios = {
       }
       await setPref(page, 'agent-indicator', 'minimal')
       await backToFirst(page)
-      // THE RAINBOW FLOWS: two samples of the finished line's position differ.
-      const pos = () => page.evaluate(() => getComputedStyle(document.querySelectorAll('[data-tab]')[3].querySelector('[data-attention="done"]')).backgroundPositionX)
+      // THE RAINBOW FLOWS: two samples of the finished line's position differ
+      // (its inner layer's transform since the perf review of 2026-10-16).
+      const pos = () =>
+        page.evaluate(() => {
+          const l = document.querySelectorAll('[data-tab]')[3].querySelector('[data-attention="done"]')
+          return l ? getComputedStyle(l.querySelector('.p-mark-flow-x') ?? l).transform : null
+        })
       const p1 = await pos()
       await sleep(400)
       const p2 = await pos()

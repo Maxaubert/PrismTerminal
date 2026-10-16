@@ -92,6 +92,8 @@ const api = {
   onEdgeNear: (cb: (near: EdgeNear) => void): (() => void) =>
     on(APP_CH.windowEdgeNear, cb),
   windowMinimize: (): void => ipcRenderer.send(APP_CH.windowMinimize),
+  /** The window was minimised (true) or restored from it (false). */
+  onMinimized: (cb: (minimized: boolean) => void): (() => void) => on(APP_CH.windowMinimized, cb),
   windowToggleMaximize: (): void => ipcRenderer.send(APP_CH.windowToggleMaximize),
   /** Closes the window, which quits (after the agent question, if one is due). */
   windowClose: (): void => ipcRenderer.send(APP_CH.windowClose),

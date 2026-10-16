@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { EDGE, edgeNear } from './edgeWatch'
+import type { BrowserWindow } from 'electron'
+import { describe, expect, it, vi } from 'vitest'
+import { EDGE, EDGE_FAR_DIP, FAR, createEdgeWatch, edgeNear, type EdgeNear } from './edgeWatch'
 
 const box = { x: 100, y: 200, width: 800, height: 600 }
 
@@ -27,6 +28,54 @@ describe('the pointer at the window edge (#162)', () => {
   it('says where the cursor is against the content', () => {
     const n = edgeNear({ x: 350, y: 203 }, box)
     expect([n.x, n.y]).toEqual([250, 3])
+  })
+})
+
+describe('the watch (perf review 2026-10-16)', () => {
+  const run = (path: Array<{ x: number; y: number }>): EdgeNear[] => {
+    vi.useFakeTimers()
+    try {
+      const win = {
+        isDestroyed: () => false,
+        isMinimized: () => false,
+        isVisible: () => true,
+        getContentBounds: () => box
+      } as unknown as BrowserWindow
+      let at = 0
+      const sent: EdgeNear[] = []
+      const w = createEdgeWatch(
+        () => win,
+        () => path[Math.min(at++, path.length - 1)],
+        (n) => sent.push(n)
+      )
+      w.set(true)
+      vi.advanceTimersByTime(EDGE.everyMs * path.length)
+      w.stop()
+      return sent
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+
+  it('tells the page once when the cursor wanders far from the window, not every move', () => {
+    const away = Array.from({ length: 20 }, (_, i) => ({ x: 2000 + i * 7, y: 900 + i }))
+    const sent = run([{ x: 500, y: 202 }, ...away, { x: 500, y: 203 }])
+    expect(sent).toEqual([edgeNear({ x: 500, y: 202 }, box), FAR, edgeNear({ x: 500, y: 203 }, box)])
+  })
+
+  it('still follows every move near the window, the resize border included', () => {
+    const near = [
+      { x: 100 - EDGE_FAR_DIP + 1, y: 400 },
+      { x: 100 - EDGE.outside, y: 400 },
+      { x: 300, y: 200 - 2 }
+    ]
+    expect(run(near)).toEqual(near.map((p) => edgeNear(p, box)))
+  })
+
+  it('FAR is at no edge and wanted by no reveal zone', () => {
+    expect(FAR.top || FAR.left).toBe(false)
+    expect(FAR.x).toBeLessThan(-EDGE.outside)
+    expect(FAR.y).toBeLessThan(-EDGE.outside)
   })
 })
 

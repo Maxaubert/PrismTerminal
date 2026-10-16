@@ -384,6 +384,11 @@ function createWindow(): void {
     diag?.log.flushSync()
   })
 
+  // The page pauses the tab marks' motion while nobody can see it (perf review
+  // 2026-10-16): the window is never throttled, so it would go on drawing them.
+  win.on('minimize', () => send(APP_CH.windowMinimized, true))
+  win.on('restore', () => send(APP_CH.windowMinimized, false))
+
   win.on('enter-full-screen', () => {
     send(APP_CH.windowFullscreen, true)
     material.settled()
