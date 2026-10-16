@@ -36,6 +36,7 @@ export const APP_CH = {
   windowFullscreenToggle: 'window:fullscreen-toggle',
   windowFullscreen: 'window:fullscreen',
   windowMinimize: 'window:minimize',
+  windowMinimized: 'window:minimized',
   windowToggleMaximize: 'window:toggle-maximize'
 } as const
 
