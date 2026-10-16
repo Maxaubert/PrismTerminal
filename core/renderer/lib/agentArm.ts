@@ -18,6 +18,10 @@ import { titleAgent, titleArmsAgent } from './agentTitle'
  *   would ever say it left. It asks the poll for its answer too: the
  *   tab's agent mark is the poll's to take back, and a poll that never saw
  *   the agent has no news to send unless asked (Prism e2e, 2026-10-16).
+ *   MEASURED (Claude Code 2.1.301, 2026-10-16): quitting, Claude writes an
+ *   empty title and ConPTY then restores the shell's, so a real exit always
+ *   ends the title. The prompt does not ask: the e2e's stand-in agents are
+ *   a pwsh prompt, and a real agent's prompt comes after its title ended.
  * - The POLL says when an agent arrives or leaves (#73); a wrapper ('other')
  *   does not undo the title's claude or codex. Its "no agent" takes back only
  *   what it saw itself.
@@ -94,8 +98,5 @@ export function armOnPrompt(s: AgentArm): ArmStep {
   // Gone even with nothing armed: a program that died without its ?2031l
   // left reports on, and a push would reach the shell (PSReadLine reads the
   // ESC as RevertLine).
-  // An agent only the title vouched for asks too: the poll never saw it,
-  // so its "no agent" is unsent news, and the tab would keep the agent's
-  // mark (Prism e2e, 2026-10-16: a claude that lived three seconds).
-  return step(BARE, true, s.polled || s.titled)
+  return step(BARE, true, s.polled)
 }

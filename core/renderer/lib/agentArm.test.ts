@@ -81,7 +81,9 @@ describe('agentArm', () => {
   // (#238) the poll had not seen it, so its "no agent" was no news and was
   // never sent. The title's agent leaving asks the poll for its answer anyway.
   it("asks the poll again when the title stops naming an agent only the title armed", () => {
-    expect(armOnTitle(titled(IDLE), 'PS C:\\src').recheck).toBe(true)
+    // Claude's own exit, MEASURED: an empty title, then the shell's.
+    expect(armOnTitle(titled(IDLE), '').recheck).toBe(true)
+    expect(armOnTitle(titled(IDLE), 'C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe').recheck).toBe(true)
     expect(armOnTitle(titled(IDLE), '◐ Claude Code').recheck).toBe(false)
   })
 
@@ -135,11 +137,7 @@ describe('agentArm', () => {
 
   it('does not ask the poll again on a prompt it has nothing to correct', () => {
     expect(armOnPrompt(armAtStart(null)).recheck).toBe(false)
-  })
-
-  // The same e2e: the prompt came back under a title the poll never saw.
-  it('asks the poll again on a prompt after an agent only the title armed', () => {
-    expect(armOnPrompt(titled(IDLE)).recheck).toBe(true)
+    expect(armOnPrompt(titled(IDLE)).recheck).toBe(false)
   })
 
   it('is armed again when the poll answers after the prompt', () => {
