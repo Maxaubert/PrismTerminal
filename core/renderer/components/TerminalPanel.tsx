@@ -50,7 +50,7 @@ import {
 } from '../lib/termSelectionEdit'
 import { attachLinkPaint, type LinkPainter } from '../lib/termLinkPaint'
 import { termFitHeld, whenTermFitReleased } from '../lib/fitHold'
-import { findPath, linkRanges, onPathsFound, pathCandidates, takeAsked, type PathHit } from '../lib/termPathLinks'
+import { findPath, forgetPathOwner, linkRanges, onPathsFound, pathCandidates, takeAsked, type PathHit } from '../lib/termPathLinks'
 import {
   initialCaretHold,
   onCaretKey,
@@ -556,6 +556,8 @@ export function disposeTermSession(id: string): void {
   s.search.dispose()
   s.term.dispose()
   s.el.remove()
+  // After the painter is gone, so no last paint teaches the tab again.
+  forgetPathOwner(id)
 }
 
 /**

@@ -114,6 +114,22 @@ describe('the program\'s own selection, copied with Ctrl+C', () => {
     expect(announce).toHaveBeenCalledTimes(1)
   })
 
+  // Perf review 2026-10-16: every press read the whole clipboard through main.
+  it('a plain click reads no clipboard; a drag reads it from its release on', async () => {
+    const read = vi.fn(async () => 'same')
+    const w = watchAppCopies({ read, programHasMouse: () => true, announce: vi.fn(), wait: async () => {} })
+    for (let i = 0; i < 5; i += 1) {
+      w.down(10, 10, 1)
+      w.up(11, 10)
+    }
+    await flush()
+    expect(read).not.toHaveBeenCalled()
+    w.down(10, 10, 1)
+    expect(read).not.toHaveBeenCalled()
+    w.up(80, 10)
+    expect(read).toHaveBeenCalledTimes(1)
+  })
+
   it('a Ctrl+C with no selection of its own looks at nothing', async () => {
     const { w, announce, set, tick } = setup()
     w.copyKey()
