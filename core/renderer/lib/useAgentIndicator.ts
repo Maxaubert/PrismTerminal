@@ -224,6 +224,20 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
     settleTimers.current.delete(id)
   }, [])
 
+  /** Background work is re-read until the screen lets it go: one timer per
+   *  session, armed again after every read that found it still there (a read
+   *  that changes nothing still needs the next one). */
+  const armBgCheck = useCallback((id: string): void => {
+    if (settleTimers.current.has(id)) return
+    settleTimers.current.set(
+      id,
+      window.setTimeout(() => {
+        settleTimers.current.delete(id)
+        applyHookRef.current(id, { state: 'bg-check' })
+      }, BACKGROUND_CHECK_MS)
+    )
+  }, [])
+
   /** One hook signal, or a title, for a hooked session: the rules are
    *  `agentHookState`'s; this only carries them out. A mark is raised only on
    *  a tab nobody is looking at, as every mark is. */
@@ -246,6 +260,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
       ...(bgUp ? { backgroundOnScreen: true } : {})
     })
     if (!o) {
+      if (prev?.phase === 'background') armBgCheck(id)
       if (boxUp && ev.state === 'working-title' && !titleRecheck.current.has(id)) {
         titleRecheck.current.set(
           id,
@@ -267,16 +282,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
           applyHookRef.current(id, { state: 'settle' })
         }, STOP_SETTLE_MS)
       )
-    // Background work is re-read until the screen lets it go (the same
-    // per-session timer: one wait at a time).
-    if (o.phase === 'background')
-      settleTimers.current.set(
-        id,
-        window.setTimeout(() => {
-          settleTimers.current.delete(id)
-          applyHookRef.current(id, { state: 'bg-check' })
-        }, BACKGROUND_CHECK_MS)
-      )
+    if (o.phase === 'background') armBgCheck(id)
     // The rule that fired, for the diagnostics log (#152).
     const said =
       ev.state === 'bg-check'
@@ -313,7 +319,7 @@ export function useAgentIndicator(activeId: string | null): AgentIndicator {
       if (prev.has(id) === o.working) return prev
       return o.working ? new Set(prev).add(id) : without(prev, id)
     })
-  }, [stopAnswerCheck, stopTitleRecheck, stopSettle])
+  }, [stopAnswerCheck, stopTitleRecheck, stopSettle, armBgCheck])
   useEffect(() => {
     applyHookRef.current = applyHook
   }, [applyHook])
