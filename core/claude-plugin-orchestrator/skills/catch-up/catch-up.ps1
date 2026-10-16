@@ -150,7 +150,7 @@ if ($List) {
   foreach ($t in @($data.tabs)) {
     $f = if ($t.session) { Find-Transcript ([string]$t.session) } else { $null }
     $role = if ($t.orchestrator) { ' | ORCHESTRATOR (this is you if your PRISM_TAB_ID matches)' } else { '' }
-    Out-Line ("- $($t.label) | folder: $($t.cwd) | now: " + $(if ($t.state) { $t.state } else { 'idle' }) + " | agent: " + $(if ($t.agent) { $t.agent } else { 'none' }) + $role)
+    Out-Line ("- $($t.label) | folder: $($t.cwd) | now: " + $(if ($t.state) { $t.state } else { 'idle' }) + " | agent: " + $(if ($t.agent) { $t.agent } else { 'none' }) + " | tab: $($t.tab)" + $role)
     if ($t.session) { Out-Line "  session $($t.session)$(if ($f) { " | transcript: $f" } else { ' | transcript not found' })" }
   }
   Out-Line "Your own tab: PRISM_TAB_ID=$($env:PRISM_TAB_ID)"

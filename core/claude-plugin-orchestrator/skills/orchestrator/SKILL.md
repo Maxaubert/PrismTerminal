@@ -38,8 +38,11 @@ whether it is the orchestrator (you), and its session's transcript.
   orchestrator. Then:
 
   ```
-  powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${CLAUDE_SKILL_DIR}/send.ps1" -To "<tab label>" -Text "<message>"
+  powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${CLAUDE_SKILL_DIR}/send.ps1" -To "<tab id>" -Text "<message>"
   ```
+
+  `-To` takes the tab's id from `-List` (`tab: ...`): always use it, never a name, so a message
+  cannot land in a tab whose name or folder happens to match.
 
   For a long message, or one with quotes, write it to a file first and pass `-TextFile <path>`.
   It prints `SENT to <label>` or `NOT SENT: <why>`; tell the owner in one line which it was.

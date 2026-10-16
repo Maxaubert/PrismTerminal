@@ -52,9 +52,14 @@ export function decideSend(req: SendRequest, tabs: readonly SendTab[], enabled: 
   if (!to) return { ok: false, reason: 'no tab named' }
   const others = tabs.filter((t) => t !== lead)
   const low = to.toLowerCase()
-  const exact = others.filter((t) => t.tab === to || t.session === to || t.label.toLowerCase() === low)
+  // A tab's own ids first (what -List prints, and the skill sends); then its
+  // exact label; a word of a label or folder only when nothing else matched,
+  // and never when it names more than one (security review, 2026-10-16: a
+  // folder named after another tab must not take its messages).
+  const ids = others.filter((t) => t.tab === to || t.session === to)
+  const exact = others.filter((t) => t.label.toLowerCase() === low)
   const loose = others.filter((t) => t.label.toLowerCase().includes(low) || t.cwd.toLowerCase().includes(low))
-  const hits = exact.length ? exact : loose
+  const hits = ids.length ? ids : exact.length ? exact : loose
   if (hits.length === 0) return { ok: false, reason: `no tab matches "${to}"` }
   if (hits.length > 1) return { ok: false, reason: `"${to}" matches ${hits.map((t) => t.label).join(', ')}: name one` }
   const target = hits[0]

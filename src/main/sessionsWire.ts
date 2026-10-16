@@ -3,6 +3,7 @@ import { readFile, readdir, rename, rm, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import { createAtomicWriter } from '@core/main/atomicWrite'
 import { setSessionsFile, tabToken, writeTerm } from '@core/main/terminal'
+import { agentUnder } from '@core/main/agentPoll'
 import { createLedger, type LedgerTab, type Presence } from './sessionLedger'
 import { decideSend, pasteOf, SEND_ENTER_MS } from './orchestratorSend'
 
@@ -210,7 +211,12 @@ export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } 
           to: typeof req.to === 'string' ? req.to : '',
           text: typeof req.text === 'string' ? req.text : ''
         }
-        const said = decideSend(asked, ledger.live(), enabled)
+        let said = decideSend(asked, ledger.live(), enabled)
+        // The tab's Claude mark is only what the tab's own output said; a
+        // program printing the same signal would earn it. So the process tree
+        // is asked, at the moment of typing (security review, 2026-10-16).
+        if (said.ok && (await agentUnder(said.target.id)) !== 'claude')
+          said = { ok: false, reason: `no Claude is running in ${said.target.label} (checked with Windows)` }
         if (said.ok) {
           const id = said.target.id
           writeTerm(id, pasteOf(asked.text))

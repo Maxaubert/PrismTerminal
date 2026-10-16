@@ -3127,8 +3127,22 @@ const scenarios = {
       const msg = dir + '\\send-message.txt'
       writeFileSync(msg, "Write-Output ('SENT-' + 'MARK-42')")
       const SEND = resolve(process.cwd(), 'core/claude-plugin-orchestrator/skills/orchestrator/send.ps1')
+      // A shell that only SAYS it is Claude (its hook signal) is refused:
+      // the app asks Windows' process list before it types (security review).
       await typeLine(page, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${SEND}' -To alpha -TextFile '${msg}'`)
-      ok(!!(await until(async () => (await shown()).includes('SENT to alpha'), 12000, 100)), 'the orchestrator sends to a tab that is not in front')
+      ok(!!(await until(async () => (await shown()).includes('checked with Windows'), 15000, 100)), 'a tab that only claims to be Claude is refused')
+      // A stand-in Claude in that tab's process tree: a copy of PowerShell
+      // named claude.exe (what the detector reads), reading the tab's input.
+      const fake = dir + '\\stand-in\\claude.exe'
+      mkdirSync(dir + '\\stand-in', { recursive: true })
+      copyFileSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', fake)
+      await shells().nth(1).click()
+      await page.locator('.xterm').last().click({ force: true })
+      await typeLine(page, `& '${fake}' -NoLogo -NoProfile`)
+      await sleep(2500)
+      await shells().nth(0).click()
+      await typeLine(page, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${SEND}' -To alpha -TextFile '${msg}'`)
+      ok(!!(await until(async () => (await shown()).includes('SENT to alpha'), 15000, 100)), 'the orchestrator sends to a tab that is not in front')
       await typeLine(page, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${SEND}' -To nosuchtab -Text 'x'`)
       ok(!!(await until(async () => (await shown()).includes('NOT SENT: no tab matches'), 12000, 100)), 'and says so when no tab matches')
       await shells().nth(1).click()

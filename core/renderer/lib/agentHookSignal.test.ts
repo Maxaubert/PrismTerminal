@@ -138,7 +138,8 @@ describe('the Claude Code plugin', () => {
       const want = second === '+sid' ? { state, session: SID } : second ? { state, kind: second } : { state }
       expect(parseAgentSignal(seq.slice(open.length, -1))).toEqual(want)
     }
-  })
+    // A cmd.exe per hook: seconds on a busy PC (MEASURED 5.8 s in a full run).
+  }, 60_000)
 
   // The id is Claude's, but read with care (review 2026-10-16): cmd expands
   // %VAR% before it parses, so a ) & | < > ^ or quote in the value would have
@@ -155,5 +156,5 @@ describe('the Claude Code plugin', () => {
       const seq = JSON.parse(out.trim()).terminalSequence as string
       expect(parseAgentSignal(seq.slice('\u001b]777;'.length, -1)), v).toEqual({ state: 'done' })
     }
-  })
+  }, 60_000)
 })

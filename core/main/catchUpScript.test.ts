@@ -2,7 +2,7 @@ import { execFileSync } from 'child_process'
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 /**
  * The catch-up digest (2026-10-16), run as the skill runs it (Windows
@@ -62,6 +62,8 @@ function world() {
 const rec = (over: object = {}): object => ({ label: 'Wind', cwd: 'C:\\src\\wind', firstKnownAt: t(0), lastHookAt: t(50), open: true, seen: null, ...over })
 
 describe.runIf(process.platform === 'win32')('the catch-up digest', () => {
+  // Each case starts Windows PowerShell several times: seconds on a busy PC.
+  vi.setConfig({ testTimeout: 60_000 })
   it('reports prompts, the answer of each turn and the facts, then nothing twice', () => {
     const w = world()
     w.sessions({ [W]: rec() }, [{ tab: 'x', label: 'Wind', cwd: 'C:\\src\\wind', agent: 'claude', state: 'done', front: false, session: W }])
