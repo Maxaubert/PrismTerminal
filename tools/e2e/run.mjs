@@ -3646,6 +3646,17 @@ const scenarios = {
       const early = await look()
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/launch-skeleton.png') }).catch(() => {})
       ok(early.skeleton, 'the tab in front wears the skeleton while its conversation comes back')
+      // Nothing of the terminal on top of it (owner, 2026-10-17: thin blue
+      // lines over the skeleton). They were the link decorations
+      // (termLinkPaint, xterm's z-index 6) of the paths Claude prints as it
+      // resumes, above the skeleton's z-index 1: the terminal's region must be
+      // a stacking context of its own, so no layer of xterm's leaves it.
+      const covered = await page.evaluate(() => {
+        const sk = document.querySelector('[data-resume-skeleton="shown"]')
+        const region = sk?.parentElement?.querySelector('[data-term-region]')
+        return region ? getComputedStyle(region).isolation : null
+      })
+      ok(covered === 'isolate', `no layer of the terminal can paint over the skeleton (isolation: ${covered})`)
       ok(early.rings === 3, `every tab shows the loading ring (${early.rings})`)
       ok(early.ringsAtEnd === 3, `each at the tab's end, where the Ring goes (${early.ringsAtEnd})`)
       let bare = false
