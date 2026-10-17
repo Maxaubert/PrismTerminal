@@ -45,7 +45,6 @@ export interface LiveView {
 }
 
 export interface AnywhereDeps {
-  script: string
   preload: string
   loadPage: (w: BrowserWindow) => void
   mainWindow: () => BrowserWindow | null
@@ -340,7 +339,7 @@ export function startDictateAnywhere(d: AnywhereDeps): {
       return
     }
     if (d.e2e) return
-    helper ??= startKeyHelper(d.script, onLine)
+    helper ??= startKeyHelper(onLine)
     helper.send(`keys ${keys.map((k) => k.toString(16).toUpperCase()).join(' ')}`)
     helper.send(`mask ${masksStart(next.hotkey) ? 1 : 0}`)
   }

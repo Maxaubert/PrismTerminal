@@ -703,7 +703,7 @@ describe('the resident Parakeet host', () => {
         allChildren.push(child)
         return child
       }) as typeof spawn,
-      command: (exePath, args) => ({ file: process.execPath, args: [PARAKEET_FIXTURE, ...args] })
+      command: (_exePath, args) => ({ file: process.execPath, args: [PARAKEET_FIXTURE, ...args] })
     })
     engines.push(eng)
     expect((await eng.transcribe(req({ modelId: 'pk' }))).ok).toBe(true)

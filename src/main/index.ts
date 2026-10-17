@@ -18,6 +18,7 @@ import { planRestore } from './planRestore'
 import { foldersFromArgv } from './argv'
 import { acrylicOk, createMaterial } from './material'
 import { stopDwmHelper, warmDwmHelper } from './dwmHelper'
+import { configureAppHelper } from './appHelper'
 import { createWindowEdge } from './windowEdge'
 import { createEdgeWatch } from './edgeWatch'
 import { DEFAULT_WINDOW_EDGES, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
@@ -367,6 +368,12 @@ function createWindow(): void {
     material.settled() // a window made after the prefs were said still wears them
     // The helper compiles its one P/Invoke now, so the first edge change is a
     // pipe write and not a two-second wait.
+    // The app's one helper (DWM attributes, the dictation key's hook), its
+    // compiled code cached in the profile so a start pays no compiler.
+    configureAppHelper(
+      app.isPackaged ? join(process.resourcesPath, 'app-helper', 'appHelper.ps1') : join(__dirname, '../../src/main/hook/appHelper.ps1'),
+      join(app.getPath('userData'), 'helper-cache')
+    )
     if (!E2E) warmDwmHelper()
     edge.apply()
   })
@@ -490,7 +497,6 @@ function wireIpc(): void {
   // real keyboard hook never runs (it would read the owner's keys and mask
   // their Start menu); the suite feeds helper lines through a seam instead.
   const anywhere = startDictateAnywhere({
-    script: app.isPackaged ? join(process.resourcesPath, 'global-key', 'globalKeyHook.ps1') : join(__dirname, '../../src/main/hook/globalKeyHook.ps1'),
     preload: join(__dirname, '../preload/overlay.js'),
     loadPage: (w) => {
       const devUrl = process.env['ELECTRON_RENDERER_URL']

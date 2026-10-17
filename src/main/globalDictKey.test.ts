@@ -1,8 +1,9 @@
 import { execFileSync } from 'child_process'
 import { join } from 'path'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { DEFAULT_HOTKEY, type Hotkey } from '@core/renderer/lib/dictationKey'
-import { createKeyFeed, keysFor, masksStart, parseHelperLine, startKeyHelper, type HelperLine } from './globalDictKey'
+import { createKeyFeed, keysFor, masksStart, parseHelperLine, startKeyHelper, type HelperLine, type KeyHelper } from './globalDictKey'
+import { appHelperSend, configureAppHelper, stopAppHelper } from './appHelper'
 
 /**
  * The dictation key from any app (owner, 2026-10-16): the helper's lines turned
@@ -66,19 +67,23 @@ describe('createKeyFeed', () => {
 })
 
 // The real helper, on a key no application uses (F24): what it reports, how
-// fast. Nothing is typed anywhere.
+// fast. Nothing is typed anywhere. Since 2026-10-17 it is the app's one helper
+// (it sets the DWM attributes too), and the hook is turned on and off in it.
 describe.runIf(process.platform === 'win32')('the hook helper', () => {
-  it('reports the binding key down and up, and stops when told', async () => {
-    const lines: HelperLine[] = []
-    const ready = new Promise<void>((res) => {
-      const h = startKeyHelper(join(__dirname, 'hook', 'globalKeyHook.ps1'), (l) => {
+  afterAll(() => stopAppHelper())
+  const started = (lines: HelperLine[]): Promise<KeyHelper> =>
+    new Promise((res) => {
+      const h: KeyHelper = startKeyHelper((l) => {
         lines.push(l)
-        if (l.kind === 'ready') res()
+        if (l.kind === 'ready') res(h)
       })
-      ;(globalThis as { __helper?: typeof h }).__helper = h
     })
-    await ready
-    const h = (globalThis as { __helper?: { send(l: string): void; stop(): void } }).__helper!
+  it('reports the binding key down and up, and stops when told', async () => {
+    configureAppHelper(join(__dirname, 'hook', 'appHelper.ps1'), null)
+    const lines: HelperLine[] = []
+    const h = await started(lines)
+    // A DWM line on a window that does not exist: answered, nothing breaks.
+    appHelperSend('dwm 0 34 -1')
     h.send('keys 87')
     await new Promise((r) => setTimeout(r, 200))
     execFileSync('powershell.exe', ['-NoProfile', '-Command', TAP_F24], { windowsHide: true })
@@ -90,6 +95,13 @@ describe.runIf(process.platform === 'win32')('the hook helper', () => {
       { kind: 'key', type: 'down', code: 'F24' },
       { kind: 'key', type: 'up', code: 'F24' }
     ])
+  }, 30_000)
+
+  it('hooks again in the same helper after it was turned off (the lock was let go)', async () => {
+    const lines: HelperLine[] = []
+    const h = await started(lines)
+    expect(lines).toEqual([{ kind: 'ready' }])
+    h.stop()
   }, 30_000)
 })
 

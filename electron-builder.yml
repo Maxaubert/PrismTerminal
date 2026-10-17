@@ -47,9 +47,10 @@ extraResources:
   # Settings > Agents > Orchestrator is on.
   - from: core/claude-plugin-orchestrator
     to: claude-plugin-orchestrator
-  # The dictation key from any app (2026-10-16): the keyboard hook helper.
+  # The app's one helper (2026-10-17): the DWM attributes and the dictation
+  # key's keyboard hook, in one PowerShell.
   - from: src/main/hook
-    to: global-key
+    to: app-helper
   # The resident Parakeet host (2026-10-17): the model kept loaded.
   - from: core/dictation-host
     to: dictation-host

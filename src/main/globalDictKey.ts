@@ -1,11 +1,10 @@
-import { spawn, type ChildProcess } from 'child_process'
 import { initialKeyState, reduceKey, type DictMode, type Hotkey, type KeyAction, type KeyEvt, type KeyState } from '@core/renderer/lib/dictationKey'
-import { SYS } from '@core/main/sysTools'
+import { appHelperSend, onAppHelperExit, onAppHelperLine } from './appHelper'
 
 /**
  * THE DICTATION KEY FROM ANY APP (owner, 2026-10-16; spec:
- * docs/superpowers/specs/2026-10-16-dictate-anywhere.md). The hook helper
- * (`hook/globalKeyHook.ps1`) reports the binding's keys; this turns them into
+ * docs/superpowers/specs/2026-10-16-dictate-anywhere.md). The hook
+ * (`hook/appHelper.ps1`) reports the binding's keys; this turns them into
  * the same key events the page's reducer reads (`reduceKey`, core), so the
  * key behaves exactly as it does in the app: hold or toggle, the solo rules
  * that keep Ctrl+Win+Left a desktop switch. Pure parts first, tested.
@@ -123,61 +122,51 @@ export function createKeyFeed(cfg: () => { hotkey: Hotkey; mode: DictMode }): {
   }
 }
 
-/** The running helper: a constant command line (rule: one per kind, #180). */
+/** The hook, in the app's one helper (`appHelper.ts`): turned on and off there. */
 export interface KeyHelper {
   send(line: string): void
   stop(): void
 }
 
-export function startKeyHelper(script: string, onLine: (l: HelperLine) => void): KeyHelper {
-  let stopping = false
-  let child: ChildProcess | null = spawn(SYS.powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script], {
-    windowsHide: true,
-    stdio: ['pipe', 'pipe', 'ignore']
+/**
+ * The dictation key's hook, in the app's one helper (2026-10-17; it had its
+ * own PowerShell). `hook 1` installs it; what was sent for it (the keys, the
+ * mask) is kept, so a helper that died and came back is armed the same again.
+ */
+export function startKeyHelper(onLine: (l: HelperLine) => void): KeyHelper {
+  let stopped = false
+  const sent = new Map<string, string>()
+  const offLine = onAppHelperLine((raw) => {
+    const l = parseHelperLine(raw)
+    if (l && !stopped) onLine(l)
   })
-  let buf = ''
-  child.stdout?.on('data', (d: Buffer) => {
-    buf += d.toString()
-    let i
-    while ((i = buf.indexOf('\n')) >= 0) {
-      const l = parseHelperLine(buf.slice(0, i))
-      buf = buf.slice(i + 1)
-      if (l) onLine(l)
-    }
+  const arm = (): void => {
+    appHelperSend('hook 1')
+    for (const line of sent.values()) appHelperSend(line)
+  }
+  const offExit = onAppHelperExit(() => {
+    if (stopped) return
+    // Gone without being told: whatever it held (the key, the service) it no
+    // longer does. Started and armed again a moment later.
+    onLine({ kind: 'failed' })
+    setTimeout(() => {
+      if (!stopped) arm()
+    }, 1000).unref()
   })
-  child.on('exit', () => {
-    child = null
-    // Gone without being told: whatever it held (the key, the service) it no longer does.
-    if (!stopping) onLine({ kind: 'failed' })
-  })
-  child.on('error', () => {
-    child = null
-  })
+  arm()
   return {
     send: (line) => {
-      try {
-        child?.stdin?.write(line + '\n')
-      } catch {
-        /* gone: the next start brings a new one */
-      }
+      const verb = line.split(' ')[0]
+      if (verb === 'keys' || verb === 'mask') sent.set(verb, line)
+      appHelperSend(line)
     },
     stop: () => {
-      stopping = true
-      try {
-        child?.stdin?.write('quit\n')
-        child?.stdin?.end()
-      } catch {
-        /* already gone */
-      }
-      const c = child
-      child = null
-      setTimeout(() => {
-        try {
-          c?.kill()
-        } catch {
-          /* gone */
-        }
-      }, 1000)
+      if (stopped) return
+      stopped = true
+      offLine()
+      offExit()
+      appHelperSend('pick 0')
+      appHelperSend('hook 0')
     }
   }
 }

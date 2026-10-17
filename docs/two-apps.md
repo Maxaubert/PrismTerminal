@@ -548,7 +548,7 @@ so an update never silently changes what an existing user sees; the bridge to ma
   chord of modifiers follows the solo rules (either key first; Ctrl+Win+Left is no dictation), a saved key is kept;
   `dictationOutside` / `setDictationRoute` let a host start a recording that belongs to no tab and take what was
   heard; `DictationPage` takes `after` rows. In Prism Terminal's app code only: the keyboard hook helper
-  (`src/main/hook/globalKeyHook.ps1`, `globalDictKey.ts`), the widget window (`dictateAnywhere.ts`,
+  (`src/main/hook/appHelper.ps1`, the app's one helper since 2026-10-17, which also sets the DWM attributes; `globalDictKey.ts`), the widget window (`dictateAnywhere.ts`,
   `src/renderer/overlay.html`), the routing and the Settings row. Prism keeps dictating in its own window only.
   **ONE DICTATION** (owner, 2026-10-17: "they should be the same thing ... one dictation engine for both";
   spec `docs/superpowers/specs/2026-10-17-one-dictation.md`): in Prism Terminal the hook reads the key with the app

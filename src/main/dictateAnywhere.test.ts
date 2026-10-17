@@ -62,7 +62,7 @@ describe('the key with a Prism Terminal in front', () => {
     const toPage = vi.fn()
     const handlers: Record<string, (...a: unknown[]) => void> = {}
     const a = startDictateAnywhere({
-      script: '', preload: '', loadPage: () => {}, mainWindow: () => null, sessions: () => null, toPage, selfPid: 1,
+      preload: '', loadPage: () => {}, mainWindow: () => null, sessions: () => null, toPage, selfPid: 1,
       onIpc: (ch, fn) => {
         handlers[ch] = fn
       },

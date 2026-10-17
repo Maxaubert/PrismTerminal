@@ -1,3 +1,10 @@
+# THE APP'S ONE HELPER (2026-10-17, owner: merge the helpers, "it's mainly
+# startup performance"): the window's DWM attributes (what dwmHelper's own
+# PowerShell did) and the dictation key's hook, in ONE Windows PowerShell
+# started with the app. It answers `dwm` at once; the hook runs on its own
+# thread only between `hook 1` and `hook 0`. Its compiled C# is cached by hash
+# in the folder named by the first argument, so a start pays no compiler.
+#
 # THE DICTATION KEY FROM ANY APP (Prism Terminal, 2026-10-16; owner: "you can
 # start the dictation while not having the app in focus"). A low-level keyboard
 # hook (WH_KEYBOARD_LL) in a long-lived Windows PowerShell, like the DWM helper:
@@ -9,7 +16,9 @@
 # "another key" (never which) while one of them is down, and, only while the
 # session picker is open, the digits 1-9 and Esc. Nothing is written anywhere.
 #
-# stdin (from main):  keys <hex vk> ...   the binding's keys (either side of a modifier)
+# stdin (from main):  dwm <hwnd> <attribute> <value>   DwmSetWindowAttribute (33 corners, 34 border)
+#                     hook 1|0            install / remove the dictation key's hook
+#                     keys <hex vk> ...   the binding's keys (either side of a modifier)
 #                     mask 1|0            mask the Start menu on a Win up after Ctrl+Win
 #                     pick 1|0            report and SWALLOW 1-9 and Esc (the picker is open)
 #                     quit
@@ -29,15 +38,18 @@
 #                     d <hex vk> [f <pid>] / u <hex vk>   a binding key down (f: a Prism Terminal in front) / up
 #                     o                          another key went down while one is held
 #                     p <1-9> / x                a digit / Esc, while picking
+param([string]$cache = '')
 $src = @'
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
-public static class PTKey {
+public static class PTHelper {
   delegate IntPtr Proc(int n, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] static extern IntPtr SetWindowsHookEx(int id, Proc fn, IntPtr mod, uint tid);
   [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr h, int n, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr h);
+  [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int a, ref int v, int s);
   [DllImport("user32.dll")] static extern int GetMessage(out MSG m, IntPtr h, uint a, uint b);
   [DllImport("user32.dll")] static extern bool PostThreadMessage(uint tid, uint msg, IntPtr w, IntPtr l);
   [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
@@ -51,7 +63,8 @@ public static class PTKey {
   [StructLayout(LayoutKind.Sequential)] public struct MSG { public IntPtr h; public uint m; public IntPtr w; public IntPtr l; public uint t; public int x; public int y; }
   [StructLayout(LayoutKind.Sequential)] struct KBD { public ushort vk; public ushort scan; public uint flags; public uint time; public IntPtr extra; }
   [StructLayout(LayoutKind.Explicit, Size = 40)] struct INPUT { [FieldOffset(0)] public uint type; [FieldOffset(8)] public KBD k; }
-  static Proc keep; static IntPtr hook; static uint thread;
+  static Proc keep; static IntPtr hook;
+  static Thread hookThread; static volatile uint hookTid; static volatile bool hookWanted;
   static volatile HashSet<int> keys = new HashSet<int>();
   static volatile bool mask, pick;
   static readonly HashSet<int> down = new HashSet<int>();
@@ -120,7 +133,14 @@ public static class PTKey {
     string line;
     while ((line = Console.In.ReadLine()) != null) {
       var p = line.Trim().Split(' ');
-      if (p[0] == "keys") {
+      if (p[0] == "dwm" && p.Length >= 4) {
+        try {
+          IntPtr h = new IntPtr(long.Parse(p[1])); int a = int.Parse(p[2]); int v = int.Parse(p[3]);
+          DwmSetWindowAttribute(h, a, ref v, 4);
+        } catch { }
+      } else if (p[0] == "hook") {
+        if (p.Length > 1 && p[1] == "1") HookOn(); else HookOff();
+      } else if (p[0] == "keys") {
         var k = new HashSet<int>();
         for (int i = 1; i < p.Length; i++) { int v; if (int.TryParse(p[i], System.Globalization.NumberStyles.HexNumber, null, out v)) k.Add(v); }
         keys = k;
@@ -129,8 +149,44 @@ public static class PTKey {
       else if (p[0] == "quit") break;
     }
     // stdin closed or quit: the app is gone, and so is the hook (and the
-    // mutex, which the next copy's helper is waiting on).
+    // lock, which the next copy's helper is waiting on).
+    HookOff();
     Environment.Exit(0);
+  }
+  static void HookOn() {
+    if (hookThread != null) return;
+    hookWanted = true;
+    hookThread = new Thread(HookLoop); hookThread.IsBackground = true; hookThread.Start();
+  }
+  static void HookOff() {
+    hookWanted = false;
+    var t = hookThread;
+    if (t == null) return;
+    // Its queue may not exist yet the first moment: asked again until it ends.
+    for (int i = 0; i < 40 && t.IsAlive; i++) {
+      uint tid = hookTid;
+      if (tid != 0) PostThreadMessage(tid, 0x12, IntPtr.Zero, IntPtr.Zero);
+      t.Join(50);
+    }
+    hookThread = null;
+  }
+  static void Release() {
+    var o = owner; owner = null;
+    if (o != null) o.Dispose();
+  }
+  static void HookLoop() {
+    hookTid = GetCurrentThreadId();
+    if (!Take()) { Say("waiting"); while (hookWanted && !Take()) Thread.Sleep(500); }
+    if (!hookWanted) { Release(); hookTid = 0; return; }
+    keep = Cb;
+    hook = SetWindowsHookEx(13, keep, GetModuleHandle(null), 0);
+    Say(hook != IntPtr.Zero ? "ready" : "failed");
+    MSG m; while (GetMessage(out m, IntPtr.Zero, 0, 0) > 0) { }
+    if (hook != IntPtr.Zero) UnhookWindowsHookEx(hook);
+    hook = IntPtr.Zero;
+    down.Clear(); winDown = false;
+    Release();
+    hookTid = 0;
   }
   static System.IO.FileStream owner;
   static bool Take() {
@@ -141,15 +197,27 @@ public static class PTKey {
     } catch (System.IO.IOException) { return false; }
   }
   public static void Run() {
-    thread = GetCurrentThreadId();
-    var t = new Thread(Read); t.IsBackground = true; t.Start();
-    if (!Take()) { Say("waiting"); while (!Take()) Thread.Sleep(500); }
-    keep = Cb;
-    hook = SetWindowsHookEx(13, keep, GetModuleHandle(null), 0);
-    Say(hook != IntPtr.Zero ? "ready" : "failed");
-    MSG m; while (GetMessage(out m, IntPtr.Zero, 0, 0) > 0) { }
+    Say("up");
+    Read();
   }
 }
 '@
-Add-Type -TypeDefinition $src
-[PTKey]::Run()
+$loaded = $false
+if ($cache) {
+  try {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $hash = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($src))) -replace '-', '').Substring(0, 16)
+    $dll = Join-Path $cache "pt-app-helper-$hash.dll"
+    if (-not (Test-Path -LiteralPath $dll)) {
+      New-Item -ItemType Directory -Force -Path $cache | Out-Null
+      $tmp = Join-Path $cache "pt-app-helper-$hash-$PID.dll"
+      Add-Type -TypeDefinition $src -OutputAssembly $tmp -OutputType Library
+      Move-Item -LiteralPath $tmp -Destination $dll -Force -ErrorAction SilentlyContinue
+      if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
+    Add-Type -LiteralPath $dll
+    $loaded = $true
+  } catch { $loaded = $false }
+}
+if (-not $loaded) { Add-Type -TypeDefinition $src }
+[PTHelper]::Run()
