@@ -52,8 +52,14 @@ if ($running) {
   Write-Host 'Closing the stable copy to refresh it (its tabs come back when it starts).'
   $running | ForEach-Object { $_.CloseMainWindow() | Out-Null }
   if (-not (Wait-StableGone 20)) {
-    Get-Process PrismTerminalStable -ErrorAction SilentlyContinue | Stop-Process -Force
-    if (-not (Wait-StableGone 15)) { throw 'the stable copy did not close; nothing was changed' }
+    # Forced, AGAIN AND AGAIN (2026-10-17): a closing copy started a fresh
+    # network service child after the first force, which then outlived its
+    # parent for good, the wait ran out and nothing was refreshed.
+    for ($i = 0; $i -lt 10 -and (Get-Process PrismTerminalStable -ErrorAction SilentlyContinue); $i++) {
+      Get-Process PrismTerminalStable -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+      [void](Wait-StableGone 3)
+    }
+    if (-not (Wait-StableGone 5)) { throw 'the stable copy did not close; nothing was changed' }
   }
 }
 
