@@ -50,6 +50,9 @@ extraResources:
   # The dictation key from any app (2026-10-16): the keyboard hook helper.
   - from: src/main/hook
     to: global-key
+  # The resident Parakeet host (2026-10-17): the model kept loaded.
+  - from: core/dictation-host
+    to: dictation-host
 win:
   icon: build/icon.ico
   executableName: PrismTerminal

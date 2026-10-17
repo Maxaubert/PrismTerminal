@@ -631,6 +631,15 @@ function wireIpc(): void {
     // Ready at all times (owner, 2026-10-17): the engine never stands down
     // on its own. Only the copy running the dictation warms one.
     idleMs: Infinity,
+    // Parakeet kept loaded (owner, 2026-10-17): 24 to 170 ms a pass against
+    // parakeet-cli's 0.72 to 0.86 s, MEASURED. Its compiled code is cached
+    // beside the models, so a start pays no compiler.
+    parakeetHost: () => ({
+      script: app.isPackaged
+        ? join(process.resourcesPath, 'dictation-host', 'parakeetHost.ps1')
+        : join(app.getAppPath(), 'core', 'dictation-host', 'parakeetHost.ps1'),
+      cache: join(process.env.PT_DICTATION_ROOT ?? join(localAppData(), 'PrismDictation'), 'host-cache')
+    }),
     hasNvidia: async () => {
       if (process.env.PT_E2E_NVIDIA) return process.env.PT_E2E_NVIDIA === '1'
       const info = (await app.getGPUInfo('basic')) as { gpuDevice?: Array<{ vendorId?: number }> }
