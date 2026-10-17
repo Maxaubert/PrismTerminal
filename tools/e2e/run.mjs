@@ -15,7 +15,7 @@
 // that "closed" its window has left a process holding the single-instance lock.
 import { _electron as electron } from 'playwright-core'
 import { execFileSync, spawn } from 'child_process'
-import { createHash } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { createServer } from 'http'
@@ -3262,7 +3262,8 @@ const scenarios = {
     const pipe = `\\\\.\\pipe\\pt-e2e-dict-${process.pid}-${Date.now()}`
     const wa = world()
     const wb = world()
-    const env = { PT_E2E_DICT_PIPE: pipe }
+    // The scenario's own link key: both copies prove they hold it (dictationLink).
+    const env = { PT_E2E_DICT_PIPE: pipe, PT_E2E_DICT_KEY: randomBytes(32).toString('hex') }
     const A = await launch(wa, { args: [wa.alpha], env })
     const B = await launch(wb, { args: [wb.beta], env })
     const SID = 'b1b2b3b4-a5a6-4b70-8c9d-0e1f2a3b4c5d'

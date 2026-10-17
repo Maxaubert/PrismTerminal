@@ -55,8 +55,9 @@ export interface AnywhereDeps {
   channels: { anywhere: string; live: string; routed: string; look: string }
   /** This copy's main process id: what the hook names when its window is in front. */
   selfPid?: number
-  /** The pipe every copy of the app meets on, and this copy's name; null: this copy alone. */
-  link?: { pipe: string; name: string } | null
+  /** The pipe every copy of the app meets on, the user's link key, and this
+   *  copy's name; null: this copy alone. */
+  link?: { pipe: string; key: Buffer; name: string } | null
   /** The page's part: it reads the key itself only with no service in reach. */
   pageRole?: (role: Role) => void
   /** Paste into this copy's front tab (its window was in front at the press). */
@@ -205,6 +206,7 @@ export function startDictateAnywhere(d: AnywhereDeps): {
     const link = d.link
     client = startLinkClient(
       link.pipe,
+      link.key,
       { pid: selfPid, name: link.name },
       {
         tabs: () => d.sessions()?.published() ?? Promise.resolve([]),
@@ -218,7 +220,7 @@ export function startDictateAnywhere(d: AnywhereDeps): {
   const becomeService = (): void => {
     client?.close()
     client = null
-    if (d.link && !svc) svc = startLinkService(d.link.pipe, (e) => d.log?.({ link: String(e).slice(0, 120) }))
+    if (d.link && !svc) svc = startLinkService(d.link.pipe, d.link.key, (e) => d.log?.({ link: String(e).slice(0, 120) }))
     setRole('service')
   }
 

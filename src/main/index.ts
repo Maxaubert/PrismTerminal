@@ -12,13 +12,13 @@ import { registerDictationIpc } from '@core/main/dictationIpc'
 import { startDiagnostics, type Diagnostics } from '@core/main/diagnostics'
 import { withStackPolicy } from '@core/main/diagIpc'
 import { diagMain } from '@core/main/diagLog'
-import { userInfo } from 'os'
 import { copyName } from './dictationLink'
 import { planRestore } from './planRestore'
 import { foldersFromArgv } from './argv'
 import { acrylicOk, createMaterial } from './material'
 import { stopDwmHelper, warmDwmHelper } from './dwmHelper'
 import { configureAppHelper } from './appHelper'
+import { linkKey, linkPipe } from './dictationLink'
 import { createWindowEdge } from './windowEdge'
 import { createEdgeWatch } from './edgeWatch'
 import { DEFAULT_WINDOW_EDGES, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
@@ -86,6 +86,22 @@ if (E2E) Object.assign(globalThis, { __e2eOpenedLinks: e2eOpenedLinks })
 // run never reads or replaces what the owner copied. On the global so a
 // scenario can see it is the stand-in.
 if (E2E) Object.assign(globalThis, { __e2eClipboard: stubClipboard(clipboard, () => nativeImage.createEmpty()) })
+/**
+ * The pipe every copy of the app meets on for the one dictation, and the
+ * user's link key both ends prove they hold (dictationLink). The key lives
+ * beside the speech models, under the user's own profile. Under --e2e only a
+ * scenario's own pipe and key: it must never reach the owner's copies.
+ */
+function dictationLinkConfig(): { pipe: string; key: Buffer; name: string } | null {
+  const name = copyName(process.execPath)
+  if (E2E) {
+    const pipe = process.env.PT_E2E_DICT_PIPE
+    const key = Buffer.from(process.env.PT_E2E_DICT_KEY ?? '', 'hex')
+    return pipe && key.length === 32 ? { pipe, key, name } : null
+  }
+  const key = linkKey(join(process.env.PT_DICTATION_ROOT ?? join(localAppData(), 'PrismDictation'), 'link.key'))
+  return key ? { pipe: linkPipe(key), key, name } : null
+}
 function openLink(url: string): void {
   if (E2E) {
     e2eOpenedLinks.push(url)
@@ -507,13 +523,7 @@ function wireIpc(): void {
     sessions: () => sessions,
     toPage: (action) => send(APP_CH.dictOutside, action),
     selfPid: process.pid,
-    // One pipe per Windows user that every copy meets on. Under --e2e only a
-    // scenario's own (it must never reach the owner's running copies).
-    link: E2E
-      ? process.env.PT_E2E_DICT_PIPE
-        ? { pipe: process.env.PT_E2E_DICT_PIPE, name: copyName(process.execPath) }
-        : null
-      : { pipe: `\\\\.\\pipe\\prism-terminal-dictation-${userInfo().username.replace(/[^A-Za-z0-9_.-]/g, '_')}`, name: copyName(process.execPath) },
+    link: dictationLinkConfig(),
     pageRole: (role) => send(APP_CH.dictRole, role),
     pastePage: (text) => send(APP_CH.dictPaste, text),
     channels: { anywhere: APP_CH.dictAnywhere, live: APP_CH.dictLive, routed: APP_CH.dictRouted, look: APP_CH.dictLook },

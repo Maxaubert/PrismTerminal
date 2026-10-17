@@ -1,4 +1,7 @@
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto'
+import { mkdirSync, openSync, readFileSync, writeSync, closeSync } from 'fs'
 import { createServer, connect, type Server, type Socket } from 'net'
+import { dirname } from 'path'
 import type { SendDecision, SendTab } from './orchestratorSend'
 
 /**
@@ -11,15 +14,76 @@ import type { SendDecision, SendTab } from './orchestratorSend'
  * into them through its own checked path when the service asks.
  *
  * A local named pipe, one per Windows user; nothing leaves the PC. JSON, one
- * message per line. The service asks; a client only answers:
- *   client -> service  {t:'hello', pid, name}
+ * message per line.
+ *
+ * BOTH ENDS PROVE THEY HOLD THE USER'S LINK KEY before anything else is said
+ * (security review 2026-10-17: a process that took the pipe's name first could
+ * otherwise pose as the service and have a copy type into its Claude). The key
+ * is 32 random bytes in a file under %LOCALAPPDATA% (`linkKey`), which only
+ * the user's own account can read; the pipe is named after its hash, never
+ * the key. Each side sends a fresh nonce and answers the other's with an HMAC:
+ *   service -> client  {t:'nonce', n}
+ *   client -> service  {t:'hello', pid, name, n, mac}     mac = HMAC(key, 'client|' + service n + '|' + n)
+ *   service -> client  {t:'proof', mac}                   mac = HMAC(key, 'service|' + client n + '|' + service n)
+ * A peer that fails is dropped. Then the service asks; a client only answers:
  *   service -> client  {t:'tabs?', rid}            -> {t:'tabs', rid, tabs}
  *   service -> client  {t:'send', rid, id, text}   -> {t:'sent', rid, res}
  *   service -> client  {t:'paste', text}           (into its front tab, no Enter)
  */
 
-export type ToClient = { t: 'tabs?'; rid: number } | { t: 'send'; rid: number; id: string; text: string } | { t: 'paste'; text: string }
-export type ToService = { t: 'hello'; pid: number; name: string } | { t: 'tabs'; rid: number; tabs: SendTab[] } | { t: 'sent'; rid: number; res: SendDecision }
+export type ToClient =
+  | { t: 'nonce'; n: string }
+  | { t: 'proof'; mac: string }
+  | { t: 'tabs?'; rid: number }
+  | { t: 'send'; rid: number; id: string; text: string }
+  | { t: 'paste'; text: string }
+export type ToService =
+  | { t: 'hello'; pid: number; name: string; n: string; mac: string }
+  | { t: 'tabs'; rid: number; tabs: SendTab[] }
+  | { t: 'sent'; rid: number; res: SendDecision }
+
+const hex = (v: unknown, len: number): v is string => typeof v === 'string' && v.length === len && /^[0-9a-f]+$/.test(v)
+const NONCE_HEX = 32
+const MAC_HEX = 64
+export const nonce = (): string => randomBytes(NONCE_HEX / 2).toString('hex')
+export const macOf = (key: Buffer, what: string): string => createHmac('sha256', key).update(what).digest('hex')
+function sameMac(a: string, b: string): boolean {
+  const x = Buffer.from(a, 'hex')
+  const y = Buffer.from(b, 'hex')
+  return x.length === y.length && x.length > 0 && timingSafeEqual(x, y)
+}
+
+/**
+ * The user's link key: read, or made once (32 random bytes, hex) with the
+ * file created exclusively, so two copies starting together agree on one.
+ * Null when it can be neither read nor made: then there is no link.
+ */
+export function linkKey(file: string): Buffer | null {
+  const read = (): Buffer | null => {
+    try {
+      const t = readFileSync(file, 'utf8').trim()
+      return /^[0-9a-f]{64}$/.test(t) ? Buffer.from(t, 'hex') : null
+    } catch {
+      return null
+    }
+  }
+  const have = read()
+  if (have) return have
+  try {
+    mkdirSync(dirname(file), { recursive: true })
+    const fd = openSync(file, 'wx')
+    writeSync(fd, randomBytes(32).toString('hex'))
+    closeSync(fd)
+  } catch {
+    /* another copy made it first, or it cannot be made */
+  }
+  return read()
+}
+
+/** The pipe's name: the key's hash, never the key. */
+export function linkPipe(key: Buffer): string {
+  return `\\\\.\\pipe\\prism-terminal-dictation-${createHash('sha256').update(key).digest('hex').slice(0, 24)}`
+}
 
 const MAX_LINE = 64 * 1024
 const MAX_TEXT = 8000
@@ -43,7 +107,7 @@ export function parseToService(line: string): ToService | null {
     return null
   }
   if (!m || typeof m !== 'object') return null
-  if (m.t === 'hello' && int(m.pid) && str(m.name, 64)) return { t: 'hello', pid: m.pid, name: m.name }
+  if (m.t === 'hello' && int(m.pid) && str(m.name, 64) && hex(m.n, NONCE_HEX) && hex(m.mac, MAC_HEX)) return { t: 'hello', pid: m.pid, name: m.name, n: m.n, mac: m.mac }
   if (m.t === 'tabs' && int(m.rid) && Array.isArray(m.tabs)) return { t: 'tabs', rid: m.rid, tabs: m.tabs.slice(0, 64).map(tabOf).filter((x): x is SendTab => !!x) }
   if (m.t === 'sent' && int(m.rid) && m.res && typeof m.res === 'object') {
     const r = m.res as Record<string, unknown>
@@ -65,6 +129,8 @@ export function parseToClient(line: string): ToClient | null {
     return null
   }
   if (!m || typeof m !== 'object') return null
+  if (m.t === 'nonce' && hex(m.n, NONCE_HEX)) return { t: 'nonce', n: m.n }
+  if (m.t === 'proof' && hex(m.mac, MAC_HEX)) return { t: 'proof', mac: m.mac }
   if (m.t === 'tabs?' && int(m.rid)) return { t: 'tabs?', rid: m.rid }
   if (m.t === 'send' && int(m.rid) && str(m.id, 128) && str(m.text, MAX_TEXT)) return { t: 'send', rid: m.rid, id: m.id, text: m.text }
   if (m.t === 'paste' && str(m.text, MAX_TEXT)) return { t: 'paste', text: m.text }
@@ -119,19 +185,28 @@ export interface LinkService {
   close(): void
 }
 
-export function startLinkService(pipe: string, onError?: (e: unknown) => void): LinkService {
-  type Peer = { sock: Socket; copy: RemoteCopy | null }
+export function startLinkService(pipe: string, key: Buffer, onError?: (e: unknown) => void): LinkService {
+  type Peer = { sock: Socket; copy: RemoteCopy | null; n: string }
   const peers = new Set<Peer>()
   const waits = new Map<number, (m: ToService) => void>()
   let rid = 1
   const server: Server = createServer((sock) => {
-    const p: Peer = { sock, copy: null }
+    const p: Peer = { sock, copy: null, n: nonce() }
     peers.add(p)
+    write(sock, { t: 'nonce', n: p.n })
+    // A peer that has not proved itself in a few seconds is not one.
+    const timer = setTimeout(() => {
+      if (!p.copy) sock.destroy()
+    }, 5000)
+    timer.unref()
     lines(sock, (l) => {
       const m = parseToService(l)
       if (!m) return
-      if (m.t === 'hello') p.copy = { pid: m.pid, name: m.name }
-      else waits.get(m.rid)?.(m)
+      if (m.t === 'hello') {
+        if (p.copy || !sameMac(m.mac, macOf(key, `client|${p.n}|${m.n}`))) return void sock.destroy()
+        p.copy = { pid: m.pid, name: m.name }
+        write(sock, { t: 'proof', mac: macOf(key, `service|${m.n}|${p.n}`) })
+      } else if (p.copy) waits.get(m.rid)?.(m)
     })
     sock.on('close', () => peers.delete(p))
     sock.on('error', () => peers.delete(p))
@@ -192,7 +267,14 @@ export interface ClientHandlers {
 
 /** A client's end: connects, and keeps trying while it is not the service.
  *  `onState` hears when it is connected to a service and when it is not. */
-export function startLinkClient(pipe: string, me: RemoteCopy, h: ClientHandlers, retryMs = 1000, onState?: (connected: boolean) => void): { close(): void } {
+export function startLinkClient(
+  pipe: string,
+  key: Buffer,
+  me: RemoteCopy,
+  h: ClientHandlers,
+  retryMs = 1000,
+  onState?: (connected: boolean) => void
+): { close(): void } {
   let sock: Socket | null = null
   let closed = false
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -212,13 +294,27 @@ export function startLinkClient(pipe: string, me: RemoteCopy, h: ClientHandlers,
     if (closed) return
     const s = connect(pipe)
     sock = s
-    s.on('connect', () => {
-      write(s, { t: 'hello', pid: me.pid, name: me.name })
-      state(true)
-    })
+    const mine = nonce()
+    let theirs: string | null = null
+    let trusted = false
     lines(s, (l) => {
       const m = parseToClient(l)
       if (!m) return
+      if (m.t === 'nonce') {
+        if (theirs) return void s.destroy()
+        theirs = m.n
+        write(s, { t: 'hello', pid: me.pid, name: me.name, n: mine, mac: macOf(key, `client|${m.n}|${mine}`) })
+        return
+      }
+      if (m.t === 'proof') {
+        // The service holds the key too, or it is not the service.
+        if (!theirs || trusted || !sameMac(m.mac, macOf(key, `service|${mine}|${theirs}`))) return void s.destroy()
+        trusted = true
+        state(true)
+        return
+      }
+      // Nothing is answered, typed or pasted for a peer that has not proved itself.
+      if (!trusted) return void s.destroy()
       if (m.t === 'tabs?') void h.tabs().then((tabs) => write(s, { t: 'tabs', rid: m.rid, tabs }), () => write(s, { t: 'tabs', rid: m.rid, tabs: [] }))
       else if (m.t === 'send') void h.send(m.id, m.text).then((res) => write(s, { t: 'sent', rid: m.rid, res }), () => write(s, { t: 'sent', rid: m.rid, res: { ok: false, reason: 'it failed' } }))
       else h.paste(m.text)
