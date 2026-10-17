@@ -63,7 +63,7 @@ function rowEl(r: OverlayRow): HTMLButtonElement {
   }
   b.append(el('span', 'num', String(r.n)))
   const name = el('span', 'name')
-  name.append(el('span', 'label', r.label), el('span', 'folder', r.folder))
+  name.append(el('span', 'label', r.label), el('span', 'folder', r.copy ? `${r.copy} \u00b7 ${r.folder}` : r.folder))
   b.append(name)
   const chip = r.lead ? 'orchestrator' : r.disabled ? 'asking' : r.state === 'working' ? 'working' : null
   if (chip) b.append(el('span', `chip ${chip}`, chip))

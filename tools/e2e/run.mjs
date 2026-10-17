@@ -3247,6 +3247,85 @@ const scenarios = {
   },
 
   /**
+   * ONE DICTATION FOR EVERY COPY (owner, 2026-10-17: "there should be one
+   * dictation engine for both ... it should show all sessions open in one ui
+   * from both instances"; spec: docs/superpowers/specs/2026-10-17-one-dictation.md).
+   * Two copies on a pipe of the scenario's own; the first is made the service
+   * through the seam (the suite runs no real hook).
+   * - The service's list holds the OTHER copy's Claude, named by its copy, and
+   *   a pick is typed and entered there by that copy.
+   * - With that copy's window in front at the press, the words are pasted at
+   *   its front tab's cursor, no Enter.
+   * - The service closes: the other copy takes over and lists its own tab.
+   */
+  async dictateTwoCopies(ok) {
+    const pipe = `\\\\.\\pipe\\pt-e2e-dict-${process.pid}-${Date.now()}`
+    const wa = world()
+    const wb = world()
+    const env = { PT_E2E_DICT_PIPE: pipe }
+    const A = await launch(wa, { args: [wa.alpha], env })
+    const B = await launch(wb, { args: [wb.beta], env })
+    const SID = 'b1b2b3b4-a5a6-4b70-8c9d-0e1f2a3b4c5d'
+    const shown = (page) =>
+      page.evaluate(() => [...document.querySelectorAll('.xterm')].filter((x) => x.offsetParent !== null).map((x) => x.querySelector('.xterm-rows')?.textContent ?? '').join('\n'))
+    const widgetText = async (app) => {
+      const p = app.windows().find((x) => x.url().includes('overlay.html'))
+      return p ? await p.evaluate(() => document.getElementById('card')?.textContent ?? '').catch(() => '') : ''
+    }
+    let aOpen = true
+    try {
+      await until(async () => (await tabLabels(B.page)).length === 1)
+      await polled(B.page)
+      // B's stand-in Claude (a copy of PowerShell named claude.exe).
+      const dir = await B.app.evaluate(({ app: a }) => a.getPath('userData'))
+      await B.page.locator('.xterm').first().click({ force: true })
+      await typeLine(B.page, hookSay('done', `;session=${SID}`))
+      const fake = dir + '\\stand-in\\claude.exe'
+      mkdirSync(dir + '\\stand-in', { recursive: true })
+      copyFileSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', fake)
+      await typeLine(B.page, `& '${fake}' -NoLogo -NoProfile`)
+      await sleep(2500)
+
+      // A takes the key: the service. B finds it on the pipe.
+      await A.app.evaluate(() => globalThis.__e2eDictLine('ready'))
+      await sleep(1800)
+
+      // 1. A's list holds B's Claude, named by its copy; "1" sends it there.
+      await A.app.evaluate(() => globalThis.__e2eDictRoute("Write-Output ('TWO-' + 'OK')", null))
+      ok(!!(await until(async () => (await widgetText(A.app)).includes('Send to'), 10000, 100)), 'the service lists the sessions')
+      const listed = await widgetText(A.app)
+      ok(listed.includes('beta') && listed.includes('\u00b7'), `the other copy's Claude is in the list, named by its copy (${listed.slice(0, 160)})`)
+      await A.app.evaluate(() => globalThis.__e2eDictLine('p 1'))
+      ok(!!(await until(async () => (await widgetText(A.app)).includes('Sent to beta'), 15000, 100)), 'the pick is sent to the other copy')
+      ok(!!(await until(async () => (await shown(B.page)).includes('TWO-OK'), 8000, 100)), 'and that copy typed and entered it')
+
+      // 2. B's window in front at the press: pasted at its cursor, no Enter.
+      const pidB = await B.app.evaluate(() => process.pid)
+      await A.app.evaluate((_e, pid) => globalThis.__e2eDictRoute('echo PASTEDB', pid), pidB)
+      ok(!!(await until(async () => (await shown(B.page)).includes('echo PASTEDB'), 8000, 100)), 'with that copy in front the words are typed at its cursor')
+      await sleep(800)
+      const after = await shown(B.page)
+      ok(!/^PASTEDB\s*$/m.test(after), 'and not entered')
+      ok((await widgetText(A.app)).includes('Typed into the tab in front'), 'the widget says where they went')
+      await B.page.keyboard.press('Control+c')
+
+      // 3. The service closes: B takes over and lists its own tab.
+      await closeApp(A.app)
+      aOpen = false
+      await sleep(1500)
+      await B.app.evaluate(() => globalThis.__e2eDictLine('ready'))
+      await B.app.evaluate(() => globalThis.__e2eDictRoute('Write-Output hi', null))
+      ok(!!(await until(async () => (await widgetText(B.app)).includes('Send to'), 10000, 100)), 'the other copy takes over the dictation')
+      const own = await widgetText(B.app)
+      ok(own.includes('beta') && !own.includes('\u00b7'), `with one copy left, no copy names (${own.slice(0, 120)})`)
+      await B.app.evaluate(() => globalThis.__e2eDictLine('x'))
+    } finally {
+      if (aOpen) await closeApp(A.app)
+      await closeApp(B.app)
+    }
+  },
+
+  /**
    * NO WINDOWS SYSTEM MENU ON A RIGHT-CLICK (owner, 2026-10-13: "stop chromium
    * right click menus like this from appearing in the terminal"). Windows
    * raises it for a right-click on a drag region; the window refuses it. The

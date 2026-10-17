@@ -5,7 +5,7 @@ import { createAtomicWriter } from '@core/main/atomicWrite'
 import { setSessionsFile, tabToken, writeTerm } from '@core/main/terminal'
 import { agentUnder } from '@core/main/agentPoll'
 import { createLedger, type LedgerTab, type Presence } from './sessionLedger'
-import { decideInto, decideSend, dictationRoute, pasteOf, SEND_ENTER_MS, type SendDecision, type SendTab } from './orchestratorSend'
+import { decideInto, decideSend, pasteOf, SEND_ENTER_MS, type SendDecision, type SendTab } from './orchestratorSend'
 
 /**
  * The catch-up report's ledger, wired to the window, the power monitor and the
@@ -276,12 +276,13 @@ export function startSessions(d: SessionsDeps) {
   })
 
   return {
-    /** Where dictated text goes: the active orchestrator, or tabs to pick. */
-    route: async (): Promise<{ lead: SendTab } | { pick: SendTab[] }> => {
-      const r = dictationRoute(ledger.live(), enabled)
-      // "Actually active": its Claude must really be running, per Windows.
-      if ('lead' in r && (await agentUnder(r.lead.id)) !== 'claude') return dictationRoute(ledger.live().map((t) => (t.id === r.lead.id ? { ...t, orchestrator: false } : t)), enabled)
-      return r
+    /** This copy's tabs for dictated text, the orchestrator marked only when it
+     *  is ACTIVE: switched on, and its Claude really running per Windows. */
+    published: async (): Promise<SendTab[]> => {
+      const live = ledger.live()
+      const lead = enabled ? live.find((t) => t.orchestrator) : undefined
+      const active = !!lead && (await agentUnder(lead.id)) === 'claude'
+      return live.map((t) => ({ ...t, orchestrator: active && t.id === lead!.id }))
     },
     /** Type dictated text into tab `id` and press Enter, checked. */
     sendInto: (id: string, text: string): Promise<SendDecision> => typeChecked(() => decideInto(id, ledger.live()), text),

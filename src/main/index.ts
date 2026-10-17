@@ -12,6 +12,8 @@ import { registerDictationIpc } from '@core/main/dictationIpc'
 import { startDiagnostics, type Diagnostics } from '@core/main/diagnostics'
 import { withStackPolicy } from '@core/main/diagIpc'
 import { diagMain } from '@core/main/diagLog'
+import { userInfo } from 'os'
+import { copyName } from './dictationLink'
 import { planRestore } from './planRestore'
 import { foldersFromArgv } from './argv'
 import { acrylicOk, createMaterial } from './material'
@@ -498,12 +500,25 @@ function wireIpc(): void {
     mainWindow: () => mainWindow,
     sessions: () => sessions,
     toPage: (action) => send(APP_CH.dictOutside, action),
+    selfPid: process.pid,
+    // One pipe per Windows user that every copy meets on. Under --e2e only a
+    // scenario's own (it must never reach the owner's running copies).
+    link: E2E
+      ? process.env.PT_E2E_DICT_PIPE
+        ? { pipe: process.env.PT_E2E_DICT_PIPE, name: copyName(process.execPath) }
+        : null
+      : { pipe: `\\\\.\\pipe\\prism-terminal-dictation-${userInfo().username.replace(/[^A-Za-z0-9_.-]/g, '_')}`, name: copyName(process.execPath) },
+    pageRole: (role) => send(APP_CH.dictRole, role),
+    pastePage: (text) => send(APP_CH.dictPaste, text),
     channels: { anywhere: APP_CH.dictAnywhere, live: APP_CH.dictLive, routed: APP_CH.dictRouted, look: APP_CH.dictLook },
     onIpc: (ch, fn) => ipcMain.on(ch, (_e, ...args: unknown[]) => fn(...args)),
     log: (what) => diagMain().write('main', 'crumb', { a: 'dictate-anywhere', ...what }),
     e2e: E2E
   })
   app.on('will-quit', () => anywhere.stop())
+  if (E2E)
+    (globalThis as { __e2eDictRoute?: (text: string, front: number | null) => void }).__e2eDictRoute = (text, front) =>
+      anywhere.route({ text }, front)
   if (E2E) (globalThis as { __e2eDictLine?: (l: string) => void }).__e2eDictLine = (l: string) => {
     const parsed = parseHelperLine(l)
     if (parsed) anywhere.line(parsed)
@@ -613,6 +628,9 @@ function wireIpc(): void {
     sharedRoot:
       process.env.PT_DICTATION_ROOT ??
       join(localAppData(), 'PrismDictation'),
+    // Ready at all times (owner, 2026-10-17): the engine never stands down
+    // on its own. Only the copy running the dictation warms one.
+    idleMs: Infinity,
     hasNvidia: async () => {
       if (process.env.PT_E2E_NVIDIA) return process.env.PT_E2E_NVIDIA === '1'
       const info = (await app.getGPUInfo('basic')) as { gpuDevice?: Array<{ vendorId?: number }> }

@@ -49,9 +49,10 @@ export function keysFor(h: Hotkey): number[] | null {
 /** The Start menu needs masking only when the binding holds Win with Ctrl. */
 export const masksStart = (h: Hotkey): boolean => (h.meta || FLAG_OF[h.code] === 'meta') && (h.ctrl || FLAG_OF[h.code] === 'ctrl')
 
-/** `front`: a Prism Terminal window (this copy or another) was in front at a down. */
+/** `front`: the main process of the Prism Terminal copy (this one or another)
+ *  whose window was in front at a down. */
 export type HelperLine =
-  | { kind: 'key'; type: 'down' | 'up'; code: string; front?: true }
+  | { kind: 'key'; type: 'down' | 'up'; code: string; front?: number }
   | { kind: 'other' }
   | { kind: 'digit'; n: number }
   | { kind: 'esc' }
@@ -67,12 +68,12 @@ export function parseHelperLine(line: string): HelperLine | null {
   if (t === 'waiting') return { kind: 'waiting' }
   if (t === 'o') return { kind: 'other' }
   if (t === 'x') return { kind: 'esc' }
-  let m = /^([du]) ([0-9A-F]{2})( f)?$/.exec(t)
+  let m = /^([du]) ([0-9A-F]{2})(?: f ([0-9]{1,10}))?$/.exec(t)
   if (m) {
     const code = CODE_OF[parseInt(m[2], 16)]
     if (!code) return null
     const type = m[1] === 'd' ? 'down' : 'up'
-    return m[3] && type === 'down' ? { kind: 'key', type, code, front: true } : { kind: 'key', type, code }
+    return m[3] && type === 'down' ? { kind: 'key', type, code, front: Number(m[3]) } : { kind: 'key', type, code }
   }
   m = /^p ([1-9])$/.exec(t)
   if (m) return { kind: 'digit', n: Number(m[1]) }
@@ -129,6 +130,7 @@ export interface KeyHelper {
 }
 
 export function startKeyHelper(script: string, onLine: (l: HelperLine) => void): KeyHelper {
+  let stopping = false
   let child: ChildProcess | null = spawn(SYS.powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script], {
     windowsHide: true,
     stdio: ['pipe', 'pipe', 'ignore']
@@ -145,6 +147,8 @@ export function startKeyHelper(script: string, onLine: (l: HelperLine) => void):
   })
   child.on('exit', () => {
     child = null
+    // Gone without being told: whatever it held (the key, the service) it no longer does.
+    if (!stopping) onLine({ kind: 'failed' })
   })
   child.on('error', () => {
     child = null
@@ -158,6 +162,7 @@ export function startKeyHelper(script: string, onLine: (l: HelperLine) => void):
       }
     },
     stop: () => {
+      stopping = true
       try {
         child?.stdin?.write('quit\n')
         child?.stdin?.end()

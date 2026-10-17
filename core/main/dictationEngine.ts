@@ -653,6 +653,9 @@ export function createDictationEngine(deps: DictationEngineDeps): DictationEngin
 
   function armIdle(): void {
     if (idleTimer) clearTimeout(idleTimer)
+    // Never stands down (a host that keeps it ready at all times, Prism
+    // Terminal's dictation service): only `stop()` ends it.
+    if (!Number.isFinite(idleMs)) return
     // unref: a timer five minutes out must not be what keeps a quitting app alive.
     idleTimer = setTimeout(() => {
       idleTimer = null

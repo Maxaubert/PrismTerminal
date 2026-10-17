@@ -191,7 +191,9 @@ one-liner in `CLAUDE.md` only if it is among the most important.
   essentially just click or pick the session", or with an active orchestrator it is sent there): the words go
   through the same checked path (`sessionsWire` `sendInto`), into a running Claude only. Inside the app dictation
   still only pastes at the cursor and never presses Enter. Held by `dictateAnywhere.test.ts` and the e2e
-  `dictateAnywhere`.
+  `dictateAnywhere`. Since 2026-10-17 the key reaches dictation in the app through the same hook, and a pick
+  can name another copy of the app's tab: that copy types it through its own checked path (`dictationLink`),
+  and words for a copy whose window was in front are still only pasted, never entered (e2e `dictateTwoCopies`).
 - <a id="same-command-line"></a>**EVERY SHELL OF A KIND STARTS WITH THE SAME COMMAND LINE, AND NO POWERSHELL IS
   `-EncodedCommand`** (#180; owner, 2026-10-11: "slow on startup and not responding until Claude sessions load").
   Windows Defender judges each NEW command line a process from `PrismTerminal.exe` starts, inside `CreateProcess`,

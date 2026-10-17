@@ -20,6 +20,8 @@ export const APP_CH = {
   dictLive: 'dict:live',
   dictLook: 'dict:look',
   dictOutside: 'dict:outside',
+  dictPaste: 'dict:paste',
+  dictRole: 'dict:role',
   dictRouted: 'dict:routed',
   ledgerEnable: 'ledger:enable',
   ledgerEngage: 'ledger:engage',

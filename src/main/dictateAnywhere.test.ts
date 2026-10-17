@@ -13,7 +13,7 @@ vi.mock('electron', () => {
 })
 
 import { decideInto, dictationRoute, type SendTab } from './orchestratorSend'
-import { folderTail, pickRows, startDictateAnywhere } from './dictateAnywhere'
+import { folderTail, mergeTabs, pickRows, startDictateAnywhere } from './dictateAnywhere'
 
 /**
  * Where dictated words go from outside the app (owner, 2026-10-16): to the
@@ -62,7 +62,7 @@ describe('the key with a Prism Terminal in front', () => {
     const toPage = vi.fn()
     const handlers: Record<string, (...a: unknown[]) => void> = {}
     const a = startDictateAnywhere({
-      script: '', preload: '', loadPage: () => {}, mainWindow: () => null, sessions: () => null, toPage,
+      script: '', preload: '', loadPage: () => {}, mainWindow: () => null, sessions: () => null, toPage, selfPid: 1,
       onIpc: (ch, fn) => {
         handlers[ch] = fn
       },
@@ -72,17 +72,35 @@ describe('the key with a Prism Terminal in front', () => {
     handlers['a']({ on: true, hotkey: { code: 'F8', ctrl: false, alt: false, shift: false, meta: false }, mode: 'toggle' })
     return { a, toPage }
   }
-  it('leaves it to that window when another copy of the app is in front', () => {
+  it('leaves it to that window when another copy of the app, not on the link, is in front', () => {
     const { a, toPage } = started()
-    a.line({ kind: 'key', type: 'down', code: 'F8', front: true })
+    a.line({ kind: 'key', type: 'down', code: 'F8', front: 4242 })
     a.line({ kind: 'key', type: 'up', code: 'F8' })
     expect(toPage).not.toHaveBeenCalled()
+  })
+  // One key path (owner, 2026-10-17): the app's own window is read here too.
+  it('starts with this copy in front', () => {
+    const { a, toPage } = started()
+    a.line({ kind: 'key', type: 'down', code: 'F8', front: 1 })
+    a.line({ kind: 'key', type: 'up', code: 'F8' })
+    expect(toPage).toHaveBeenCalledWith('start')
   })
   it('starts with any other app in front', () => {
     const { a, toPage } = started()
     a.line({ kind: 'key', type: 'down', code: 'F8' })
     a.line({ kind: 'key', type: 'up', code: 'F8' })
     expect(toPage).toHaveBeenCalledWith('start')
+  })
+})
+
+describe('mergeTabs', () => {
+  it('lists every copy, naming the copy only when there is more than one', () => {
+    expect(mergeTabs([tab({})], [], 'Stable').map((t) => [t.id, t.copy])).toEqual([['p1', null]])
+    const two = mergeTabs([tab({})], [{ copy: { pid: 9, name: 'Prism Terminal' }, tabs: [tab({ id: 'q1' })] }], 'Stable')
+    expect(two.map((t) => [t.id, t.copy])).toEqual([
+      ['p1', 'Stable'],
+      ['9:q1', 'Prism Terminal']
+    ])
   })
 })
 

@@ -63,6 +63,10 @@ const api = {
   dictLook: (l: { ground: string; text: string; dim: string; accent: string; edge: string }): void => ipcRenderer.send(APP_CH.dictLook, l),
   /** Main's global key: start, stop or cancel the outside recording. */
   onDictOutside: (cb: (action: 'start' | 'stop' | 'cancel') => void): (() => void) => on(APP_CH.dictOutside, cb),
+  /** This copy's part in the one dictation: service, client, or alone. */
+  onDictRole: (cb: (role: 'service' | 'client' | 'none') => void): (() => void) => on(APP_CH.dictRole, cb),
+  /** Dictated words for the tab in front: pasted at its cursor, never Enter. */
+  onDictPaste: (cb: (text: string) => void): (() => void) => on(APP_CH.dictPaste, cb),
 
   /* ----- the catch-up report's ledger (2026-10-16) ----- */
 

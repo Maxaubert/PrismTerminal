@@ -3,7 +3,8 @@ import type { Hotkey, DictMode } from '@core/renderer/lib/dictationKey'
 import { OVERLAY_CH, type OverlayLook, type OverlayRow, type OverlayState } from '@shared/dictOverlay'
 import { createKeyFeed, keysFor, masksStart, startKeyHelper, type HelperLine, type KeyHelper } from './globalDictKey'
 import type { Sessions } from './sessionsWire'
-import type { SendTab } from './orchestratorSend'
+import { dictationRoute, type SendDecision, type SendTab } from './orchestratorSend'
+import { startLinkClient, startLinkService, type LinkService } from './dictationLink'
 
 /**
  * DICTATE FROM ANY APP (owner, 2026-10-16; spec:
@@ -13,7 +14,21 @@ import type { SendTab } from './orchestratorSend'
  * the orchestrator when it is ACTIVE, or to the session the owner picks from
  * the widget (a click or its number). Sent through the same checked path as
  * the orchestrator's sends (sessionsWire.sendInto).
+ *
+ * ONE DICTATION (owner, 2026-10-17; spec:
+ * docs/superpowers/specs/2026-10-17-one-dictation.md): the hook reads the key
+ * with the app in front too, so there is one key path and one widget. The
+ * copy whose helper holds the lock is the SERVICE: it records, and every
+ * other copy is a CLIENT on the link (dictationLink), its page not reading
+ * the key. The words go to the copy whose window was in front at the press
+ * (pasted at its front tab's cursor, no Enter, as dictation in the app always
+ * did), else to the active orchestrator or the list, which holds the tabs of
+ * every copy.
  */
+
+/** service: this copy runs the dictation. client: another copy does, and this
+ *  one answers on the link. none: no other copy; the page reads its own key. */
+export type Role = 'none' | 'service' | 'client'
 
 export interface AnywhereConfig {
   on: boolean
@@ -39,6 +54,14 @@ export interface AnywhereDeps {
   toPage: (action: 'start' | 'stop' | 'cancel') => void
   onIpc: (channel: string, fn: (...args: unknown[]) => void) => void
   channels: { anywhere: string; live: string; routed: string; look: string }
+  /** This copy's main process id: what the hook names when its window is in front. */
+  selfPid?: number
+  /** The pipe every copy of the app meets on, and this copy's name; null: this copy alone. */
+  link?: { pipe: string; name: string } | null
+  /** The page's part: it reads the key itself only with no service in reach. */
+  pageRole?: (role: Role) => void
+  /** Paste into this copy's front tab (its window was in front at the press). */
+  pastePage?: (text: string) => void
   /** A diag crumb (never a key but the binding's; never typed text). */
   log?: (what: Record<string, unknown>) => void
   /** Under --e2e: no real hook; `line` is the only way keys arrive. */
@@ -52,8 +75,12 @@ const SHOW_MS = 2200
 /** The last two folders of a path: enough to tell two `api` tabs apart. */
 export const folderTail = (p: string): string => p.split(/[\\/]+/).filter(Boolean).slice(-2).join('\\')
 
+/** A tab as the list holds it: `copy` names the copy of the app it is in,
+ *  when more than one is open. A tab of another copy has the id `<pid>:<id>`. */
+export type ListTab = SendTab & { copy?: string | null }
+
 /** The picker's rows: numbered 1 to 9, a tab that is asking disabled. */
-export function pickRows(tabs: readonly SendTab[]): OverlayRow[] {
+export function pickRows(tabs: readonly ListTab[]): OverlayRow[] {
   return tabs.slice(0, 9).map((t, i) => ({
     id: t.id,
     n: i + 1,
@@ -61,11 +88,26 @@ export function pickRows(tabs: readonly SendTab[]): OverlayRow[] {
     folder: folderTail(t.cwd),
     state: t.state,
     disabled: t.state === 'question' ? 'Waiting on a question: answer it there first' : null,
-    lead: t.orchestrator
+    lead: t.orchestrator,
+    copy: t.copy ?? null
   }))
 }
 
-export function startDictateAnywhere(d: AnywhereDeps): { stop(): void; line(l: HelperLine): void } {
+/** This copy's tabs and every linked copy's, as one list. */
+export function mergeTabs(local: readonly SendTab[], remote: readonly { copy: { pid: number; name: string }; tabs: readonly SendTab[] }[], me: string): ListTab[] {
+  const many = remote.length > 0
+  return [
+    ...local.map((t) => ({ ...t, copy: many ? me : null })),
+    ...remote.flatMap((r) => r.tabs.map((t) => ({ ...t, id: `${r.copy.pid}:${t.id}`, copy: r.copy.name })))
+  ]
+}
+
+export function startDictateAnywhere(d: AnywhereDeps): {
+  stop(): void
+  line(l: HelperLine): void
+  /** What a recording heard, as if it began with copy `front`'s window in front (the e2e's seam). */
+  route(r: RouteResult, front: number | null): void
+} {
   let cfg: AnywhereConfig | null = null
   let helper: KeyHelper | null = null
   let outside = false
@@ -74,6 +116,14 @@ export function startDictateAnywhere(d: AnywhereDeps): { stop(): void; line(l: H
   let hideTimer: ReturnType<typeof setTimeout> | null = null
   let look: OverlayLook | null = null
   let win: BrowserWindow | null = null
+  const selfPid = d.selfPid ?? process.pid
+  let role: Role = 'none'
+  let svc: LinkService | null = null
+  let client: { close(): void } | null = null
+  /** The copy whose window was in front at the last binding key down. */
+  let lastFront: number | null = null
+  /** ... and at the press that started the recording. */
+  let recFront: number | null = null
 
   const feed = createKeyFeed(() => ({ hotkey: cfg!.hotkey, mode: cfg!.mode }))
 
@@ -141,12 +191,46 @@ export function startDictateAnywhere(d: AnywhereDeps): { stop(): void; line(l: H
     hideAfter(SHOW_MS + 800)
   }
 
+  /* ----- the copies of the app ----- */
+  const setRole = (r: Role): void => {
+    if (r === role) return
+    role = r
+    d.log?.({ role: r })
+    d.pageRole?.(r)
+  }
+  const becomeClient = (): void => {
+    svc?.close()
+    svc = null
+    if (!d.link) return setRole('none')
+    if (client) return
+    const link = d.link
+    client = startLinkClient(
+      link.pipe,
+      { pid: selfPid, name: link.name },
+      {
+        tabs: () => d.sessions()?.published() ?? Promise.resolve([]),
+        send: (id, text) => d.sessions()?.sendInto(id, text) ?? Promise.resolve<SendDecision>({ ok: false, reason: 'the app is not ready' }),
+        paste: (t) => d.pastePage?.(t)
+      },
+      1000,
+      (on) => setRole(on ? 'client' : 'none')
+    )
+  }
+  const becomeService = (): void => {
+    client?.close()
+    client = null
+    if (d.link && !svc) svc = startLinkService(d.link.pipe, (e) => d.log?.({ link: String(e).slice(0, 120) }))
+    setRole('service')
+  }
+
   /* ----- sending ----- */
   const sendTo = async (id: string, label: string, text: string): Promise<void> => {
     const s = d.sessions()
     if (!s) return note('Not sent: the app is not ready', 'warn')
     show({ phase: 'sending', to: label })
-    const res = await s.sendInto(id, text)
+    // Another copy's tab: that copy types it, through its own checks.
+    const other = /^([0-9]+):(.+)$/.exec(id)
+    const res = other ? (svc ? await svc.send(Number(other[1]), other[2], text) : { ok: false as const, reason: 'that copy of the app has closed' }) : await s.sendInto(id, text)
     outside = false
     if (res.ok) {
       show({ phase: 'sent', to: res.target.label })
@@ -168,10 +252,20 @@ export function startDictateAnywhere(d: AnywhereDeps): { stop(): void; line(l: H
     void sendTo(row.id, row.label, p.text)
   }
   const routed = async (r: RouteResult): Promise<void> => {
+    const front = recFront
+    recFront = null
     if ('message' in r) return note(r.message, r.message === 'Cancelled' || r.message === 'Heard nothing' ? 'quiet' : 'warn')
+    // A Prism Terminal window was in front: the words go to its front tab, at
+    // the cursor, never Enter (dictation in the app as it always was).
+    if (front === selfPid && d.pastePage) {
+      d.pastePage(r.text)
+      return note('Typed into the tab in front')
+    }
+    if (front !== null && svc?.paste(front, r.text)) return note('Typed into the tab in front')
     const s = d.sessions()
     if (!s) return note('Not sent: the app is not ready', 'warn')
-    const where = await s.route()
+    const all = mergeTabs(await s.published(), svc ? await svc.tabs() : [], d.link?.name ?? 'Prism Terminal')
+    const where = dictationRoute(all, true)
     if ('lead' in where) return sendTo(where.lead.id, where.lead.label, r.text)
     if (!where.pick.length) return note('No Claude session to send to', 'warn')
     const rows = pickRows(where.pick)
@@ -191,6 +285,7 @@ export function startDictateAnywhere(d: AnywhereDeps): { stop(): void; line(l: H
     if (a === 'start') {
       endPick()
       outside = true
+      recFront = lastFront
       show({ phase: 'listening', text: '', level: 0, starting: false })
     }
     d.toPage(a)
@@ -211,16 +306,20 @@ export function startDictateAnywhere(d: AnywhereDeps): { stop(): void; line(l: H
     }
     if (l.kind === 'ready' || l.kind === 'failed' || l.kind === 'waiting') {
       d.log?.({ hook: l.kind })
+      if (l.kind === 'ready') becomeService()
+      else becomeClient()
       return
     }
     if (!cfg?.on) return
-    // With the app in front its own page reads the key (as it always has),
-    // unless this recording started outside. A Prism Terminal in front that
-    // is ANOTHER copy (Stable beside the installed app) reads it there too.
-    const front = l.kind === 'key' && l.front === true
-    if ((d.mainWindow()?.isFocused() || front) && !outside) {
-      feed.reset()
-      return
+    if (l.kind === 'key' && l.type === 'down') {
+      lastFront = l.front ?? null
+      // Another copy's window, and that copy is not on the link: it reads its
+      // own key, so this one stays out of it.
+      if (lastFront !== null && lastFront !== selfPid && !svc?.copies().some((c) => c.pid === lastFront) && !outside) {
+        feed.reset()
+        d.log?.({ key: 'left to that copy' })
+        return
+      }
     }
     const now = performance.now()
     act(feed.feed(l, now))
@@ -232,9 +331,12 @@ export function startDictateAnywhere(d: AnywhereDeps): { stop(): void; line(l: H
     const keys = next.on ? keysFor(next.hotkey) : null
     cfg = { ...next, on: !!keys }
     feed.reset()
+    // The page says this as it loads: the part it may have missed, again.
+    d.pageRole?.(role)
     if (!keys) {
       helper?.stop()
       helper = null
+      becomeClient()
       return
     }
     if (d.e2e) return
@@ -275,11 +377,22 @@ export function startDictateAnywhere(d: AnywhereDeps): { stop(): void; line(l: H
     win?.hide()
   })
 
+  // Every copy looks for a service from the start; holding the key makes it one.
+  becomeClient()
+
   return {
     line: onLine,
+    route: (r, front) => {
+      recFront = front
+      void routed(r)
+    },
     stop: () => {
       helper?.stop()
       helper = null
+      svc?.close()
+      svc = null
+      client?.close()
+      client = null
       endPick()
       if (win && !win.isDestroyed()) win.destroy()
     }

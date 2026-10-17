@@ -22,11 +22,11 @@
 # the key, a later one waits ("waiting") and takes over when the first exits.
 # MEASURED: a named Mutex hung the waiting helper for good once the owner
 # exited (WaitOne on PowerShell's STA thread); the lock file hands over within
-# the 500 ms poll. A down says " f" when a Prism Terminal window is in front: that
-# copy's own page reads the key, so this one stays out of it.
+# the 500 ms poll. A down says " f <pid>" when a Prism Terminal window is in
+# front, naming the copy (its main process) whose window it is: the words go there.
 #
 # stdout (to main):   ready / failed / waiting  hooked / could not / another copy owns the key
-#                     d <hex vk> [f] / u <hex vk>   a binding key down (f: a Prism Terminal in front) / up
+#                     d <hex vk> [f <pid>] / u <hex vk>   a binding key down (f: a Prism Terminal in front) / up
 #                     o                          another key went down while one is held
 #                     p <1-9> / x                a digit / Esc, while picking
 $src = @'
@@ -58,7 +58,7 @@ public static class PTKey {
   static bool winDown, ctrlWithWin;
   const int MASK_VK = 0xE8; // unassigned: what AutoHotkey sends to keep Start shut
   static void Say(string s) { Console.Out.WriteLine(s); Console.Out.Flush(); }
-  static IntPtr lastFront; static bool lastWasPT;
+  static IntPtr lastFront; static bool lastWasPT; static uint lastPid;
   // Is the window in front one of Prism Terminal's (any copy: PrismTerminal,
   // PrismTerminalStable)? Kept per window: the hook must answer fast.
   static bool FrontIsPT() {
@@ -66,6 +66,7 @@ public static class PTKey {
     if (f == lastFront) return lastWasPT;
     lastFront = f; lastWasPT = false;
     uint pid; GetWindowThreadProcessId(f, out pid);
+    lastPid = pid;
     IntPtr h = OpenProcess(0x1000, false, pid);
     if (h == IntPtr.Zero) return false;
     var sb = new System.Text.StringBuilder(1024); uint n = 1024;
@@ -99,7 +100,7 @@ public static class PTKey {
           }
         } else if (IsCtrl(vk) && isDown && winDown) ctrlWithWin = true;
         if (keys.Contains(vk)) {
-          if (isDown) { if (down.Add(vk)) Say("d " + vk.ToString("X2") + (FrontIsPT() ? " f" : "")); }
+          if (isDown) { if (down.Add(vk)) Say("d " + vk.ToString("X2") + (FrontIsPT() ? " f " + lastPid : "")); }
           else { down.Remove(vk); Say("u " + vk.ToString("X2")); }
         } else if (isDown) {
           if (pick && ((vk >= 0x31 && vk <= 0x39) || (vk >= 0x61 && vk <= 0x69))) {

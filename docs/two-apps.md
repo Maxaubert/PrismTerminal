@@ -550,6 +550,12 @@ so an update never silently changes what an existing user sees; the bridge to ma
   heard; `DictationPage` takes `after` rows. In Prism Terminal's app code only: the keyboard hook helper
   (`src/main/hook/globalKeyHook.ps1`, `globalDictKey.ts`), the widget window (`dictateAnywhere.ts`,
   `src/renderer/overlay.html`), the routing and the Settings row. Prism keeps dictating in its own window only.
+  **ONE DICTATION** (owner, 2026-10-17: "they should be the same thing ... one dictation engine for both";
+  spec `docs/superpowers/specs/2026-10-17-one-dictation.md`): in Prism Terminal the hook reads the key with the app
+  in front too, and the copy holding the hook's lock runs the dictation for every copy (`src/main/dictationLink.ts`,
+  a local pipe). Core additions, all off unless a host asks, so Prism is unchanged: `setDictationPageKeys`,
+  `setDictationAutoWarm`, `keepDictationWarm`, `pasteIntoFront` (core `dictation.ts`) and `idleMs` on
+  `registerDictationIpc` (Prism Terminal passes Infinity: "It needs to be ready at all times").
 - <a id="page-looks-right"></a>**A PAGE THAT WORKS IS NOT A PAGE THAT LOOKS RIGHT** (#20, 2026-09-19). Moving the settings into
   `core/` dropped every Tailwind class used only there (`core/` is outside the scanned root; the fix
   is the `@source` line at the top of `index.css`, do not remove it). All 14 e2e scenarios passed over

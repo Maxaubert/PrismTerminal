@@ -406,6 +406,17 @@ describe('standing down', () => {
     expect(w.launched).toHaveLength(2)
   })
 
+  // Prism Terminal's dictation service (owner, 2026-10-17: "It needs to be
+  // ready at all times"): Infinity never stands down; stop() still ends it.
+  it('never stands down with an idleMs of Infinity', async () => {
+    const w = world({}, { idleMs: Infinity })
+    await w.engine.transcribe(req())
+    await sleep(300)
+    expect(w.engine.info().running).toBe(true)
+    w.engine.stop()
+    await until(() => gone(w.children[0]))
+  })
+
   it('counts the idle time from the LAST request, not the first', async () => {
     const w = world({}, { idleMs: 500 })
     await w.engine.transcribe(req())

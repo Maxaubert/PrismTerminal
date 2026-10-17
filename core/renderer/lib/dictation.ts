@@ -155,6 +155,37 @@ export function dictationOutside(action: 'start' | 'stop' | 'cancel'): void {
   } else if (action === 'stop') stop()
   else cancel()
 }
+/*
+ * ONE KEY PATH (Prism Terminal, owner 2026-10-17: "the dictation in the app
+ * and outside seem like two different things ... they should be the same
+ * thing"). A host whose main process reads the key everywhere (a keyboard
+ * hook) turns the window's own key reading off, drives every recording with
+ * `dictationOutside`, and has the words pasted into the tab in front with
+ * `pasteIntoFront` when its own window was in front. A host that sets none of
+ * this (Prism) reads the key in its window as before.
+ */
+let pageKeys = true
+let autoWarm = true
+let frontSession: (() => string | null) | null = null
+/** Whether this window reads the dictation key itself (on unless a host says). */
+export function setDictationPageKeys(on: boolean): void {
+  pageKeys = on
+}
+/** Whether this window warms the engine on its own (off in a copy whose
+ *  dictation another copy runs, so only one engine is resident). */
+export function setDictationAutoWarm(on: boolean): void {
+  autoWarm = on
+}
+/** Have the engine ready now (idempotent in main). */
+export function keepDictationWarm(): void {
+  warmEngine()
+}
+/** Paste dictated words at the cursor of the tab in front, never Enter. */
+export function pasteIntoFront(text: string): boolean {
+  const id = frontSession?.()
+  return !!id && pasteTextInto(id, text + ' ')
+}
+
 /** Said to the sink when the recording is the outside one, else on the pill. */
 function tell(r: Recording, message: string): void {
   if (r.sessionId === OUTSIDE) {
@@ -366,7 +397,13 @@ export function armDictation(activeSession: () => string | null): () => void {
     else if (out.action === 'cancel') cancel()
   }
 
-  const onKey = (e: KeyboardEvent): void =>
+  frontSession = activeSession
+  const onKey = (e: KeyboardEvent): void => {
+    // Another reader has the key (the host's hook): nothing held here either.
+    if (!pageKeys) {
+      keyState = initialKeyState()
+      return
+    }
     feed(
       {
         type: e.type === 'keydown' ? 'down' : 'up',
@@ -380,6 +417,7 @@ export function armDictation(activeSession: () => string | null): () => void {
       },
       e
     )
+  }
   const onBlur = (): void => feed({ type: 'blur', at: performance.now() })
 
   let warmTimer: number | null = null
@@ -389,7 +427,7 @@ export function armDictation(activeSession: () => string | null): () => void {
     // opened), and again when its model or language changes; off means off,
     // so nothing is warmed while it is off.
     if (warmTimer !== null) clearTimeout(warmTimer)
-    warmTimer = want ? window.setTimeout(() => {
+    warmTimer = want && autoWarm ? window.setTimeout(() => {
       warmTimer = null
       warmEngine()
     }, armed ? 500 : 3000) : null

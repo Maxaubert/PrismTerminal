@@ -1,7 +1,18 @@
 import { useEffect } from 'react'
 import { boolPref } from '@core/renderer/lib/prefStore'
-import { dictationOutside, dictationView, onDictationLevel, onDictationView, OUTSIDE, setDictationRoute } from '@core/renderer/lib/dictation'
-import { useDictationEnabled, useDictationHotkey, useDictationMode } from '@core/renderer/lib/dictationPrefs'
+import {
+  dictationOutside,
+  dictationView,
+  keepDictationWarm,
+  onDictationLevel,
+  onDictationView,
+  OUTSIDE,
+  pasteIntoFront,
+  setDictationAutoWarm,
+  setDictationPageKeys,
+  setDictationRoute
+} from '@core/renderer/lib/dictation'
+import { dictationEnabled, useDictationEnabled, useDictationHotkey, useDictationMode } from '@core/renderer/lib/dictationPrefs'
 
 /**
  * DICTATE FROM ANY APP (owner, 2026-10-16; spec:
@@ -67,11 +78,27 @@ export function useDictateAnywhereBridge(): void {
       if (action === 'start') window.prism.dictLook(look())
       dictationOutside(action)
     })
+    // ONE DICTATION (owner, 2026-10-17): with a service in reach (this copy or
+    // another) the hook reads the key, so this window does not; only the
+    // service's copy keeps an engine warm.
+    const offRole = window.prism.onDictRole((role) => {
+      setDictationPageKeys(role === 'none')
+      setDictationAutoWarm(role !== 'client')
+      if (role === 'client') window.prism.dictationStop()
+      else if (role === 'service' && dictationEnabled()) keepDictationWarm()
+    })
+    const offPaste = window.prism.onDictPaste((text) => {
+      pasteIntoFront(text)
+    })
     return () => {
       setDictationRoute(null)
+      setDictationPageKeys(true)
+      setDictationAutoWarm(true)
       offView()
       offLevel()
       offKey()
+      offRole()
+      offPaste()
     }
   }, [])
 }

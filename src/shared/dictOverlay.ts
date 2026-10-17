@@ -4,7 +4,8 @@
  * whatever window you're in"). Main sends one of these to the widget's page;
  * the page draws it and says back only a pick or a dismissal.
  */
-export type OverlayRow = { id: string; n: number; label: string; folder: string; state: string | null; disabled: string | null; lead: boolean }
+/** `copy`: which copy of the app the tab is in ("Stable"), when more than one is open. */
+export type OverlayRow = { id: string; n: number; label: string; folder: string; state: string | null; disabled: string | null; lead: boolean; copy: string | null }
 
 export type OverlayState =
   | { phase: 'listening'; text: string; level: number; starting: boolean }
