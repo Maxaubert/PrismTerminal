@@ -23,10 +23,12 @@ export const plusMenuRows = (): Array<{ path: string; pinned: boolean }> =>
  */
 export function useTabMenus({
   onClose,
-  onOpenRecent
+  onOpenRecent,
+  onOrchestrator
 }: {
   onClose: (id: string) => void
   onOpenRecent: (path: string) => void
+  onOrchestrator?: (id: string | null) => void
 }): {
   openTabMenu: (e: MouseEvent, t: Tab) => void
   openPlusMenu: (e: MouseEvent) => void
@@ -42,12 +44,12 @@ export function useTabMenus({
    *  raise the agent-is-working question, and firing several would overwrite
    *  it and stop the work it exists to protect. That wants App-side
    *  batching, which is a decision rather than a gap to fill here. */
-  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; id: string; cwd: string } | null>(
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; id: string; cwd: string; lead: boolean } | null>(
     null
   )
   const openTabMenu = (e: MouseEvent, t: Tab): void => {
     e.preventDefault()
-    setTabMenu({ x: e.clientX, y: e.clientY, id: t.id, cwd: t.kind === 'settings' ? '' : t.cwd })
+    setTabMenu({ x: e.clientX, y: e.clientY, id: t.id, cwd: t.kind === 'settings' ? '' : t.cwd, lead: !!t.orchestrator })
   }
   const openPlusMenu = (e: MouseEvent): void => {
     e.preventDefault()
@@ -82,6 +84,17 @@ export function useTabMenus({
                     // The core's copy: the page's clipboard, or main's when
                     // the page is refused one (as under --e2e, #183).
                     onPick: () => void copyText(tabMenu.cwd)
+                  }
+                ]
+              : []),
+            // THE ORCHESTRATOR (owner, 2026-10-16: "right click and choose
+            // make orchestrator"): only with the feature on, never on Settings.
+            ...(onOrchestrator && tabMenu.cwd
+              ? [
+                  {
+                    label: tabMenu.lead ? 'Stop being orchestrator' : 'Make orchestrator',
+                    icon: <MenuIcon name="lead" />,
+                    onPick: () => onOrchestrator(tabMenu.lead ? null : tabMenu.id)
                   }
                 ]
               : [])

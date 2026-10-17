@@ -172,7 +172,7 @@ const PREF_PAGE = {
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
   'agent-indicator': 'agents', 'agent-done-on': 'agents', 'agent-rainbow': 'agents', 'agent-question-on': 'agents', 'agent-failed-on': 'agents',
-  'taskbar-badge': 'agents', 'agent-hooks': 'agents', 'agent-color': 'agents', 'agent-done-color': 'agents',
+  'taskbar-badge': 'agents', 'agent-hooks': 'agents', 'orchestrator': 'agents', 'agent-color': 'agents', 'agent-done-color': 'agents',
   'agent-question-color': 'agents',
   'dictation-enabled': 'dictation', 'dictation-mode': 'dictation', 'dictation-hotkey': 'dictation', 'dictation-mic': 'dictation',
   'dictation-language': 'dictation', 'dictation-pause-media': 'dictation', 'dictation-sounds': 'dictation',
@@ -3021,6 +3021,141 @@ const scenarios = {
     } finally {
       await closeApp(app)
     }
+  },
+
+  /**
+   * THE ORCHESTRATOR (beta, 2026-10-16; spec:
+   * docs/superpowers/specs/2026-10-16-catch-up-report.md). Off by default: a
+   * shell gets no session list and no orchestrator plugin, and a tab's menu
+   * offers nothing. Switched on, a NEW tab gets both; a turn's hook naming its
+   * Claude session links it in sessions.json (an id that is not a UUID links
+   * nothing); a parked window is nobody looking, so nothing is stamped seen.
+   * "Make orchestrator" moves the tab first, with its outline and rule, and
+   * names its PRISM_TAB_ID for the role hook; switched off, that name goes.
+   */
+  async catchUp(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const SID = 'd1d2d3d4-e5e6-4f70-8a9b-0c1d2e3f4a5b'
+    const dir = await app.evaluate(({ app: a }) => a.getPath('userData'))
+    const file = dir + '\\sessions.json'
+    const leadFile = dir + '\\orchestrator-tab.txt'
+    const read = (f) => {
+      try {
+        return readFileSync(f, 'utf8')
+      } catch {
+        return null
+      }
+    }
+    const list = () => {
+      try {
+        return JSON.parse(read(file) ?? '')
+      } catch {
+        return null
+      }
+    }
+    const shells = () => page.locator('[data-tab]').filter({ hasNotText: /^Settings$/ })
+    const ENV = `'SF=' + [bool]$env:PRISM_SESSIONS_FILE + ' OP=' + ($env:CLAUDE_CODE_PLUGIN_DIRS -like '*claude-plugin-orchestrator*')`
+    const menuItems = async (i) => {
+      await shells().nth(i).click({ button: 'right' })
+      await page.waitForSelector('[role="menu"]', { timeout: 5000 })
+      const t = await page.locator('[role="menu"] [role="menuitem"]').allTextContents()
+      return t
+    }
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      await polled(page)
+      // Off by default.
+      await typeLine(page, ENV)
+      ok(!!(await until(async () => (await termText(page)).includes('SF=False OP=False'), 8000, 100)), 'off by default: no session list, no orchestrator plugin')
+      ok(!(await menuItems(0)).some((x) => /orchestrator/i.test(x)), 'and the tab menu offers no orchestrator')
+      await page.keyboard.press('Escape')
+      // On.
+      const sw = (await gotoPref(page, 'orchestrator')).locator('[role="switch"]')
+      ok((await sw.getAttribute('aria-checked')) === 'false', 'the Orchestrator switch is off by default')
+      await sw.click()
+      ok(!!(await until(async () => (await sw.getAttribute('aria-checked')) === 'true', 3000, 50)), 'and turns on')
+      await page.keyboard.press('Control+w')
+      await until(async () => (await page.locator('[data-tab]').count()) === 1, 4000, 50)
+      await shells().nth(0).click()
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.press('Control+t')
+      ok(!!(await until(async () => (await shells().count()) === 2)), 'a new tab')
+      await page.locator('.xterm').last().click({ force: true })
+      await typeLine(page, ENV)
+      ok(!!(await until(async () => (await termText(page)).includes('SF=True OP=True'), 8000, 100)), 'a tab opened with it on has the session list and the orchestrator plugin')
+      await typeLine(page, `${hookSay('working', ';session=../../etc')}; ${hookSay('done', `;session=${SID}`)}`)
+      const linked = await until(() => {
+        const l = list()
+        return l && l.sessions?.[SID] && l.tabs?.some((t) => t.session === SID) ? l : null
+      }, 10000, 200)
+      ok(!!linked, 'a hook naming its session links it to the tab in sessions.json')
+      ok(!!linked && Object.keys(linked.sessions).length === 1, `an id that is not a UUID links nothing (${linked ? Object.keys(linked.sessions).join(',') : '-'})`)
+      const rec = linked?.sessions?.[SID]
+      ok(!!rec?.lastHookAt && rec.open === true, `with its last hook and open (${JSON.stringify(rec)})`)
+      const t = linked?.tabs?.find((x) => x.session === SID)
+      ok(!!t && typeof t.tab === 'string' && t.tab.length > 10 && t.label !== '', `the tab carries its PRISM_TAB_ID and label (${JSON.stringify(t)})`)
+      await sleep(12000) // past the 10 s look
+      ok(list()?.sessions?.[SID]?.seen == null, 'a parked window is nobody looking: nothing is stamped seen')
+      // Make the second tab the orchestrator.
+      const items = await menuItems(1)
+      ok(items.some((x) => x.includes('Make orchestrator')), `the tab menu offers Make orchestrator (${JSON.stringify(items)})`)
+      await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Make orchestrator' }).click()
+      ok(!!(await until(async () => (await shells().nth(0).getAttribute('data-tab-orchestrator')) !== null, 3000, 50)), 'the orchestrator moves first')
+      ok((await page.locator('[data-tab-lead-divider]').count()) === 1, 'with one rule after it')
+      const outline = await shells().nth(0).evaluate((el) => getComputedStyle(el).outlineStyle)
+      ok(outline === 'solid', `and an outline (${outline})`)
+      await shotStrip(page, 'orchestrator-strip')
+      ok(!!(await until(() => read(leadFile) === t?.tab, 6000, 100)), `its PRISM_TAB_ID is named for the role hook (${read(leadFile)})`)
+      ok(!!(await until(() => list()?.tabs?.some((x) => x.orchestrator && x.session === SID), 6000, 100)), 'and sessions.json marks it')
+      const again = await menuItems(0)
+      ok(again.some((x) => x.includes('Stop being orchestrator')), 'its menu offers to stop')
+      await page.keyboard.press('Escape')
+      // SENDING INTO ANY TAB (owner, 2026-10-16: "to any session, not just
+      // whichever is in focus"). The other tab plays a Claude (its hook names a
+      // session); the orchestrator's script sends while the orchestrator is in
+      // front, and the text lands and is entered in the other tab. The stand-in
+      // is a pwsh prompt, so what arrives runs, and its output proves it.
+      const shown = () =>
+        page.evaluate(() => [...document.querySelectorAll('.xterm')].filter((x) => x.offsetParent !== null).map((x) => x.querySelector('.xterm-rows')?.textContent ?? '').join('\n'))
+      const SID2 = 'e1e2e3e4-f5f6-4a70-8b9c-0d1e2f3a4b5c'
+      await shells().nth(1).click()
+      await page.locator('.xterm').last().click({ force: true })
+      await typeLine(page, hookSay('done', `;session=${SID2}`))
+      ok(!!(await until(() => list()?.tabs?.some((x) => x.session === SID2 && x.agent === 'claude'), 8000, 100)), 'the other tab is a Claude with a session')
+      await shells().nth(0).click()
+      const msg = dir + '\\send-message.txt'
+      writeFileSync(msg, "Write-Output ('SENT-' + 'MARK-42')")
+      const SEND = resolve(process.cwd(), 'core/claude-plugin-orchestrator/skills/orchestrator/send.ps1')
+      // A shell that only SAYS it is Claude (its hook signal) is refused:
+      // the app asks Windows' process list before it types (security review).
+      await typeLine(page, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${SEND}' -To alpha -TextFile '${msg}'`)
+      ok(!!(await until(async () => (await shown()).includes('checked with Windows'), 15000, 100)), 'a tab that only claims to be Claude is refused')
+      // A stand-in Claude in that tab's process tree: a copy of PowerShell
+      // named claude.exe (what the detector reads), reading the tab's input.
+      const fake = dir + '\\stand-in\\claude.exe'
+      mkdirSync(dir + '\\stand-in', { recursive: true })
+      copyFileSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', fake)
+      await shells().nth(1).click()
+      await page.locator('.xterm').last().click({ force: true })
+      await typeLine(page, `& '${fake}' -NoLogo -NoProfile`)
+      await sleep(2500)
+      await shells().nth(0).click()
+      await typeLine(page, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${SEND}' -To alpha -TextFile '${msg}'`)
+      ok(!!(await until(async () => (await shown()).includes('SENT to alpha'), 15000, 100)), 'the orchestrator sends to a tab that is not in front')
+      await typeLine(page, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${SEND}' -To nosuchtab -Text 'x'`)
+      ok(!!(await until(async () => (await shown()).includes('NOT SENT: no tab matches'), 12000, 100)), 'and says so when no tab matches')
+      await shells().nth(1).click()
+      ok(!!(await until(async () => (await shown()).includes('SENT-MARK-42'), 8000, 100)), 'the message arrived in that tab and was entered')
+      // Off again: the role hook's name goes.
+      const sw2 = (await gotoPref(page, 'orchestrator')).locator('[role="switch"]')
+      await sw2.click()
+      ok(!!(await until(() => read(leadFile) === null, 4000, 100)), 'switched off, no tab is named orchestrator any more')
+      await page.keyboard.press('Control+w')
+    } finally {
+      await closeApp(app)
+    }
+    ok(!!list()?.sessions?.[SID], 'the list written while it was on stays on disk')
   },
 
   /**

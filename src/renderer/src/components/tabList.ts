@@ -41,6 +41,9 @@ export interface TabListProps {
   onReorder: (id: string, toIndex: number) => void
   /** Open a folder from New tab's list of places a tab has been opened. */
   onOpenRecent: (path: string) => void
+  /** Promote tab `id` to orchestrator, or (null) none (2026-10-16). Absent:
+   *  the menu offers nothing of the kind. */
+  onOrchestrator?: (id: string | null) => void
 }
 
 /** A tab's tooltip: the whole path (the label is its last segment), and while

@@ -7,6 +7,7 @@ import {
   pickTab,
   toggleSettings,
   reorderTabs,
+  setOrchestrator,
   setCwd,
   shellTabs,
   stepTab,
@@ -76,5 +77,26 @@ describe('tabs', () => {
   it('reorders, correcting for the removed slot', () => {
     expect(reorderTabs(three().tabs, 'a', 3).map((t) => t.id)).toEqual(['b', 'c', 'a'])
     expect(reorderTabs(three().tabs, 'c', 0).map((t) => t.id)).toEqual(['c', 'a', 'b'])
+  })
+
+  // THE ORCHESTRATOR (owner, 2026-10-16): one at most, always first.
+  it('makes one tab the orchestrator, first in the strip, and takes it back', () => {
+    const s = setOrchestrator(three(), 'c')
+    expect(s.tabs.map((t) => [t.id, !!t.orchestrator])).toEqual([['c', true], ['a', false], ['b', false]])
+    const moved = setOrchestrator(s, 'b')
+    expect(moved.tabs.map((t) => [t.id, !!t.orchestrator])).toEqual([['b', true], ['c', false], ['a', false]])
+    expect(setOrchestrator(moved, null).tabs.some((t) => t.orchestrator)).toBe(false)
+    expect(setOrchestrator(three(), 'nope')).toEqual(three())
+  })
+
+  it('keeps the orchestrator first whatever is dragged', () => {
+    const s = setOrchestrator(three(), 'a')
+    expect(reorderTabs(s.tabs, 'c', 0).map((t) => t.id)).toEqual(['a', 'c', 'b'])
+    expect(reorderTabs(s.tabs, 'a', 3).map((t) => t.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('never makes the Settings tab the orchestrator', () => {
+    const s = openSettings(three())
+    expect(setOrchestrator(s, s.activeId)).toBe(s)
   })
 })

@@ -529,6 +529,19 @@ so an update never silently changes what an existing user sees; the bridge to ma
     app's); the list draws a page at a time.
   - Its option list is `helpOptions.ts`, NOT a row in `TERMINAL_OPTIONS`: Prism's gate reads that
     file as text, and a row there would fail Prism's parity check until Prism wires the popup.
+- <a id="catch-up"></a>**THE ORCHESTRATOR: OPT-IN; THE CORE NAMES THE SESSION, THE APP KEEPS THE LEDGER** (2026-10-16;
+  owner: "a report of what's been done and what I need to do next", based on "whether I've seen the
+  session"; then "others that download this terminal ... if they don't want it, it's like already
+  in there" and "right click and choose make orchestrator"; spec
+  `docs/superpowers/specs/2026-10-16-catch-up-report.md`). In the core: the hooks' `session=` field
+  and its parser, `setSessionsFile` + `PRISM_SESSIONS_FILE` in `ptyEnv`, the opt-in orchestrator
+  plugin (`core/claude-plugin-orchestrator`: catch-up and orchestrator skills, the role hook) and
+  the `orchestratorOn` switch, OFF by default. In Prism Terminal's app code only: the ledger
+  (`src/main/sessionLedger.ts`: which tab holds which session, and when the owner really looked:
+  present and 10 s in front, or typing), `sessions.json`, the promoted tab (first, an accent
+  outline and rule; `orchestrator-tab.txt` names it for the role hook) and the Settings row. Prism
+  passes no orchestrator folder, so nothing changes there until the owner wires it. A terminal
+  plugin system (#118) may take it over later (owner: "we'll move it to a plug-in later perhaps").
 - <a id="page-looks-right"></a>**A PAGE THAT WORKS IS NOT A PAGE THAT LOOKS RIGHT** (#20, 2026-09-19). Moving the settings into
   `core/` dropped every Tailwind class used only there (`core/` is outside the scanned root; the fix
   is the `@source` line at the top of `index.css`, do not remove it). All 14 e2e scenarios passed over
