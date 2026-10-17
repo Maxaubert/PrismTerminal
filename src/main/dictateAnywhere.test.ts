@@ -1,9 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('electron', () => ({ BrowserWindow: class {}, screen: {} }))
+// A window whose every method is a no-op: enough for the widget to "show".
+vi.mock('electron', () => {
+  const noop = (): unknown => new Proxy(() => {}, { get: (_t, k) => (k === 'then' ? undefined : k === 'isLoading' || k === 'isVisible' || k === 'isDestroyed' ? () => false : noop()), apply: () => undefined })
+  class BrowserWindow {
+    constructor() {
+      return noop() as BrowserWindow
+    }
+  }
+  const area = { workArea: { x: 0, y: 0, width: 1920, height: 1080 } }
+  return { BrowserWindow, screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }), getDisplayNearestPoint: () => area } }
+})
 
 import { decideInto, dictationRoute, type SendTab } from './orchestratorSend'
-import { folderTail, pickRows } from './dictateAnywhere'
+import { folderTail, pickRows, startDictateAnywhere } from './dictateAnywhere'
 
 /**
  * Where dictated words go from outside the app (owner, 2026-10-16): to the
@@ -43,6 +53,36 @@ describe('dictationRoute', () => {
     const many = Array.from({ length: 12 }, (_, i) => tab({ id: `p${i}`, label: `t${i}` }))
     const r = dictationRoute([tab({ id: 'sh', agent: null, session: null }), ...many, tab({ id: 'L', orchestrator: true, state: 'question' })], true)
     expect('pick' in r && r.pick.map((t) => t.id)).toEqual(['L', 'p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])
+  })
+})
+
+describe('the key with a Prism Terminal in front', () => {
+  // MEASURED 2026-10-17: Stable and the installed app both took every press.
+  const started = () => {
+    const toPage = vi.fn()
+    const handlers: Record<string, (...a: unknown[]) => void> = {}
+    const a = startDictateAnywhere({
+      script: '', preload: '', loadPage: () => {}, mainWindow: () => null, sessions: () => null, toPage,
+      onIpc: (ch, fn) => {
+        handlers[ch] = fn
+      },
+      channels: { anywhere: 'a', live: 'l', routed: 'r', look: 'k' },
+      e2e: true
+    })
+    handlers['a']({ on: true, hotkey: { code: 'F8', ctrl: false, alt: false, shift: false, meta: false }, mode: 'toggle' })
+    return { a, toPage }
+  }
+  it('leaves it to that window when another copy of the app is in front', () => {
+    const { a, toPage } = started()
+    a.line({ kind: 'key', type: 'down', code: 'F8', front: true })
+    a.line({ kind: 'key', type: 'up', code: 'F8' })
+    expect(toPage).not.toHaveBeenCalled()
+  })
+  it('starts with any other app in front', () => {
+    const { a, toPage } = started()
+    a.line({ kind: 'key', type: 'down', code: 'F8' })
+    a.line({ kind: 'key', type: 'up', code: 'F8' })
+    expect(toPage).toHaveBeenCalledWith('start')
   })
 })
 

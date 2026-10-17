@@ -39,6 +39,8 @@ export interface AnywhereDeps {
   toPage: (action: 'start' | 'stop' | 'cancel') => void
   onIpc: (channel: string, fn: (...args: unknown[]) => void) => void
   channels: { anywhere: string; live: string; routed: string; look: string }
+  /** A diag crumb (never a key but the binding's; never typed text). */
+  log?: (what: Record<string, unknown>) => void
   /** Under --e2e: no real hook; `line` is the only way keys arrive. */
   e2e?: boolean
 }
@@ -185,6 +187,7 @@ export function startDictateAnywhere(d: AnywhereDeps): { stop(): void; line(l: H
   /* ----- the key ----- */
   const act = (a: 'start' | 'stop' | 'cancel' | null): void => {
     if (!a) return
+    d.log?.({ key: a })
     if (a === 'start') {
       endPick()
       outside = true
@@ -206,10 +209,16 @@ export function startDictateAnywhere(d: AnywhereDeps): { stop(): void; line(l: H
         return
       }
     }
+    if (l.kind === 'ready' || l.kind === 'failed' || l.kind === 'waiting') {
+      d.log?.({ hook: l.kind })
+      return
+    }
     if (!cfg?.on) return
     // With the app in front its own page reads the key (as it always has),
-    // unless this recording started outside.
-    if (d.mainWindow()?.isFocused() && !outside) {
+    // unless this recording started outside. A Prism Terminal in front that
+    // is ANOTHER copy (Stable beside the installed app) reads it there too.
+    const front = l.kind === 'key' && l.front === true
+    if ((d.mainWindow()?.isFocused() || front) && !outside) {
       feed.reset()
       return
     }

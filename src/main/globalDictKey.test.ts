@@ -33,6 +33,8 @@ describe('parseHelperLine', () => {
     expect(parseHelperLine('x')).toEqual({ kind: 'esc' })
     expect(parseHelperLine('p 0')).toBeNull()
     expect(parseHelperLine('d ZZ')).toBeNull()
+    expect(parseHelperLine('d 5B f')).toEqual({ kind: 'key', type: 'down', code: 'MetaLeft', front: true })
+    expect(parseHelperLine('waiting')).toEqual({ kind: 'waiting' })
     expect(parseHelperLine('hello')).toBeNull()
   })
 })
@@ -81,7 +83,9 @@ describe.runIf(process.platform === 'win32')('the hook helper', () => {
     execFileSync('powershell.exe', ['-NoProfile', '-Command', TAP_F24], { windowsHide: true })
     await new Promise((r) => setTimeout(r, 400))
     h.stop()
-    expect(lines.filter((l) => l.kind !== 'ready')).toEqual([
+    // `front` says whether a Prism Terminal window is in front, which depends on
+    // where the suite runs from: not this test's business.
+    expect(lines.filter((l) => l.kind !== 'ready').map((l) => (l.kind === 'key' ? { kind: l.kind, type: l.type, code: l.code } : l))).toEqual([
       { kind: 'key', type: 'down', code: 'F24' },
       { kind: 'key', type: 'up', code: 'F24' }
     ])

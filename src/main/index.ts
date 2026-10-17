@@ -11,6 +11,7 @@ import { openFolderDefault } from '@core/main/termPathOpen'
 import { registerDictationIpc } from '@core/main/dictationIpc'
 import { startDiagnostics, type Diagnostics } from '@core/main/diagnostics'
 import { withStackPolicy } from '@core/main/diagIpc'
+import { diagMain } from '@core/main/diagLog'
 import { planRestore } from './planRestore'
 import { foldersFromArgv } from './argv'
 import { acrylicOk, createMaterial } from './material'
@@ -499,6 +500,7 @@ function wireIpc(): void {
     toPage: (action) => send(APP_CH.dictOutside, action),
     channels: { anywhere: APP_CH.dictAnywhere, live: APP_CH.dictLive, routed: APP_CH.dictRouted, look: APP_CH.dictLook },
     onIpc: (ch, fn) => ipcMain.on(ch, (_e, ...args: unknown[]) => fn(...args)),
+    log: (what) => diagMain().write('main', 'crumb', { a: 'dictate-anywhere', ...what }),
     e2e: E2E
   })
   app.on('will-quit', () => anywhere.stop())
