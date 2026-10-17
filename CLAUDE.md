@@ -50,7 +50,8 @@ read the full entry before changing anything it names.
 1. [What reaches a shell is inert until the user acts](docs/regression-rules.md#inert-input): pastes
    go through `sanitizePaste`, paths through `quotePath` per shell, Windows tools by full path.
 2. [The only command the app writes into a shell is the agent resume](docs/regression-rules.md#only-command-is-resume),
-   as the STARTUP command with a validated id. Never type into a user's shell; a program gets only
+   as the STARTUP command with a validated id. Never type into a user's shell (one owner exception: the opt-in
+   orchestrator types into another tab's RUNNING Claude prompt, never a shell; see the rule); a program gets only
    [replies to what it asked](docs/regression-rules.md#replies-only-when-asked). The id rides in the
    environment: [one command line per kind of shell, no `-EncodedCommand`](docs/regression-rules.md#same-command-line),
    or Defender holds main 700 ms per shell at launch (#180).

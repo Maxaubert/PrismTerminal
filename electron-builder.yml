@@ -43,6 +43,17 @@ extraResources:
   # on disk, never inside the asar (core/** is left out of it above).
   - from: core/claude-plugin
     to: claude-plugin
+  # The opt-in orchestrator plugin (2026-10-16): added to a shell only when
+  # Settings > Agents > Orchestrator is on.
+  - from: core/claude-plugin-orchestrator
+    to: claude-plugin-orchestrator
+  # The app's one helper (2026-10-17): the DWM attributes and the dictation
+  # key's keyboard hook, in one PowerShell.
+  - from: src/main/hook
+    to: app-helper
+  # The resident Parakeet host (2026-10-17): the model kept loaded.
+  - from: core/dictation-host
+    to: dictation-host
 win:
   icon: build/icon.ico
   executableName: PrismTerminal

@@ -61,7 +61,8 @@ export function TabSidebar({
   onNew,
   onDropFolder,
   onReorder,
-  onOpenRecent
+  onOpenRecent,
+  onOrchestrator
 }: TabListProps): JSX.Element | null {
   const mode = useSidebarLayout()
   // Pinned or unpinned just now: its room and its left slide together.
@@ -76,7 +77,7 @@ export function TabSidebar({
     failedIds,
     agentIds
   })
-  const menu = useTabMenus({ onClose, onOpenRecent })
+  const menu = useTabMenus({ onClose, onOpenRecent, onOrchestrator })
   // FIND A TAB (owner, 2026-10-12, of the sidebar looks mockup): typing keeps
   // the rows whose name or folder has every word; Enter puts the first in
   // front, Escape lets go. Ctrl+Shift+K (App) comes here.
@@ -340,10 +341,11 @@ export function TabSidebar({
             ) : mark.place === 'ring' ? (
               <TabMark mark={mark} state={state} background={paint(mark.colour, 'x')} />
             ) : null
-            return (
+            const row = (
               <div
                 key={t.id}
                 data-tab
+                data-tab-orchestrator={t.orchestrator || undefined}
                 data-tab-active={on || undefined}
                 data-agent={state ? indicator : undefined}
                 data-agent-state={state ?? undefined}
@@ -358,6 +360,8 @@ export function TabSidebar({
                 // Every name in the sidebar's own ink, held to 7:1 (chromeTheme):
                 // the tint, not a dimmer name, says which tab is in front.
                 className={`no-drag group relative isolate mx-2 flex shrink-0 items-center gap-2.5 overflow-hidden rounded-[8px] pr-2 text-[var(--p-side-text)] transition-colors ${
+                  t.orchestrator ? 'outline outline-[1.5px] -outline-offset-[1.5px] outline-[color-mix(in_srgb,var(--p-accent-hi)_70%,transparent)] ' : ''
+                }${
                   on
                     ? 'bg-[color-mix(in_srgb,var(--p-accent-hi)_14%,transparent)]'
                     : 'bg-[color-mix(in_srgb,var(--p-text)_3%,transparent)] hover:bg-[color-mix(in_srgb,var(--p-text)_6%,transparent)]'
@@ -404,6 +408,20 @@ export function TabSidebar({
                 <TabEnd ring={ring} label={labels[i]} on={on} size={18} onClose={() => onClose(t.id)} />
               </div>
             )
+            // THE ORCHESTRATOR LEADS (owner, 2026-10-16: "first in the list and
+            // there's a divider line under it"): its card wears an accent
+            // outline, and an accent rule sets it apart from the rest.
+            return t.orchestrator && !(kept && !kept[i])
+              ? [
+                  row,
+                  <div
+                    key={`${t.id}-lead`}
+                    data-tab-lead-divider
+                    aria-hidden
+                    className="mx-4 my-1 h-0.5 shrink-0 rounded-full bg-[color-mix(in_srgb,var(--p-accent-hi)_60%,transparent)]"
+                  />
+                ]
+              : row
           })}
         </div>
         {/* NEW TAB, A BUTTON AT THE FOOT (owner, 2026-10-12, of the sidebar

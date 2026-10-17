@@ -49,9 +49,46 @@ Everything else happens **only when you ask for it**:
 Prism Terminal adds a small local plugin to the Claude Code sessions started in its tabs, so the tab
 can show what the agent is doing: working, waiting on you, finished or failed. The plugin's hooks
 print one fixed line into that tab's own terminal; they send nothing over the network, read
-nothing, and write no file. It is passed through an environment variable of the tab's shell, never
+nothing, and write no file. Two of them (a prompt sent, a turn finished) also name the Claude
+session's id, so the app knows which conversation is in which tab. It is passed through an environment variable of the tab's shell, never
 written into your Claude Code settings. Settings > Appearance > "Exact status from Claude Code"
 turns it off for every terminal opened afterwards.
+
+## The orchestrator (beta, off unless you turn it on)
+
+Settings > Agents > Orchestrator is OFF by default; with it off, none of this happens. Turned on,
+to answer "what happened in my other tabs while I was away", Prism Terminal keeps a small list on
+your PC, `sessions.json` beside its settings: each tab's label and folder, the id of the Claude
+session in it, its state (working, finished, waiting on you), and when you last really looked at it
+(the tab in front, the window focused, and you using the keyboard or mouse). No conversation text,
+nothing you type. Every tab's shell is told where the list is (`PRISM_SESSIONS_FILE`).
+
+New tabs then also get a second local plugin, the orchestrator's: its skills, and a hook that tells
+Claude it is the orchestrator in the one tab you promoted (its id is kept in
+`orchestrator-tab.txt` beside the list). The catch-up skill reads that list and the NEW part of each session's own Claude Code
+transcript on your PC, and puts excerpts of them (your prompts, Claude's answers, PRs and commits)
+into the Claude session where you asked for the report, which, like anything in a Claude Code
+session, goes to Anthropic. It sends nothing anywhere else, and writes only its own cursor
+(`catch-up.json`) beside the list. It runs only when you ask for it.
+
+## Dictating from any app
+
+With dictation on and Settings > Dictation > "Dictate from any app" on (the default when dictation
+is on), a small helper watches the keyboard so the dictation key works with another app in front.
+It reads only the dictation key's own keys, notes only THAT another key was pressed while they are
+held (never which), and, only while the widget's list of sessions is open, the digits 1 to 9 and
+Esc (which it keeps from the app in front). It writes nothing anywhere and sends nothing. What you
+say is handled as all dictation is: transcribed on your PC, then sent to the Claude session you
+pick, or to the orchestrator tab.
+
+With more than one copy of Prism Terminal open (for example a stable copy beside the installed
+app), or Prism beside it, one copy runs the dictation for all of them. The copies talk over a local named pipe that
+only your Windows account uses: the running copy asks the others for their tab list (the tab's
+name, folder and whether Claude runs there) so the list of sessions shows every copy's, and hands a
+copy the words to type into one of its tabs. Nothing on the pipe leaves your PC. Both ends first
+prove they hold a key only your Windows account can read (a file of random bytes beside the speech
+models, made once); nothing else is written to disk. While the dictation key is held, the helper
+notes which program's window is in front (its process number only), so the words go to that app.
 
 ## What programs in a tab can do
 

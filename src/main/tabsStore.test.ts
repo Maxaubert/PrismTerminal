@@ -73,3 +73,11 @@ describe('tabsStore', () => {
     expect(existsSync(file)).toBe(false)
   })
 })
+
+// The orchestrator (2026-10-16): kept, and only the first one marked.
+describe('the orchestrator mark', () => {
+  it('keeps one orchestrator, the first marked, and nothing that is not a true', () => {
+    const r = parseTabs(JSON.stringify({ tabs: [{ cwd: 'C:\\a', orchestrator: 'yes' }, { cwd: 'C:\\b', orchestrator: true }, { cwd: 'C:\\c', orchestrator: true }], active: 0 }))
+    expect(r.tabs).toEqual([{ cwd: 'C:\\a' }, { cwd: 'C:\\b', orchestrator: true }, { cwd: 'C:\\c' }])
+  })
+})

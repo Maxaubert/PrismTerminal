@@ -529,6 +529,40 @@ so an update never silently changes what an existing user sees; the bridge to ma
     app's); the list draws a page at a time.
   - Its option list is `helpOptions.ts`, NOT a row in `TERMINAL_OPTIONS`: Prism's gate reads that
     file as text, and a row there would fail Prism's parity check until Prism wires the popup.
+- <a id="catch-up"></a>**THE ORCHESTRATOR: OPT-IN; THE CORE NAMES THE SESSION, THE APP KEEPS THE LEDGER** (2026-10-16;
+  owner: "a report of what's been done and what I need to do next", based on "whether I've seen the
+  session"; then "others that download this terminal ... if they don't want it, it's like already
+  in there" and "right click and choose make orchestrator"; spec
+  `docs/superpowers/specs/2026-10-16-catch-up-report.md`). In the core: the hooks' `session=` field
+  and its parser, `setSessionsFile` + `PRISM_SESSIONS_FILE` in `ptyEnv`, the opt-in orchestrator
+  plugin (`core/claude-plugin-orchestrator`: catch-up and orchestrator skills, the role hook) and
+  the `orchestratorOn` switch, OFF by default. In Prism Terminal's app code only: the ledger
+  (`src/main/sessionLedger.ts`: which tab holds which session, and when the owner really looked:
+  present and 10 s in front, or typing), `sessions.json`, the promoted tab (first, an accent
+  outline and rule; `orchestrator-tab.txt` names it for the role hook) and the Settings row. Prism
+  passes no orchestrator folder, so nothing changes there until the owner wires it. A terminal
+  plugin system (#118) may take it over later (owner: "we'll move it to a plug-in later perhaps").
+- <a id="dictate-anywhere"></a>**DICTATION'S KEY IS CTRL+WIN, AND PRISM TERMINAL DICTATES FROM ANY APP** (owner, 2026-10-16:
+  "one dictation key ... control plus the windows key"; spec `docs/superpowers/specs/2026-10-16-dictate-anywhere.md`).
+  In the core, so BOTH apps change: `DEFAULT_HOTKEY` is Ctrl+Win (right Alt is AltGr on a Norwegian keyboard), a
+  chord of modifiers follows the solo rules (either key first; Ctrl+Win+Left is no dictation), a saved key is kept;
+  `dictationOutside` / `setDictationRoute` let a host start a recording that belongs to no tab and take what was
+  heard; `DictationPage` takes `after` rows. In Prism Terminal's app code only: the keyboard hook helper
+  (`src/main/hook/appHelper.ps1`, the app's one helper since 2026-10-17, which also sets the DWM attributes; `globalDictKey.ts`), the widget window (`dictateAnywhere.ts`,
+  `src/renderer/overlay.html`), the routing and the Settings row. Prism keeps dictating in its own window only.
+  **ONE DICTATION** (owner, 2026-10-17: "they should be the same thing ... one dictation engine for both";
+  spec `docs/superpowers/specs/2026-10-17-one-dictation.md`): in Prism Terminal the hook reads the key with the app
+  in front too, and the copy holding the hook's lock runs the dictation for every copy (`src/main/dictationLink.ts`,
+  a local pipe). Core additions, all off unless a host asks, so Prism is unchanged: `setDictationPageKeys`,
+  `setDictationAutoWarm`, `keepDictationWarm`, `pasteIntoFront` (core `dictation.ts`) and `idleMs` on
+  `registerDictationIpc` (Prism Terminal passes Infinity: "It needs to be ready at all times").
+  **EVERY APP'S SESSIONS IN THE LIST, GROUPED** (owner, 2026-10-17: "if it's a session from Prism, it should have
+  the header Prism above it"; spec `docs/superpowers/specs/2026-10-17-dictation-all-apps.md`): the link
+  (`core/main/dictationLink.ts`), the send rules (`core/main/orchestratorSend.ts`) and a ready client
+  (`core/main/dictationClient.ts`, `startDictationClient`) are core now, so Prism joins with its tabs, its checked
+  send and its front-tab paste, and turns its own key reading off while connected. The hook names the front
+  window's process for every key down; the list is grouped under a header per app ("Prism", "Prism Terminal",
+  "Prism Terminal (2)", "Prism Terminal (Stable)") when more than one has sessions. Prism's own wiring is its PR.
 - <a id="page-looks-right"></a>**A PAGE THAT WORKS IS NOT A PAGE THAT LOOKS RIGHT** (#20, 2026-09-19). Moving the settings into
   `core/` dropped every Tailwind class used only there (`core/` is outside the scanned root; the fix
   is the `@source` line at the top of `index.css`, do not remove it). All 14 e2e scenarios passed over

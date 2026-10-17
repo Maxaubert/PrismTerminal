@@ -3,7 +3,7 @@ import pkg from '../../package.json'
 import { existsSync } from 'fs'
 import { stat } from 'fs/promises'
 import { homedir } from 'os'
-import { dirname, join } from 'path'
+import { basename, dirname, join } from 'path'
 import type { BadgeImage, Restored, SavedTabs, UpdateInfo } from '@shared/types'
 import { claudeSessionsAsync } from '@core/main/agentResume'
 import { registerTermIpc } from '@core/main/ipc'
@@ -11,15 +11,22 @@ import { openFolderDefault } from '@core/main/termPathOpen'
 import { registerDictationIpc } from '@core/main/dictationIpc'
 import { startDiagnostics, type Diagnostics } from '@core/main/diagnostics'
 import { withStackPolicy } from '@core/main/diagIpc'
+import { diagMain } from '@core/main/diagLog'
+import { copyName } from '@core/main/dictationLink'
 import { planRestore } from './planRestore'
 import { foldersFromArgv } from './argv'
 import { acrylicOk, createMaterial } from './material'
 import { stopDwmHelper, warmDwmHelper } from './dwmHelper'
+import { configureAppHelper } from './appHelper'
+import { linkKey, linkPipe } from '@core/main/dictationLink'
 import { createWindowEdge } from './windowEdge'
 import { createEdgeWatch } from './edgeWatch'
 import { DEFAULT_WINDOW_EDGES, validWindowEdges, type WindowEdges } from '@shared/windowEdges'
 import { detectShells } from '@core/main/shells'
 import { createTabsStore } from './tabsStore'
+import { startSessions, type Sessions } from './sessionsWire'
+import { startDictateAnywhere } from './dictateAnywhere'
+import { parseHelperLine } from './globalDictKey'
 import { killAll, shellsDying, shellsGone } from '@core/main/terminal'
 import { installUpdate, updateCalls, watchForUpdates } from './update'
 import { previewUpdate, runPreviewInstall, wantsPreview } from '@core/main/updatePreview'
@@ -79,6 +86,22 @@ if (E2E) Object.assign(globalThis, { __e2eOpenedLinks: e2eOpenedLinks })
 // run never reads or replaces what the owner copied. On the global so a
 // scenario can see it is the stand-in.
 if (E2E) Object.assign(globalThis, { __e2eClipboard: stubClipboard(clipboard, () => nativeImage.createEmpty()) })
+/**
+ * The pipe every copy of the app meets on for the one dictation, and the
+ * user's link key both ends prove they hold (dictationLink). The key lives
+ * beside the speech models, under the user's own profile. Under --e2e only a
+ * scenario's own pipe and key: it must never reach the owner's copies.
+ */
+function dictationLinkConfig(): { pipe: string; key: Buffer; name: string } | null {
+  const name = copyName(process.execPath)
+  if (E2E) {
+    const pipe = process.env.PT_E2E_DICT_PIPE
+    const key = Buffer.from(process.env.PT_E2E_DICT_KEY ?? '', 'hex')
+    return pipe && key.length === 32 ? { pipe, key, name } : null
+  }
+  const key = linkKey(join(process.env.PT_DICTATION_ROOT ?? join(localAppData(), 'PrismDictation'), 'link.key'))
+  return key ? { pipe: linkPipe(key), key, name } : null
+}
 function openLink(url: string): void {
   if (E2E) {
     e2eOpenedLinks.push(url)
@@ -138,6 +161,14 @@ function claudePluginDir(): string | undefined {
   // is found the same way): app.getAppPath() is that folder when the e2e
   // launches the script directly.
   const dir = app.isPackaged ? join(process.resourcesPath, 'claude-plugin') : join(__dirname, '../../core/claude-plugin')
+  return existsSync(join(dir, 'hooks', 'hooks.json')) ? dir : undefined
+}
+
+/** The opt-in orchestrator plugin (2026-10-16), found the same way. */
+function orchestratorPluginDir(): string | undefined {
+  const dir = app.isPackaged
+    ? join(process.resourcesPath, 'claude-plugin-orchestrator')
+    : join(__dirname, '../../core/claude-plugin-orchestrator')
   return existsSync(join(dir, 'hooks', 'hooks.json')) ? dir : undefined
 }
 
@@ -245,6 +276,9 @@ let firstRestore = true
 let pendingFolders: string[] = []
 
 const tabs = createTabsStore(join(app.getPath('userData'), 'tabs.json'))
+/** The catch-up report's ledger (2026-10-16): which Claude session is in which
+ *  tab and when the owner really looked, written to sessions.json. */
+let sessions: Sessions | null = null
 
 /** The newest update offer, remembered so a page that loads after it was made
  *  still hears about it (`update:announce`), and so `update:install` can tell a
@@ -350,6 +384,12 @@ function createWindow(): void {
     material.settled() // a window made after the prefs were said still wears them
     // The helper compiles its one P/Invoke now, so the first edge change is a
     // pipe write and not a two-second wait.
+    // The app's one helper (DWM attributes, the dictation key's hook), its
+    // compiled code cached in the profile so a start pays no compiler.
+    configureAppHelper(
+      app.isPackaged ? join(process.resourcesPath, 'app-helper', 'appHelper.ps1') : join(__dirname, '../../src/main/hook/appHelper.ps1'),
+      join(app.getPath('userData'), 'helper-cache')
+    )
     if (!E2E) warmDwmHelper()
     edge.apply()
   })
@@ -373,6 +413,7 @@ function createWindow(): void {
       return
     }
     tabs.flush()
+    sessions?.flush()
     killAll()
     // Not prevented: the window closes, and window-all-closed ends the app.
   })
@@ -381,6 +422,7 @@ function createWindow(): void {
   // (those just before a hang at shutdown) are written here.
   win.on('session-end', () => {
     tabs.flush()
+    sessions?.flush()
     diag?.log.write('main', 'session-end', {})
     diag?.log.flushSync()
   })
@@ -446,6 +488,58 @@ function createWindow(): void {
  * IPC. Registered once, at ready; every handler reads `mainWindow` live.
  * ------------------------------------------------------------------ */
 function wireIpc(): void {
+  /* ----- the catch-up report's ledger ----- */
+
+  // First: it names the sessions file every shell is given, so even a warm
+  // shell spawned next carries it.
+  sessions = startSessions({
+    file: join(app.getPath('userData'), 'sessions.json'),
+    app: basename(app.getPath('userData')),
+    window: () => mainWindow,
+    power: () => powerMonitor,
+    on: (ch, fn) => ipcMain.on(ch, (_e, ...args: unknown[]) => fn(...args)),
+    channels: {
+      tabs: APP_CH.ledgerTabs,
+      front: APP_CH.ledgerFront,
+      link: APP_CH.ledgerLink,
+      engage: APP_CH.ledgerEngage,
+      enable: APP_CH.ledgerEnable
+    }
+  })
+
+  /* ----- dictating from any app (2026-10-16) ----- */
+
+  // The key from any app, the widget, and where the words go. Under --e2e the
+  // real keyboard hook never runs (it would read the owner's keys and mask
+  // their Start menu); the suite feeds helper lines through a seam instead.
+  const anywhere = startDictateAnywhere({
+    preload: join(__dirname, '../preload/overlay.js'),
+    loadPage: (w) => {
+      const devUrl = process.env['ELECTRON_RENDERER_URL']
+      if (devUrl) void w.loadURL(`${devUrl}/overlay.html`)
+      else void w.loadFile(join(__dirname, '../renderer/overlay.html'))
+    },
+    mainWindow: () => mainWindow,
+    sessions: () => sessions,
+    toPage: (action) => send(APP_CH.dictOutside, action),
+    selfPid: process.pid,
+    link: dictationLinkConfig(),
+    pageRole: (role) => send(APP_CH.dictRole, role),
+    pastePage: (text) => send(APP_CH.dictPaste, text),
+    channels: { anywhere: APP_CH.dictAnywhere, live: APP_CH.dictLive, routed: APP_CH.dictRouted, look: APP_CH.dictLook },
+    onIpc: (ch, fn) => ipcMain.on(ch, (_e, ...args: unknown[]) => fn(...args)),
+    log: (what) => diagMain().write('main', 'crumb', { a: 'dictate-anywhere', ...what }),
+    e2e: E2E
+  })
+  app.on('will-quit', () => anywhere.stop())
+  if (E2E)
+    (globalThis as { __e2eDictRoute?: (text: string, front: number | null) => void }).__e2eDictRoute = (text, front) =>
+      anywhere.route({ text }, front)
+  if (E2E) (globalThis as { __e2eDictLine?: (l: string) => void }).__e2eDictLine = (l: string) => {
+    const parsed = parseHelperLine(l)
+    if (parsed) anywhere.line(parsed)
+  }
+
   /* ----- tabs ----- */
 
   // What the strip comes back as. The FIRST answer of the process also carries
@@ -525,6 +619,7 @@ function wireIpc(): void {
     // the app (electron-builder's extraResources), and a dev build reads the
     // core's own copy. A shell gets it while the page's setting is on.
     claudePluginDir: claudePluginDir(),
+    orchestratorPluginDir: orchestratorPluginDir(),
     // A bell flashes the taskbar while the window is unfocused (#177).
     attention: bellAttention
   })
@@ -549,6 +644,18 @@ function wireIpc(): void {
     sharedRoot:
       process.env.PT_DICTATION_ROOT ??
       join(localAppData(), 'PrismDictation'),
+    // Ready at all times (owner, 2026-10-17): the engine never stands down
+    // on its own. Only the copy running the dictation warms one.
+    idleMs: Infinity,
+    // Parakeet kept loaded (owner, 2026-10-17): 24 to 170 ms a pass against
+    // parakeet-cli's 0.72 to 0.86 s, MEASURED. Its compiled code is cached
+    // beside the models, so a start pays no compiler.
+    parakeetHost: () => ({
+      script: app.isPackaged
+        ? join(process.resourcesPath, 'dictation-host', 'parakeetHost.ps1')
+        : join(app.getAppPath(), 'core', 'dictation-host', 'parakeetHost.ps1'),
+      cache: join(process.env.PT_DICTATION_ROOT ?? join(localAppData(), 'PrismDictation'), 'host-cache')
+    }),
     hasNvidia: async () => {
       if (process.env.PT_E2E_NVIDIA) return process.env.PT_E2E_NVIDIA === '1'
       const info = (await app.getGPUInfo('basic')) as { gpuDevice?: Array<{ vendorId?: number }> }
@@ -819,6 +926,7 @@ if (!app.requestSingleInstanceLock()) {
     stopDictation()
     killAll()
     tabs.flush()
+    sessions?.flush()
     // Nothing dying: no hold. A hold that ends at once is worse than none:
     // its app.quit() lands inside the quit it cancelled and Electron drops it,
     // so the app stayed up (MEASURED, the opacityAlpha quit). Hence also the

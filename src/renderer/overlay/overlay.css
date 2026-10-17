@@ -1,0 +1,248 @@
+/* THE DICTATION WIDGET (2026-10-16). The app's own inks, handed over by main
+   from the theme in front (rule 15); these are only the first frame's. Sized
+   for the owner at 225% zoom: 17 px words, 44 px rows. */
+:root {
+  --ground: #16161a;
+  --text: #f2f2f4;
+  --dim: #b4b4bd;
+  --accent: #e8925c;
+  --edge: #3a3a44;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  font: 15px/1.4 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  color: var(--text);
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 10px 14px 14px;
+}
+#card {
+  width: 100%;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ground) 96%, transparent);
+  border: 1px solid color-mix(in srgb, var(--edge) 80%, var(--text) 20%);
+  box-shadow: 0 10px 28px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.35);
+  padding: 14px 16px 12px;
+  animation: rise 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+#card[data-phase='idle'] {
+  display: none;
+}
+@keyframes rise {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+.badge.ring::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0.55;
+  animation: breathe 1.4s ease-in-out infinite;
+}
+@keyframes breathe {
+  50% {
+    transform: scale(1.12);
+    opacity: 0.15;
+  }
+}
+.icon {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon.check {
+  stroke-width: 2.6;
+}
+.icon.warn {
+  color: #f0b45a;
+}
+.title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meter {
+  height: 4px;
+  margin: 12px 0 10px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  overflow: hidden;
+}
+.level {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  transform: scaleX(0.04);
+  background: var(--accent);
+  border-radius: 2px;
+  transition: transform 90ms linear;
+}
+.live,
+.said {
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.said {
+  margin: 10px 0 10px;
+  padding-left: 12px;
+  border-left: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  color: var(--dim);
+  -webkit-line-clamp: 2;
+}
+.hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--dim);
+}
+.dots {
+  margin: 12px 0 4px 46px;
+  width: 42px;
+  height: 6px;
+  background: radial-gradient(circle, var(--accent) 3px, transparent 3.5px) 0 0 / 14px 6px repeat-x;
+  animation: dots 900ms steps(3) infinite;
+}
+@keyframes dots {
+  to {
+    background-position: 42px 0;
+  }
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 340px;
+  overflow: auto;
+}
+.group {
+  margin: 8px 4px 2px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--dim);
+}
+.group:first-child {
+  margin-top: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.row:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.row:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.row:disabled:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  border-color: transparent;
+}
+.num {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.label {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.folder {
+  font-size: 12.5px;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip {
+  flex: none;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--dim);
+  border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+}
+.chip.orchestrator {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  #card,
+  .badge.ring::after,
+  .dots {
+    animation: none;
+  }
+}

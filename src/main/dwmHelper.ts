@@ -19,45 +19,13 @@
  * the window and every IPC call standing still; the same script as plain
  * -Command, 10 ms. So the script is ONE line with no double quote in it (the
  * mediaPause rule): the C# string's quotes are made inside PowerShell.
+ *
+ * SINCE 2026-10-17 THE APP'S ONE HELPER (`appHelper.ts`, `hook/appHelper.ps1`)
+ * does it, beside the dictation key's hook: one PowerShell started with the
+ * app instead of two (owner: merge the helpers, for the startup). A line
+ * "dwm <hwnd> <attribute> <value>".
  */
-import { SYS } from '@core/main/sysTools'
-import { spawn, type ChildProcess } from 'child_process'
-
-export const DWM_HELPER_SCRIPT =
-  `$q = [char]34; Add-Type ('using System;using System.Runtime.InteropServices;public class DW{[DllImport(' + $q + 'dwmapi.dll' + $q + ')]public static extern int DwmSetWindowAttribute(IntPtr h,int a,ref int v,int s);}'); ` +
-  `while ($true) { $line = [Console]::In.ReadLine(); if ($null -eq $line) { break }; $p = $line.Split(' '); ` +
-  `if ($p.Length -ge 3) { try { $h = [IntPtr]::new([int64]$p[0]); $a = [int]$p[1]; $v = [int]$p[2]; ` +
-  `[DW]::DwmSetWindowAttribute($h, $a, [ref]$v, 4) | Out-Null } catch {} } }`
-
-export function dwmHelperArgs(): string[] {
-  return ['-NoProfile', '-NonInteractive', '-Command', DWM_HELPER_SCRIPT]
-}
-
-let proc: ChildProcess | null = null
-
-function helper(): ChildProcess | null {
-  if (proc && proc.exitCode === null && !proc.killed) return proc
-  try {
-    proc = spawn(SYS.powershell, dwmHelperArgs(), { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true })
-    proc.on('exit', () => {
-      proc = null
-    })
-    proc.on('error', () => {
-      proc = null
-    })
-    // A write to a helper that has just died fails LATER, as an 'error' event
-    // on stdin that the try round write() cannot catch; unheard, it is an
-    // uncaught exception in main (code review 2026-09-24, #13). mediaPause
-    // guards the same case.
-    proc.stdin?.on('error', () => {
-      proc = null
-    })
-    return proc
-  } catch {
-    proc = null
-    return null
-  }
-}
+import { appHelperSend, stopAppHelper, warmAppHelper } from './appHelper'
 
 /** The HWND as a decimal string, from Electron's native handle buffer. */
 export function hwndOf(buf: Buffer): string {
@@ -65,12 +33,7 @@ export function hwndOf(buf: Buffer): string {
 }
 
 function send(hwnd: string, attribute: number, value: number): void {
-  const p = helper()
-  try {
-    p?.stdin?.write(`${hwnd} ${attribute} ${value}\n`)
-  } catch {
-    proc = null
-  }
+  appHelperSend(`dwm ${hwnd} ${attribute} ${value}`)
 }
 
 /** Square or default corners while the window is up. */
@@ -100,15 +63,9 @@ export function colorrefOf(hex: string): number {
 
 /** Warm the helper at startup so the first change is not the compile. */
 export function warmDwmHelper(): void {
-  helper()
+  warmAppHelper()
 }
 
 export function stopDwmHelper(): void {
-  try {
-    proc?.stdin?.end()
-    proc?.kill()
-  } catch {
-    /* gone */
-  }
-  proc = null
+  stopAppHelper()
 }

@@ -15,7 +15,7 @@
 // that "closed" its window has left a process holding the single-instance lock.
 import { _electron as electron } from 'playwright-core'
 import { execFileSync, spawn } from 'child_process'
-import { createHash } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { createServer } from 'http'
@@ -172,7 +172,7 @@ const PREF_PAGE = {
   'term-shell': 'terminal', 'newtab-mode': 'terminal', 'explorer-verb': 'terminal', 'term-font-family': 'terminal',
   'term-font': 'terminal', 'help-enabled': 'terminal',
   'agent-indicator': 'agents', 'agent-done-on': 'agents', 'agent-rainbow': 'agents', 'agent-question-on': 'agents', 'agent-failed-on': 'agents',
-  'taskbar-badge': 'agents', 'agent-hooks': 'agents', 'agent-color': 'agents', 'agent-done-color': 'agents',
+  'taskbar-badge': 'agents', 'agent-hooks': 'agents', 'orchestrator': 'agents', 'dictation-anywhere': 'dictation', 'agent-color': 'agents', 'agent-done-color': 'agents',
   'agent-question-color': 'agents',
   'dictation-enabled': 'dictation', 'dictation-mode': 'dictation', 'dictation-hotkey': 'dictation', 'dictation-mic': 'dictation',
   'dictation-language': 'dictation', 'dictation-pause-media': 'dictation', 'dictation-sounds': 'dictation',
@@ -3024,6 +3024,327 @@ const scenarios = {
   },
 
   /**
+   * THE ORCHESTRATOR (beta, 2026-10-16; spec:
+   * docs/superpowers/specs/2026-10-16-catch-up-report.md). Off by default: a
+   * shell gets no session list and no orchestrator plugin, and a tab's menu
+   * offers nothing. Switched on, a NEW tab gets both; a turn's hook naming its
+   * Claude session links it in sessions.json (an id that is not a UUID links
+   * nothing); a parked window is nobody looking, so nothing is stamped seen.
+   * "Make orchestrator" moves the tab first, with its outline and rule, and
+   * names its PRISM_TAB_ID for the role hook; switched off, that name goes.
+   */
+  async catchUp(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const SID = 'd1d2d3d4-e5e6-4f70-8a9b-0c1d2e3f4a5b'
+    const dir = await app.evaluate(({ app: a }) => a.getPath('userData'))
+    const file = dir + '\\sessions.json'
+    const leadFile = dir + '\\orchestrator-tab.txt'
+    const read = (f) => {
+      try {
+        return readFileSync(f, 'utf8')
+      } catch {
+        return null
+      }
+    }
+    const list = () => {
+      try {
+        return JSON.parse(read(file) ?? '')
+      } catch {
+        return null
+      }
+    }
+    const shells = () => page.locator('[data-tab]').filter({ hasNotText: /^Settings$/ })
+    const ENV = `'SF=' + [bool]$env:PRISM_SESSIONS_FILE + ' OP=' + ($env:CLAUDE_CODE_PLUGIN_DIRS -like '*claude-plugin-orchestrator*')`
+    const menuItems = async (i) => {
+      await shells().nth(i).click({ button: 'right' })
+      await page.waitForSelector('[role="menu"]', { timeout: 5000 })
+      const t = await page.locator('[role="menu"] [role="menuitem"]').allTextContents()
+      return t
+    }
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      await polled(page)
+      // Off by default.
+      await typeLine(page, ENV)
+      ok(!!(await until(async () => (await termText(page)).includes('SF=False OP=False'), 8000, 100)), 'off by default: no session list, no orchestrator plugin')
+      ok(!(await menuItems(0)).some((x) => /orchestrator/i.test(x)), 'and the tab menu offers no orchestrator')
+      await page.keyboard.press('Escape')
+      // On.
+      const sw = (await gotoPref(page, 'orchestrator')).locator('[role="switch"]')
+      ok((await sw.getAttribute('aria-checked')) === 'false', 'the Orchestrator switch is off by default')
+      await sw.click()
+      ok(!!(await until(async () => (await sw.getAttribute('aria-checked')) === 'true', 3000, 50)), 'and turns on')
+      await page.keyboard.press('Control+w')
+      await until(async () => (await page.locator('[data-tab]').count()) === 1, 4000, 50)
+      await shells().nth(0).click()
+      await page.locator('.xterm').first().click({ force: true })
+      await page.keyboard.press('Control+t')
+      ok(!!(await until(async () => (await shells().count()) === 2)), 'a new tab')
+      await page.locator('.xterm').last().click({ force: true })
+      await typeLine(page, ENV)
+      ok(!!(await until(async () => (await termText(page)).includes('SF=True OP=True'), 8000, 100)), 'a tab opened with it on has the session list and the orchestrator plugin')
+      await typeLine(page, `${hookSay('working', ';session=../../etc')}; ${hookSay('done', `;session=${SID}`)}`)
+      const linked = await until(() => {
+        const l = list()
+        return l && l.sessions?.[SID] && l.tabs?.some((t) => t.session === SID) ? l : null
+      }, 10000, 200)
+      ok(!!linked, 'a hook naming its session links it to the tab in sessions.json')
+      ok(!!linked && Object.keys(linked.sessions).length === 1, `an id that is not a UUID links nothing (${linked ? Object.keys(linked.sessions).join(',') : '-'})`)
+      const rec = linked?.sessions?.[SID]
+      ok(!!rec?.lastHookAt && rec.open === true, `with its last hook and open (${JSON.stringify(rec)})`)
+      const t = linked?.tabs?.find((x) => x.session === SID)
+      ok(!!t && typeof t.tab === 'string' && t.tab.length > 10 && t.label !== '', `the tab carries its PRISM_TAB_ID and label (${JSON.stringify(t)})`)
+      await sleep(12000) // past the 10 s look
+      ok(list()?.sessions?.[SID]?.seen == null, 'a parked window is nobody looking: nothing is stamped seen')
+      // Make the second tab the orchestrator.
+      const items = await menuItems(1)
+      ok(items.some((x) => x.includes('Make orchestrator')), `the tab menu offers Make orchestrator (${JSON.stringify(items)})`)
+      await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Make orchestrator' }).click()
+      ok(!!(await until(async () => (await shells().nth(0).getAttribute('data-tab-orchestrator')) !== null, 3000, 50)), 'the orchestrator moves first')
+      ok((await page.locator('[data-tab-lead-divider]').count()) === 1, 'with one rule after it')
+      const outline = await shells().nth(0).evaluate((el) => getComputedStyle(el).outlineStyle)
+      ok(outline === 'solid', `and an outline (${outline})`)
+      await shotStrip(page, 'orchestrator-strip')
+      ok(!!(await until(() => read(leadFile) === t?.tab, 6000, 100)), `its PRISM_TAB_ID is named for the role hook (${read(leadFile)})`)
+      ok(!!(await until(() => list()?.tabs?.some((x) => x.orchestrator && x.session === SID), 6000, 100)), 'and sessions.json marks it')
+      const again = await menuItems(0)
+      ok(again.some((x) => x.includes('Stop being orchestrator')), 'its menu offers to stop')
+      await page.keyboard.press('Escape')
+      // SENDING INTO ANY TAB (owner, 2026-10-16: "to any session, not just
+      // whichever is in focus"). The other tab plays a Claude (its hook names a
+      // session); the orchestrator's script sends while the orchestrator is in
+      // front, and the text lands and is entered in the other tab. The stand-in
+      // is a pwsh prompt, so what arrives runs, and its output proves it.
+      const shown = () =>
+        page.evaluate(() => [...document.querySelectorAll('.xterm')].filter((x) => x.offsetParent !== null).map((x) => x.querySelector('.xterm-rows')?.textContent ?? '').join('\n'))
+      const SID2 = 'e1e2e3e4-f5f6-4a70-8b9c-0d1e2f3a4b5c'
+      await shells().nth(1).click()
+      await page.locator('.xterm').last().click({ force: true })
+      await typeLine(page, hookSay('done', `;session=${SID2}`))
+      ok(!!(await until(() => list()?.tabs?.some((x) => x.session === SID2 && x.agent === 'claude'), 8000, 100)), 'the other tab is a Claude with a session')
+      await shells().nth(0).click()
+      const msg = dir + '\\send-message.txt'
+      writeFileSync(msg, "Write-Output ('SENT-' + 'MARK-42')")
+      const SEND = resolve(process.cwd(), 'core/claude-plugin-orchestrator/skills/orchestrator/send.ps1')
+      // A shell that only SAYS it is Claude (its hook signal) is refused:
+      // the app asks Windows' process list before it types (security review).
+      await typeLine(page, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${SEND}' -To alpha -TextFile '${msg}'`)
+      ok(!!(await until(async () => (await shown()).includes('checked with Windows'), 15000, 100)), 'a tab that only claims to be Claude is refused')
+      // A stand-in Claude in that tab's process tree: a copy of PowerShell
+      // named claude.exe (what the detector reads), reading the tab's input.
+      const fake = dir + '\\stand-in\\claude.exe'
+      mkdirSync(dir + '\\stand-in', { recursive: true })
+      copyFileSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', fake)
+      await shells().nth(1).click()
+      await page.locator('.xterm').last().click({ force: true })
+      await typeLine(page, `& '${fake}' -NoLogo -NoProfile`)
+      await sleep(2500)
+      await shells().nth(0).click()
+      await typeLine(page, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${SEND}' -To alpha -TextFile '${msg}'`)
+      ok(!!(await until(async () => (await shown()).includes('SENT to alpha'), 15000, 100)), 'the orchestrator sends to a tab that is not in front')
+      await typeLine(page, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File '${SEND}' -To nosuchtab -Text 'x'`)
+      ok(!!(await until(async () => (await shown()).includes('NOT SENT: no tab matches'), 12000, 100)), 'and says so when no tab matches')
+      await shells().nth(1).click()
+      ok(!!(await until(async () => (await shown()).includes('SENT-MARK-42'), 8000, 100)), 'the message arrived in that tab and was entered')
+      // Off again: the role hook's name goes.
+      const sw2 = (await gotoPref(page, 'orchestrator')).locator('[role="switch"]')
+      await sw2.click()
+      ok(!!(await until(() => read(leadFile) === null, 4000, 100)), 'switched off, no tab is named orchestrator any more')
+      await page.keyboard.press('Control+w')
+    } finally {
+      await closeApp(app)
+    }
+    ok(!!list()?.sessions?.[SID], 'the list written while it was on stays on disk')
+  },
+
+  /**
+   * DICTATE FROM ANY APP (owner, 2026-10-16; spec:
+   * docs/superpowers/specs/2026-10-16-dictate-anywhere.md). The suite never
+   * runs the real keyboard hook: helper lines arrive through a seam, and what
+   * was heard is handed to main as the page would. A stand-in Claude (a copy of
+   * PowerShell named claude.exe, so Windows' process check passes) takes the
+   * words, and runs them, which proves they were typed and entered.
+   * - No orchestrator: the widget lists the sessions, numbered; "1" sends.
+   * - An ACTIVE orchestrator: it is sent there with no list.
+   * - The key with the app not in front opens the widget.
+   */
+  async dictateAnywhere(ok) {
+    const w = world()
+    const { app, page } = await launch(w, { args: [w.alpha] })
+    const SID = 'f1f2f3f4-a5a6-4b70-8c9d-0e1f2a3b4c5d'
+    const dir = await app.evaluate(({ app: a }) => a.getPath('userData'))
+    const shells = () => page.locator('[data-tab]').filter({ hasNotText: /^Settings$/ })
+    const shown = () =>
+      page.evaluate(() => [...document.querySelectorAll('.xterm')].filter((x) => x.offsetParent !== null).map((x) => x.querySelector('.xterm-rows')?.textContent ?? '').join('\n'))
+    const widget = async () => app.windows().find((p) => p.url().includes('overlay.html')) ?? null
+    const widgetText = async () => {
+      const p = await widget()
+      return p ? await p.evaluate(() => document.getElementById('card')?.textContent ?? '').catch(() => '') : ''
+    }
+    try {
+      await until(async () => (await tabLabels(page)).length === 1)
+      await polled(page)
+      // The stand-in Claude.
+      await page.locator('.xterm').first().click({ force: true })
+      await typeLine(page, hookSay('done', `;session=${SID}`))
+      const fake = dir + '\\stand-in\\claude.exe'
+      mkdirSync(dir + '\\stand-in', { recursive: true })
+      copyFileSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', fake)
+      await typeLine(page, `& '${fake}' -NoLogo -NoProfile`)
+      await sleep(2500)
+
+      // 1. No orchestrator: the list, then "1".
+      await page.evaluate(() => window.prism.dictRouted({ text: "Write-Output ('DICT-' + 'OK')" }))
+      ok(!!(await until(async () => (await widgetText()).includes('Send to'), 10000, 100)), 'with no orchestrator the widget lists the sessions')
+      const w1 = await widgetText()
+      ok(w1.includes('1') && w1.includes('alpha'), `numbered, by tab (${w1.slice(0, 120)})`)
+      const unfocusable = await app.evaluate(({ BrowserWindow }) => {
+        const o = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().includes('overlay.html'))
+        return o ? !o.isFocusable() && o.isAlwaysOnTop() : null
+      })
+      ok(unfocusable === true, 'the widget never takes focus and stays on top')
+      const wp = await widget()
+      await wp?.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-widget-pick.png') }).catch(() => {})
+      await app.evaluate(() => globalThis.__e2eDictLine('p 1'))
+      ok(!!(await until(async () => (await widgetText()).includes('Sent to alpha'), 15000, 100)), 'the number sends it, and the widget says sent')
+      await wp?.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-widget-sent.png') }).catch(() => {})
+      ok(!!(await until(async () => (await shown()).includes('DICT-OK'), 8000, 100)), 'and it was typed and entered in that session')
+
+      // 2. An active orchestrator: no list.
+      const sw = (await gotoPref(page, 'orchestrator')).locator('[role="switch"]')
+      await sw.click()
+      await page.keyboard.press('Control+w')
+      await until(async () => (await page.locator('[data-tab]').count()) === 1, 4000, 50)
+      await shells().nth(0).click({ button: 'right' })
+      await page.locator('[role="menu"] [role="menuitem"]', { hasText: 'Make orchestrator' }).click()
+      await sleep(800)
+      await page.evaluate(() => window.prism.dictRouted({ text: "Write-Output ('LEAD-' + 'OK')" }))
+      ok(!!(await until(async () => (await widgetText()).includes('Sent to alpha'), 15000, 100)), 'with an active orchestrator it is sent straight there')
+      ok(!(await widgetText()).includes('Send to'), 'with no list')
+      ok(!!(await until(async () => (await shown()).includes('LEAD-OK'), 8000, 100)), 'and it arrived')
+
+      // 3. The key, with the app not in front (the suite's window is parked
+      // and unfocused): Ctrl then Win, held past the solo wait.
+      await page.evaluate(() => localStorage.setItem('prism.dictation.enabled', '1'))
+      await gotoPref(page, 'dictation-anywhere')
+      await page.keyboard.press('Control+w')
+      await sleep(600)
+      await app.evaluate(() => {
+        globalThis.__e2eDictLine('d A2')
+        globalThis.__e2eDictLine('d 5B')
+      })
+      await sleep(500)
+      const keyed = await widgetText()
+      ok(/Listening|speech model|Speak now/.test(keyed), `Ctrl+Win from another app opens the widget (${keyed.slice(0, 80)})`)
+      await app.evaluate(() => {
+        globalThis.__e2eDictLine('u 5B')
+        globalThis.__e2eDictLine('u A2')
+      })
+    } finally {
+      await closeApp(app)
+    }
+  },
+
+  /**
+   * ONE DICTATION FOR EVERY COPY (owner, 2026-10-17: "there should be one
+   * dictation engine for both ... it should show all sessions open in one ui
+   * from both instances"; spec: docs/superpowers/specs/2026-10-17-one-dictation.md).
+   * Two copies on a pipe of the scenario's own; the first is made the service
+   * through the seam (the suite runs no real hook).
+   * - The service's list holds the OTHER copy's Claude, named by its copy, and
+   *   a pick is typed and entered there by that copy.
+   * - With that copy's window in front at the press, the words are pasted at
+   *   its front tab's cursor, no Enter.
+   * - The service closes: the other copy takes over and lists its own tab.
+   */
+  async dictateTwoCopies(ok) {
+    const pipe = `\\\\.\\pipe\\pt-e2e-dict-${process.pid}-${Date.now()}`
+    const wa = world()
+    const wb = world()
+    // The scenario's own link key: both copies prove they hold it (dictationLink).
+    const env = { PT_E2E_DICT_PIPE: pipe, PT_E2E_DICT_KEY: randomBytes(32).toString('hex') }
+    const A = await launch(wa, { args: [wa.alpha], env })
+    const B = await launch(wb, { args: [wb.beta], env })
+    const SID = 'b1b2b3b4-a5a6-4b70-8c9d-0e1f2a3b4c5d'
+    const shown = (page) =>
+      page.evaluate(() => [...document.querySelectorAll('.xterm')].filter((x) => x.offsetParent !== null).map((x) => x.querySelector('.xterm-rows')?.textContent ?? '').join('\n'))
+    const widgetText = async (app) => {
+      const p = app.windows().find((x) => x.url().includes('overlay.html'))
+      return p ? await p.evaluate(() => document.getElementById('card')?.textContent ?? '').catch(() => '') : ''
+    }
+    let aOpen = true
+    try {
+      await until(async () => (await tabLabels(B.page)).length === 1)
+      await polled(B.page)
+      // B's stand-in Claude (a copy of PowerShell named claude.exe).
+      const dir = await B.app.evaluate(({ app: a }) => a.getPath('userData'))
+      await B.page.locator('.xterm').first().click({ force: true })
+      await typeLine(B.page, hookSay('done', `;session=${SID}`))
+      const fake = dir + '\\stand-in\\claude.exe'
+      mkdirSync(dir + '\\stand-in', { recursive: true })
+      copyFileSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', fake)
+      await typeLine(B.page, `& '${fake}' -NoLogo -NoProfile`)
+      await sleep(2500)
+
+      // A's stand-in Claude too, so the list holds both apps.
+      const dirA = await A.app.evaluate(({ app: a }) => a.getPath('userData'))
+      await until(async () => (await tabLabels(A.page)).length === 1)
+      await polled(A.page)
+      await A.page.locator('.xterm').first().click({ force: true })
+      await typeLine(A.page, hookSay('done', ';session=c1c2c3c4-a5a6-4b70-8c9d-0e1f2a3b4c5d'))
+      const fakeA = dirA + '\\stand-in\\claude.exe'
+      mkdirSync(dirA + '\\stand-in', { recursive: true })
+      copyFileSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', fakeA)
+      await typeLine(A.page, `& '${fakeA}' -NoLogo -NoProfile`)
+      await sleep(2500)
+
+      // A takes the key: the service. B finds it on the pipe.
+      await A.app.evaluate(() => globalThis.__e2eDictLine('ready'))
+      await sleep(1800)
+
+      // 1. A's list holds both copies' Claude, under a header each; "2" is B's.
+      await A.app.evaluate(() => globalThis.__e2eDictRoute("Write-Output ('TWO-' + 'OK')", null))
+      ok(!!(await until(async () => (await widgetText(A.app)).includes('Send to'), 10000, 100)), 'the service lists the sessions')
+      const listed = await widgetText(A.app)
+      // Grouped by app (owner, 2026-10-17): a header per copy, a second of the
+      // same name numbered, the service's own first.
+      ok(listed.includes('alpha') && listed.includes('beta'), `both copies' Claude are in the list (${listed.slice(0, 160)})`)
+      const overlayA = A.app.windows().find((x) => x.url().includes('overlay.html'))
+      const headers = await overlayA?.evaluate(() => [...document.querySelectorAll('.group')].map((g) => g.textContent))
+      ok(JSON.stringify(headers) === JSON.stringify(['Prism Terminal (Dev)', 'Prism Terminal (Dev) (2)']), `under a header per copy (${JSON.stringify(headers)})`)
+      await overlayA?.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-widget-groups.png') }).catch(() => {})
+      await A.app.evaluate(() => globalThis.__e2eDictLine('p 2'))
+      ok(!!(await until(async () => (await widgetText(A.app)).includes('Sent to beta'), 15000, 100)), 'the pick is sent to the other copy')
+      ok(!!(await until(async () => (await shown(B.page)).includes('TWO-OK'), 8000, 100)), 'and that copy typed and entered it')
+
+      // 2. B's window in front at the press: pasted at its cursor, no Enter.
+      const pidB = await B.app.evaluate(() => process.pid)
+      await A.app.evaluate((_e, pid) => globalThis.__e2eDictRoute('echo PASTEDB', pid), pidB)
+      ok(!!(await until(async () => (await shown(B.page)).includes('echo PASTEDB'), 8000, 100)), 'with that copy in front the words are typed at its cursor')
+      await sleep(800)
+      const after = await shown(B.page)
+      ok(!/^PASTEDB\s*$/m.test(after), 'and not entered')
+      ok((await widgetText(A.app)).includes('Typed into the tab in front'), 'the widget says where they went')
+      await B.page.keyboard.press('Control+c')
+
+      // 3. The service closes: B takes over and lists its own tab.
+      await closeApp(A.app)
+      aOpen = false
+      await sleep(1500)
+      await B.app.evaluate(() => globalThis.__e2eDictLine('ready'))
+      await B.app.evaluate(() => globalThis.__e2eDictRoute('Write-Output hi', null))
+      ok(!!(await until(async () => (await widgetText(B.app)).includes('Send to'), 10000, 100)), 'the other copy takes over the dictation')
+      const own = await widgetText(B.app)
+      ok(own.includes('beta') && !own.includes('Prism Terminal (Dev)'), `with one copy left, no headers (${own.slice(0, 120)})`)
+      await B.app.evaluate(() => globalThis.__e2eDictLine('x'))
+    } finally {
+      if (aOpen) await closeApp(A.app)
+      await closeApp(B.app)
+    }
+  },
+
+  /**
    * NO WINDOWS SYSTEM MENU ON A RIGHT-CLICK (owner, 2026-10-13: "stop chromium
    * right click menus like this from appearing in the terminal"). Windows
    * raises it for a right-click on a drag region; the window refuses it. The
@@ -3344,6 +3665,17 @@ const scenarios = {
       const early = await look()
       await page.screenshot({ path: resolve(process.cwd(), '.e2e-shots/launch-skeleton.png') }).catch(() => {})
       ok(early.skeleton, 'the tab in front wears the skeleton while its conversation comes back')
+      // Nothing of the terminal on top of it (owner, 2026-10-17: thin blue
+      // lines over the skeleton). They were the link decorations
+      // (termLinkPaint, xterm's z-index 6) of the paths Claude prints as it
+      // resumes, above the skeleton's z-index 1: the terminal's region must be
+      // a stacking context of its own, so no layer of xterm's leaves it.
+      const covered = await page.evaluate(() => {
+        const sk = document.querySelector('[data-resume-skeleton="shown"]')
+        const region = sk?.parentElement?.querySelector('[data-term-region]')
+        return region ? getComputedStyle(region).isolation : null
+      })
+      ok(covered === 'isolate', `no layer of the terminal can paint over the skeleton (isolation: ${covered})`)
       ok(early.rings === 3, `every tab shows the loading ring (${early.rings})`)
       ok(early.ringsAtEnd === 3, `each at the tab's end, where the Ring goes (${early.ringsAtEnd})`)
       let bare = false
@@ -7789,6 +8121,9 @@ const scenarios = {
     await page.evaluate(() => {
       localStorage.setItem('prism.dictation.model', 'tiny')
       localStorage.setItem('prism.dictation.sounds', '0')
+      // These scenarios hold Right Alt, the default until 2026-10-16 (now Ctrl+Win):
+      // they set it, so the AltGr-era rules keep their real-key proof.
+      localStorage.setItem('prism.dictation.hotkey', JSON.stringify({ code: 'AltRight', ctrl: false, alt: false, shift: false, meta: false }))
     })
     await page.locator('[data-title-settings]').click()
     await page.locator('[data-settings-tab="dictation"]').click()
@@ -8039,6 +8374,9 @@ const scenarios = {
     // so the English sentence must still come back in English.
     await page.evaluate(() => {
       localStorage.setItem('prism.dictation.model', 'parakeet-v3-q4')
+      // These scenarios hold Right Alt, the default until 2026-10-16 (now Ctrl+Win):
+      // they set it, so the AltGr-era rules keep their real-key proof.
+      localStorage.setItem('prism.dictation.hotkey', JSON.stringify({ code: 'AltRight', ctrl: false, alt: false, shift: false, meta: false }))
       localStorage.setItem('prism.dictation.language', 'no')
       localStorage.setItem('prism.dictation.sounds', '0')
     })
