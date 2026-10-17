@@ -12,7 +12,7 @@ vi.mock('electron', () => {
   return { BrowserWindow, screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }), getDisplayNearestPoint: () => area } }
 })
 
-import { decideInto, dictationRoute, type SendTab } from './orchestratorSend'
+import { decideInto, dictationRoute, type SendTab } from '@core/main/orchestratorSend'
 import { folderTail, mergeTabs, pickRows, startDictateAnywhere } from './dictateAnywhere'
 
 /**
@@ -72,11 +72,11 @@ describe('the key with a Prism Terminal in front', () => {
     handlers['a']({ on: true, hotkey: { code: 'F8', ctrl: false, alt: false, shift: false, meta: false }, mode: 'toggle' })
     return { a, toPage }
   }
-  it('leaves it to that window when another copy of the app, not on the link, is in front', () => {
+  it('starts with another app in front, whichever (it is named by its process)', () => {
     const { a, toPage } = started()
     a.line({ kind: 'key', type: 'down', code: 'F8', front: 4242 })
     a.line({ kind: 'key', type: 'up', code: 'F8' })
-    expect(toPage).not.toHaveBeenCalled()
+    expect(toPage).toHaveBeenCalledWith('start')
   })
   // One key path (owner, 2026-10-17): the app's own window is read here too.
   it('starts with this copy in front', () => {
@@ -94,13 +94,36 @@ describe('the key with a Prism Terminal in front', () => {
 })
 
 describe('mergeTabs', () => {
-  it('lists every copy, naming the copy only when there is more than one', () => {
-    expect(mergeTabs([tab({})], [], 'Stable').map((t) => [t.id, t.copy])).toEqual([['p1', null]])
-    const two = mergeTabs([tab({})], [{ copy: { pid: 9, name: 'Prism Terminal' }, tabs: [tab({ id: 'q1' })] }], 'Stable')
+  it('lists every copy, naming the app only when there is more than one', () => {
+    expect(mergeTabs([tab({})], [], 'Prism Terminal (Stable)').map((t) => [t.id, t.copy])).toEqual([['p1', null]])
+    const two = mergeTabs([tab({})], [{ copy: { pid: 9, name: 'Prism' }, tabs: [tab({ id: 'q1' })] }], 'Prism Terminal (Stable)')
     expect(two.map((t) => [t.id, t.copy])).toEqual([
-      ['p1', 'Stable'],
-      ['9:q1', 'Prism Terminal']
+      ['p1', 'Prism Terminal (Stable)'],
+      ['9:q1', 'Prism']
     ])
+  })
+  it('numbers a second copy of the same name (owner: "Prism terminal, and then maybe parentheses two")', () => {
+    const t = mergeTabs([tab({})], [{ copy: { pid: 9, name: 'Prism Terminal' }, tabs: [tab({ id: 'q1' })] }], 'Prism Terminal')
+    expect(t.map((x) => x.copy)).toEqual(['Prism Terminal', 'Prism Terminal (2)'])
+  })
+})
+
+describe('pickRows grouped by app', () => {
+  it('keeps each app together, in the order the apps come, numbered across them', () => {
+    const rows = pickRows([
+      { ...tab({ id: 'a', label: 'Lead', orchestrator: true }), copy: 'Prism' },
+      { ...tab({ id: 'b', label: 'Wind' }), copy: 'Prism Terminal' },
+      { ...tab({ id: 'c', label: 'Sonara' }), copy: 'Prism' }
+    ])
+    expect(rows.map((r) => [r.n, r.label, r.group])).toEqual([
+      [1, 'Lead', 'Prism'],
+      [2, 'Sonara', 'Prism'],
+      [3, 'Wind', 'Prism Terminal']
+    ])
+  })
+  it('draws no headers when every session is in one app', () => {
+    const rows = pickRows([{ ...tab({ id: 'b' }), copy: 'Prism' }, { ...tab({ id: 'c' }), copy: 'Prism' }])
+    expect(rows.map((r) => r.group)).toEqual([null, null])
   })
 })
 

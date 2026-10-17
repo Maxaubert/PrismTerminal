@@ -1,4 +1,4 @@
-import { sanitizePaste } from '@core/renderer/lib/termPaste'
+import { sanitizePaste } from '../renderer/lib/termPaste'
 
 /**
  * THE ORCHESTRATOR SENDS INTO ANY TAB (owner, 2026-10-16: "the terminal needs

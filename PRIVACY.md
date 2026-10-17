@@ -82,11 +82,13 @@ say is handled as all dictation is: transcribed on your PC, then sent to the Cla
 pick, or to the orchestrator tab.
 
 With more than one copy of Prism Terminal open (for example a stable copy beside the installed
-app), one copy runs the dictation for all of them. The copies talk over a local named pipe that
+app), or Prism beside it, one copy runs the dictation for all of them. The copies talk over a local named pipe that
 only your Windows account uses: the running copy asks the others for their tab list (the tab's
 name, folder and whether Claude runs there) so the list of sessions shows every copy's, and hands a
-copy the words to type into one of its tabs. Nothing on the pipe leaves your PC, and nothing is
-written to disk.
+copy the words to type into one of its tabs. Nothing on the pipe leaves your PC. Both ends first
+prove they hold a key only your Windows account can read (a file of random bytes beside the speech
+models, made once); nothing else is written to disk. While the dictation key is held, the helper
+notes which program's window is in front (its process number only), so the words go to that app.
 
 ## What programs in a tab can do
 

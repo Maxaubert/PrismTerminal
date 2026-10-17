@@ -48,8 +48,8 @@ export function keysFor(h: Hotkey): number[] | null {
 /** The Start menu needs masking only when the binding holds Win with Ctrl. */
 export const masksStart = (h: Hotkey): boolean => (h.meta || FLAG_OF[h.code] === 'meta') && (h.ctrl || FLAG_OF[h.code] === 'ctrl')
 
-/** `front`: the main process of the Prism Terminal copy (this one or another)
- *  whose window was in front at a down. */
+/** `front`: the process whose window was in front at a down (any app's: main
+ *  matches it against this copy and the copies on the link). */
 export type HelperLine =
   | { kind: 'key'; type: 'down' | 'up'; code: string; front?: number }
   | { kind: 'other' }

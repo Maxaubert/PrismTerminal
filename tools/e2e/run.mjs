@@ -3287,16 +3287,34 @@ const scenarios = {
       await typeLine(B.page, `& '${fake}' -NoLogo -NoProfile`)
       await sleep(2500)
 
+      // A's stand-in Claude too, so the list holds both apps.
+      const dirA = await A.app.evaluate(({ app: a }) => a.getPath('userData'))
+      await until(async () => (await tabLabels(A.page)).length === 1)
+      await polled(A.page)
+      await A.page.locator('.xterm').first().click({ force: true })
+      await typeLine(A.page, hookSay('done', ';session=c1c2c3c4-a5a6-4b70-8c9d-0e1f2a3b4c5d'))
+      const fakeA = dirA + '\\stand-in\\claude.exe'
+      mkdirSync(dirA + '\\stand-in', { recursive: true })
+      copyFileSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', fakeA)
+      await typeLine(A.page, `& '${fakeA}' -NoLogo -NoProfile`)
+      await sleep(2500)
+
       // A takes the key: the service. B finds it on the pipe.
       await A.app.evaluate(() => globalThis.__e2eDictLine('ready'))
       await sleep(1800)
 
-      // 1. A's list holds B's Claude, named by its copy; "1" sends it there.
+      // 1. A's list holds both copies' Claude, under a header each; "2" is B's.
       await A.app.evaluate(() => globalThis.__e2eDictRoute("Write-Output ('TWO-' + 'OK')", null))
       ok(!!(await until(async () => (await widgetText(A.app)).includes('Send to'), 10000, 100)), 'the service lists the sessions')
       const listed = await widgetText(A.app)
-      ok(listed.includes('beta') && listed.includes('\u00b7'), `the other copy's Claude is in the list, named by its copy (${listed.slice(0, 160)})`)
-      await A.app.evaluate(() => globalThis.__e2eDictLine('p 1'))
+      // Grouped by app (owner, 2026-10-17): a header per copy, a second of the
+      // same name numbered, the service's own first.
+      ok(listed.includes('alpha') && listed.includes('beta'), `both copies' Claude are in the list (${listed.slice(0, 160)})`)
+      const overlayA = A.app.windows().find((x) => x.url().includes('overlay.html'))
+      const headers = await overlayA?.evaluate(() => [...document.querySelectorAll('.group')].map((g) => g.textContent))
+      ok(JSON.stringify(headers) === JSON.stringify(['Prism Terminal (Dev)', 'Prism Terminal (Dev) (2)']), `under a header per copy (${JSON.stringify(headers)})`)
+      await overlayA?.screenshot({ path: resolve(process.cwd(), '.e2e-shots/dictation-widget-groups.png') }).catch(() => {})
+      await A.app.evaluate(() => globalThis.__e2eDictLine('p 2'))
       ok(!!(await until(async () => (await widgetText(A.app)).includes('Sent to beta'), 15000, 100)), 'the pick is sent to the other copy')
       ok(!!(await until(async () => (await shown(B.page)).includes('TWO-OK'), 8000, 100)), 'and that copy typed and entered it')
 
@@ -3318,7 +3336,7 @@ const scenarios = {
       await B.app.evaluate(() => globalThis.__e2eDictRoute('Write-Output hi', null))
       ok(!!(await until(async () => (await widgetText(B.app)).includes('Send to'), 10000, 100)), 'the other copy takes over the dictation')
       const own = await widgetText(B.app)
-      ok(own.includes('beta') && !own.includes('\u00b7'), `with one copy left, no copy names (${own.slice(0, 120)})`)
+      ok(own.includes('beta') && !own.includes('Prism Terminal (Dev)'), `with one copy left, no headers (${own.slice(0, 120)})`)
       await B.app.evaluate(() => globalThis.__e2eDictLine('x'))
     } finally {
       if (aOpen) await closeApp(A.app)

@@ -31,11 +31,13 @@
 # the key, a later one waits ("waiting") and takes over when the first exits.
 # MEASURED: a named Mutex hung the waiting helper for good once the owner
 # exited (WaitOne on PowerShell's STA thread); the lock file hands over within
-# the 500 ms poll. A down says " f <pid>" when a Prism Terminal window is in
-# front, naming the copy (its main process) whose window it is: the words go there.
+# the 500 ms poll. A down says " f <pid>": the process whose window is in front
+# (since 2026-10-17 any app's, so a Prism on the link counts as well as a Prism
+# Terminal copy; main matches it against the copies it knows, and the words go
+# there). A process id, never a window title or a name.
 #
 # stdout (to main):   ready / failed / waiting  hooked / could not / another copy owns the key
-#                     d <hex vk> [f <pid>] / u <hex vk>   a binding key down (f: a Prism Terminal in front) / up
+#                     d <hex vk> f <pid> / u <hex vk>   a binding key down (f: the front window's process) / up
 #                     o                          another key went down while one is held
 #                     p <1-9> / x                a digit / Esc, while picking
 param([string]$cache = '')
@@ -57,9 +59,6 @@ public static class PTHelper {
   [DllImport("user32.dll")] static extern uint SendInput(uint n, INPUT[] i, int size);
   [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-  [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
-  [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr h, uint flags, System.Text.StringBuilder s, ref uint n);
-  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
   [StructLayout(LayoutKind.Sequential)] public struct MSG { public IntPtr h; public uint m; public IntPtr w; public IntPtr l; public uint t; public int x; public int y; }
   [StructLayout(LayoutKind.Sequential)] struct KBD { public ushort vk; public ushort scan; public uint flags; public uint time; public IntPtr extra; }
   [StructLayout(LayoutKind.Explicit, Size = 40)] struct INPUT { [FieldOffset(0)] public uint type; [FieldOffset(8)] public KBD k; }
@@ -71,24 +70,10 @@ public static class PTHelper {
   static bool winDown, ctrlWithWin;
   const int MASK_VK = 0xE8; // unassigned: what AutoHotkey sends to keep Start shut
   static void Say(string s) { Console.Out.WriteLine(s); Console.Out.Flush(); }
-  static IntPtr lastFront; static bool lastWasPT; static uint lastPid;
-  // Is the window in front one of Prism Terminal's (any copy: PrismTerminal,
-  // PrismTerminalStable)? Kept per window: the hook must answer fast.
-  static bool FrontIsPT() {
-    IntPtr f = GetForegroundWindow();
-    if (f == lastFront) return lastWasPT;
-    lastFront = f; lastWasPT = false;
-    uint pid; GetWindowThreadProcessId(f, out pid);
-    lastPid = pid;
-    IntPtr h = OpenProcess(0x1000, false, pid);
-    if (h == IntPtr.Zero) return false;
-    var sb = new System.Text.StringBuilder(1024); uint n = 1024;
-    if (QueryFullProcessImageName(h, 0, sb, ref n)) {
-      string name = System.IO.Path.GetFileNameWithoutExtension(sb.ToString());
-      lastWasPT = name.StartsWith("PrismTerminal", StringComparison.OrdinalIgnoreCase) && name.IndexOf("Setup", StringComparison.OrdinalIgnoreCase) < 0;
-    }
-    CloseHandle(h);
-    return lastWasPT;
+  // The process whose window is in front: one call, fast enough for the hook.
+  static uint FrontPid() {
+    uint pid; GetWindowThreadProcessId(GetForegroundWindow(), out pid);
+    return pid;
   }
   static bool IsCtrl(int vk) { return vk == 0xA2 || vk == 0xA3 || vk == 0x11; }
   static bool IsWin(int vk) { return vk == 0x5B || vk == 0x5C; }
@@ -113,7 +98,7 @@ public static class PTHelper {
           }
         } else if (IsCtrl(vk) && isDown && winDown) ctrlWithWin = true;
         if (keys.Contains(vk)) {
-          if (isDown) { if (down.Add(vk)) Say("d " + vk.ToString("X2") + (FrontIsPT() ? " f " + lastPid : "")); }
+          if (isDown) { if (down.Add(vk)) Say("d " + vk.ToString("X2") + " f " + FrontPid()); }
           else { down.Remove(vk); Say("u " + vk.ToString("X2")); }
         } else if (isDown) {
           if (pick && ((vk >= 0x31 && vk <= 0x39) || (vk >= 0x61 && vk <= 0x69))) {
