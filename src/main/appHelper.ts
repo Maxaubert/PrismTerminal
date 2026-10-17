@@ -19,11 +19,17 @@ let cache: string | null = null
 let proc: ChildProcess | null = null
 const lineListeners = new Set<(line: string) => void>()
 const exitListeners = new Set<() => void>()
+// Lines sent before the script's path is known. The page says its dictation
+// key before the window is shown, which is where the path is set; dropped,
+// `hook 1` was never sent again and the key worked only inside the app
+// (MEASURED in both installed 0.58.0 copies, 2026-10-17).
+const early: string[] = []
 
 /** Where the script is, and where it may cache its compiled code. */
 export function configureAppHelper(path: string, cacheDir: string | null): void {
   script = path
   cache = cacheDir
+  for (const line of early.splice(0)) appHelperSend(line)
 }
 
 /** Its command line: one per kind (#180), a script FILE, never -EncodedCommand. */
@@ -68,6 +74,10 @@ function ensure(): ChildProcess | null {
 
 /** One line to the helper, starting it first if need be. */
 export function appHelperSend(line: string): void {
+  if (!script) {
+    if (early.length < 64) early.push(line)
+    return
+  }
   const p = ensure()
   try {
     p?.stdin?.write(line + '\n')
