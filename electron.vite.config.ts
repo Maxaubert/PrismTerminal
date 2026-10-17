@@ -12,7 +12,7 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
     resolve: { alias: { '@shared': resolve('src/shared'), '@core': resolve('core') } },
-    build: { rollupOptions: { input: { index: resolve(__dirname, 'src/preload/index.ts') } } }
+    build: { rollupOptions: { input: { index: resolve(__dirname, 'src/preload/index.ts'), overlay: resolve(__dirname, 'src/preload/overlay.ts') } } }
   },
   renderer: {
     root: 'src/renderer',
@@ -24,6 +24,6 @@ export default defineConfig({
       }
     },
     plugins: [react(), tailwindcss()],
-    build: { rollupOptions: { input: { index: resolve(__dirname, 'src/renderer/index.html') } } }
+    build: { rollupOptions: { input: { index: resolve(__dirname, 'src/renderer/index.html'), overlay: resolve(__dirname, 'src/renderer/overlay.html') } } }
   }
 })

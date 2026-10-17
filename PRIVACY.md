@@ -71,6 +71,23 @@ into the Claude session where you asked for the report, which, like anything in 
 session, goes to Anthropic. It sends nothing anywhere else, and writes only its own cursor
 (`catch-up.json`) beside the list. It runs only when you ask for it.
 
+## Dictating from any app
+
+With dictation on and Settings > Dictation > "Dictate from any app" on (the default when dictation
+is on), a small helper watches the keyboard so the dictation key works with another app in front.
+It reads only the dictation key's own keys, notes only THAT another key was pressed while they are
+held (never which), and, only while the widget's list of sessions is open, the digits 1 to 9 and
+Esc (which it keeps from the app in front). It writes nothing anywhere and sends nothing. What you
+say is handled as all dictation is: transcribed on your PC, then sent to the Claude session you
+pick, or to the orchestrator tab.
+
+With more than one copy of Prism Terminal open (for example a stable copy beside the installed
+app), one copy runs the dictation for all of them. The copies talk over a local named pipe that
+only your Windows account uses: the running copy asks the others for their tab list (the tab's
+name, folder and whether Claude runs there) so the list of sessions shows every copy's, and hands a
+copy the words to type into one of its tabs. Nothing on the pipe leaves your PC, and nothing is
+written to disk.
+
 ## What programs in a tab can do
 
 A program running in a tab (Claude Code's /copy, or anything you reach over ssh) can put text ON

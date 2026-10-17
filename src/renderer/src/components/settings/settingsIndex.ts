@@ -43,7 +43,7 @@ export const ROW_ORDER = [
   'agent-indicator', 'agent-done-on', 'agent-rainbow', 'agent-question-on', 'agent-failed-on', 'taskbar-badge', 'agent-hooks', 'orchestrator',
   'agent-color', 'agent-done-color', 'agent-question-color',
   'dictation-enabled', 'dictation-mode', 'dictation-hotkey', 'dictation-mic', 'dictation-language',
-  'dictation-pause-media', 'dictation-sounds', 'dictation-model', 'dictation-gpu',
+  'dictation-pause-media', 'dictation-sounds', 'dictation-model', 'dictation-gpu', 'dictation-anywhere',
   'diag-verbose', 'diag-folder', 'diag-mark',
   'app-version'
 ] as const

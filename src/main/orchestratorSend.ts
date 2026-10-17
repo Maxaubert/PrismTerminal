@@ -62,13 +62,42 @@ export function decideSend(req: SendRequest, tabs: readonly SendTab[], enabled: 
   const hits = ids.length ? ids : exact.length ? exact : loose
   if (hits.length === 0) return { ok: false, reason: `no tab matches "${to}"` }
   if (hits.length > 1) return { ok: false, reason: `"${to}" matches ${hits.map((t) => t.label).join(', ')}: name one` }
-  const target = hits[0]
+  return typeable(hits[0])
+}
+
+/** Whether the app may type into this tab at all (the rule 2 exception's
+ *  limits, shared by the orchestrator and dictation). */
+export function typeable(target: SendTab): SendDecision {
   // Only into a Claude Code prompt: never into a shell, where the text would
   // run as a command.
   if (target.agent !== 'claude' || !target.session) return { ok: false, reason: `${target.label} has no Claude session running` }
   // A question or permission box would take the text as its answer.
   if (target.state === 'question') return { ok: false, reason: `${target.label} is waiting on a question: answer it there first` }
   return { ok: true, target }
+}
+
+/**
+ * DICTATION FROM OUTSIDE THE APP (owner, 2026-10-16): the tab the owner picked
+ * by its pty id, with the same limits.
+ */
+export function decideInto(id: string, tabs: readonly SendTab[]): SendDecision {
+  const target = tabs.find((t) => t.id === id)
+  if (!target) return { ok: false, reason: 'that tab has closed' }
+  return typeable(target)
+}
+
+/**
+ * Where dictated text goes (owner: with the orchestrator "only if the
+ * orchestrator is actually active not just that you have the setting turned
+ * on"): the promoted tab when the switch is on and its Claude can take it;
+ * else the tabs a Claude can take it in, to pick from, the orchestrator first.
+ * Windows' process check confirms the lead before anything is typed.
+ */
+export function dictationRoute(tabs: readonly SendTab[], enabled: boolean): { lead: SendTab } | { pick: SendTab[] } {
+  const lead = enabled ? tabs.find((t) => t.orchestrator) : undefined
+  if (lead && typeable(lead).ok) return { lead }
+  const pick = tabs.filter((t) => t.agent === 'claude' && t.session)
+  return { pick: [...pick.filter((t) => t.orchestrator), ...pick.filter((t) => !t.orchestrator)].slice(0, 9) }
 }
 
 /**

@@ -5,7 +5,7 @@ import { createAtomicWriter } from '@core/main/atomicWrite'
 import { setSessionsFile, tabToken, writeTerm } from '@core/main/terminal'
 import { agentUnder } from '@core/main/agentPoll'
 import { createLedger, type LedgerTab, type Presence } from './sessionLedger'
-import { decideSend, pasteOf, SEND_ENTER_MS } from './orchestratorSend'
+import { decideInto, decideSend, pasteOf, SEND_ENTER_MS, type SendDecision, type SendTab } from './orchestratorSend'
 
 /**
  * The catch-up report's ledger, wired to the window, the power monitor and the
@@ -48,7 +48,9 @@ const REQUEST = /^[0-9a-f]{32}\.json$/
 const STATES = new Set(['working', 'question', 'done', 'failed'])
 const str = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length <= max ? v : null)
 
-export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } {
+export type Sessions = ReturnType<typeof startSessions>
+
+export function startSessions(d: SessionsDeps) {
   const now = d.now ?? Date.now
   let saved: unknown
   try {
@@ -211,30 +213,7 @@ export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } 
           to: typeof req.to === 'string' ? req.to : '',
           text: typeof req.text === 'string' ? req.text : ''
         }
-        let said = decideSend(asked, ledger.live(), enabled)
-        // The tab's Claude mark is only what the tab's own output said; a
-        // program printing the same signal would earn it. So the process tree
-        // is asked (security review, 2026-10-16).
-        if (said.ok && (await agentUnder(said.target.id)) !== 'claude')
-          said = { ok: false, reason: `no Claude is running in ${said.target.label} (checked with Windows)` }
-        // That question takes about a second, in which the switch, the tab or
-        // its state can change: decide again, synchronously, right before
-        // typing, and the same tab must win (security review, 2026-10-16).
-        if (said.ok) {
-          const was = said.target
-          const now = decideSend(asked, ledger.live(), enabled)
-          said = now.ok && now.target.id === was.id && now.target.session === was.session ? now : { ok: false, reason: `${was.label} changed while it was checked: send again` }
-        }
-        if (said.ok) {
-          const id = said.target.id
-          writeTerm(id, pasteOf(asked.text))
-          // And once more before Enter: a question that opened in between
-          // would take the Enter as its answer. The text then waits, unsent.
-          setTimeout(() => {
-            const still = decideSend(asked, ledger.live(), enabled)
-            if (still.ok && still.target.id === id) writeTerm(id, '\r')
-          }, SEND_ENTER_MS)
-        }
+        const said = await typeChecked(() => decideSend(asked, ledger.live(), enabled), asked.text)
         const out = join(outbox, name.replace(/\.json$/, '.result.json'))
         const answer = said.ok ? { ok: true, to: said.target.label } : { ok: false, reason: said.reason }
         await writeFile(`${out}.tmp`, JSON.stringify(answer)).catch(() => {})
@@ -244,6 +223,39 @@ export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } 
       draining = false
     }
   }
+  /**
+   * TYPE INTO A TAB, CHECKED (the rule 2 exception, shared by the
+   * orchestrator's sends and dictation from outside the app). `decide` names
+   * the tab and its limits (orchestratorSend); then:
+   * - the tab's Claude mark is only what the tab's own output said, which a
+   *   program printing the same signal would earn, so Windows' process tree
+   *   is asked (security review, 2026-10-16);
+   * - that takes about a second, in which the switch, the tab or its state
+   *   can change: decided again, synchronously, right before typing, and the
+   *   same tab and session must win;
+   * - and once more before Enter: a question that opened in between would
+   *   take the Enter as its answer. The text then waits, unsent.
+   */
+  const typeChecked = async (decide: () => SendDecision, text: string): Promise<SendDecision> => {
+    let said = decide()
+    if (said.ok && (await agentUnder(said.target.id)) !== 'claude')
+      said = { ok: false, reason: `no Claude is running in ${said.target.label} (checked with Windows)` }
+    if (said.ok) {
+      const was = said.target
+      const now = decide()
+      said = now.ok && now.target.id === was.id && now.target.session === was.session ? now : { ok: false, reason: `${was.label} changed while it was checked: send again` }
+    }
+    if (said.ok) {
+      const id = said.target.id
+      writeTerm(id, pasteOf(text))
+      setTimeout(() => {
+        const still = decide()
+        if (still.ok && still.target.id === id) writeTerm(id, '\r')
+      }, SEND_ENTER_MS)
+    }
+    return said
+  }
+
   d.on(d.channels.front, (id: unknown) => {
     // The front tab first, then a fresh reading: a switch made while present
     // starts the new tab's look at once.
@@ -264,6 +276,16 @@ export function startSessions(d: SessionsDeps): { flush(): void; stop(): void } 
   })
 
   return {
+    /** This copy's tabs for dictated text, the orchestrator marked only when it
+     *  is ACTIVE: switched on, and its Claude really running per Windows. */
+    published: async (): Promise<SendTab[]> => {
+      const live = ledger.live()
+      const lead = enabled ? live.find((t) => t.orchestrator) : undefined
+      const active = !!lead && (await agentUnder(lead.id)) === 'claude'
+      return live.map((t) => ({ ...t, orchestrator: active && t.id === lead!.id }))
+    },
+    /** Type dictated text into tab `id` and press Enter, checked. */
+    sendInto: (id: string, text: string): Promise<SendDecision> => typeChecked(() => decideInto(id, ledger.live()), text),
     // The close, the quit and a Windows shutdown: written now (rule 7).
     flush: () => {
       if (!enabled) return

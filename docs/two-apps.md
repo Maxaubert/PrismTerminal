@@ -542,6 +542,20 @@ so an update never silently changes what an existing user sees; the bridge to ma
   outline and rule; `orchestrator-tab.txt` names it for the role hook) and the Settings row. Prism
   passes no orchestrator folder, so nothing changes there until the owner wires it. A terminal
   plugin system (#118) may take it over later (owner: "we'll move it to a plug-in later perhaps").
+- <a id="dictate-anywhere"></a>**DICTATION'S KEY IS CTRL+WIN, AND PRISM TERMINAL DICTATES FROM ANY APP** (owner, 2026-10-16:
+  "one dictation key ... control plus the windows key"; spec `docs/superpowers/specs/2026-10-16-dictate-anywhere.md`).
+  In the core, so BOTH apps change: `DEFAULT_HOTKEY` is Ctrl+Win (right Alt is AltGr on a Norwegian keyboard), a
+  chord of modifiers follows the solo rules (either key first; Ctrl+Win+Left is no dictation), a saved key is kept;
+  `dictationOutside` / `setDictationRoute` let a host start a recording that belongs to no tab and take what was
+  heard; `DictationPage` takes `after` rows. In Prism Terminal's app code only: the keyboard hook helper
+  (`src/main/hook/appHelper.ps1`, the app's one helper since 2026-10-17, which also sets the DWM attributes; `globalDictKey.ts`), the widget window (`dictateAnywhere.ts`,
+  `src/renderer/overlay.html`), the routing and the Settings row. Prism keeps dictating in its own window only.
+  **ONE DICTATION** (owner, 2026-10-17: "they should be the same thing ... one dictation engine for both";
+  spec `docs/superpowers/specs/2026-10-17-one-dictation.md`): in Prism Terminal the hook reads the key with the app
+  in front too, and the copy holding the hook's lock runs the dictation for every copy (`src/main/dictationLink.ts`,
+  a local pipe). Core additions, all off unless a host asks, so Prism is unchanged: `setDictationPageKeys`,
+  `setDictationAutoWarm`, `keepDictationWarm`, `pasteIntoFront` (core `dictation.ts`) and `idleMs` on
+  `registerDictationIpc` (Prism Terminal passes Infinity: "It needs to be ready at all times").
 - <a id="page-looks-right"></a>**A PAGE THAT WORKS IS NOT A PAGE THAT LOOKS RIGHT** (#20, 2026-09-19). Moving the settings into
   `core/` dropped every Tailwind class used only there (`core/` is outside the scanned root; the fix
   is the `@source` line at the top of `index.css`, do not remove it). All 14 e2e scenarios passed over
