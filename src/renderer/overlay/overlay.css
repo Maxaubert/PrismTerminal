@@ -160,6 +160,16 @@ body {
   max-height: 340px;
   overflow: auto;
 }
+.group {
+  margin: 8px 4px 2px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--dim);
+}
+.group:first-child {
+  margin-top: 0;
+}
 .row {
   display: flex;
   align-items: center;

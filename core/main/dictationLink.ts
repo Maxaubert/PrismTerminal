@@ -137,12 +137,15 @@ export function parseToClient(line: string): ToClient | null {
   return null
 }
 
-/** The copy's name in the list: "Stable" for the stable copy, else the app's. */
+/** A Prism Terminal copy's name in the list (owner, 2026-10-17: "Prism
+ *  terminal, and then maybe parentheses two"): the stable copy and a dev run
+ *  say which they are; two of the same are numbered by the service. Prism
+ *  names itself "Prism". */
 export function copyName(execPath: string): string {
   const base = (execPath.split(/[\\/]/).pop() ?? '').replace(/\.exe$/i, '')
-  if (/^PrismTerminalStable$/i.test(base)) return 'Stable'
+  if (/^PrismTerminalStable$/i.test(base)) return 'Prism Terminal (Stable)'
   if (/^PrismTerminal$/i.test(base)) return 'Prism Terminal'
-  return base || 'Prism Terminal'
+  return 'Prism Terminal (Dev)'
 }
 
 function lines(sock: Socket, onLine: (l: string) => void): void {

@@ -43,8 +43,9 @@ describe('the messages', () => {
     expect(parseToClient(JSON.stringify({ t: 'send', rid: 2, id: 'p1', text: 'x'.repeat(9000) }))).toBeNull()
   })
   it('names a copy by its exe', () => {
-    expect(copyName('C:\\Users\\a\\AppData\\Local\\PrismTerminalStable\\PrismTerminalStable.exe')).toBe('Stable')
+    expect(copyName('C:\\Users\\a\\AppData\\Local\\PrismTerminalStable\\PrismTerminalStable.exe')).toBe('Prism Terminal (Stable)')
     expect(copyName('C:\\x\\PrismTerminal.exe')).toBe('Prism Terminal')
+    expect(copyName('C:\\x\\node_modules\\electron\\dist\\electron.exe')).toBe('Prism Terminal (Dev)')
   })
 })
 

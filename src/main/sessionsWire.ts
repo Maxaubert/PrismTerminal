@@ -5,7 +5,8 @@ import { createAtomicWriter } from '@core/main/atomicWrite'
 import { setSessionsFile, tabToken, writeTerm } from '@core/main/terminal'
 import { agentUnder } from '@core/main/agentPoll'
 import { createLedger, type LedgerTab, type Presence } from './sessionLedger'
-import { decideInto, decideSend, pasteOf, SEND_ENTER_MS, type SendDecision, type SendTab } from './orchestratorSend'
+import { decideInto, decideSend, type SendDecision, type SendTab } from '@core/main/orchestratorSend'
+import { publishTabs, typeChecked as typeCheckedIn } from '@core/main/dictationClient'
 
 /**
  * The catch-up report's ledger, wired to the window, the power monitor and the
@@ -236,25 +237,8 @@ export function startSessions(d: SessionsDeps) {
    * - and once more before Enter: a question that opened in between would
    *   take the Enter as its answer. The text then waits, unsent.
    */
-  const typeChecked = async (decide: () => SendDecision, text: string): Promise<SendDecision> => {
-    let said = decide()
-    if (said.ok && (await agentUnder(said.target.id)) !== 'claude')
-      said = { ok: false, reason: `no Claude is running in ${said.target.label} (checked with Windows)` }
-    if (said.ok) {
-      const was = said.target
-      const now = decide()
-      said = now.ok && now.target.id === was.id && now.target.session === was.session ? now : { ok: false, reason: `${was.label} changed while it was checked: send again` }
-    }
-    if (said.ok) {
-      const id = said.target.id
-      writeTerm(id, pasteOf(text))
-      setTimeout(() => {
-        const still = decide()
-        if (still.ok && still.target.id === id) writeTerm(id, '\r')
-      }, SEND_ENTER_MS)
-    }
-    return said
-  }
+  // The checks live in the core (dictationClient), so every app keeps them.
+  const typeChecked = (decide: () => SendDecision, text: string): Promise<SendDecision> => typeCheckedIn(decide, text, { agentUnder, writeTerm })
 
   d.on(d.channels.front, (id: unknown) => {
     // The front tab first, then a fresh reading: a switch made while present
@@ -278,12 +262,7 @@ export function startSessions(d: SessionsDeps) {
   return {
     /** This copy's tabs for dictated text, the orchestrator marked only when it
      *  is ACTIVE: switched on, and its Claude really running per Windows. */
-    published: async (): Promise<SendTab[]> => {
-      const live = ledger.live()
-      const lead = enabled ? live.find((t) => t.orchestrator) : undefined
-      const active = !!lead && (await agentUnder(lead.id)) === 'claude'
-      return live.map((t) => ({ ...t, orchestrator: active && t.id === lead!.id }))
-    },
+    published: (): Promise<SendTab[]> => publishTabs(ledger.live(), enabled, agentUnder),
     /** Type dictated text into tab `id` and press Enter, checked. */
     sendInto: (id: string, text: string): Promise<SendDecision> => typeChecked(() => decideInto(id, ledger.live()), text),
     // The close, the quit and a Windows shutdown: written now (rule 7).

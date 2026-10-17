@@ -556,6 +556,13 @@ so an update never silently changes what an existing user sees; the bridge to ma
   a local pipe). Core additions, all off unless a host asks, so Prism is unchanged: `setDictationPageKeys`,
   `setDictationAutoWarm`, `keepDictationWarm`, `pasteIntoFront` (core `dictation.ts`) and `idleMs` on
   `registerDictationIpc` (Prism Terminal passes Infinity: "It needs to be ready at all times").
+  **EVERY APP'S SESSIONS IN THE LIST, GROUPED** (owner, 2026-10-17: "if it's a session from Prism, it should have
+  the header Prism above it"; spec `docs/superpowers/specs/2026-10-17-dictation-all-apps.md`): the link
+  (`core/main/dictationLink.ts`), the send rules (`core/main/orchestratorSend.ts`) and a ready client
+  (`core/main/dictationClient.ts`, `startDictationClient`) are core now, so Prism joins with its tabs, its checked
+  send and its front-tab paste, and turns its own key reading off while connected. The hook names the front
+  window's process for every key down; the list is grouped under a header per app ("Prism", "Prism Terminal",
+  "Prism Terminal (2)", "Prism Terminal (Stable)") when more than one has sessions. Prism's own wiring is its PR.
 - <a id="page-looks-right"></a>**A PAGE THAT WORKS IS NOT A PAGE THAT LOOKS RIGHT** (#20, 2026-09-19). Moving the settings into
   `core/` dropped every Tailwind class used only there (`core/` is outside the scanned root; the fix
   is the `@source` line at the top of `index.css`, do not remove it). All 14 e2e scenarios passed over

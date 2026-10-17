@@ -63,7 +63,7 @@ function rowEl(r: OverlayRow): HTMLButtonElement {
   }
   b.append(el('span', 'num', String(r.n)))
   const name = el('span', 'name')
-  name.append(el('span', 'label', r.label), el('span', 'folder', r.copy ? `${r.copy} \u00b7 ${r.folder}` : r.folder))
+  name.append(el('span', 'label', r.label), el('span', 'folder', r.folder))
   b.append(name)
   const chip = r.lead ? 'orchestrator' : r.disabled ? 'asking' : r.state === 'working' ? 'working' : null
   if (chip) b.append(el('span', `chip ${chip}`, chip))
@@ -97,7 +97,13 @@ function draw(s: OverlayState): void {
     card.append(head(svg(MIC, 'icon'), 'Send to'))
     card.append(el('div', 'said', s.text))
     const list = el('div', 'rows')
-    s.rows.forEach((r) => list.append(rowEl(r)))
+    // A header per app, when the sessions come from more than one.
+    let group: string | null = null
+    s.rows.forEach((r) => {
+      if (r.group && r.group !== group) list.append(el('div', 'group', r.group))
+      group = r.group
+      list.append(rowEl(r))
+    })
     card.append(list, el('div', 'hint', 'Press a number or click. Esc keeps it unsent.'))
   } else if (s.phase === 'sending') {
     card.append(head(svg(MIC, 'icon'), `Sending to ${s.to}`))

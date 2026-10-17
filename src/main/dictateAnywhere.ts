@@ -3,8 +3,8 @@ import type { Hotkey, DictMode } from '@core/renderer/lib/dictationKey'
 import { OVERLAY_CH, type OverlayLook, type OverlayRow, type OverlayState } from '@shared/dictOverlay'
 import { createKeyFeed, keysFor, masksStart, startKeyHelper, type HelperLine, type KeyHelper } from './globalDictKey'
 import type { Sessions } from './sessionsWire'
-import { dictationRoute, type SendDecision, type SendTab } from './orchestratorSend'
-import { startLinkClient, startLinkService, type LinkService } from './dictationLink'
+import { dictationRoute, type SendDecision, type SendTab } from '@core/main/orchestratorSend'
+import { startLinkClient, startLinkService, type LinkService } from '@core/main/dictationLink'
 
 /**
  * DICTATE FROM ANY APP (owner, 2026-10-16; spec:
@@ -75,13 +75,23 @@ const SHOW_MS = 2200
 /** The last two folders of a path: enough to tell two `api` tabs apart. */
 export const folderTail = (p: string): string => p.split(/[\\/]+/).filter(Boolean).slice(-2).join('\\')
 
-/** A tab as the list holds it: `copy` names the copy of the app it is in,
- *  when more than one is open. A tab of another copy has the id `<pid>:<id>`. */
+/** A tab as the list holds it: `copy` names the app it is in, when more than
+ *  one is open. A tab of another copy has the id `<pid>:<id>`. */
 export type ListTab = SendTab & { copy?: string | null }
 
-/** The picker's rows: numbered 1 to 9, a tab that is asking disabled. */
+/**
+ * The picker's rows (owner, 2026-10-17: "if it's a session from Prism, it
+ * should have the header Prism above it, and then I see all the sessions from
+ * that"): grouped by app in the order the apps first appear, numbered 1 to 9
+ * across the groups, a tab that is asking disabled.
+ */
 export function pickRows(tabs: readonly ListTab[]): OverlayRow[] {
-  return tabs.slice(0, 9).map((t, i) => ({
+  const order: (string | null)[] = []
+  for (const t of tabs) if (!order.includes(t.copy ?? null)) order.push(t.copy ?? null)
+  const grouped = order.flatMap((g) => tabs.filter((t) => (t.copy ?? null) === g))
+  // Headers only when the sessions come from more than one app.
+  const many = order.length > 1
+  return grouped.slice(0, 9).map((t, i) => ({
     id: t.id,
     n: i + 1,
     label: t.label,
@@ -89,16 +99,27 @@ export function pickRows(tabs: readonly ListTab[]): OverlayRow[] {
     state: t.state,
     disabled: t.state === 'question' ? 'Waiting on a question: answer it there first' : null,
     lead: t.orchestrator,
-    copy: t.copy ?? null
+    group: many ? (t.copy ?? null) : null
   }))
+}
+
+/** Each copy's name, a second of the same name numbered ("Prism Terminal (2)"). */
+export function copyNames(names: readonly string[]): string[] {
+  const seen = new Map<string, number>()
+  return names.map((n) => {
+    const k = (seen.get(n) ?? 0) + 1
+    seen.set(n, k)
+    return k === 1 ? n : `${n} (${k})`
+  })
 }
 
 /** This copy's tabs and every linked copy's, as one list. */
 export function mergeTabs(local: readonly SendTab[], remote: readonly { copy: { pid: number; name: string }; tabs: readonly SendTab[] }[], me: string): ListTab[] {
   const many = remote.length > 0
+  const names = copyNames([me, ...remote.map((r) => r.copy.name)])
   return [
-    ...local.map((t) => ({ ...t, copy: many ? me : null })),
-    ...remote.flatMap((r) => r.tabs.map((t) => ({ ...t, id: `${r.copy.pid}:${t.id}`, copy: r.copy.name })))
+    ...local.map((t) => ({ ...t, copy: many ? names[0] : null })),
+    ...remote.flatMap((r, i) => r.tabs.map((t) => ({ ...t, id: `${r.copy.pid}:${t.id}`, copy: names[i + 1] })))
   ]
 }
 
@@ -159,7 +180,8 @@ export function startDictateAnywhere(d: AnywhereDeps): {
     d.loadPage(win)
     return win
   }
-  const heightFor = (s: OverlayState): number => (s.phase === 'pick' ? 196 + s.rows.length * 48 : s.phase === 'listening' ? 196 : 104)
+  const heightFor = (s: OverlayState): number =>
+    s.phase === 'pick' ? 196 + s.rows.length * 48 + new Set(s.rows.map((r) => r.group).filter(Boolean)).size * 30 : s.phase === 'listening' ? 196 : 104
   const show = (s: OverlayState): void => {
     const w = ensure()
     if (hideTimer) clearTimeout(hideTimer)
@@ -262,7 +284,7 @@ export function startDictateAnywhere(d: AnywhereDeps): {
       d.pastePage(r.text)
       return note('Typed into the tab in front')
     }
-    if (front !== null && svc?.paste(front, r.text)) return note('Typed into the tab in front')
+    if (front !== null && front !== selfPid && svc?.paste(front, r.text)) return note('Typed into the tab in front')
     const s = d.sessions()
     if (!s) return note('Not sent: the app is not ready', 'warn')
     const all = mergeTabs(await s.published(), svc ? await svc.tabs() : [], d.link?.name ?? 'Prism Terminal')
@@ -312,16 +334,8 @@ export function startDictateAnywhere(d: AnywhereDeps): {
       return
     }
     if (!cfg?.on) return
-    if (l.kind === 'key' && l.type === 'down') {
-      lastFront = l.front ?? null
-      // Another copy's window, and that copy is not on the link: it reads its
-      // own key, so this one stays out of it.
-      if (lastFront !== null && lastFront !== selfPid && !svc?.copies().some((c) => c.pid === lastFront) && !outside) {
-        feed.reset()
-        d.log?.({ key: 'left to that copy' })
-        return
-      }
-    }
+    // Which app is in front: this copy, one on the link, or another app.
+    if (l.kind === 'key' && l.type === 'down') lastFront = l.front ?? null
     const now = performance.now()
     act(feed.feed(l, now))
     if (tick) clearTimeout(tick)
